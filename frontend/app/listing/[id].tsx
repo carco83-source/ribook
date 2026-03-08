@@ -144,6 +144,24 @@ export default function ListingDetailScreen() {
     );
   };
 
+  const sellerCard = listing ? (
+    <TouchableOpacity
+      style={styles.sellerCard}
+      onPress={() =>
+        router.push(
+          `/chat/${listing.id}?otherUserId=${listing.seller_id}&otherUsername=${listing.seller_username}&title=${encodeURIComponent(listing.book_titolo)}`
+        )
+      }
+    >
+      <Ionicons name="person-circle-outline" size={24} color="#1a472a" />
+      <Text style={styles.sellerText}>Venditore: {listing.seller_username}</Text>
+      <View style={styles.chatBadge}>
+        <Ionicons name="chatbubble" size={14} color="#fff" />
+        <Text style={styles.chatBadgeText}>Chat</Text>
+      </View>
+    </TouchableOpacity>
+  ) : null;
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -216,6 +234,19 @@ export default function ListingDetailScreen() {
           <Ionicons name="person-circle-outline" size={24} color="#1a472a" />
           <Text style={styles.sellerText}>Venditore: {listing.seller_username}</Text>
         </View>
+        
+        {/* Chat Button */}
+        <TouchableOpacity
+          style={styles.chatButton}
+          onPress={() =>
+            router.push(
+              `/chat/${listing.id}?otherUserId=${listing.seller_id}&otherUsername=${listing.seller_username}&title=${encodeURIComponent(listing.book_titolo)}`
+            )
+          }
+        >
+          <Ionicons name="chatbubble" size={20} color="#fff" />
+          <Text style={styles.chatButtonText}>Contatta venditore</Text>
+        </TouchableOpacity>
 
         {listing.note && (
           <View style={styles.noteCard}>
@@ -424,6 +455,21 @@ const styles = StyleSheet.create({
   sellerText: {
     fontSize: 14,
     color: '#333',
+  },
+  chatButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#2196F3',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 8,
+    gap: 8,
+  },
+  chatButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
   noteCard: {
     backgroundColor: '#fff8f0',

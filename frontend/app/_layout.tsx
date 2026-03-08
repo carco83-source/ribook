@@ -26,6 +26,7 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="listing/create" options={{ title: 'Vendi un Libro' }} />
         <Stack.Screen name="listing/[id]" options={{ title: 'Dettaglio Libro' }} />
+        <Stack.Screen name="chat/[listingId]" options={{ title: 'Chat' }} />
       </Stack>
     </>
   );

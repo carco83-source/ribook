@@ -24,7 +24,7 @@ import {
   SEZIONI,
   SchoolType,
   School,
-} from '../constants/schools';
+} from '../../src/constants/schools';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 

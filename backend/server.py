@@ -706,6 +706,200 @@ async def confirm_transaction(transaction_id: str, user_id: str):
     
     return {"message": "Transazione completata con successo"}
 
+# ============== CHAT ROUTES ==============
+
+# Patterns to block in chat messages
+import re
+
+BLOCKED_PATTERNS = [
+    # Phone numbers (Italian and international)
+    r'\+?\d{2,4}[\s\-]?\d{3,4}[\s\-]?\d{3,4}[\s\-]?\d{0,4}',
+    r'\d{3}[\s\-]?\d{3}[\s\-]?\d{4}',
+    r'\d{10,}',
+    # Email addresses
+    r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',
+    # Social media handles/keywords
+    r'(?i)(instagram|facebook|whatsapp|telegram|messenger|twitter|tiktok|snapchat)',
+    r'(?i)(ig:|fb:|wa\.me|t\.me)',
+    r'@[a-zA-Z0-9_]+',
+    # Common contact phrases
+    r'(?i)(chiamami|contattami|scrivimi su|il mio numero|la mia mail|mio contatto)',
+    r'(?i)(ci vediamo|incontriamoci|dove abiti|il tuo numero|la tua mail)',
+]
+
+def contains_blocked_content(message: str, user_nome: str = None, user_cognome: str = None) -> tuple[bool, str]:
+    """Check if message contains blocked content. Returns (is_blocked, reason)"""
+    
+    # Check against regex patterns
+    for pattern in BLOCKED_PATTERNS:
+        if re.search(pattern, message):
+            return True, "Il messaggio contiene informazioni di contatto non permesse"
+    
+    # Check if message contains user's real name
+    if user_nome and user_nome.lower() in message.lower():
+        return True, "Non puoi condividere il tuo nome reale"
+    if user_cognome and user_cognome.lower() in message.lower():
+        return True, "Non puoi condividere il tuo cognome reale"
+    
+    return False, ""
+
+class ChatMessageCreate(BaseModel):
+    listing_id: str
+    receiver_id: str
+    message: Optional[str] = None
+    foto_base64: Optional[str] = None
+
+class ChatMessage(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    listing_id: str
+    sender_id: str
+    sender_username: str
+    receiver_id: str
+    receiver_username: str
+    message: Optional[str] = None
+    foto_base64: Optional[str] = None
+    read: bool = False
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class ChatConversation(BaseModel):
+    listing_id: str
+    listing_title: str
+    other_user_username: str
+    other_user_id: str
+    last_message: Optional[str] = None
+    last_message_time: Optional[datetime] = None
+    unread_count: int = 0
+
+@api_router.post("/chat/send")
+async def send_chat_message(message_data: ChatMessageCreate, user_id: str):
+    """Send a chat message with content filtering"""
+    
+    # Get sender
+    sender = await db.users.find_one({"id": user_id})
+    if not sender:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+    
+    # Get receiver
+    receiver = await db.users.find_one({"id": message_data.receiver_id})
+    if not receiver:
+        raise HTTPException(status_code=404, detail="Destinatario non trovato")
+    
+    # Get listing
+    listing = await db.listings.find_one({"id": message_data.listing_id})
+    if not listing:
+        raise HTTPException(status_code=404, detail="Annuncio non trovato")
+    
+    # Check message content if present
+    if message_data.message:
+        is_blocked, reason = contains_blocked_content(
+            message_data.message,
+            sender.get("nome"),
+            sender.get("cognome")
+        )
+        if is_blocked:
+            raise HTTPException(status_code=400, detail=f"⚠️ {reason}. Per la tua sicurezza, non è possibile scambiare dati personali.")
+    
+    # Check that either message or photo is provided
+    if not message_data.message and not message_data.foto_base64:
+        raise HTTPException(status_code=400, detail="Inserisci un messaggio o una foto")
+    
+    # Create message
+    chat_message = ChatMessage(
+        listing_id=message_data.listing_id,
+        sender_id=user_id,
+        sender_username=sender["username"],
+        receiver_id=message_data.receiver_id,
+        receiver_username=receiver["username"],
+        message=message_data.message,
+        foto_base64=message_data.foto_base64
+    )
+    
+    await db.chat_messages.insert_one(chat_message.dict())
+    
+    return {"message": "Messaggio inviato", "chat_id": chat_message.id}
+
+@api_router.get("/chat/conversations/{user_id}")
+async def get_conversations(user_id: str):
+    """Get all conversations for a user"""
+    
+    # Find all messages where user is sender or receiver
+    messages = await db.chat_messages.find({
+        "$or": [
+            {"sender_id": user_id},
+            {"receiver_id": user_id}
+        ]
+    }).sort("created_at", -1).to_list(1000)
+    
+    # Group by listing and other user
+    conversations = {}
+    for msg in messages:
+        msg.pop('_id', None)
+        listing_id = msg["listing_id"]
+        other_user_id = msg["receiver_id"] if msg["sender_id"] == user_id else msg["sender_id"]
+        other_username = msg["receiver_username"] if msg["sender_id"] == user_id else msg["sender_username"]
+        
+        key = f"{listing_id}_{other_user_id}"
+        
+        if key not in conversations:
+            # Get listing title
+            listing = await db.listings.find_one({"id": listing_id})
+            listing_title = listing["book_titolo"] if listing else "Libro"
+            
+            conversations[key] = {
+                "listing_id": listing_id,
+                "listing_title": listing_title,
+                "other_user_username": other_username,
+                "other_user_id": other_user_id,
+                "last_message": msg.get("message") or "📷 Foto",
+                "last_message_time": msg["created_at"],
+                "unread_count": 0
+            }
+        
+        # Count unread messages
+        if msg["receiver_id"] == user_id and not msg.get("read", False):
+            conversations[key]["unread_count"] += 1
+    
+    return list(conversations.values())
+
+@api_router.get("/chat/messages/{listing_id}/{other_user_id}")
+async def get_chat_messages(listing_id: str, other_user_id: str, user_id: str):
+    """Get all messages in a conversation"""
+    
+    messages = await db.chat_messages.find({
+        "listing_id": listing_id,
+        "$or": [
+            {"sender_id": user_id, "receiver_id": other_user_id},
+            {"sender_id": other_user_id, "receiver_id": user_id}
+        ]
+    }).sort("created_at", 1).to_list(1000)
+    
+    # Mark messages as read
+    await db.chat_messages.update_many(
+        {
+            "listing_id": listing_id,
+            "sender_id": other_user_id,
+            "receiver_id": user_id,
+            "read": False
+        },
+        {"$set": {"read": True}}
+    )
+    
+    # Remove MongoDB _id field
+    for msg in messages:
+        msg.pop('_id', None)
+    
+    return messages
+
+@api_router.get("/chat/unread-count/{user_id}")
+async def get_unread_count(user_id: str):
+    """Get total unread message count for a user"""
+    count = await db.chat_messages.count_documents({
+        "receiver_id": user_id,
+        "read": False
+    })
+    return {"unread_count": count}
+
+
 # ============== SEED DATA ROUTES ==============
 
 @api_router.post("/seed/books")
