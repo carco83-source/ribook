@@ -1,0 +1,783 @@
+from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form
+from dotenv import load_dotenv
+from starlette.middleware.cors import CORSMiddleware
+from motor.motor_asyncio import AsyncIOMotorClient
+import os
+import logging
+from pathlib import Path
+from pydantic import BaseModel, Field
+from typing import List, Optional
+import uuid
+from datetime import datetime
+import random
+import string
+import hashlib
+import base64
+
+ROOT_DIR = Path(__file__).parent
+load_dotenv(ROOT_DIR / '.env')
+
+# MongoDB connection
+mongo_url = os.environ['MONGO_URL']
+client = AsyncIOMotorClient(mongo_url)
+db = client[os.environ['DB_NAME']]
+
+# Create the main app without a prefix
+app = FastAPI(title="ScambiaLibri API")
+
+# Create a router with the /api prefix
+api_router = APIRouter(prefix="/api")
+
+# ============== MODELS ==============
+
+# Book conditions with pricing percentages
+BOOK_CONDITIONS = {
+    "nuovo": 0.85,           # 85% - New with 15% discount
+    "come_nuovo": 0.60,      # 60%
+    "ottime_condizioni": 0.50,  # 50%
+    "buono": 0.40,           # 40%
+    "scarso": 0.30           # 30%
+}
+
+def generate_username():
+    """Generate anonymous username like Utente_A7K3X"""
+    chars = string.ascii_uppercase + string.digits
+    random_part = ''.join(random.choices(chars, k=5))
+    return f"Utente_{random_part}"
+
+def hash_password(password: str) -> str:
+    return hashlib.sha256(password.encode()).hexdigest()
+
+# User Models
+class UserCreate(BaseModel):
+    nome: str
+    cognome: str
+    email: str
+    telefono: str
+    password: str
+    scuola: str
+    classe: str
+    sezione: str
+    tipo_scuola: Optional[str] = None  # primo_grado or secondo_grado
+
+class UserLogin(BaseModel):
+    email: str
+    password: str
+
+class User(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    nome: str
+    cognome: str
+    email: str
+    telefono: str
+    password_hash: str
+    scuola: str
+    classe: str
+    sezione: str
+    tipo_scuola: Optional[str] = None  # primo_grado or secondo_grado
+    username: str  # Auto-generated anonymous username
+    is_premium: bool = False
+    premium_expires: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class UserPublic(BaseModel):
+    id: str
+    username: str
+    scuola: str
+    classe: str
+    sezione: str
+    is_premium: bool
+
+# Book Models
+class BookBase(BaseModel):
+    titolo: str
+    autore: str
+    isbn: str
+    materia: str
+    prezzo_ministeriale: float
+    classe: str  # Which class needs this book
+
+class BookCreate(BaseModel):
+    titolo: str
+    autore: str
+    isbn: str
+    materia: str
+    prezzo_ministeriale: float
+    classe: str
+
+class Book(BookBase):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+# Book Listing (user selling a book)
+class BookListingCreate(BaseModel):
+    book_id: str
+    condizione: str  # nuovo, come_nuovo, ottime_condizioni, buono, scarso
+    note: Optional[str] = None
+    foto_base64: Optional[str] = None
+
+class BookListing(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    seller_id: str
+    seller_username: str
+    book_id: str
+    book_titolo: str
+    book_autore: str
+    book_isbn: str
+    book_materia: str
+    book_classe: str
+    prezzo_ministeriale: float
+    condizione: str
+    prezzo_vendita: float  # Calculated based on condition
+    note: Optional[str] = None
+    foto_base64: Optional[str] = None
+    stato: str = "disponibile"  # disponibile, prenotato, venduto
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+# Book Request (user looking for a book)
+class BookRequestCreate(BaseModel):
+    book_id: str
+
+class BookRequest(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    buyer_id: str
+    buyer_username: str
+    book_id: str
+    book_titolo: str
+    book_autore: str
+    book_isbn: str
+    book_materia: str
+    book_classe: str
+    stato: str = "cercando"  # cercando, trovato
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+# Bookstore Models
+class BookstoreCreate(BaseModel):
+    nome: str
+    indirizzo: str
+    citta: str
+    telefono: str
+    email: str
+    password: str
+
+class Bookstore(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    nome: str
+    indirizzo: str
+    citta: str
+    telefono: str
+    email: str
+    password_hash: str
+    affiliazione_attiva: bool = True
+    affiliazione_scadenza: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class BookstorePublic(BaseModel):
+    id: str
+    nome: str
+    indirizzo: str
+    citta: str
+    telefono: str
+
+# Transaction Models
+class TransactionCreate(BaseModel):
+    listing_id: str
+    bookstore_id: str
+
+class Transaction(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    listing_id: str
+    book_titolo: str
+    buyer_id: str
+    buyer_username: str
+    seller_id: str
+    seller_username: str
+    bookstore_id: str
+    bookstore_nome: str
+    prezzo_totale: float
+    commissione_app: float  # 15% for free, 0% for premium
+    commissione_cartolibreria: float  # 5%
+    importo_venditore: float
+    stato: str = "in_attesa_consegna"  # in_attesa_consegna, in_custodia, completato, annullato
+    buyer_is_premium: bool
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    consegnato_il: Optional[datetime] = None
+    ritirato_il: Optional[datetime] = None
+
+# Compatibility/Match Model
+class Match(BaseModel):
+    listing: dict
+    compatibility_score: float  # 0-100
+    same_school: bool
+    same_class: bool
+    same_section: bool
+
+# ============== AUTH ROUTES ==============
+
+@api_router.post("/auth/register")
+async def register_user(user_data: UserCreate):
+    # Check if email already exists
+    existing = await db.users.find_one({"email": user_data.email})
+    if existing:
+        raise HTTPException(status_code=400, detail="Email già registrata")
+    
+    # Create user with auto-generated username
+    user = User(
+        nome=user_data.nome,
+        cognome=user_data.cognome,
+        email=user_data.email,
+        telefono=user_data.telefono,
+        password_hash=hash_password(user_data.password),
+        scuola=user_data.scuola,
+        classe=user_data.classe,
+        sezione=user_data.sezione,
+        tipo_scuola=user_data.tipo_scuola,
+        username=generate_username()
+    )
+    
+    await db.users.insert_one(user.dict())
+    return {"message": "Registrazione completata", "user_id": user.id, "username": user.username}
+
+@api_router.post("/auth/login")
+async def login_user(credentials: UserLogin):
+    user = await db.users.find_one({"email": credentials.email})
+    if not user or user["password_hash"] != hash_password(credentials.password):
+        raise HTTPException(status_code=401, detail="Credenziali non valide")
+    
+    return {
+        "user_id": user["id"],
+        "username": user["username"],
+        "nome": user["nome"],
+        "is_premium": user["is_premium"],
+        "scuola": user["scuola"],
+        "classe": user["classe"],
+        "sezione": user["sezione"]
+    }
+
+@api_router.get("/users/{user_id}")
+async def get_user(user_id: str):
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+    return UserPublic(**user)
+
+@api_router.post("/users/{user_id}/upgrade-premium")
+async def upgrade_to_premium(user_id: str):
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+    
+    # Set premium for 1 year
+    from datetime import timedelta
+    expire_date = datetime.utcnow() + timedelta(days=365)
+    
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"is_premium": True, "premium_expires": expire_date}}
+    )
+    
+    return {"message": "Upgrade a Premium completato", "scadenza": expire_date}
+
+# ============== BOOKS ROUTES ==============
+
+@api_router.post("/books", response_model=Book)
+async def create_book(book_data: BookCreate):
+    book = Book(**book_data.dict())
+    await db.books.insert_one(book.dict())
+    return book
+
+@api_router.get("/books", response_model=List[Book])
+async def get_books(classe: Optional[str] = None, materia: Optional[str] = None):
+    query = {}
+    if classe:
+        query["classe"] = classe
+    if materia:
+        query["materia"] = materia
+    
+    books = await db.books.find(query).to_list(1000)
+    return [Book(**book) for book in books]
+
+@api_router.get("/books/{book_id}", response_model=Book)
+async def get_book(book_id: str):
+    book = await db.books.find_one({"id": book_id})
+    if not book:
+        raise HTTPException(status_code=404, detail="Libro non trovato")
+    return Book(**book)
+
+@api_router.get("/books/search/{isbn}")
+async def search_book_by_isbn(isbn: str):
+    book = await db.books.find_one({"isbn": isbn})
+    if not book:
+        raise HTTPException(status_code=404, detail="Libro non trovato")
+    return Book(**book)
+
+# ============== BOOK LISTINGS ROUTES ==============
+
+@api_router.post("/listings")
+async def create_listing(listing_data: BookListingCreate, user_id: str):
+    # Get user
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+    
+    # Get book
+    book = await db.books.find_one({"id": listing_data.book_id})
+    if not book:
+        raise HTTPException(status_code=404, detail="Libro non trovato")
+    
+    # Validate condition
+    if listing_data.condizione not in BOOK_CONDITIONS:
+        raise HTTPException(status_code=400, detail="Condizione non valida")
+    
+    # Calculate price based on condition
+    prezzo_vendita = book["prezzo_ministeriale"] * BOOK_CONDITIONS[listing_data.condizione]
+    
+    listing = BookListing(
+        seller_id=user_id,
+        seller_username=user["username"],
+        book_id=book["id"],
+        book_titolo=book["titolo"],
+        book_autore=book["autore"],
+        book_isbn=book["isbn"],
+        book_materia=book["materia"],
+        book_classe=book["classe"],
+        prezzo_ministeriale=book["prezzo_ministeriale"],
+        condizione=listing_data.condizione,
+        prezzo_vendita=round(prezzo_vendita, 2),
+        note=listing_data.note,
+        foto_base64=listing_data.foto_base64
+    )
+    
+    await db.listings.insert_one(listing.dict())
+    return listing
+
+@api_router.get("/listings")
+async def get_listings(classe: Optional[str] = None, materia: Optional[str] = None, stato: str = "disponibile"):
+    query = {"stato": stato}
+    if classe:
+        query["book_classe"] = classe
+    if materia:
+        query["book_materia"] = materia
+    
+    listings = await db.listings.find(query).to_list(1000)
+    # Remove MongoDB _id field to prevent serialization issues
+    for listing in listings:
+        listing.pop('_id', None)
+    return listings
+
+@api_router.get("/listings/user/{user_id}")
+async def get_user_listings(user_id: str):
+    listings = await db.listings.find({"seller_id": user_id}).to_list(100)
+    # Remove MongoDB _id field to prevent serialization issues
+    for listing in listings:
+        listing.pop('_id', None)
+    return listings
+
+@api_router.delete("/listings/{listing_id}")
+async def delete_listing(listing_id: str, user_id: str):
+    listing = await db.listings.find_one({"id": listing_id, "seller_id": user_id})
+    if not listing:
+        raise HTTPException(status_code=404, detail="Annuncio non trovato")
+    
+    if listing["stato"] != "disponibile":
+        raise HTTPException(status_code=400, detail="Non puoi eliminare un annuncio già prenotato")
+    
+    await db.listings.delete_one({"id": listing_id})
+    return {"message": "Annuncio eliminato"}
+
+# ============== BOOK REQUESTS ROUTES ==============
+
+@api_router.post("/requests")
+async def create_request(request_data: BookRequestCreate, user_id: str):
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+    
+    book = await db.books.find_one({"id": request_data.book_id})
+    if not book:
+        raise HTTPException(status_code=404, detail="Libro non trovato")
+    
+    book_request = BookRequest(
+        buyer_id=user_id,
+        buyer_username=user["username"],
+        book_id=book["id"],
+        book_titolo=book["titolo"],
+        book_autore=book["autore"],
+        book_isbn=book["isbn"],
+        book_materia=book["materia"],
+        book_classe=book["classe"]
+    )
+    
+    await db.requests.insert_one(book_request.dict())
+    return book_request
+
+@api_router.get("/requests/user/{user_id}")
+async def get_user_requests(user_id: str):
+    requests = await db.requests.find({"buyer_id": user_id}).to_list(100)
+    # Remove MongoDB _id field to prevent serialization issues
+    for req in requests:
+        req.pop('_id', None)
+    return requests
+
+# ============== COMPATIBILITY/MATCHING ROUTES ==============
+
+@api_router.get("/matches/{user_id}")
+async def get_matches(user_id: str):
+    """Find compatible listings based on user's book requests"""
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+    
+    # Get user's book requests
+    user_requests = await db.requests.find({"buyer_id": user_id, "stato": "cercando"}).to_list(100)
+    
+    if not user_requests:
+        return {"matches": [], "total": 0}
+    
+    # Get book IDs user is looking for
+    wanted_book_ids = [req["book_id"] for req in user_requests]
+    
+    # Find available listings for those books (excluding user's own)
+    listings = await db.listings.find({
+        "book_id": {"$in": wanted_book_ids},
+        "seller_id": {"$ne": user_id},
+        "stato": "disponibile"
+    }).to_list(1000)
+    
+    matches = []
+    for listing in listings:
+        # Calculate compatibility score
+        seller = await db.users.find_one({"id": listing["seller_id"]})
+        if not seller:
+            continue
+        
+        same_school = seller["scuola"] == user["scuola"]
+        same_class = seller["classe"] == user["classe"]
+        same_section = seller["sezione"] == user["sezione"]
+        
+        # Score: same section = 100, same class = 80, same school = 60, other = 40
+        if same_section:
+            score = 100
+        elif same_class:
+            score = 80
+        elif same_school:
+            score = 60
+        else:
+            score = 40
+        
+        matches.append({
+            "listing": listing,
+            "compatibility_score": score,
+            "same_school": same_school,
+            "same_class": same_class,
+            "same_section": same_section
+        })
+    
+    # Sort by compatibility score
+    matches.sort(key=lambda x: x["compatibility_score"], reverse=True)
+    
+    return {"matches": matches, "total": len(matches)}
+
+@api_router.get("/radar/{user_id}")
+async def get_radar_view(user_id: str):
+    """Get a summary view of all compatibilities for the radar"""
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+    
+    # Get user's requests
+    user_requests = await db.requests.find({"buyer_id": user_id, "stato": "cercando"}).to_list(100)
+    wanted_book_ids = [req["book_id"] for req in user_requests]
+    
+    # Count matches by category
+    same_section = 0
+    same_class = 0
+    same_school = 0
+    others = 0
+    
+    listings = await db.listings.find({
+        "book_id": {"$in": wanted_book_ids},
+        "seller_id": {"$ne": user_id},
+        "stato": "disponibile"
+    }).to_list(1000)
+    
+    for listing in listings:
+        seller = await db.users.find_one({"id": listing["seller_id"]})
+        if not seller:
+            continue
+        
+        if seller["sezione"] == user["sezione"] and seller["classe"] == user["classe"] and seller["scuola"] == user["scuola"]:
+            same_section += 1
+        elif seller["classe"] == user["classe"] and seller["scuola"] == user["scuola"]:
+            same_class += 1
+        elif seller["scuola"] == user["scuola"]:
+            same_school += 1
+        else:
+            others += 1
+    
+    return {
+        "total_matches": len(listings),
+        "same_section": same_section,
+        "same_class": same_class,
+        "same_school": same_school,
+        "others": others,
+        "books_searching": len(user_requests)
+    }
+
+# ============== BOOKSTORE ROUTES ==============
+
+@api_router.post("/bookstores/register")
+async def register_bookstore(bookstore_data: BookstoreCreate):
+    existing = await db.bookstores.find_one({"email": bookstore_data.email})
+    if existing:
+        raise HTTPException(status_code=400, detail="Email già registrata")
+    
+    from datetime import timedelta
+    bookstore = Bookstore(
+        nome=bookstore_data.nome,
+        indirizzo=bookstore_data.indirizzo,
+        citta=bookstore_data.citta,
+        telefono=bookstore_data.telefono,
+        email=bookstore_data.email,
+        password_hash=hash_password(bookstore_data.password),
+        affiliazione_scadenza=datetime.utcnow() + timedelta(days=365)
+    )
+    
+    await db.bookstores.insert_one(bookstore.dict())
+    return {"message": "Cartolibreria registrata", "id": bookstore.id}
+
+@api_router.post("/bookstores/login")
+async def login_bookstore(credentials: UserLogin):
+    bookstore = await db.bookstores.find_one({"email": credentials.email})
+    if not bookstore or bookstore["password_hash"] != hash_password(credentials.password):
+        raise HTTPException(status_code=401, detail="Credenziali non valide")
+    
+    return {
+        "bookstore_id": bookstore["id"],
+        "nome": bookstore["nome"],
+        "affiliazione_attiva": bookstore["affiliazione_attiva"]
+    }
+
+@api_router.get("/bookstores", response_model=List[BookstorePublic])
+async def get_bookstores(citta: Optional[str] = None):
+    query = {"affiliazione_attiva": True}
+    if citta:
+        query["citta"] = citta
+    
+    bookstores = await db.bookstores.find(query).to_list(100)
+    return [BookstorePublic(**b) for b in bookstores]
+
+@api_router.get("/bookstores/{bookstore_id}/transactions")
+async def get_bookstore_transactions(bookstore_id: str):
+    transactions = await db.transactions.find({"bookstore_id": bookstore_id}).to_list(100)
+    # Remove MongoDB _id field to prevent serialization issues
+    for transaction in transactions:
+        transaction.pop('_id', None)
+    return transactions
+
+@api_router.post("/bookstores/{bookstore_id}/confirm-delivery/{transaction_id}")
+async def confirm_book_delivery(bookstore_id: str, transaction_id: str):
+    """Bookstore confirms they received the book from seller"""
+    transaction = await db.transactions.find_one({"id": transaction_id, "bookstore_id": bookstore_id})
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transazione non trovata")
+    
+    await db.transactions.update_one(
+        {"id": transaction_id},
+        {"$set": {"stato": "in_custodia", "consegnato_il": datetime.utcnow()}}
+    )
+    
+    return {"message": "Consegna confermata, libro in custodia"}
+
+@api_router.post("/bookstores/{bookstore_id}/confirm-pickup/{transaction_id}")
+async def confirm_book_pickup(bookstore_id: str, transaction_id: str, buyer_name: str):
+    """Bookstore confirms buyer picked up the book"""
+    transaction = await db.transactions.find_one({"id": transaction_id, "bookstore_id": bookstore_id})
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transazione non trovata")
+    
+    await db.transactions.update_one(
+        {"id": transaction_id},
+        {"$set": {
+            "stato": "completato",
+            "ritirato_il": datetime.utcnow(),
+            "ritirato_da": buyer_name
+        }}
+    )
+    
+    # Update listing status
+    await db.listings.update_one(
+        {"id": transaction["listing_id"]},
+        {"$set": {"stato": "venduto"}}
+    )
+    
+    return {"message": "Ritiro confermato, transazione completata"}
+
+# ============== TRANSACTION ROUTES ==============
+
+@api_router.post("/transactions")
+async def create_transaction(transaction_data: TransactionCreate, user_id: str):
+    """Create a purchase transaction (only for premium users or with commission)"""
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+    
+    listing = await db.listings.find_one({"id": transaction_data.listing_id})
+    if not listing:
+        raise HTTPException(status_code=404, detail="Annuncio non trovato")
+    
+    if listing["stato"] != "disponibile":
+        raise HTTPException(status_code=400, detail="Libro non più disponibile")
+    
+    bookstore = await db.bookstores.find_one({"id": transaction_data.bookstore_id})
+    if not bookstore:
+        raise HTTPException(status_code=404, detail="Cartolibreria non trovata")
+    
+    # Calculate commissions
+    prezzo = listing["prezzo_vendita"]
+    is_premium = user["is_premium"]
+    
+    if is_premium:
+        # Premium: 0% commission
+        commissione_app = 0
+        commissione_cartolibreria = prezzo * 0.05  # 5% to bookstore (paid by app from subscription revenue)
+        importo_venditore = prezzo
+    else:
+        # Free: 15% total commission (10% app + 5% bookstore)
+        commissione_totale = prezzo * 0.15
+        commissione_cartolibreria = prezzo * 0.05
+        commissione_app = commissione_totale - commissione_cartolibreria
+        importo_venditore = prezzo - commissione_totale
+    
+    transaction = Transaction(
+        listing_id=listing["id"],
+        book_titolo=listing["book_titolo"],
+        buyer_id=user_id,
+        buyer_username=user["username"],
+        seller_id=listing["seller_id"],
+        seller_username=listing["seller_username"],
+        bookstore_id=bookstore["id"],
+        bookstore_nome=bookstore["nome"],
+        prezzo_totale=prezzo,
+        commissione_app=round(commissione_app, 2),
+        commissione_cartolibreria=round(commissione_cartolibreria, 2),
+        importo_venditore=round(importo_venditore, 2),
+        buyer_is_premium=is_premium
+    )
+    
+    await db.transactions.insert_one(transaction.dict())
+    
+    # Update listing status
+    await db.listings.update_one(
+        {"id": listing["id"]},
+        {"$set": {"stato": "prenotato"}}
+    )
+    
+    return transaction
+
+@api_router.get("/transactions/user/{user_id}")
+async def get_user_transactions(user_id: str):
+    # Get both as buyer and seller
+    as_buyer = await db.transactions.find({"buyer_id": user_id}).to_list(100)
+    as_seller = await db.transactions.find({"seller_id": user_id}).to_list(100)
+    
+    # Remove MongoDB _id field to prevent serialization issues
+    for transaction in as_buyer:
+        transaction.pop('_id', None)
+    for transaction in as_seller:
+        transaction.pop('_id', None)
+    
+    return {
+        "acquisti": as_buyer,
+        "vendite": as_seller
+    }
+
+@api_router.post("/transactions/{transaction_id}/confirm")
+async def confirm_transaction(transaction_id: str, user_id: str):
+    """Buyer confirms the book is OK after pickup"""
+    transaction = await db.transactions.find_one({"id": transaction_id, "buyer_id": user_id})
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transazione non trovata")
+    
+    await db.transactions.update_one(
+        {"id": transaction_id},
+        {"$set": {"stato": "completato", "ritirato_il": datetime.utcnow()}}
+    )
+    
+    return {"message": "Transazione completata con successo"}
+
+# ============== SEED DATA ROUTES ==============
+
+@api_router.post("/seed/books")
+async def seed_books():
+    """Seed database with sample books for testing"""
+    sample_books = [
+        {"titolo": "Matematica Blu 2.0 Vol. 1", "autore": "Bergamini, Barozzi", "isbn": "9788808537898", "materia": "Matematica", "prezzo_ministeriale": 32.50, "classe": "1"},
+        {"titolo": "Matematica Blu 2.0 Vol. 2", "autore": "Bergamini, Barozzi", "isbn": "9788808537904", "materia": "Matematica", "prezzo_ministeriale": 34.00, "classe": "2"},
+        {"titolo": "Matematica Blu 2.0 Vol. 3", "autore": "Bergamini, Barozzi", "isbn": "9788808537911", "materia": "Matematica", "prezzo_ministeriale": 35.50, "classe": "3"},
+        {"titolo": "Fisica! Le regole del gioco Vol. 1", "autore": "Romeni", "isbn": "9788808920812", "materia": "Fisica", "prezzo_ministeriale": 28.90, "classe": "1"},
+        {"titolo": "Fisica! Le regole del gioco Vol. 2", "autore": "Romeni", "isbn": "9788808920829", "materia": "Fisica", "prezzo_ministeriale": 30.50, "classe": "2"},
+        {"titolo": "Chimica: Concetti e modelli", "autore": "Valitutti", "isbn": "9788808820716", "materia": "Chimica", "prezzo_ministeriale": 31.20, "classe": "1"},
+        {"titolo": "Biologia: La scienza della vita", "autore": "Sadava", "isbn": "9788808720634", "materia": "Biologia", "prezzo_ministeriale": 33.80, "classe": "2"},
+        {"titolo": "Letteratura Italiana Vol. 1", "autore": "Baldi, Giusso", "isbn": "9788839536211", "materia": "Italiano", "prezzo_ministeriale": 29.50, "classe": "3"},
+        {"titolo": "Letteratura Italiana Vol. 2", "autore": "Baldi, Giusso", "isbn": "9788839536228", "materia": "Italiano", "prezzo_ministeriale": 31.00, "classe": "4"},
+        {"titolo": "Promessi Sposi", "autore": "Manzoni", "isbn": "9788808620521", "materia": "Italiano", "prezzo_ministeriale": 18.50, "classe": "2"},
+        {"titolo": "Storia: Dalle origini al Medioevo", "autore": "Gentile, Ronga", "isbn": "9788835047582", "materia": "Storia", "prezzo_ministeriale": 27.90, "classe": "1"},
+        {"titolo": "Storia: Età moderna", "autore": "Gentile, Ronga", "isbn": "9788835047599", "materia": "Storia", "prezzo_ministeriale": 28.50, "classe": "2"},
+        {"titolo": "Storia: Novecento", "autore": "Gentile, Ronga", "isbn": "9788835047605", "materia": "Storia", "prezzo_ministeriale": 29.80, "classe": "3"},
+        {"titolo": "Filosofia: Dalle origini ad Aristotele", "autore": "Abbagnano", "isbn": "9788839521613", "materia": "Filosofia", "prezzo_ministeriale": 26.90, "classe": "3"},
+        {"titolo": "English File Intermediate", "autore": "Latham-Koenig", "isbn": "9780194519847", "materia": "Inglese", "prezzo_ministeriale": 32.00, "classe": "2"},
+        {"titolo": "English File Upper-Intermediate", "autore": "Latham-Koenig", "isbn": "9780194519854", "materia": "Inglese", "prezzo_ministeriale": 33.50, "classe": "3"},
+        {"titolo": "Latino: Grammatica essenziale", "autore": "Flocchini", "isbn": "9788845152412", "materia": "Latino", "prezzo_ministeriale": 24.50, "classe": "1"},
+        {"titolo": "Divina Commedia: Inferno", "autore": "Dante Alighieri", "isbn": "9788808420152", "materia": "Italiano", "prezzo_ministeriale": 15.90, "classe": "3"},
+        {"titolo": "Divina Commedia: Purgatorio", "autore": "Dante Alighieri", "isbn": "9788808420169", "materia": "Italiano", "prezzo_ministeriale": 15.90, "classe": "4"},
+        {"titolo": "Divina Commedia: Paradiso", "autore": "Dante Alighieri", "isbn": "9788808420176", "materia": "Italiano", "prezzo_ministeriale": 15.90, "classe": "5"}
+    ]
+    
+    # Clear existing books
+    await db.books.delete_many({})
+    
+    # Insert new books
+    for book_data in sample_books:
+        book = Book(**book_data)
+        await db.books.insert_one(book.dict())
+    
+    return {"message": f"Inseriti {len(sample_books)} libri di esempio"}
+
+@api_router.post("/seed/bookstores")
+async def seed_bookstores():
+    """Seed database with sample bookstores for testing"""
+    sample_bookstores = [
+        {"nome": "Cartolibreria Centrale", "indirizzo": "Via Roma 45", "citta": "Milano", "telefono": "02-1234567", "email": "centrale@test.it", "password": "test123"},
+        {"nome": "Libreria dello Studente", "indirizzo": "Corso Italia 12", "citta": "Milano", "telefono": "02-7654321", "email": "studente@test.it", "password": "test123"},
+        {"nome": "Cartoleria Bianchi", "indirizzo": "Via Garibaldi 78", "citta": "Roma", "telefono": "06-9876543", "email": "bianchi@test.it", "password": "test123"}
+    ]
+    
+    await db.bookstores.delete_many({})
+    
+    for store_data in sample_bookstores:
+        await register_bookstore(BookstoreCreate(**store_data))
+    
+    return {"message": f"Inserite {len(sample_bookstores)} cartolibrerie di esempio"}
+
+# Include the router in the main app
+app.include_router(api_router)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+@app.on_event("shutdown")
+async def shutdown_db_client():
+    client.close()

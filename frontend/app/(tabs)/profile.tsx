@@ -1,0 +1,411 @@
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  Alert,
+  ActivityIndicator,
+} from 'react-native';
+import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import axios from 'axios';
+
+const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+
+export default function ProfileScreen() {
+  const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [upgrading, setUpgrading] = useState(false);
+  const [userData, setUserData] = useState<any>(null);
+
+  useEffect(() => {
+    loadUserData();
+  }, []);
+
+  const loadUserData = async () => {
+    try {
+      const userId = await AsyncStorage.getItem('user_id');
+      const username = await AsyncStorage.getItem('username');
+      const nome = await AsyncStorage.getItem('user_nome');
+      const isPremium = await AsyncStorage.getItem('is_premium');
+
+      if (!userId) {
+        router.replace('/');
+        return;
+      }
+
+      // Get full user data
+      const response = await axios.get(`${API_URL}/api/users/${userId}`);
+
+      setUserData({
+        ...response.data,
+        nome,
+        isPremium: isPremium === 'true',
+      });
+    } catch (error) {
+      console.error('Error loading user data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpgradePremium = async () => {
+    Alert.alert(
+      'Upgrade a Premium',
+      'Diventa Premium per €5,99/anno e risparmia sulle commissioni!\n\n• 0% commissioni sulle vendite\n• Risparmia il 15% su ogni transazione\n• Supporto prioritario',
+      [
+        { text: 'Annulla', style: 'cancel' },
+        {
+          text: 'Acquista',
+          onPress: async () => {
+            setUpgrading(true);
+            try {
+              const userId = await AsyncStorage.getItem('user_id');
+              await axios.post(`${API_URL}/api/users/${userId}/upgrade-premium`);
+              await AsyncStorage.setItem('is_premium', 'true');
+              setUserData({ ...userData, isPremium: true });
+              Alert.alert(
+                'Upgrade completato!',
+                'Ora sei un utente Premium. Goditi lo 0% di commissioni!'
+              );
+            } catch (error) {
+              Alert.alert('Errore', 'Impossibile completare l\'upgrade');
+            } finally {
+              setUpgrading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleLogout = async () => {
+    Alert.alert('Esci', 'Sei sicuro di voler uscire?', [
+      { text: 'Annulla', style: 'cancel' },
+      {
+        text: 'Esci',
+        style: 'destructive',
+        onPress: async () => {
+          await AsyncStorage.multiRemove([
+            'user_id',
+            'username',
+            'user_nome',
+            'is_premium',
+          ]);
+          router.replace('/');
+        },
+      },
+    ]);
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#1a472a" />
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView style={styles.container}>
+      {/* Profile Header */}
+      <View style={styles.profileHeader}>
+        <View style={styles.avatarContainer}>
+          <Ionicons name="person" size={48} color="#fff" />
+        </View>
+        <Text style={styles.userName}>{userData?.nome || 'Utente'}</Text>
+        <Text style={styles.userUsername}>{userData?.username}</Text>
+        {userData?.isPremium && (
+          <View style={styles.premiumBadge}>
+            <Ionicons name="diamond" size={16} color="#fff" />
+            <Text style={styles.premiumBadgeText}>Premium</Text>
+          </View>
+        )}
+      </View>
+
+      {/* School Info */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Scuola</Text>
+        <View style={styles.infoCard}>
+          <View style={styles.infoRow}>
+            <Ionicons name="school-outline" size={20} color="#666" />
+            <Text style={styles.infoText}>{userData?.scuola}</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Ionicons name="bookmark-outline" size={20} color="#666" />
+            <Text style={styles.infoText}>
+              Classe {userData?.classe} - Sezione {userData?.sezione}
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Premium Section */}
+      {!userData?.isPremium && (
+        <View style={styles.section}>
+          <View style={styles.premiumCard}>
+            <View style={styles.premiumHeader}>
+              <Ionicons name="diamond" size={32} color="#f4a460" />
+              <Text style={styles.premiumTitle}>Diventa Premium</Text>
+            </View>
+            <Text style={styles.premiumPrice}>€5,99/anno</Text>
+            <View style={styles.premiumFeatures}>
+              <View style={styles.premiumFeature}>
+                <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+                <Text style={styles.premiumFeatureText}>
+                  0% commissioni sulle vendite
+                </Text>
+              </View>
+              <View style={styles.premiumFeature}>
+                <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+                <Text style={styles.premiumFeatureText}>
+                  Risparmia il 15% su ogni transazione
+                </Text>
+              </View>
+              <View style={styles.premiumFeature}>
+                <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+                <Text style={styles.premiumFeatureText}>
+                  Supporto prioritario
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              style={styles.premiumButton}
+              onPress={handleUpgradePremium}
+              disabled={upgrading}
+            >
+              {upgrading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.premiumButtonText}>Acquista Premium</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {/* Commission Info */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Commissioni</Text>
+        <View style={styles.infoCard}>
+          <View style={styles.commissionRow}>
+            <Text style={styles.commissionLabel}>Il tuo stato:</Text>
+            <Text
+              style={[
+                styles.commissionValue,
+                { color: userData?.isPremium ? '#4CAF50' : '#f4a460' },
+              ]}
+            >
+              {userData?.isPremium ? '0%' : '15%'}
+            </Text>
+          </View>
+          <Text style={styles.commissionNote}>
+            {userData?.isPremium
+              ? 'Come utente Premium, non paghi commissioni sulle vendite!'
+              : 'Gli utenti Free pagano il 15% di commissione. Diventa Premium per azzerare le commissioni!'}
+          </Text>
+        </View>
+      </View>
+
+      {/* Actions */}
+      <View style={styles.section}>
+        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+          <Ionicons name="log-out-outline" size={20} color="#ff4444" />
+          <Text style={styles.logoutButtonText}>Esci</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.footer}>
+        <Text style={styles.footerText}>ScambiaLibri v1.0</Text>
+        <Text style={styles.footerSubtext}>
+          La piattaforma per lo scambio di libri scolastici
+        </Text>
+      </View>
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  profileHeader: {
+    backgroundColor: '#1a472a',
+    alignItems: 'center',
+    paddingVertical: 32,
+    paddingHorizontal: 24,
+  },
+  avatarContainer: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  userName: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  userUsername: {
+    fontSize: 14,
+    color: '#a8d5ba',
+    marginTop: 4,
+  },
+  premiumBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f4a460',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginTop: 12,
+    gap: 6,
+  },
+  premiumBadgeText: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  section: {
+    padding: 16,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 12,
+  },
+  infoCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 12,
+  },
+  infoText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  premiumCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    borderWidth: 2,
+    borderColor: '#f4a460',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  premiumHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 8,
+  },
+  premiumTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  premiumPrice: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#1a472a',
+    marginBottom: 16,
+  },
+  premiumFeatures: {
+    gap: 12,
+    marginBottom: 20,
+  },
+  premiumFeature: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  premiumFeatureText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  premiumButton: {
+    backgroundColor: '#f4a460',
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  premiumButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  commissionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  commissionLabel: {
+    fontSize: 16,
+    color: '#666',
+  },
+  commissionValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+  commissionNote: {
+    fontSize: 13,
+    color: '#999',
+    marginTop: 4,
+  },
+  logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#ffcccc',
+  },
+  logoutButtonText: {
+    color: '#ff4444',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  footer: {
+    alignItems: 'center',
+    padding: 24,
+    paddingBottom: 40,
+  },
+  footerText: {
+    fontSize: 14,
+    color: '#999',
+  },
+  footerSubtext: {
+    fontSize: 12,
+    color: '#ccc',
+    marginTop: 4,
+  },
+});
