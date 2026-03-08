@@ -96,6 +96,8 @@ class BookBase(BaseModel):
     materia: str
     prezzo_ministeriale: float
     classe: str  # Which class needs this book
+    tipo_scuola: Optional[str] = None  # primo_grado or secondo_grado
+    editore: Optional[str] = None
 
 class BookCreate(BaseModel):
     titolo: str
@@ -104,6 +106,8 @@ class BookCreate(BaseModel):
     materia: str
     prezzo_ministeriale: float
     classe: str
+    tipo_scuola: Optional[str] = None
+    editore: Optional[str] = None
 
 class Book(BookBase):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -287,14 +291,16 @@ async def create_book(book_data: BookCreate):
     return book
 
 @api_router.get("/books", response_model=List[Book])
-async def get_books(classe: Optional[str] = None, materia: Optional[str] = None):
+async def get_books(classe: Optional[str] = None, materia: Optional[str] = None, tipo_scuola: Optional[str] = None, limit: int = 5000):
     query = {}
     if classe:
         query["classe"] = classe
     if materia:
         query["materia"] = materia
+    if tipo_scuola:
+        query["tipo_scuola"] = tipo_scuola
     
-    books = await db.books.find(query).to_list(1000)
+    books = await db.books.find(query).to_list(limit)
     return [Book(**book) for book in books]
 
 @api_router.get("/books/{book_id}", response_model=Book)
@@ -937,6 +943,48 @@ async def seed_books():
         await db.books.insert_one(book.dict())
     
     return {"message": f"Inseriti {len(sample_books)} libri di esempio"}
+
+@api_router.post("/seed/books-miur")
+async def seed_books_miur(books: List[BookCreate]):
+    """Import official MIUR textbook data"""
+    # Clear existing books
+    await db.books.delete_many({})
+    
+    inserted = 0
+    for book_data in books:
+        try:
+            book = Book(**book_data.dict())
+            await db.books.insert_one(book.dict())
+            inserted += 1
+        except Exception as e:
+            logger.error(f"Error inserting book: {e}")
+            continue
+    
+    return {"message": f"Inseriti {inserted} libri dal database MIUR"}
+
+@api_router.get("/books/stats")
+async def get_books_stats():
+    """Get statistics about books in database"""
+    total = await db.books.count_documents({})
+    
+    # Count by tipo_scuola
+    primo_grado = await db.books.count_documents({"tipo_scuola": "primo_grado"})
+    secondo_grado = await db.books.count_documents({"tipo_scuola": "secondo_grado"})
+    
+    # Count by materia (top 10)
+    pipeline = [
+        {"$group": {"_id": "$materia", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": 10}
+    ]
+    materie = await db.books.aggregate(pipeline).to_list(10)
+    
+    return {
+        "totale": total,
+        "primo_grado": primo_grado,
+        "secondo_grado": secondo_grado,
+        "top_materie": materie
+    }
 
 @api_router.post("/seed/bookstores")
 async def seed_bookstores():
