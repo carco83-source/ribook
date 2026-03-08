@@ -55,6 +55,8 @@ export default function RegisterScreen() {
   const [availableSchools, setAvailableSchools] = useState<School[]>([]);
   const [availableClassi, setAvailableClassi] = useState<string[]>([]);
 
+  const [errorMessage, setErrorMessage] = useState('');
+
   useEffect(() => {
     if (formData.tipoScuola) {
       setAvailableSchools(getSchoolsByType(formData.tipoScuola as SchoolType));
@@ -83,25 +85,54 @@ export default function RegisterScreen() {
   };
 
   const handleRegister = async () => {
+    setErrorMessage('');
     const { nome, cognome, email, telefono, password, confirmPassword, scuolaNome, classe, sezione, tipoScuola } = formData;
 
-    if (!nome || !cognome || !email || !telefono || !password || !scuolaNome || !classe || !sezione || !tipoScuola) {
-      Alert.alert('Errore', 'Compila tutti i campi');
+    // Validate all fields
+    if (!nome || !cognome) {
+      setErrorMessage('Inserisci nome e cognome');
       return;
     }
-
-    if (password !== confirmPassword) {
-      Alert.alert('Errore', 'Le password non corrispondono');
+    if (!email) {
+      setErrorMessage('Inserisci la tua email');
       return;
     }
-
+    if (!telefono) {
+      setErrorMessage('Inserisci il tuo numero di telefono');
+      return;
+    }
+    if (!tipoScuola) {
+      setErrorMessage('Seleziona il tipo di scuola');
+      return;
+    }
+    if (!scuolaNome) {
+      setErrorMessage('Seleziona la tua scuola');
+      return;
+    }
+    if (!classe) {
+      setErrorMessage('Seleziona la classe');
+      return;
+    }
+    if (!sezione) {
+      setErrorMessage('Seleziona la sezione');
+      return;
+    }
+    if (!password) {
+      setErrorMessage('Inserisci una password');
+      return;
+    }
     if (password.length < 6) {
-      Alert.alert('Errore', 'La password deve avere almeno 6 caratteri');
+      setErrorMessage('La password deve avere almeno 6 caratteri');
+      return;
+    }
+    if (password !== confirmPassword) {
+      setErrorMessage('Le password non corrispondono');
       return;
     }
 
     setLoading(true);
     try {
+      console.log('Sending registration request...', { nome, cognome, email, scuolaNome, classe, sezione, tipoScuola });
       const response = await axios.post(`${API_URL}/api/auth/register`, {
         nome,
         cognome,
@@ -114,6 +145,9 @@ export default function RegisterScreen() {
         tipo_scuola: tipoScuola,
       });
 
+      console.log('Registration successful:', response.data);
+      
+      // Show success and navigate
       Alert.alert(
         'Registrazione completata!',
         `Il tuo username anonimo è: ${response.data.username}\n\nQuesto username sarà visibile agli altri utenti per proteggere la tua privacy.`,
@@ -124,12 +158,16 @@ export default function RegisterScreen() {
           },
         ]
       );
+      
+      // Also navigate directly for web where Alert might not work well
+      setTimeout(() => {
+        router.push('/(auth)/login');
+      }, 2000);
+      
     } catch (error: any) {
       console.error('Registration error:', error);
-      Alert.alert(
-        'Errore',
-        error.response?.data?.detail || 'Errore durante la registrazione'
-      );
+      const errorMsg = error.response?.data?.detail || 'Errore durante la registrazione. Riprova.';
+      setErrorMessage(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -178,6 +216,14 @@ export default function RegisterScreen() {
         </Text>
 
         <View style={styles.form}>
+          {/* Error Message */}
+          {errorMessage ? (
+            <View style={styles.errorBanner}>
+              <Ionicons name="alert-circle" size={20} color="#c62828" />
+              <Text style={styles.errorText}>{errorMessage}</Text>
+            </View>
+          ) : null}
+
           <Text style={styles.sectionTitle}>Dati Personali</Text>
           
           <View style={styles.row}>
@@ -479,6 +525,22 @@ const styles = StyleSheet.create({
   headerBannerText: {
     color: '#1a472a',
     fontWeight: '600',
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffebee',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#ef9a9a',
+  },
+  errorText: {
+    flex: 1,
+    color: '#c62828',
+    fontSize: 14,
   },
   title: {
     fontSize: 24,
