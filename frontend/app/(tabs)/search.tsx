@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -34,6 +35,9 @@ export default function SearchScreen() {
   const [loading, setLoading] = useState(true);
   const [userRequests, setUserRequests] = useState<string[]>([]);
   const [userId, setUserId] = useState<string | null>(null);
+  const [userClasse, setUserClasse] = useState<string | null>(null);
+  const [selectedClasse, setSelectedClasse] = useState<string>('');
+  const [tipoScuola, setTipoScuola] = useState<string>('');
 
   useEffect(() => {
     loadData();
@@ -56,25 +60,61 @@ export default function SearchScreen() {
     }
   }, [searchQuery, books]);
 
+  // Reload books when classe filter changes
+  useEffect(() => {
+    if (selectedClasse && tipoScuola) {
+      loadBooks(selectedClasse, tipoScuola);
+    }
+  }, [selectedClasse]);
+
+  const loadBooks = async (classe: string, tipo: string) => {
+    try {
+      setLoading(true);
+      const booksResponse = await axios.get(
+        `${API_URL}/api/books?classe=${classe}&tipo_scuola=${tipo}&limit=500`
+      );
+      setBooks(booksResponse.data);
+      setFilteredBooks(booksResponse.data);
+    } catch (error) {
+      console.error('Error loading books:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const loadData = async () => {
     try {
       const storedUserId = await AsyncStorage.getItem('user_id');
       setUserId(storedUserId);
 
-      // Load all books
-      const booksResponse = await axios.get(`${API_URL}/api/books`);
-      setBooks(booksResponse.data);
-      setFilteredBooks(booksResponse.data);
-
-      // Load user's requests to know which books they're already looking for
+      // Get user info to know their classe
       if (storedUserId) {
+        const userResponse = await axios.get(`${API_URL}/api/users/${storedUserId}`);
+        const userClasse = userResponse.data.classe;
+        setUserClasse(userClasse);
+        setSelectedClasse(userClasse);
+        
+        // Determine tipo_scuola based on classe (1-3 = medie, 1-5 = superiori)
+        // We need to store this info, for now assume based on scuola name
+        const scuola = userResponse.data.scuola?.toLowerCase() || '';
+        const tipo = scuola.includes('media') || scuola.includes('i.c.') ? 'primo_grado' : 'secondo_grado';
+        setTipoScuola(tipo);
+        
+        // Load books for user's classe
+        await loadBooks(userClasse, tipo);
+
+        // Load user's requests
         const requestsResponse = await axios.get(
           `${API_URL}/api/requests/user/${storedUserId}`
         );
         setUserRequests(requestsResponse.data.map((r: any) => r.book_id));
       }
     } catch (error) {
-      console.error('Error loading books:', error);
+      console.error('Error loading data:', error);
+      // Fallback: load all books
+      const booksResponse = await axios.get(`${API_URL}/api/books?limit=500`);
+      setBooks(booksResponse.data);
+      setFilteredBooks(booksResponse.data);
     } finally {
       setLoading(false);
     }
@@ -154,6 +194,34 @@ export default function SearchScreen() {
 
   return (
     <View style={styles.container}>
+      {/* Class Filter */}
+      {tipoScuola && (
+        <View style={styles.classeFilterContainer}>
+          <Text style={styles.classeFilterLabel}>Classe:</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.classeScroll}>
+            {(tipoScuola === 'primo_grado' ? ['1', '2', '3'] : ['1', '2', '3', '4', '5']).map((c) => (
+              <TouchableOpacity
+                key={c}
+                style={[
+                  styles.classeButton,
+                  selectedClasse === c && styles.classeButtonActive,
+                ]}
+                onPress={() => setSelectedClasse(c)}
+              >
+                <Text
+                  style={[
+                    styles.classeButtonText,
+                    selectedClasse === c && styles.classeButtonTextActive,
+                  ]}
+                >
+                  {c}°
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+
       <View style={styles.searchContainer}>
         <Ionicons name="search" size={20} color="#666" />
         <TextInput
@@ -211,6 +279,42 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  classeFilterContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  classeFilterLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginRight: 12,
+  },
+  classeScroll: {
+    flexDirection: 'row',
+  },
+  classeButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#f0f0f0',
+    marginRight: 8,
+  },
+  classeButtonActive: {
+    backgroundColor: '#1a472a',
+  },
+  classeButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+  },
+  classeButtonTextActive: {
+    color: '#fff',
   },
   searchContainer: {
     flexDirection: 'row',

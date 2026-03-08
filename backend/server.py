@@ -87,6 +87,7 @@ class UserPublic(BaseModel):
     classe: str
     sezione: str
     is_premium: bool
+    tipo_scuola: Optional[str] = None
 
 # Book Models
 class BookBase(BaseModel):
