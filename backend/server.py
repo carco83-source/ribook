@@ -291,7 +291,7 @@ async def create_book(book_data: BookCreate):
     return book
 
 @api_router.get("/books", response_model=List[Book])
-async def get_books(classe: Optional[str] = None, materia: Optional[str] = None, tipo_scuola: Optional[str] = None, limit: int = 5000):
+async def get_books(classe: Optional[str] = None, materia: Optional[str] = None, tipo_scuola: Optional[str] = None, limit: int = 100, skip: int = 0, search: Optional[str] = None):
     query = {}
     if classe:
         query["classe"] = classe
@@ -299,8 +299,14 @@ async def get_books(classe: Optional[str] = None, materia: Optional[str] = None,
         query["materia"] = materia
     if tipo_scuola:
         query["tipo_scuola"] = tipo_scuola
+    if search:
+        query["$or"] = [
+            {"titolo": {"$regex": search, "$options": "i"}},
+            {"autore": {"$regex": search, "$options": "i"}},
+            {"isbn": {"$regex": search, "$options": "i"}}
+        ]
     
-    books = await db.books.find(query).to_list(limit)
+    books = await db.books.find(query).skip(skip).limit(limit).to_list(limit)
     return [Book(**book) for book in books]
 
 @api_router.get("/books/{book_id}", response_model=Book)
@@ -358,22 +364,26 @@ async def create_listing(listing_data: BookListingCreate, user_id: str):
     return listing
 
 @api_router.get("/listings")
-async def get_listings(classe: Optional[str] = None, materia: Optional[str] = None, stato: str = "disponibile"):
+async def get_listings(classe: Optional[str] = None, materia: Optional[str] = None, stato: str = "disponibile", limit: int = 50, skip: int = 0):
     query = {"stato": stato}
     if classe:
         query["book_classe"] = classe
     if materia:
         query["book_materia"] = materia
     
-    listings = await db.listings.find(query).to_list(1000)
+    # Exclude foto_base64 from list view to reduce payload
+    projection = {"foto_base64": 0}
+    listings = await db.listings.find(query, projection).skip(skip).limit(limit).to_list(limit)
     # Remove MongoDB _id field to prevent serialization issues
     for listing in listings:
         listing.pop('_id', None)
     return listings
 
 @api_router.get("/listings/user/{user_id}")
-async def get_user_listings(user_id: str):
-    listings = await db.listings.find({"seller_id": user_id}).to_list(100)
+async def get_user_listings(user_id: str, limit: int = 50):
+    # Exclude foto_base64 from list view
+    projection = {"foto_base64": 0}
+    listings = await db.listings.find({"seller_id": user_id}, projection).limit(limit).to_list(limit)
     # Remove MongoDB _id field to prevent serialization issues
     for listing in listings:
         listing.pop('_id', None)
@@ -428,14 +438,14 @@ async def get_user_requests(user_id: str):
 # ============== COMPATIBILITY/MATCHING ROUTES ==============
 
 @api_router.get("/matches/{user_id}")
-async def get_matches(user_id: str):
+async def get_matches(user_id: str, limit: int = 50):
     """Find compatible listings based on user's book requests"""
     user = await db.users.find_one({"id": user_id})
     if not user:
         raise HTTPException(status_code=404, detail="Utente non trovato")
     
     # Get user's book requests
-    user_requests = await db.requests.find({"buyer_id": user_id, "stato": "cercando"}).to_list(100)
+    user_requests = await db.requests.find({"buyer_id": user_id, "stato": "cercando"}).to_list(50)
     
     if not user_requests:
         return {"matches": [], "total": 0}
@@ -443,28 +453,43 @@ async def get_matches(user_id: str):
     # Get book IDs user is looking for
     wanted_book_ids = [req["book_id"] for req in user_requests]
     
-    # Find available listings for those books (excluding user's own)
-    listings = await db.listings.find({
-        "book_id": {"$in": wanted_book_ids},
-        "seller_id": {"$ne": user_id},
-        "stato": "disponibile"
-    }).to_list(1000)
+    # Use aggregation with $lookup to avoid N+1 queries
+    pipeline = [
+        {
+            "$match": {
+                "book_id": {"$in": wanted_book_ids},
+                "seller_id": {"$ne": user_id},
+                "stato": "disponibile"
+            }
+        },
+        {
+            "$lookup": {
+                "from": "users",
+                "localField": "seller_id",
+                "foreignField": "id",
+                "as": "seller_info"
+            }
+        },
+        {"$unwind": "$seller_info"},
+        {"$project": {"foto_base64": 0, "seller_info.password_hash": 0, "seller_info.email": 0, "seller_info.telefono": 0}},
+        {"$limit": limit}
+    ]
+    
+    listings = await db.listings.aggregate(pipeline).to_list(limit)
     
     matches = []
     for listing in listings:
-        # Calculate compatibility score
-        seller = await db.users.find_one({"id": listing["seller_id"]})
-        if not seller:
-            continue
+        listing.pop('_id', None)
+        seller = listing.pop('seller_info', {})
         
-        same_school = seller["scuola"] == user["scuola"]
-        same_class = seller["classe"] == user["classe"]
-        same_section = seller["sezione"] == user["sezione"]
+        same_school = seller.get("scuola") == user["scuola"]
+        same_class = seller.get("classe") == user["classe"]
+        same_section = seller.get("sezione") == user["sezione"]
         
         # Score: same section = 100, same class = 80, same school = 60, other = 40
-        if same_section:
+        if same_section and same_class and same_school:
             score = 100
-        elif same_class:
+        elif same_class and same_school:
             score = 80
         elif same_school:
             score = 60
@@ -492,8 +517,47 @@ async def get_radar_view(user_id: str):
         raise HTTPException(status_code=404, detail="Utente non trovato")
     
     # Get user's requests
-    user_requests = await db.requests.find({"buyer_id": user_id, "stato": "cercando"}).to_list(100)
+    user_requests = await db.requests.find({"buyer_id": user_id, "stato": "cercando"}).to_list(50)
     wanted_book_ids = [req["book_id"] for req in user_requests]
+    
+    if not wanted_book_ids:
+        return {
+            "total_matches": 0,
+            "same_section": 0,
+            "same_class": 0,
+            "same_school": 0,
+            "others": 0,
+            "books_searching": 0
+        }
+    
+    # Use aggregation with $lookup to avoid N+1 queries
+    pipeline = [
+        {
+            "$match": {
+                "book_id": {"$in": wanted_book_ids},
+                "seller_id": {"$ne": user_id},
+                "stato": "disponibile"
+            }
+        },
+        {
+            "$lookup": {
+                "from": "users",
+                "localField": "seller_id",
+                "foreignField": "id",
+                "as": "seller_info"
+            }
+        },
+        {"$unwind": "$seller_info"},
+        {
+            "$project": {
+                "seller_scuola": "$seller_info.scuola",
+                "seller_classe": "$seller_info.classe",
+                "seller_sezione": "$seller_info.sezione"
+            }
+        }
+    ]
+    
+    listings = await db.listings.aggregate(pipeline).to_list(200)
     
     # Count matches by category
     same_section = 0
@@ -501,22 +565,15 @@ async def get_radar_view(user_id: str):
     same_school = 0
     others = 0
     
-    listings = await db.listings.find({
-        "book_id": {"$in": wanted_book_ids},
-        "seller_id": {"$ne": user_id},
-        "stato": "disponibile"
-    }).to_list(1000)
-    
     for listing in listings:
-        seller = await db.users.find_one({"id": listing["seller_id"]})
-        if not seller:
-            continue
-        
-        if seller["sezione"] == user["sezione"] and seller["classe"] == user["classe"] and seller["scuola"] == user["scuola"]:
+        if (listing.get("seller_sezione") == user["sezione"] and 
+            listing.get("seller_classe") == user["classe"] and 
+            listing.get("seller_scuola") == user["scuola"]):
             same_section += 1
-        elif seller["classe"] == user["classe"] and seller["scuola"] == user["scuola"]:
+        elif (listing.get("seller_classe") == user["classe"] and 
+              listing.get("seller_scuola") == user["scuola"]):
             same_class += 1
-        elif seller["scuola"] == user["scuola"]:
+        elif listing.get("seller_scuola") == user["scuola"]:
             same_school += 1
         else:
             others += 1
@@ -828,16 +885,18 @@ async def send_chat_message(message_data: ChatMessageCreate, user_id: str):
 async def get_conversations(user_id: str):
     """Get all conversations for a user"""
     
-    # Find all messages where user is sender or receiver
+    # Find all messages where user is sender or receiver (limit to recent)
     messages = await db.chat_messages.find({
         "$or": [
             {"sender_id": user_id},
             {"receiver_id": user_id}
         ]
-    }).sort("created_at", -1).to_list(1000)
+    }, {"foto_base64": 0}).sort("created_at", -1).to_list(200)
     
     # Group by listing and other user
     conversations = {}
+    listing_cache = {}  # Cache listing lookups
+    
     for msg in messages:
         msg.pop('_id', None)
         listing_id = msg["listing_id"]
@@ -847,13 +906,14 @@ async def get_conversations(user_id: str):
         key = f"{listing_id}_{other_user_id}"
         
         if key not in conversations:
-            # Get listing title
-            listing = await db.listings.find_one({"id": listing_id})
-            listing_title = listing["book_titolo"] if listing else "Libro"
+            # Get listing title (with caching)
+            if listing_id not in listing_cache:
+                listing = await db.listings.find_one({"id": listing_id}, {"book_titolo": 1})
+                listing_cache[listing_id] = listing["book_titolo"] if listing else "Libro"
             
             conversations[key] = {
                 "listing_id": listing_id,
-                "listing_title": listing_title,
+                "listing_title": listing_cache[listing_id],
                 "other_user_username": other_username,
                 "other_user_id": other_user_id,
                 "last_message": msg.get("message") or "📷 Foto",
@@ -868,7 +928,7 @@ async def get_conversations(user_id: str):
     return list(conversations.values())
 
 @api_router.get("/chat/messages/{listing_id}/{other_user_id}")
-async def get_chat_messages(listing_id: str, other_user_id: str, user_id: str):
+async def get_chat_messages(listing_id: str, other_user_id: str, user_id: str, limit: int = 100):
     """Get all messages in a conversation"""
     
     messages = await db.chat_messages.find({
@@ -877,7 +937,7 @@ async def get_chat_messages(listing_id: str, other_user_id: str, user_id: str):
             {"sender_id": user_id, "receiver_id": other_user_id},
             {"sender_id": other_user_id, "receiver_id": user_id}
         ]
-    }).sort("created_at", 1).to_list(1000)
+    }).sort("created_at", 1).to_list(limit)
     
     # Mark messages as read
     await db.chat_messages.update_many(
