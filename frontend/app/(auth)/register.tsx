@@ -147,22 +147,11 @@ export default function RegisterScreen() {
 
       console.log('Registration successful:', response.data);
       
-      // Show success and navigate
-      Alert.alert(
-        'Registrazione completata!',
-        `Il tuo username anonimo è: ${response.data.username}\n\nQuesto username sarà visibile agli altri utenti per proteggere la tua privacy.`,
-        [
-          {
-            text: 'OK',
-            onPress: () => router.push('/(auth)/login'),
-          },
-        ]
-      );
-      
-      // Also navigate directly for web where Alert might not work well
-      setTimeout(() => {
-        router.push('/(auth)/login');
-      }, 2000);
+      // Navigate to success page with the username
+      router.replace({
+        pathname: '/(auth)/register-success',
+        params: { username: response.data.username }
+      });
       
     } catch (error: any) {
       console.error('Registration error:', error);
