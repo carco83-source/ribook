@@ -28,7 +28,18 @@ interface Listing {
   book_classe: string;
   prezzo_ministeriale: number;
   condizione: string;
+  condition_details?: {
+    sottolineature: number;
+    copertina: number;
+    pagine: number;
+    esercizi: number;
+  };
   prezzo_vendita: number;
+  ha_fascicoli?: boolean;
+  fascicoli_totali?: number;
+  fascicoli_presenti?: number;
+  bookstore_ids?: string[];
+  bookstore_names?: string[];
   note?: string;
   foto_base64?: string;
   stato: string;
@@ -105,9 +116,16 @@ export default function ListingDetailScreen() {
       return;
     }
 
+    // Check if bookstore is in seller's available list
+    const sellerBookstoreIds = listing?.bookstore_ids || [];
+    if (sellerBookstoreIds.length > 0 && !sellerBookstoreIds.includes(selectedBookstore.id)) {
+      Alert.alert('Errore', 'Questa cartolibreria non è disponibile per questo annuncio');
+      return;
+    }
+
     Alert.alert(
       'Conferma acquisto',
-      `Stai per acquistare "${listing?.book_titolo}" per \u20ac${listing?.prezzo_vendita.toFixed(2)}${!isPremium ? ' (+ 15% commissione)' : ''}.\n\nRitiro presso: ${selectedBookstore.nome}`,
+      `Stai per acquistare "${listing?.book_titolo}" per €${listing?.prezzo_vendita.toFixed(2)}${!isPremium ? ' (+ 15% commissione)' : ''}.\n\nRitiro presso: ${selectedBookstore.nome}`,
       [
         { text: 'Annulla', style: 'cancel' },
         {
@@ -115,18 +133,18 @@ export default function ListingDetailScreen() {
           onPress: async () => {
             setPurchasing(true);
             try {
-              await axios.post(`${API_URL}/api/transactions?user_id=${userId}`, {
+              const response = await axios.post(`${API_URL}/api/purchase?buyer_id=${userId}`, {
                 listing_id: listing?.id,
                 bookstore_id: selectedBookstore.id,
               });
 
               Alert.alert(
                 'Acquisto completato!',
-                `Il venditore ha 5 giorni per consegnare il libro presso ${selectedBookstore.nome}. Riceverai una notifica quando sarà pronto per il ritiro.`,
+                `Codice ritiro: ${response.data.codice_ritiro}\n\nIl venditore ha 5 giorni per consegnare il libro presso ${selectedBookstore.nome}.\n\nMostra questo codice quando ritiri il libro.`,
                 [
                   {
                     text: 'OK',
-                    onPress: () => router.push('/(tabs)/transactions'),
+                    onPress: () => router.push('/my-purchases'),
                   },
                 ]
               );
