@@ -384,6 +384,55 @@ async def get_user(user_id: str):
         raise HTTPException(status_code=404, detail="Utente non trovato")
     return UserPublic(**user)
 
+
+class UpdateUserRequest(BaseModel):
+    nome: Optional[str] = None
+    cognome: Optional[str] = None
+    email: Optional[str] = None
+    telefono: Optional[str] = None
+    scuola: Optional[str] = None
+    classe: Optional[str] = None
+    sezione: Optional[str] = None
+    tipo_scuola: Optional[str] = None
+
+
+@api_router.put("/users/{user_id}")
+async def update_user(user_id: str, update_data: UpdateUserRequest):
+    """Update user profile data"""
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+    
+    # Build update dict with only non-None values
+    update_fields = {}
+    if update_data.nome is not None:
+        update_fields["nome"] = update_data.nome
+    if update_data.cognome is not None:
+        update_fields["cognome"] = update_data.cognome
+    if update_data.email is not None:
+        update_fields["email"] = update_data.email
+    if update_data.telefono is not None:
+        update_fields["telefono"] = update_data.telefono
+    if update_data.scuola is not None:
+        update_fields["scuola"] = update_data.scuola
+    if update_data.classe is not None:
+        update_fields["classe"] = update_data.classe
+    if update_data.sezione is not None:
+        update_fields["sezione"] = update_data.sezione
+    if update_data.tipo_scuola is not None:
+        update_fields["tipo_scuola"] = update_data.tipo_scuola
+    
+    if update_fields:
+        await db.users.update_one(
+            {"id": user_id},
+            {"$set": update_fields}
+        )
+    
+    # Return updated user
+    updated_user = await db.users.find_one({"id": user_id})
+    return UserPublic(**updated_user)
+
+
 @api_router.post("/users/{user_id}/upgrade-premium")
 async def upgrade_to_premium(user_id: str):
     user = await db.users.find_one({"id": user_id})
@@ -493,6 +542,112 @@ async def delete_child_profile(user_id: str, profile_id: str):
     )
     
     return {"message": "Profilo eliminato"}
+
+
+@api_router.put("/users/{user_id}/profiles/{profile_id}")
+async def update_child_profile(user_id: str, profile_id: str, profile_data: AddChildProfileRequest):
+    """Update a child profile"""
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+    
+    if profile_id == "main":
+        # Update main profile
+        await db.users.update_one(
+            {"id": user_id},
+            {"$set": {
+                "scuola": profile_data.scuola,
+                "classe": profile_data.classe,
+                "sezione": profile_data.sezione,
+                "tipo_scuola": profile_data.tipo_scuola
+            }}
+        )
+        return {"message": "Profilo principale aggiornato"}
+    
+    # Update child profile
+    profili = user.get("profili_figli", [])
+    updated = False
+    for i, p in enumerate(profili):
+        if p["id"] == profile_id:
+            profili[i] = {
+                "id": profile_id,
+                "nome_figlio": profile_data.nome_figlio,
+                "scuola": profile_data.scuola,
+                "classe": profile_data.classe,
+                "sezione": profile_data.sezione,
+                "tipo_scuola": profile_data.tipo_scuola
+            }
+            updated = True
+            break
+    
+    if not updated:
+        raise HTTPException(status_code=404, detail="Profilo non trovato")
+    
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"profili_figli": profili}}
+    )
+    
+    return {"message": "Profilo aggiornato", "profile": profili[i]}
+
+
+# ============== LISTING REPORTS ==============
+
+class ReportListingRequest(BaseModel):
+    motivo: str  # "foto_errata", "contenuto_inappropriato", "prezzo_errato", "altro"
+    descrizione: Optional[str] = None
+
+
+@api_router.post("/listings/{listing_id}/report")
+async def report_listing(listing_id: str, report: ReportListingRequest, reporter_id: str):
+    """Report a listing for incorrect photo or content"""
+    listing = await db.listings.find_one({"id": listing_id})
+    if not listing:
+        raise HTTPException(status_code=404, detail="Annuncio non trovato")
+    
+    report_doc = {
+        "id": str(uuid.uuid4()),
+        "listing_id": listing_id,
+        "reporter_id": reporter_id,
+        "seller_id": listing.get("seller_id"),
+        "motivo": report.motivo,
+        "descrizione": report.descrizione,
+        "stato": "aperta",  # aperta, in_revisione, risolta, respinta
+        "created_at": datetime.utcnow()
+    }
+    
+    await db.reports.insert_one(report_doc)
+    
+    # Create notification for admin
+    # (In a real app, this would send an email or push notification)
+    
+    return {"message": "Segnalazione inviata", "report_id": report_doc["id"]}
+
+
+@api_router.get("/admin/reports")
+async def get_reports(status: Optional[str] = None, limit: int = 50):
+    """Get all reports (admin only)"""
+    query = {}
+    if status:
+        query["stato"] = status
+    
+    reports = await db.reports.find(query).sort("created_at", -1).to_list(limit)
+    for r in reports:
+        r.pop("_id", None)
+    return reports
+
+
+@api_router.put("/admin/reports/{report_id}")
+async def update_report_status(report_id: str, new_status: str):
+    """Update report status (admin only)"""
+    result = await db.reports.update_one(
+        {"id": report_id},
+        {"$set": {"stato": new_status, "updated_at": datetime.utcnow()}}
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Segnalazione non trovata")
+    return {"message": "Stato aggiornato"}
+
 
 @api_router.get("/users/{user_id}/active-profile")
 async def get_active_profile(user_id: str):
