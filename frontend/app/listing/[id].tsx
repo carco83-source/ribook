@@ -248,6 +248,74 @@ export default function ListingDetailScreen() {
           </View>
         </View>
 
+        {/* Condition Details */}
+        {listing.condition_details && (
+          <View style={styles.conditionDetailsCard}>
+            <Text style={styles.conditionDetailsTitle}>Stato del libro</Text>
+            <View style={styles.conditionGrid}>
+              <View style={styles.conditionItem}>
+                <Text style={styles.conditionItemLabel}>Scritte/evidenziature</Text>
+                <Text style={styles.conditionItemValue}>
+                  {['✨ Nessuna', '✏️ Poche', '🖊️ Molte'][listing.condition_details.sottolineature]}
+                </Text>
+              </View>
+              <View style={styles.conditionItem}>
+                <Text style={styles.conditionItemLabel}>Copertina</Text>
+                <Text style={styles.conditionItemValue}>
+                  {['✨ Integra', '⚠️ Un po\' rovinata', '📉 Molto rovinata'][listing.condition_details.copertina]}
+                </Text>
+              </View>
+              <View style={styles.conditionItem}>
+                <Text style={styles.conditionItemLabel}>Pagine</Text>
+                <Text style={styles.conditionItemValue}>
+                  {['✨ Perfette', '📄 Qualche piega', '📚 Molte pieghe'][listing.condition_details.pagine]}
+                </Text>
+              </View>
+              <View style={styles.conditionItem}>
+                <Text style={styles.conditionItemLabel}>Esercizi compilati</Text>
+                <Text style={styles.conditionItemValue}>
+                  {['✨ Nessuno', '📝 Alcuni', '📋 Molti'][listing.condition_details.esercizi]}
+                </Text>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* Fascicoli Info */}
+        {listing.ha_fascicoli && listing.fascicoli_totali && listing.fascicoli_totali > 0 && (
+          <View style={styles.fascicoliCard}>
+            <Text style={styles.fascicoliTitle}>Fascicoli allegati</Text>
+            <View style={styles.fascicoliInfo}>
+              <Ionicons 
+                name={listing.fascicoli_presenti === listing.fascicoli_totali ? "checkmark-circle" : "alert-circle"} 
+                size={20} 
+                color={listing.fascicoli_presenti === listing.fascicoli_totali ? "#4CAF50" : "#FF9800"} 
+              />
+              <Text style={styles.fascicoliText}>
+                {listing.fascicoli_presenti}/{listing.fascicoli_totali} fascicoli presenti
+              </Text>
+            </View>
+            {listing.fascicoli_presenti !== listing.fascicoli_totali && (
+              <Text style={styles.fascicoliWarning}>
+                ⚠️ Mancano {listing.fascicoli_totali - (listing.fascicoli_presenti || 0)} fascicoli
+              </Text>
+            )}
+          </View>
+        )}
+
+        {/* Bookstores where seller can deliver */}
+        {listing.bookstore_names && listing.bookstore_names.length > 0 && (
+          <View style={styles.bookstoresAvailableCard}>
+            <Text style={styles.bookstoresAvailableTitle}>Punti di ritiro disponibili</Text>
+            {listing.bookstore_names.map((name, index) => (
+              <View key={index} style={styles.bookstoreAvailableItem}>
+                <Ionicons name="storefront-outline" size={16} color="#1a472a" />
+                <Text style={styles.bookstoreAvailableName}>{name}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
         <View style={styles.sellerCard}>
           <Ionicons name="person-circle-outline" size={24} color="#1a472a" />
           <Text style={styles.sellerText}>Venditore: {listing.seller_username}</Text>
@@ -626,5 +694,84 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  conditionDetailsCard: {
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    marginTop: 16,
+  },
+  conditionDetailsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 12,
+  },
+  conditionGrid: {
+    gap: 12,
+  },
+  conditionItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  conditionItemLabel: {
+    fontSize: 14,
+    color: '#666',
+  },
+  conditionItemValue: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  fascicoliCard: {
+    backgroundColor: '#fff8e1',
+    padding: 16,
+    borderRadius: 12,
+    marginTop: 16,
+  },
+  fascicoliTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  fascicoliInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  fascicoliText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  fascicoliWarning: {
+    fontSize: 13,
+    color: '#e65100',
+    marginTop: 8,
+  },
+  bookstoresAvailableCard: {
+    backgroundColor: '#e8f5e9',
+    padding: 16,
+    borderRadius: 12,
+    marginTop: 16,
+  },
+  bookstoresAvailableTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1a472a',
+    marginBottom: 12,
+  },
+  bookstoreAvailableItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  bookstoreAvailableName: {
+    fontSize: 14,
+    color: '#333',
   },
 });

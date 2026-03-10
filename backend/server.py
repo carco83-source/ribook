@@ -1362,6 +1362,85 @@ async def confirm_transaction(transaction_id: str, user_id: str):
     
     return {"message": "Transazione completata con successo"}
 
+# ============== ADMIN ROUTES ==============
+
+@api_router.get("/admin/stats")
+async def get_admin_stats():
+    """Get admin dashboard statistics"""
+    users_count = await db.users.count_documents({})
+    premium_count = await db.users.count_documents({"is_premium": True})
+    books_count = await db.books.count_documents({})
+    listings_count = await db.listings.count_documents({})
+    listings_available = await db.listings.count_documents({"stato": "disponibile"})
+    listings_sold = await db.listings.count_documents({"stato": {"$in": ["venduto", "consegnato", "ritirato"]}})
+    transactions_count = await db.transactions.count_documents({})
+    bookstores_count = await db.bookstores.count_documents({})
+    
+    # Calculate revenue
+    completed_transactions = await db.transactions.find({"stato": "completato"}).to_list(1000)
+    total_revenue = sum(t.get("commissione_app", 0) for t in completed_transactions)
+    
+    return {
+        "users": {
+            "total": users_count,
+            "premium": premium_count,
+            "free": users_count - premium_count
+        },
+        "books": books_count,
+        "listings": {
+            "total": listings_count,
+            "available": listings_available,
+            "sold": listings_sold
+        },
+        "transactions": transactions_count,
+        "bookstores": bookstores_count,
+        "revenue": round(total_revenue, 2)
+    }
+
+@api_router.get("/admin/users")
+async def get_admin_users(limit: int = 100, skip: int = 0):
+    """Get list of users for admin"""
+    users = await db.users.find({}).skip(skip).limit(limit).to_list(limit)
+    result = []
+    for user in users:
+        user.pop('_id', None)
+        user.pop('password_hash', None)
+        result.append(user)
+    return result
+
+@api_router.get("/admin/transactions")
+async def get_admin_transactions(limit: int = 100):
+    """Get recent transactions for admin"""
+    # Get listings with completed sales
+    listings = await db.listings.find({
+        "stato": {"$in": ["venduto", "consegnato", "ritirato"]}
+    }).sort("data_vendita", -1).limit(limit).to_list(limit)
+    
+    result = []
+    for listing in listings:
+        listing.pop('_id', None)
+        listing.pop('foto_base64', None)
+        result.append(listing)
+    return result
+
+@api_router.post("/admin/users/{user_id}/toggle-premium")
+async def admin_toggle_premium(user_id: str):
+    """Admin toggle user premium status"""
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+    
+    new_status = not user.get("is_premium", False)
+    
+    from datetime import timedelta
+    update = {"is_premium": new_status}
+    if new_status:
+        update["premium_expires"] = datetime.utcnow() + timedelta(days=365)
+    
+    await db.users.update_one({"id": user_id}, {"$set": update})
+    
+    return {"message": f"Utente ora è {'Premium' if new_status else 'Free'}", "is_premium": new_status}
+
 # ============== CHAT ROUTES ==============
 
 # Patterns to block in chat messages

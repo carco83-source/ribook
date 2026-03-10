@@ -22,10 +22,14 @@ const ADMIN_PASSWORD = 'admin2024';
 
 interface Stats {
   users: number;
+  premium_users: number;
   books: number;
   listings: number;
+  listings_available: number;
+  listings_sold: number;
   transactions: number;
   bookstores: number;
+  revenue: number;
 }
 
 interface Transaction {
@@ -80,21 +84,25 @@ export default function AdminScreen() {
   const loadData = async () => {
     setLoading(true);
     try {
-      // Load stats
-      const [usersRes, booksRes, listingsRes, bookstoresRes] = await Promise.all([
-        axios.get(`${API_URL}/api/books?limit=1`).catch(() => ({ data: [] })),
-        axios.get(`${API_URL}/api/books?limit=5000`),
-        axios.get(`${API_URL}/api/listings?limit=1000`),
-        axios.get(`${API_URL}/api/bookstores`),
-      ]);
-
+      // Load stats from admin endpoint
+      const statsRes = await axios.get(`${API_URL}/api/admin/stats`);
+      const data = statsRes.data;
+      
       setStats({
-        users: 0, // We'd need an admin endpoint for this
-        books: booksRes.data.length,
-        listings: listingsRes.data.length,
-        transactions: 0, // We'd need an admin endpoint
-        bookstores: bookstoresRes.data.length,
+        users: data.users.total,
+        premium_users: data.users.premium,
+        books: data.books,
+        listings: data.listings.total,
+        listings_available: data.listings.available,
+        listings_sold: data.listings.sold,
+        transactions: data.transactions,
+        bookstores: data.bookstores,
+        revenue: data.revenue,
       });
+      
+      // Load recent transactions
+      const transRes = await axios.get(`${API_URL}/api/admin/transactions?limit=20`);
+      setRecentTransactions(transRes.data);
     } catch (error) {
       console.error('Error loading admin data:', error);
     } finally {
