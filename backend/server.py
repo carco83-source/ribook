@@ -491,6 +491,18 @@ async def get_books(classe: Optional[str] = None, materia: Optional[str] = None,
         query["materia"] = materia
     if tipo_scuola:
         query["tipo_scuola"] = tipo_scuola
+    
+    # If searching by ISBN (13 digits), search directly without limit
+    if search and search.isdigit() and len(search) >= 10:
+        # Direct ISBN search - exact match
+        book = await db.books.find_one({"isbn": search})
+        if book:
+            return [Book(**book)]
+        # Try partial match
+        query["isbn"] = {"$regex": f"^{search}"}
+        books = await db.books.find(query).limit(10).to_list(10)
+        return [Book(**book) for book in books]
+    
     if search:
         query["$or"] = [
             {"titolo": {"$regex": search, "$options": "i"}},
@@ -849,6 +861,137 @@ async def get_radar_view(user_id: str):
         "same_school": same_school,
         "others": others,
         "books_searching": len(user_requests)
+    }
+
+@api_router.get("/radar/{user_id}/sellers")
+async def get_radar_sellers(user_id: str, filter_type: Optional[str] = None):
+    """Get list of sellers with their books that match user's wanted books"""
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+    
+    # Get user's requests
+    user_requests = await db.requests.find({"buyer_id": user_id, "stato": "cercando"}).to_list(50)
+    wanted_book_ids = [req["book_id"] for req in user_requests]
+    
+    if not wanted_book_ids:
+        return []
+    
+    # Find all available listings for wanted books
+    pipeline = [
+        {
+            "$match": {
+                "book_id": {"$in": wanted_book_ids},
+                "seller_id": {"$ne": user_id},
+                "stato": "disponibile"
+            }
+        },
+        {
+            "$lookup": {
+                "from": "users",
+                "localField": "seller_id",
+                "foreignField": "id",
+                "as": "seller_info"
+            }
+        },
+        {"$unwind": "$seller_info"},
+        {
+            "$group": {
+                "_id": "$seller_id",
+                "seller_username": {"$first": "$seller_info.username"},
+                "seller_scuola": {"$first": "$seller_info.scuola"},
+                "seller_classe": {"$first": "$seller_info.classe"},
+                "seller_sezione": {"$first": "$seller_info.sezione"},
+                "books_count": {"$sum": 1},
+                "total_price": {"$sum": "$prezzo_vendita"},
+                "books": {
+                    "$push": {
+                        "listing_id": "$id",
+                        "book_id": "$book_id",
+                        "titolo": "$book_titolo",
+                        "autore": "$book_autore",
+                        "prezzo_vendita": "$prezzo_vendita",
+                        "condizione": "$condizione",
+                        "condition_details": "$condition_details"
+                    }
+                }
+            }
+        },
+        {"$sort": {"books_count": -1}}
+    ]
+    
+    sellers = await db.listings.aggregate(pipeline).to_list(50)
+    
+    # Categorize and filter sellers
+    result = []
+    for seller in sellers:
+        category = "altri"
+        if (seller.get("seller_sezione") == user["sezione"] and 
+            seller.get("seller_classe") == user["classe"] and 
+            seller.get("seller_scuola") == user["scuola"]):
+            category = "stessa_sezione"
+        elif (seller.get("seller_classe") == user["classe"] and 
+              seller.get("seller_scuola") == user["scuola"]):
+            category = "stessa_classe"
+        elif seller.get("seller_scuola") == user["scuola"]:
+            category = "stessa_scuola"
+        
+        # Apply filter if provided
+        if filter_type and filter_type != category:
+            continue
+            
+        result.append({
+            "seller_id": seller["_id"],
+            "seller_username": seller["seller_username"],
+            "scuola": seller["seller_scuola"],
+            "classe": seller["seller_classe"],
+            "sezione": seller["seller_sezione"],
+            "category": category,
+            "books_count": seller["books_count"],
+            "total_price": round(seller["total_price"], 2),
+            "books": seller["books"][:10]  # Limit books per seller
+        })
+    
+    return result
+
+@api_router.get("/seller/{seller_id}/listings")
+async def get_seller_listings(seller_id: str, buyer_id: Optional[str] = None):
+    """Get all listings from a specific seller"""
+    seller = await db.users.find_one({"id": seller_id})
+    if not seller:
+        raise HTTPException(status_code=404, detail="Venditore non trovato")
+    
+    # Get all available listings from this seller
+    listings = await db.listings.find({
+        "seller_id": seller_id,
+        "stato": "disponibile"
+    }).to_list(50)
+    
+    # If buyer_id provided, mark which books they want
+    wanted_book_ids = []
+    if buyer_id:
+        requests = await db.requests.find({"buyer_id": buyer_id, "stato": "cercando"}).to_list(50)
+        wanted_book_ids = [req["book_id"] for req in requests]
+    
+    result = []
+    for listing in listings:
+        listing.pop('_id', None)
+        listing.pop('foto_base64', None)  # Don't send photo in list
+        listing["is_wanted"] = listing["book_id"] in wanted_book_ids
+        result.append(listing)
+    
+    # Sort: wanted books first
+    result.sort(key=lambda x: (not x["is_wanted"], x["book_titolo"]))
+    
+    return {
+        "seller": {
+            "id": seller_id,
+            "username": seller["username"],
+            "scuola": seller["scuola"],
+            "classe": seller["classe"],
+            "sezione": seller["sezione"]
+        },
+        "listings": result
     }
 
 # ============== TRANSACTION & DELIVERY ROUTES ==============

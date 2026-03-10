@@ -150,41 +150,66 @@ export default function RadarScreen() {
             </Text>
 
             <View style={styles.radarStats}>
-              <View style={styles.statItem}>
+              <TouchableOpacity 
+                style={styles.statItem}
+                onPress={() => router.push('/radar/sellers')}
+              >
                 <Text style={styles.statNumber}>{radarData.total_matches}</Text>
                 <Text style={styles.statLabel}>Totale Match</Text>
-              </View>
+              </TouchableOpacity>
               <View style={styles.statDivider} />
-              <View style={styles.statItem}>
+              <TouchableOpacity 
+                style={styles.statItem}
+                onPress={() => router.push('/radar/sellers?filter=stessa_sezione')}
+              >
                 <Text style={[styles.statNumber, { color: '#4CAF50' }]}>
                   {radarData.same_section}
                 </Text>
                 <Text style={styles.statLabel}>Stessa Sezione</Text>
-              </View>
+              </TouchableOpacity>
               <View style={styles.statDivider} />
-              <View style={styles.statItem}>
+              <TouchableOpacity 
+                style={styles.statItem}
+                onPress={() => router.push('/radar/sellers?filter=stessa_classe')}
+              >
                 <Text style={[styles.statNumber, { color: '#8BC34A' }]}>
                   {radarData.same_class}
                 </Text>
                 <Text style={styles.statLabel}>Stessa Classe</Text>
-              </View>
+              </TouchableOpacity>
             </View>
 
             <View style={styles.radarStats}>
-              <View style={styles.statItem}>
+              <TouchableOpacity 
+                style={styles.statItem}
+                onPress={() => router.push('/radar/sellers?filter=stessa_scuola')}
+              >
                 <Text style={[styles.statNumber, { color: '#FFC107' }]}>
                   {radarData.same_school}
                 </Text>
                 <Text style={styles.statLabel}>Stessa Scuola</Text>
-              </View>
+              </TouchableOpacity>
               <View style={styles.statDivider} />
-              <View style={styles.statItem}>
+              <TouchableOpacity 
+                style={styles.statItem}
+                onPress={() => router.push('/radar/sellers?filter=altri')}
+              >
                 <Text style={[styles.statNumber, { color: '#FF9800' }]}>
                   {radarData.others}
                 </Text>
                 <Text style={styles.statLabel}>Altre Scuole</Text>
-              </View>
+              </TouchableOpacity>
             </View>
+
+            {/* View Sellers Button */}
+            <TouchableOpacity
+              style={styles.viewSellersButton}
+              onPress={() => router.push('/radar/sellers')}
+            >
+              <Ionicons name="people" size={20} color="#fff" />
+              <Text style={styles.viewSellersButtonText}>Vedi tutti i venditori</Text>
+              <Ionicons name="arrow-forward" size={16} color="#fff" />
+            </TouchableOpacity>
           </>
         ) : (
           <View style={styles.emptyRadar}>
@@ -429,5 +454,21 @@ const styles = StyleSheet.create({
   matchSeller: {
     fontSize: 12,
     color: '#999',
+  },
+  viewSellersButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1a472a',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    marginTop: 16,
+    gap: 8,
+  },
+  viewSellersButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
