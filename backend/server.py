@@ -171,8 +171,8 @@ class BookListingCreate(BaseModel):
     ha_fascicoli: bool = True  # Default assumes book comes with supplements
     fascicoli_totali: int = 0  # How many supplements the book should have
     fascicoli_presenti: int = 0  # How many the seller has
-    # Bookstore selection for pickup
-    bookstore_id: Optional[str] = None
+    # Bookstore selection for pickup - MULTIPLE selection
+    bookstore_ids: List[str] = []  # List of bookstore IDs where seller can deliver
 
 class BookListing(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -194,9 +194,9 @@ class BookListing(BaseModel):
     fascicoli_totali: int = 0
     fascicoli_presenti: int = 0
     prezzo_fascicoli: float = 0.0  # 10% of book price divided by total supplements
-    # Bookstore selection
-    bookstore_id: Optional[str] = None
-    bookstore_nome: Optional[str] = None
+    # Bookstore selection - MULTIPLE bookstores where seller can deliver
+    bookstore_ids: List[str] = []  # List of bookstore IDs
+    bookstore_names: List[str] = []  # List of bookstore names for display
     note: Optional[str] = None
     foto_base64: Optional[str] = None
     stato: str = "disponibile"  # disponibile, prenotato, venduto
@@ -554,12 +554,13 @@ async def create_listing(listing_data: BookListingCreate, user_id: str):
         if listing_data.fascicoli_presenti > 0:
             prezzo_fascicoli = round((prezzo_totale_fascicoli / listing_data.fascicoli_totali) * listing_data.fascicoli_presenti, 2)
     
-    # Get bookstore name if provided
-    bookstore_nome = None
-    if listing_data.bookstore_id:
-        bookstore = await db.bookstores.find_one({"id": listing_data.bookstore_id})
-        if bookstore:
-            bookstore_nome = bookstore["nome"]
+    # Get bookstore names for multiple selection
+    bookstore_names = []
+    if listing_data.bookstore_ids:
+        for bs_id in listing_data.bookstore_ids:
+            bookstore = await db.bookstores.find_one({"id": bs_id})
+            if bookstore:
+                bookstore_names.append(bookstore["nome"])
     
     listing = BookListing(
         seller_id=user_id,
@@ -578,8 +579,8 @@ async def create_listing(listing_data: BookListingCreate, user_id: str):
         fascicoli_totali=listing_data.fascicoli_totali,
         fascicoli_presenti=listing_data.fascicoli_presenti,
         prezzo_fascicoli=prezzo_fascicoli,
-        bookstore_id=listing_data.bookstore_id,
-        bookstore_nome=bookstore_nome,
+        bookstore_ids=listing_data.bookstore_ids,
+        bookstore_names=bookstore_names,
         note=listing_data.note,
         foto_base64=listing_data.foto_base64
     )

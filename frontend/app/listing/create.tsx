@@ -109,9 +109,9 @@ export default function CreateListingScreen() {
   const [fascicoliTotali, setFascicoliTotali] = useState(0);
   const [fascicoliPresenti, setFascicoliPresenti] = useState(0);
   
-  // Bookstores
+  // Bookstores - MULTIPLE selection
   const [bookstores, setBookstores] = useState<Bookstore[]>([]);
-  const [selectedBookstore, setSelectedBookstore] = useState<string | null>(null);
+  const [selectedBookstores, setSelectedBookstores] = useState<string[]>([]);
 
   useEffect(() => {
     loadInitialData();
@@ -222,7 +222,7 @@ export default function CreateListingScreen() {
         ha_fascicoli: hasFascicoli,
         fascicoli_totali: fascicoliTotali,
         fascicoli_presenti: fascicoliPresenti,
-        bookstore_id: selectedBookstore,
+        bookstore_ids: selectedBookstores,
         note: note || null,
         foto_base64: photo || null,
       });
@@ -454,26 +454,43 @@ export default function CreateListingScreen() {
             
             {bookstores.length > 0 ? (
               <View style={styles.bookstoreList}>
-                {bookstores.map((store) => (
-                  <TouchableOpacity
-                    key={store.id}
-                    style={[
-                      styles.bookstoreItem,
-                      selectedBookstore === store.id && styles.bookstoreItemSelected,
-                    ]}
-                    onPress={() => setSelectedBookstore(store.id)}
-                  >
-                    <Ionicons
-                      name={selectedBookstore === store.id ? 'radio-button-on' : 'radio-button-off'}
-                      size={20}
-                      color="#1a472a"
-                    />
-                    <View style={styles.bookstoreInfo}>
-                      <Text style={styles.bookstoreName}>{store.nome}</Text>
-                      <Text style={styles.bookstoreAddress}>{store.indirizzo}</Text>
-                    </View>
-                  </TouchableOpacity>
-                ))}
+                {bookstores.map((store) => {
+                  const isSelected = selectedBookstores.includes(store.id);
+                  return (
+                    <TouchableOpacity
+                      key={store.id}
+                      style={[
+                        styles.bookstoreItem,
+                        isSelected && styles.bookstoreItemSelected,
+                      ]}
+                      onPress={() => {
+                        if (isSelected) {
+                          setSelectedBookstores(selectedBookstores.filter(id => id !== store.id));
+                        } else {
+                          setSelectedBookstores([...selectedBookstores, store.id]);
+                        }
+                      }}
+                    >
+                      <Ionicons
+                        name={isSelected ? 'checkbox' : 'square-outline'}
+                        size={24}
+                        color="#1a472a"
+                      />
+                      <View style={styles.bookstoreInfo}>
+                        <Text style={styles.bookstoreName}>{store.nome}</Text>
+                        <Text style={styles.bookstoreAddress}>{store.indirizzo}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+                {selectedBookstores.length > 0 && (
+                  <View style={styles.selectedBookstoresInfo}>
+                    <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
+                    <Text style={styles.selectedBookstoresText}>
+                      {selectedBookstores.length} cartolibreri{selectedBookstores.length === 1 ? 'a' : 'e'} selezionat{selectedBookstores.length === 1 ? 'a' : 'e'}
+                    </Text>
+                  </View>
+                )}
               </View>
             ) : (
               <Text style={styles.noBookstoresText}>
@@ -936,5 +953,20 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  selectedBookstoresInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#e8f5e9',
+    borderRadius: 8,
+  },
+  selectedBookstoresText: {
+    fontSize: 13,
+    color: '#2e7d32',
+    fontWeight: '500',
   },
 });
