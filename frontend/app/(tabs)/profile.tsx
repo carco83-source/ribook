@@ -152,98 +152,71 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Book Flow Widget - Comprare/Vendere basato sulla classe */}
+      {/* Book Flow Widget - Layout a 3 colonne */}
       {bookFlow && userData?.classe && (
         <View style={styles.bookFlowSection}>
-          <Text style={styles.bookFlowTitle}>
-            Flusso Libri - {userData.classe}ª Media
-          </Text>
+          <Text style={styles.bookFlowTitle}>Flusso Libri</Text>
           <Text style={styles.bookFlowSubtitle}>
             {bookFlow.summary?.nota_volumi_unici || 'Basato sul D.P.R. 157/1989'}
           </Text>
           
           <View style={styles.bookFlowContainer}>
-            {/* Colonna Sinistra - COMPRA USATO */}
+            {/* LEFT - VENDI alla 1ª */}
+            <View style={styles.bookFlowColumn}>
+              <View style={[styles.bookFlowHeader, { backgroundColor: '#2196F3' }]}>
+                <Text style={styles.bookFlowHeaderClass}>1ª MEDIA</Text>
+              </View>
+              <View style={styles.bookFlowBody}>
+                <Ionicons name="arrow-up-circle" size={28} color="#2196F3" />
+                <Text style={[styles.bookFlowAction, { color: '#2196F3' }]}>VENDI</Text>
+                <Text style={[styles.bookFlowNumber, { color: '#2196F3' }]}>
+                  {bookFlow.vendere?.totale || 0}
+                </Text>
+                <Text style={styles.bookFlowLabel}>usati</Text>
+              </View>
+              <Text style={styles.bookFlowHint}>
+                {bookFlow.vendere?.studenti_interessati || 0} studenti
+              </Text>
+            </View>
+
+            {/* CENTER - TU - NUOVI */}
+            <View style={styles.bookFlowColumn}>
+              <View style={[styles.bookFlowHeader, { backgroundColor: '#1a472a' }]}>
+                <Text style={styles.bookFlowHeaderClass}>{userData.classe}ª MEDIA</Text>
+              </View>
+              <View style={styles.bookFlowBody}>
+                <View style={styles.bookFlowCenterBadge}>
+                  <Text style={styles.bookFlowCenterClass}>TU</Text>
+                </View>
+                <Text style={[styles.bookFlowAction, { color: '#FF9800' }]}>NUOVI</Text>
+                <Text style={[styles.bookFlowNumber, { color: '#FF9800' }]}>
+                  {bookFlow.nuovi?.totale || 0}
+                </Text>
+                <Text style={styles.bookFlowLabel}>da comprare</Text>
+              </View>
+              <Text style={styles.bookFlowHint}>
+                €{bookFlow.nuovi?.costo_stimato?.toFixed(0) || 0}
+              </Text>
+            </View>
+
+            {/* RIGHT - COMPRA dalla 3ª */}
             <View style={styles.bookFlowColumn}>
               <View style={[styles.bookFlowHeader, { backgroundColor: '#4CAF50' }]}>
-                <Ionicons name="cart" size={20} color="#fff" />
-                <Text style={styles.bookFlowHeaderText}>COMPRA</Text>
-                <Text style={styles.bookFlowHeaderClass}>USATO</Text>
+                <Text style={styles.bookFlowHeaderClass}>3ª MEDIA</Text>
               </View>
               <View style={styles.bookFlowBody}>
-                <View style={styles.bookFlowStat}>
-                  <Text style={styles.bookFlowNumber}>
-                    {bookFlow.comprare?.totale || 0}
-                  </Text>
-                  <Text style={styles.bookFlowLabel}>Disponibili</Text>
-                </View>
-                <View style={styles.bookFlowDivider} />
-                <View style={styles.bookFlowStat}>
-                  <Text style={[styles.bookFlowNumber, { fontSize: 16, color: '#4CAF50' }]}>
-                    €{bookFlow.comprare?.risparmio_stimato?.toFixed(0) || 0}
-                  </Text>
-                  <Text style={styles.bookFlowLabel}>Risparmio</Text>
-                </View>
+                <Ionicons name="cart" size={28} color="#4CAF50" />
+                <Text style={[styles.bookFlowAction, { color: '#4CAF50' }]}>COMPRA</Text>
+                <Text style={[styles.bookFlowNumber, { color: '#4CAF50' }]}>
+                  {bookFlow.comprare?.totale || 0}
+                </Text>
+                <Text style={styles.bookFlowLabel}>usati</Text>
               </View>
-            </View>
-
-            {/* Colonna Centrale - Riepilogo */}
-            <View style={styles.bookFlowCenter}>
-              <View style={styles.bookFlowCenterBadge}>
-                <Text style={styles.bookFlowCenterClass}>{userData.classe}ª</Text>
-              </View>
-              <Text style={styles.bookFlowCenterText}>TU</Text>
-              <Text style={styles.bookFlowCompatibility}>
-                {bookFlow.summary?.percentuale_usato?.toFixed(0) || 0}%
+              <Text style={styles.bookFlowHint}>
+                Risparmio €{bookFlow.comprare?.risparmio_stimato?.toFixed(0) || 0}
               </Text>
-              <Text style={styles.bookFlowCompatibilityLabel}>usato</Text>
-            </View>
-
-            {/* Colonna Destra - COMPRA NUOVO */}
-            <View style={styles.bookFlowColumn}>
-              <View style={[styles.bookFlowHeader, { backgroundColor: '#FF9800' }]}>
-                <Ionicons name="pricetag" size={20} color="#fff" />
-                <Text style={styles.bookFlowHeaderText}>COMPRA</Text>
-                <Text style={styles.bookFlowHeaderClass}>NUOVO</Text>
-              </View>
-              <View style={styles.bookFlowBody}>
-                <View style={styles.bookFlowStat}>
-                  <Text style={styles.bookFlowNumber}>
-                    {bookFlow.nuovi?.totale || 0}
-                  </Text>
-                  <Text style={styles.bookFlowLabel}>Necessari</Text>
-                </View>
-                <View style={styles.bookFlowDivider} />
-                <View style={styles.bookFlowStat}>
-                  <Text style={[styles.bookFlowNumber, { fontSize: 16, color: '#FF9800' }]}>
-                    €{bookFlow.nuovi?.costo_stimato?.toFixed(0) || 0}
-                  </Text>
-                  <Text style={styles.bookFlowLabel}>Costo</Text>
-                </View>
-              </View>
             </View>
           </View>
-
-          {/* Sezione VENDI */}
-          {bookFlow.vendere && bookFlow.vendere.totale > 0 && (
-            <View style={styles.bookFlowSellSection}>
-              <View style={[styles.bookFlowHeader, { backgroundColor: '#2196F3', marginBottom: 8 }]}>
-                <Ionicons name="arrow-up-circle" size={20} color="#fff" />
-                <Text style={styles.bookFlowHeaderText}>{bookFlow.vendere.titolo}</Text>
-              </View>
-              <View style={styles.bookFlowSellStats}>
-                <View style={styles.bookFlowSellStat}>
-                  <Text style={styles.bookFlowSellNumber}>{bookFlow.vendere.totale}</Text>
-                  <Text style={styles.bookFlowSellLabel}>Libri vendibili</Text>
-                </View>
-                <View style={styles.bookFlowSellStat}>
-                  <Text style={styles.bookFlowSellNumber}>{bookFlow.vendere.studenti_interessati}</Text>
-                  <Text style={styles.bookFlowSellLabel}>Studenti in 1ª</Text>
-                </View>
-              </View>
-              <Text style={styles.bookFlowSellHint}>{bookFlow.vendere.descrizione}</Text>
-            </View>
-          )}
         </View>
       )}
 
@@ -872,6 +845,11 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: '#1a472a',
+  },
+  bookFlowAction: {
+    fontSize: 10,
+    fontWeight: '600',
+    marginTop: 4,
   },
   bookFlowLabel: {
     fontSize: 10,

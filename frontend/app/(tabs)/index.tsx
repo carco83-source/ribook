@@ -294,50 +294,75 @@ export default function RadarScreen() {
         <View style={styles.classCompatSection}>
           <View style={styles.sectionHeader}>
             <Ionicons name="swap-horizontal" size={24} color="#1a472a" />
-            <Text style={styles.sectionTitle}>Flusso Libri - {classCompatibility.user_classe}ª Media</Text>
+            <Text style={styles.sectionTitle}>Flusso Libri</Text>
           </View>
           
           <Text style={styles.classCompatSubtitle}>
             {classCompatibility.summary?.nota_volumi_unici || 'Basato sul D.P.R. 157/1989'}
           </Text>
 
-          {/* Summary Card */}
-          <View style={styles.compatSummaryCard}>
-            <View style={styles.compatSummaryRow}>
-              <View style={styles.compatSummaryStat}>
-                <Text style={[styles.compatSummaryNumber, { color: '#4CAF50' }]}>
-                  {classCompatibility.comprare?.totale || 0}
-                </Text>
-                <Text style={styles.compatSummaryLabel}>Usati{'\n'}disponibili</Text>
+          {/* Three Column Layout */}
+          <View style={styles.bookFlowThreeColumns}>
+            {/* LEFT - VENDI alla 1ª */}
+            <View style={styles.bookFlowColumnNew}>
+              <View style={[styles.bookFlowColumnHeader, { backgroundColor: '#2196F3' }]}>
+                <Text style={styles.bookFlowColumnHeaderText}>1ª MEDIA</Text>
               </View>
-              <View style={styles.compatSummaryDivider} />
-              <View style={styles.compatSummaryStat}>
-                <Text style={[styles.compatSummaryNumber, { color: '#FF9800' }]}>
+              <View style={styles.bookFlowColumnBody}>
+                <Ionicons name="arrow-up-circle" size={28} color="#2196F3" />
+                <Text style={styles.bookFlowColumnAction}>VENDI</Text>
+                <Text style={styles.bookFlowColumnNumber}>{classCompatibility.vendere?.totale || 0}</Text>
+                <Text style={styles.bookFlowColumnLabel}>usati</Text>
+              </View>
+              <Text style={styles.bookFlowColumnHint}>
+                {classCompatibility.vendere?.studenti_interessati || 0} studenti interessati
+              </Text>
+            </View>
+
+            {/* CENTER - TU (2ª) - NUOVI */}
+            <View style={styles.bookFlowColumnNew}>
+              <View style={[styles.bookFlowColumnHeader, { backgroundColor: '#1a472a' }]}>
+                <Text style={styles.bookFlowColumnHeaderText}>{classCompatibility.user_classe}ª MEDIA</Text>
+              </View>
+              <View style={styles.bookFlowColumnBody}>
+                <View style={styles.bookFlowYouBadge}>
+                  <Text style={styles.bookFlowYouText}>TU</Text>
+                </View>
+                <Text style={[styles.bookFlowColumnAction, { color: '#FF9800' }]}>NUOVI</Text>
+                <Text style={[styles.bookFlowColumnNumber, { color: '#FF9800' }]}>
                   {classCompatibility.nuovi?.totale || 0}
                 </Text>
-                <Text style={styles.compatSummaryLabel}>Da comprare{'\n'}nuovi</Text>
+                <Text style={styles.bookFlowColumnLabel}>da comprare</Text>
               </View>
-              <View style={styles.compatSummaryDivider} />
-              <View style={styles.compatSummaryStat}>
-                <Text style={[styles.compatSummaryNumber, { color: '#2196F3' }]}>
-                  {classCompatibility.summary?.percentuale_usato?.toFixed(0) || 0}%
-                </Text>
-                <Text style={styles.compatSummaryLabel}>Usato</Text>
-              </View>
+              <Text style={styles.bookFlowColumnHint}>
+                €{classCompatibility.nuovi?.costo_stimato?.toFixed(0) || 0} stimati
+              </Text>
             </View>
-            <Text style={styles.compatMessage}>
-              Risparmio stimato con usato: €{classCompatibility.comprare?.risparmio_stimato?.toFixed(0) || 0}
-            </Text>
+
+            {/* RIGHT - COMPRA dalla 3ª */}
+            <View style={styles.bookFlowColumnNew}>
+              <View style={[styles.bookFlowColumnHeader, { backgroundColor: '#4CAF50' }]}>
+                <Text style={styles.bookFlowColumnHeaderText}>3ª MEDIA</Text>
+              </View>
+              <View style={styles.bookFlowColumnBody}>
+                <Ionicons name="cart" size={28} color="#4CAF50" />
+                <Text style={[styles.bookFlowColumnAction, { color: '#4CAF50' }]}>COMPRA</Text>
+                <Text style={[styles.bookFlowColumnNumber, { color: '#4CAF50' }]}>
+                  {classCompatibility.comprare?.totale || 0}
+                </Text>
+                <Text style={styles.bookFlowColumnLabel}>usati</Text>
+              </View>
+              <Text style={styles.bookFlowColumnHint}>
+                Risparmio €{classCompatibility.comprare?.risparmio_stimato?.toFixed(0) || 0}
+              </Text>
+            </View>
           </View>
 
           {/* Available Used Books */}
           {classCompatibility.comprare?.libri && classCompatibility.comprare.libri.length > 0 && (
             <View style={styles.classCard}>
-              <View style={[styles.bookFlowHeader, { backgroundColor: '#4CAF50', marginBottom: 12 }]}>
-                <Ionicons name="cart" size={18} color="#fff" />
-                <Text style={styles.bookFlowHeaderText}>LIBRI USATI DISPONIBILI</Text>
-              </View>
-              {classCompatibility.comprare.libri.slice(0, 5).map((book: any, idx: number) => (
+              <Text style={styles.sampleBooksTitle}>Libri usati disponibili ora:</Text>
+              {classCompatibility.comprare.libri.slice(0, 3).map((book: any, idx: number) => (
                 <TouchableOpacity 
                   key={idx} 
                   style={styles.sampleBookItem}
@@ -348,38 +373,12 @@ export default function RadarScreen() {
                       {book.titolo}
                     </Text>
                     <Text style={styles.sampleBookSeller}>
-                      da {book.seller_username} • {book.condizione}
+                      da {book.seller_username}
                     </Text>
                   </View>
                   <Text style={styles.sampleBookPrice}>€{book.prezzo_vendita?.toFixed(2)}</Text>
                 </TouchableOpacity>
               ))}
-            </View>
-          )}
-
-          {/* Sell Section */}
-          {classCompatibility.vendere && classCompatibility.vendere.totale > 0 && (
-            <View style={styles.classCard}>
-              <View style={[styles.bookFlowHeader, { backgroundColor: '#2196F3', marginBottom: 12 }]}>
-                <Ionicons name="arrow-up-circle" size={18} color="#fff" />
-                <Text style={styles.bookFlowHeaderText}>{classCompatibility.vendere.titolo}</Text>
-              </View>
-              <View style={styles.compatSummaryRow}>
-                <View style={styles.compatSummaryStat}>
-                  <Text style={[styles.compatSummaryNumber, { color: '#2196F3' }]}>
-                    {classCompatibility.vendere.totale}
-                  </Text>
-                  <Text style={styles.compatSummaryLabel}>Libri{'\n'}vendibili</Text>
-                </View>
-                <View style={styles.compatSummaryDivider} />
-                <View style={styles.compatSummaryStat}>
-                  <Text style={[styles.compatSummaryNumber, { color: '#2196F3' }]}>
-                    {classCompatibility.vendere.studenti_interessati}
-                  </Text>
-                  <Text style={styles.compatSummaryLabel}>Studenti{'\n'}in 1ª</Text>
-                </View>
-              </View>
-              <Text style={styles.compatMessage}>{classCompatibility.vendere.descrizione}</Text>
             </View>
           )}
         </View>
@@ -896,6 +895,72 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   bookFlowHeaderText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  // New Three Column Layout
+  bookFlowThreeColumns: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 16,
+  },
+  bookFlowColumnNew: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  bookFlowColumnHeader: {
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  bookFlowColumnHeaderText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: 'bold',
+  },
+  bookFlowColumnBody: {
+    padding: 12,
+    alignItems: 'center',
+  },
+  bookFlowColumnAction: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#2196F3',
+    marginTop: 4,
+  },
+  bookFlowColumnNumber: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  bookFlowColumnLabel: {
+    fontSize: 11,
+    color: '#666',
+  },
+  bookFlowColumnHint: {
+    fontSize: 9,
+    color: '#888',
+    textAlign: 'center',
+    paddingBottom: 8,
+    paddingHorizontal: 4,
+  },
+  bookFlowYouBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#1a472a',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bookFlowYouText: {
     color: '#fff',
     fontSize: 12,
     fontWeight: 'bold',
