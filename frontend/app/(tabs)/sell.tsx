@@ -102,77 +102,115 @@ export default function SellScreen() {
       nuovo: 'Nuovo',
       come_nuovo: 'Come Nuovo',
       ottime_condizioni: 'Ottime Condizioni',
-      buono: 'Buono',
+      buono: '🟡 Buono',
       scarso: 'Scarso',
+      perfetto: '🟢 Perfetto',
+      molto_usato: '🔴 Molto usato',
     };
     return labels[condition] || condition;
   };
 
-  const getStatoColor = (stato: string) => {
+  const getStatoConfig = (stato: string) => {
     switch (stato) {
       case 'disponibile':
-        return '#4CAF50';
-      case 'prenotato':
-        return '#FFC107';
+        return { color: '#4CAF50', label: 'In vendita', icon: 'pricetag' };
       case 'venduto':
-        return '#9E9E9E';
+        return { color: '#FF9800', label: 'Da consegnare', icon: 'time' };
+      case 'consegnato':
+        return { color: '#2196F3', label: 'Consegnato', icon: 'checkmark-circle' };
+      case 'ritirato':
+        return { color: '#9C27B0', label: 'Completato', icon: 'trophy' };
+      case 'prenotato':
+        return { color: '#FFC107', label: 'Prenotato', icon: 'bookmark' };
       default:
-        return '#666';
+        return { color: '#666', label: stato, icon: 'ellipse' };
     }
   };
 
-  const renderListing = ({ item }: { item: Listing }) => (
-    <View style={styles.listingCard}>
-      {item.foto_base64 && (
-        <Image
-          source={{ uri: `data:image/jpeg;base64,${item.foto_base64}` }}
-          style={styles.listingImage}
-        />
-      )}
-      
-      <View style={styles.listingContent}>
-        <View style={styles.listingHeader}>
-          <View
-            style={[
-              styles.statoBadge,
-              { backgroundColor: getStatoColor(item.stato) },
-            ]}
-          >
-            <Text style={styles.statoText}>
-              {item.stato.charAt(0).toUpperCase() + item.stato.slice(1)}
-            </Text>
-          </View>
-          <Text style={styles.listingPrice}>
-            €{item.prezzo_vendita.toFixed(2)}
-          </Text>
-        </View>
+  const getStatoColor = (stato: string) => {
+    return getStatoConfig(stato).color;
+  };
 
-        <Text style={styles.listingTitle}>{item.book_titolo}</Text>
-        <Text style={styles.listingAuthor}>{item.book_autore}</Text>
-
-        <View style={styles.listingMeta}>
-          <View style={styles.conditionBadge}>
-            <Text style={styles.conditionText}>
-              {getConditionLabel(item.condizione)}
-            </Text>
-          </View>
-          <Text style={styles.originalPrice}>
-            Listino: €{item.prezzo_ministeriale.toFixed(2)}
-          </Text>
-        </View>
-
-        {item.stato === 'disponibile' && (
-          <TouchableOpacity
-            style={styles.deleteButton}
-            onPress={() => handleDeleteListing(item.id)}
-          >
-            <Ionicons name="trash-outline" size={16} color="#ff4444" />
-            <Text style={styles.deleteButtonText}>Elimina</Text>
-          </TouchableOpacity>
+  const renderListing = ({ item }: { item: Listing }) => {
+    const statoConfig = getStatoConfig(item.stato);
+    
+    return (
+      <View style={styles.listingCard}>
+        {item.foto_base64 && (
+          <Image
+            source={{ uri: `data:image/jpeg;base64,${item.foto_base64}` }}
+            style={styles.listingImage}
+          />
         )}
+        
+        <View style={styles.listingContent}>
+          <View style={styles.listingHeader}>
+            <View
+              style={[
+                styles.statoBadge,
+                { backgroundColor: statoConfig.color },
+              ]}
+            >
+              <Ionicons name={statoConfig.icon as any} size={12} color="#fff" />
+              <Text style={styles.statoText}>{statoConfig.label}</Text>
+            </View>
+            <Text style={styles.listingPrice}>
+              €{item.prezzo_vendita.toFixed(2)}
+            </Text>
+          </View>
+
+          <Text style={styles.listingTitle} numberOfLines={2}>{item.book_titolo}</Text>
+          <Text style={styles.listingAuthor}>{item.book_autore}</Text>
+
+          <View style={styles.listingMeta}>
+            <View style={styles.conditionBadge}>
+              <Text style={styles.conditionText}>
+                {getConditionLabel(item.condizione)}
+              </Text>
+            </View>
+            <Text style={styles.originalPrice}>
+              Listino: €{item.prezzo_ministeriale.toFixed(2)}
+            </Text>
+          </View>
+
+          {/* Actions based on status */}
+          {item.stato === 'disponibile' && (
+            <TouchableOpacity
+              style={styles.deleteButton}
+              onPress={() => handleDeleteListing(item.id)}
+            >
+              <Ionicons name="trash-outline" size={16} color="#ff4444" />
+              <Text style={styles.deleteButtonText}>Elimina</Text>
+            </TouchableOpacity>
+          )}
+
+          {item.stato === 'venduto' && (
+            <TouchableOpacity
+              style={styles.deliveryButton}
+              onPress={() => router.push('/my-sales')}
+            >
+              <Ionicons name="cube" size={16} color="#fff" />
+              <Text style={styles.deliveryButtonText}>Vai a consegnare</Text>
+            </TouchableOpacity>
+          )}
+
+          {item.stato === 'consegnato' && (
+            <View style={styles.waitingBadge}>
+              <Ionicons name="hourglass" size={14} color="#2196F3" />
+              <Text style={styles.waitingText}>In attesa di ritiro</Text>
+            </View>
+          )}
+
+          {item.stato === 'ritirato' && (
+            <View style={styles.completedBadge}>
+              <Ionicons name="checkmark-done" size={14} color="#9C27B0" />
+              <Text style={styles.completedText}>Transazione completata</Text>
+            </View>
+          )}
+        </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   if (loading) {
     return (
@@ -271,9 +309,12 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   statoBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
+    gap: 4,
   },
   statoText: {
     color: '#fff',
@@ -324,6 +365,47 @@ const styles = StyleSheet.create({
   deleteButtonText: {
     color: '#ff4444',
     fontSize: 14,
+  },
+  deliveryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FF9800',
+    padding: 10,
+    borderRadius: 8,
+    marginTop: 12,
+    gap: 6,
+  },
+  deliveryButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  waitingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#e3f2fd',
+    padding: 8,
+    borderRadius: 6,
+    marginTop: 12,
+    gap: 6,
+  },
+  waitingText: {
+    color: '#2196F3',
+    fontSize: 12,
+  },
+  completedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f3e5f5',
+    padding: 8,
+    borderRadius: 6,
+    marginTop: 12,
+    gap: 6,
+  },
+  completedText: {
+    color: '#9C27B0',
+    fontSize: 12,
   },
   emptyContainer: {
     flex: 1,

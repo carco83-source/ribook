@@ -150,7 +150,7 @@ export default function SearchScreen() {
     return (
       <View style={styles.bookCard}>
         <View style={styles.bookInfo}>
-          <Text style={styles.bookTitle}>{item.titolo}</Text>
+          <Text style={styles.bookTitle} numberOfLines={2}>{item.titolo}</Text>
           <Text style={styles.bookAuthor}>{item.autore}</Text>
           <View style={styles.bookMeta}>
             <View style={styles.metaBadge}>
@@ -160,26 +160,35 @@ export default function SearchScreen() {
               <Text style={styles.metaText}>Classe {item.classe}</Text>
             </View>
           </View>
-          <Text style={styles.bookPrice}>
-            Prezzo: €{item.prezzo_ministeriale.toFixed(2)}
-          </Text>
-          <Text style={styles.bookIsbn}>ISBN: {item.isbn}</Text>
+          <View style={styles.priceRow}>
+            <Text style={styles.bookPrice}>
+              €{item.prezzo_ministeriale.toFixed(2)}
+            </Text>
+            <Text style={styles.bookIsbn}>ISBN: {item.isbn}</Text>
+          </View>
         </View>
 
-        <TouchableOpacity
-          style={[
-            styles.addButton,
-            isSearching && styles.addButtonDisabled,
-          ]}
-          onPress={() => handleAddRequest(item)}
-          disabled={isSearching}
-        >
-          <Ionicons
-            name={isSearching ? 'checkmark' : 'add'}
-            size={24}
-            color="#fff"
-          />
-        </TouchableOpacity>
+        <View style={styles.bookActions}>
+          <TouchableOpacity
+            style={[
+              styles.addButton,
+              isSearching && styles.addButtonActive,
+            ]}
+            onPress={() => handleAddRequest(item)}
+          >
+            <Ionicons
+              name={isSearching ? 'checkmark-circle' : 'add-circle'}
+              size={28}
+              color={isSearching ? '#4CAF50' : '#1a472a'}
+            />
+            <Text style={[
+              styles.addButtonText,
+              isSearching && styles.addButtonTextActive
+            ]}>
+              {isSearching ? 'Cercando' : 'Cerca'}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   };
@@ -397,24 +406,40 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   bookPrice: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: 'bold',
     color: '#1a472a',
-    marginTop: 8,
   },
   bookIsbn: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#999',
-    marginTop: 4,
   },
-  addButton: {
-    backgroundColor: '#1a472a',
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  priceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  bookActions: {
     justifyContent: 'center',
     alignItems: 'center',
-    alignSelf: 'center',
+    marginLeft: 12,
+  },
+  addButton: {
+    alignItems: 'center',
+    padding: 8,
+  },
+  addButtonActive: {
+    opacity: 1,
+  },
+  addButtonText: {
+    fontSize: 11,
+    color: '#1a472a',
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  addButtonTextActive: {
+    color: '#4CAF50',
   },
   addButtonDisabled: {
     backgroundColor: '#4CAF50',
