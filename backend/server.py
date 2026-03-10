@@ -1176,88 +1176,231 @@ async def get_radar_view(user_id: str):
 @api_router.get("/radar/{user_id}/class-compatibility")
 async def get_class_compatibility(user_id: str):
     """
-    Calcola la compatibilità libri tra classi basandosi su:
+    Calcola il flusso TEORICO dei libri tra classi.
     
-    REGOLE CORRETTE (D.P.R. 157/1989):
-    1. VOLUMI UNICI (Religione, Arte, Ed.Fisica, Musica, Tecnologia, Grammatica):
-       - Si comprano SOLO in 1ª media
-       - NON vanno contati per 2ª e 3ª (li hai già!)
+    LOGICA:
+    Per uno studente di 2ª media:
     
-    2. LIBRI ANNUALI:
-       - Cambiano ogni anno
-       - Puoi comprare usato SOLO se stesso ISBN (stessa edizione)
-       - Se l'edizione è cambiata → devi comprare nuovo
+    1. VENDERE alla 1ª media:
+       - I miei libri di 1ª (Storia 1, Inglese 1, etc.)
+       - Solo se lo STESSO libro (stessa serie/editore) è ancora nella lista adozioni 1ª
+       - Confronto per: stesso TITOLO BASE + stesso EDITORE
     
-    FLUSSO PER 2ª MEDIA:
-    - COMPRARE: Libri annuali di 2ª che studenti di 1ª (ora in 2ª) vendono
-    - VENDERE: I tuoi libri annuali di 1ª a chi entra in 1ª
-    - NUOVI: Libri con edizione cambiata o nuove adozioni
+    2. COMPRARE dalla 3ª media:
+       - I libri di 2ª che i 3ª hanno usato l'anno scorso
+       - Cioè: libri con volume "2" della stessa serie dei miei
+       - Se il 3ª ha "Storia 2" della stessa edizione che serve a me → compro usato
+    
+    3. NUOVI da comprare:
+       - Libri dove l'edizione è cambiata (non trovo corrispondenza)
+       - O nuove adozioni
     """
     user = await db.users.find_one({"id": user_id})
     if not user:
         raise HTTPException(status_code=404, detail="Utente non trovato")
     
     user_classe = int(user.get("classe", 1))
-    user_scuola = user.get("scuola", "")
     user_tipo = user.get("tipo_scuola", "primo_grado")
     
-    # Definisci classi del ciclo
-    if user_tipo == "primo_grado":
-        all_classes = [1, 2, 3]
-    else:
-        all_classes = [1, 2, 3, 4, 5]
-    
-    # Per comprare usato: guardo chi era nella MIA classe l'anno scorso (ora classe+1)
-    # Per vendere: guardo chi entra nella classe che ho appena finito (classe-1 per loro)
+    tipo_scuola_query = "MM" if user_tipo == "primo_grado" else {"$in": ["NO", "NT"]}
     classe_precedente = user_classe - 1 if user_classe > 1 else None
-    classe_successiva = user_classe + 1 if user_classe < max(all_classes) else None
+    classe_successiva = user_classe + 1 if user_classe <= 3 else None
     
-    # === STEP 1: Trova i libri della TUA lista adozioni (cosa ti serve quest'anno) ===
-    # Prendo i libri dal DB MIUR per la tua classe
-    my_books_needed = await db.books.find({
-        "tipi_scuola": "MM" if user_tipo == "primo_grado" else {"$in": ["NO", "NT"]},
-        "anni_corso": user_classe
+    # === STEP 1: I MIEI libri ANNUALI per la mia classe ===
+    my_books = await db.books.find({
+        "tipi_scuola": tipo_scuola_query,
+        "anni_corso": user_classe,
+        "is_volume_unico": {"$ne": True}
     }).to_list(500)
     
-    # Separa volumi unici da annuali
-    my_volumi_unici_isbn = set()
-    my_libri_annuali_isbn = set()
+    # Creo un dizionario dei miei libri per disciplina
+    my_books_by_discipline = {}
+    for book in my_books:
+        disc = book.get("disciplina", "").strip().upper()
+        if disc and disc not in my_books_by_discipline:
+            my_books_by_discipline[disc] = {
+                "isbn": book.get("isbn", ""),
+                "titolo": book.get("titolo", ""),
+                "editore": book.get("editore", "").strip().upper(),
+                "autori": book.get("autori", ""),
+                "prezzo": book.get("prezzo_copertina", 0),
+                "volume": book.get("volume", "")
+            }
     
-    for book in my_books_needed:
-        isbn = book.get("isbn", "")
-        if book.get("is_volume_unico", False):
-            my_volumi_unici_isbn.add(isbn)
-        else:
-            my_libri_annuali_isbn.add(isbn)
+    totale_miei_libri = len(my_books_by_discipline)
     
-    # === STEP 2: Trova annunci disponibili dalla stessa scuola ===
-    pipeline = [
-        {
-            "$match": {
-                "seller_id": {"$ne": user_id},
-                "stato": "disponibile"
-            }
+    # === STEP 2: Libri della classe PRECEDENTE (cosa posso VENDERE) ===
+    vendibili = []
+    non_vendibili = []
+    
+    if classe_precedente:
+        libri_classe_prec = await db.books.find({
+            "tipi_scuola": tipo_scuola_query,
+            "anni_corso": classe_precedente,
+            "is_volume_unico": {"$ne": True}
+        }).to_list(500)
+        
+        # Raggruppo per disciplina
+        libri_prec_by_disc = {}
+        for book in libri_classe_prec:
+            disc = book.get("disciplina", "").strip().upper()
+            if disc and disc not in libri_prec_by_disc:
+                libri_prec_by_disc[disc] = {
+                    "isbn": book.get("isbn", ""),
+                    "titolo": book.get("titolo", ""),
+                    "editore": book.get("editore", "").strip().upper(),
+                    "autori": book.get("autori", ""),
+                    "prezzo": book.get("prezzo_copertina", 0)
+                }
+        
+        # Confronto: per ogni disciplina, controllo se editore è lo stesso
+        # (indica stessa serie, quindi posso vendere il mio vol.1 a chi entra in 1ª)
+        for disc, book_prec in libri_prec_by_disc.items():
+            # Cerco se nella MIA lista (classe attuale) c'è lo stesso editore per questa disciplina
+            # Questo indica che la serie non è cambiata
+            if disc in my_books_by_discipline:
+                my_book = my_books_by_discipline[disc]
+                # Confronto editore (se stesso editore → stessa serie → vendibile)
+                if book_prec["editore"] == my_book["editore"]:
+                    vendibili.append({
+                        "disciplina": disc,
+                        "titolo": book_prec["titolo"][:50],
+                        "editore": book_prec["editore"],
+                        "prezzo_consigliato": round(book_prec["prezzo"] * 0.5, 2),
+                        "motivo": "Stessa serie - VENDIBILE"
+                    })
+                else:
+                    non_vendibili.append({
+                        "disciplina": disc,
+                        "titolo": book_prec["titolo"][:50],
+                        "vecchio_editore": book_prec["editore"],
+                        "nuovo_editore": my_book["editore"],
+                        "motivo": "Edizione cambiata - NON vendibile"
+                    })
+            else:
+                # Disciplina non più presente in 2ª
+                vendibili.append({
+                    "disciplina": disc,
+                    "titolo": book_prec["titolo"][:50],
+                    "editore": book_prec["editore"],
+                    "prezzo_consigliato": round(book_prec["prezzo"] * 0.5, 2),
+                    "motivo": "Vendibile (materia solo in 1ª)"
+                })
+    
+    # === STEP 3: Libri della classe SUCCESSIVA (cosa posso COMPRARE usato) ===
+    comprare_usato = []
+    comprare_nuovo = []
+    
+    if classe_successiva:
+        libri_classe_succ = await db.books.find({
+            "tipi_scuola": tipo_scuola_query,
+            "anni_corso": classe_successiva,
+            "is_volume_unico": {"$ne": True}
+        }).to_list(500)
+        
+        # Raggruppo per disciplina
+        libri_succ_by_disc = {}
+        for book in libri_classe_succ:
+            disc = book.get("disciplina", "").strip().upper()
+            if disc and disc not in libri_succ_by_disc:
+                libri_succ_by_disc[disc] = {
+                    "isbn": book.get("isbn", ""),
+                    "titolo": book.get("titolo", ""),
+                    "editore": book.get("editore", "").strip().upper(),
+                    "autori": book.get("autori", ""),
+                    "prezzo": book.get("prezzo_copertina", 0)
+                }
+        
+        # Per ogni MIO libro, controllo se nella classe successiva c'è lo stesso editore
+        # Se sì → la serie non è cambiata → chi è in 3ª ha il vol.2 della stessa serie → posso comprare usato
+        for disc, my_book in my_books_by_discipline.items():
+            if disc in libri_succ_by_disc:
+                book_succ = libri_succ_by_disc[disc]
+                if my_book["editore"] == book_succ["editore"]:
+                    comprare_usato.append({
+                        "disciplina": disc,
+                        "titolo": my_book["titolo"][:50],
+                        "editore": my_book["editore"],
+                        "prezzo_nuovo": my_book["prezzo"],
+                        "prezzo_usato_stimato": round(my_book["prezzo"] * 0.5, 2),
+                        "risparmio": round(my_book["prezzo"] * 0.5, 2),
+                        "motivo": "Stessa serie - USATO disponibile"
+                    })
+                else:
+                    comprare_nuovo.append({
+                        "disciplina": disc,
+                        "titolo": my_book["titolo"][:50],
+                        "prezzo": my_book["prezzo"],
+                        "motivo": f"Edizione cambiata ({book_succ['editore']} → {my_book['editore']})"
+                    })
+            else:
+                # Disciplina non presente in 3ª (nuova materia per 2ª)
+                comprare_nuovo.append({
+                    "disciplina": disc,
+                    "titolo": my_book["titolo"][:50],
+                    "prezzo": my_book["prezzo"],
+                    "motivo": "Materia nuova in questa classe"
+                })
+    else:
+        # Se sono in 3ª, non ho classe successiva da cui comprare
+        for disc, my_book in my_books_by_discipline.items():
+            comprare_nuovo.append({
+                "disciplina": disc,
+                "titolo": my_book["titolo"][:50],
+                "prezzo": my_book["prezzo"],
+                "motivo": "Nessuna classe superiore"
+            })
+    
+    # === CALCOLI FINALI ===
+    num_vendibili = len(vendibili)
+    num_usato = len(comprare_usato)
+    num_nuovo = len(comprare_nuovo)
+    
+    risparmio_totale = sum(l["risparmio"] for l in comprare_usato)
+    costo_nuovi = sum(l["prezzo"] for l in comprare_nuovo)
+    
+    # Conta studenti per classe (per info)
+    studenti_1a = await db.users.count_documents({"classe": "1"}) if classe_precedente == 1 else 0
+    
+    return {
+        "user_classe": user_classe,
+        
+        "vendere": {
+            "classe": classe_precedente,
+            "titolo": f"Vendi alla {classe_precedente}ª" if classe_precedente else "Non puoi vendere",
+            "totale": num_vendibili,
+            "non_vendibili": len(non_vendibili),
+            "libri_vendibili": vendibili[:15],
+            "libri_non_vendibili": non_vendibili[:10],
+            "studenti_potenziali": studenti_1a
         },
-        {
-            "$lookup": {
-                "from": "users",
-                "localField": "seller_id",
-                "foreignField": "id",
-                "as": "seller_info"
-            }
+        
+        "nuovi": {
+            "classe": user_classe,
+            "titolo": f"Compra NUOVI ({user_classe}ª)",
+            "totale": num_nuovo,
+            "costo_totale": round(costo_nuovi, 2),
+            "libri": comprare_nuovo[:15]
         },
-        {"$unwind": "$seller_info"},
-        {
-            "$match": {
-                "seller_info.scuola": user_scuola
-            }
+        
+        "comprare": {
+            "classe": classe_successiva,
+            "titolo": f"Compra USATI dalla {classe_successiva}ª" if classe_successiva else "Non puoi comprare usato",
+            "totale": num_usato,
+            "risparmio_totale": round(risparmio_totale, 2),
+            "libri": comprare_usato[:15]
+        },
+        
+        "summary": {
+            "totale_libri_annuali": totale_miei_libri,
+            "usati_possibili": num_usato,
+            "nuovi_necessari": num_nuovo,
+            "vendibili": num_vendibili,
+            "risparmio_stimato": round(risparmio_totale, 2),
+            "costo_nuovi": round(costo_nuovi, 2),
+            "nota": f"Esclusi i volumi triennali (già comprati in 1ª)" if user_classe > 1 else "In 1ª devi comprare anche i volumi triennali"
         }
-    ]
-    
-    all_listings = await db.listings.aggregate(pipeline).to_list(500)
-    
-    # === STEP 3: Calcola cosa puoi COMPRARE usato ===
-    # Puoi comprare libri ANNUALI (non unici!) il cui ISBN è nella tua lista
+    }
     libri_acquistabili_usato = []
     libri_da_comprare_nuovo = []
     
