@@ -210,6 +210,53 @@ export default function ProfileScreen() {
         </View>
       </View>
 
+      {/* Quick Actions */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Le mie attività</Text>
+        
+        <TouchableOpacity 
+          style={styles.menuItem}
+          onPress={() => router.push('/my-sales')}
+        >
+          <View style={styles.menuItemIcon}>
+            <Ionicons name="pricetag" size={20} color="#1a472a" />
+          </View>
+          <View style={styles.menuItemContent}>
+            <Text style={styles.menuItemTitle}>Le mie vendite</Text>
+            <Text style={styles.menuItemSubtitle}>Gestisci i libri in vendita e le consegne</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#999" />
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={styles.menuItem}
+          onPress={() => router.push('/profiles/manage')}
+        >
+          <View style={[styles.menuItemIcon, { backgroundColor: '#fff3e0' }]}>
+            <Ionicons name="people" size={20} color="#FF9800" />
+          </View>
+          <View style={styles.menuItemContent}>
+            <Text style={styles.menuItemTitle}>Gestisci profili figli</Text>
+            <Text style={styles.menuItemSubtitle}>Aggiungi profili per più figli/classi</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#999" />
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={styles.menuItem}
+          onPress={() => router.push('/bookstores')}
+        >
+          <View style={[styles.menuItemIcon, { backgroundColor: '#e3f2fd' }]}>
+            <Ionicons name="storefront" size={20} color="#1976D2" />
+          </View>
+          <View style={styles.menuItemContent}>
+            <Text style={styles.menuItemTitle}>Cartolibrerie partner</Text>
+            <Text style={styles.menuItemSubtitle}>Punti di ritiro e consegna libri</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#999" />
+        </TouchableOpacity>
+      </View>
+
       {/* Actions */}
       <View style={styles.section}>
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
@@ -407,5 +454,40 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#ccc',
     marginTop: 4,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  menuItemIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: '#e8f5e9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  menuItemContent: {
+    flex: 1,
+  },
+  menuItemTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  menuItemSubtitle: {
+    fontSize: 13,
+    color: '#999',
+    marginTop: 2,
   },
 });

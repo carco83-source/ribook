@@ -199,7 +199,18 @@ class BookListing(BaseModel):
     bookstore_names: List[str] = []  # List of bookstore names for display
     note: Optional[str] = None
     foto_base64: Optional[str] = None
-    stato: str = "disponibile"  # disponibile, prenotato, venduto
+    # Stati: disponibile -> venduto -> in_consegna -> consegnato -> ritirato
+    stato: str = "disponibile"
+    # Tracking consegna (5 giorni per consegnare)
+    data_vendita: Optional[datetime] = None  # Quando è stato venduto
+    deadline_consegna: Optional[datetime] = None  # data_vendita + 5 giorni
+    data_consegna: Optional[datetime] = None  # Quando il venditore ha consegnato
+    data_ritiro: Optional[datetime] = None  # Quando l'acquirente ha ritirato
+    # Cartolibreria scelta per il ritiro (tra quelle selezionate dal venditore)
+    bookstore_ritiro_id: Optional[str] = None
+    bookstore_ritiro_nome: Optional[str] = None
+    # Codice transazione per ritiro
+    codice_ritiro: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 # Book Request (user looking for a book)
@@ -811,6 +822,192 @@ async def get_radar_view(user_id: str):
         "others": others,
         "books_searching": len(user_requests)
     }
+
+# ============== TRANSACTION & DELIVERY ROUTES ==============
+
+import random
+import string
+
+def generate_pickup_code():
+    """Generate a unique 6-character pickup code"""
+    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+
+class PurchaseRequest(BaseModel):
+    listing_id: str
+    bookstore_id: str  # Which bookstore the buyer wants to pick up from
+
+@api_router.post("/purchase")
+async def purchase_book(purchase_data: PurchaseRequest, buyer_id: str):
+    """Buyer initiates purchase of a book"""
+    from datetime import timedelta
+    
+    # Get listing
+    listing = await db.listings.find_one({"id": purchase_data.listing_id})
+    if not listing:
+        raise HTTPException(status_code=404, detail="Annuncio non trovato")
+    
+    if listing["stato"] != "disponibile":
+        raise HTTPException(status_code=400, detail="Libro non più disponibile")
+    
+    # Verify bookstore is in seller's list
+    if purchase_data.bookstore_id not in listing.get("bookstore_ids", []):
+        raise HTTPException(status_code=400, detail="Cartolibreria non disponibile per questo annuncio")
+    
+    # Get buyer
+    buyer = await db.users.find_one({"id": buyer_id})
+    if not buyer:
+        raise HTTPException(status_code=404, detail="Acquirente non trovato")
+    
+    # Can't buy your own book
+    if listing["seller_id"] == buyer_id:
+        raise HTTPException(status_code=400, detail="Non puoi acquistare il tuo stesso libro")
+    
+    # Get bookstore name
+    bookstore = await db.bookstores.find_one({"id": purchase_data.bookstore_id})
+    bookstore_nome = bookstore["nome"] if bookstore else ""
+    
+    # Generate pickup code
+    codice_ritiro = generate_pickup_code()
+    
+    # Calculate deadline (5 days from now)
+    now = datetime.utcnow()
+    deadline = now + timedelta(days=5)
+    
+    # Update listing
+    await db.listings.update_one(
+        {"id": purchase_data.listing_id},
+        {"$set": {
+            "stato": "venduto",
+            "data_vendita": now,
+            "deadline_consegna": deadline,
+            "bookstore_ritiro_id": purchase_data.bookstore_id,
+            "bookstore_ritiro_nome": bookstore_nome,
+            "codice_ritiro": codice_ritiro,
+            "buyer_id": buyer_id,
+            "buyer_username": buyer["username"]
+        }}
+    )
+    
+    return {
+        "message": "Acquisto confermato!",
+        "codice_ritiro": codice_ritiro,
+        "deadline_consegna": deadline.isoformat(),
+        "bookstore": bookstore_nome,
+        "prezzo": listing["prezzo_vendita"]
+    }
+
+@api_router.post("/listings/{listing_id}/mark-delivered")
+async def mark_as_delivered(listing_id: str, seller_id: str):
+    """Seller marks the book as delivered to the bookstore"""
+    listing = await db.listings.find_one({"id": listing_id})
+    if not listing:
+        raise HTTPException(status_code=404, detail="Annuncio non trovato")
+    
+    if listing["seller_id"] != seller_id:
+        raise HTTPException(status_code=403, detail="Non sei il venditore di questo libro")
+    
+    if listing["stato"] != "venduto":
+        raise HTTPException(status_code=400, detail="Il libro deve essere prima venduto")
+    
+    await db.listings.update_one(
+        {"id": listing_id},
+        {"$set": {
+            "stato": "consegnato",
+            "data_consegna": datetime.utcnow()
+        }}
+    )
+    
+    return {"message": "Libro segnato come consegnato alla cartolibreria"}
+
+@api_router.post("/listings/{listing_id}/confirm-pickup")
+async def confirm_pickup(listing_id: str, buyer_id: str, codice: str):
+    """Buyer confirms pickup with the pickup code"""
+    listing = await db.listings.find_one({"id": listing_id})
+    if not listing:
+        raise HTTPException(status_code=404, detail="Annuncio non trovato")
+    
+    if listing.get("buyer_id") != buyer_id:
+        raise HTTPException(status_code=403, detail="Non sei l'acquirente di questo libro")
+    
+    if listing["stato"] != "consegnato":
+        raise HTTPException(status_code=400, detail="Il libro non è ancora stato consegnato")
+    
+    if listing.get("codice_ritiro") != codice:
+        raise HTTPException(status_code=400, detail="Codice di ritiro non valido")
+    
+    await db.listings.update_one(
+        {"id": listing_id},
+        {"$set": {
+            "stato": "ritirato",
+            "data_ritiro": datetime.utcnow()
+        }}
+    )
+    
+    # TODO: Here we would release the payment to the seller
+    
+    return {"message": "Ritiro confermato! Transazione completata."}
+
+@api_router.get("/listings/{listing_id}/delivery-status")
+async def get_delivery_status(listing_id: str):
+    """Get the delivery status of a listing"""
+    listing = await db.listings.find_one({"id": listing_id})
+    if not listing:
+        raise HTTPException(status_code=404, detail="Annuncio non trovato")
+    
+    # Remove sensitive data
+    listing.pop('_id', None)
+    listing.pop('foto_base64', None)
+    
+    # Calculate days remaining
+    days_remaining = None
+    if listing.get("deadline_consegna"):
+        deadline = listing["deadline_consegna"]
+        if isinstance(deadline, str):
+            deadline = datetime.fromisoformat(deadline.replace('Z', '+00:00'))
+        days_remaining = (deadline - datetime.utcnow()).days
+        if days_remaining < 0:
+            days_remaining = 0
+    
+    return {
+        "listing": listing,
+        "days_remaining": days_remaining
+    }
+
+@api_router.get("/user/{user_id}/sales")
+async def get_user_sales(user_id: str):
+    """Get all books the user is selling or has sold"""
+    listings = await db.listings.find({"seller_id": user_id}).to_list(100)
+    
+    result = []
+    for listing in listings:
+        listing.pop('_id', None)
+        listing.pop('foto_base64', None)
+        
+        # Calculate days remaining for active sales
+        days_remaining = None
+        if listing.get("deadline_consegna") and listing["stato"] == "venduto":
+            deadline = listing["deadline_consegna"]
+            if isinstance(deadline, str):
+                deadline = datetime.fromisoformat(deadline.replace('Z', '+00:00'))
+            days_remaining = (deadline - datetime.utcnow()).days
+            if days_remaining < 0:
+                days_remaining = 0
+        
+        listing["days_remaining"] = days_remaining
+        result.append(listing)
+    
+    return result
+
+@api_router.get("/user/{user_id}/purchases")
+async def get_user_purchases(user_id: str):
+    """Get all books the user has purchased"""
+    listings = await db.listings.find({"buyer_id": user_id}).to_list(100)
+    
+    for listing in listings:
+        listing.pop('_id', None)
+        listing.pop('foto_base64', None)
+    
+    return listings
 
 # ============== BOOKSTORE ROUTES ==============
 
