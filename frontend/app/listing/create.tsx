@@ -12,7 +12,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
@@ -20,13 +20,57 @@ import * as ImagePicker from 'expo-image-picker';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
-const CONDITIONS = [
-  { key: 'nuovo', label: 'Nuovo', percentage: 85, description: '-15% dal prezzo' },
-  { key: 'come_nuovo', label: 'Come Nuovo', percentage: 60, description: '60% del prezzo' },
-  { key: 'ottime_condizioni', label: 'Ottime Condizioni', percentage: 50, description: '50% del prezzo' },
-  { key: 'buono', label: 'Buono', percentage: 40, description: '40% del prezzo' },
-  { key: 'scarso', label: 'Scarso', percentage: 30, description: '30% del prezzo' },
+// Condition questions with icons and labels
+const CONDITION_QUESTIONS = [
+  {
+    key: 'sottolineature',
+    question: 'Il libro ha scritte o evidenziature?',
+    icon: 'pencil',
+    options: [
+      { value: 0, label: 'Nessuna', emoji: '✨' },
+      { value: 1, label: 'Poche', emoji: '✏️' },
+      { value: 2, label: 'Molte', emoji: '🖊️' },
+    ],
+  },
+  {
+    key: 'copertina',
+    question: 'La copertina è rovinata?',
+    icon: 'book',
+    options: [
+      { value: 0, label: 'No', emoji: '✨' },
+      { value: 1, label: 'Un po\'', emoji: '⚠️' },
+      { value: 2, label: 'Molto', emoji: '📉' },
+    ],
+  },
+  {
+    key: 'pagine',
+    question: 'Le pagine hanno pieghe o orecchie?',
+    icon: 'document-text',
+    options: [
+      { value: 0, label: 'Nessuna', emoji: '✨' },
+      { value: 1, label: 'Qualcuna', emoji: '📄' },
+      { value: 2, label: 'Molte', emoji: '📚' },
+    ],
+  },
+  {
+    key: 'esercizi',
+    question: 'Gli esercizi sono già compilati?',
+    icon: 'create',
+    options: [
+      { value: 0, label: 'No', emoji: '✨' },
+      { value: 1, label: 'Qualcuno', emoji: '📝' },
+      { value: 2, label: 'Molti', emoji: '📋' },
+    ],
+  },
 ];
+
+// Calculate condition from answers
+const calculateCondition = (answers: Record<string, number>) => {
+  const total = Object.values(answers).reduce((sum, val) => sum + val, 0);
+  if (total <= 2) return { key: 'perfetto', label: '🟢 Perfetto', percentage: 70 };
+  if (total <= 5) return { key: 'buono', label: '🟡 Buono', percentage: 50 };
+  return { key: 'molto_usato', label: '🔴 Molto usato', percentage: 30 };
+};
 
 interface Book {
   id: string;
@@ -38,48 +82,86 @@ interface Book {
   classe: string;
 }
 
+interface Bookstore {
+  id: string;
+  nome: string;
+  indirizzo: string;
+}
+
 export default function CreateListingScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [books, setBooks] = useState<Book[]>([]);
-  const [filteredBooks, setFilteredBooks] = useState<Book[]>([]);
+  const [searchResults, setSearchResults] = useState<Book[]>([]);
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
-  const [selectedCondition, setSelectedCondition] = useState<string | null>(null);
+  const [conditionAnswers, setConditionAnswers] = useState<Record<string, number>>({
+    sottolineature: 0,
+    copertina: 0,
+    pagine: 0,
+    esercizi: 0,
+  });
   const [note, setNote] = useState('');
   const [photo, setPhoto] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+  
+  // Fascicoli state
+  const [hasFascicoli, setHasFascicoli] = useState(false);
+  const [fascicoliTotali, setFascicoliTotali] = useState(0);
+  const [fascicoliPresenti, setFascicoliPresenti] = useState(0);
+  
+  // Bookstores
+  const [bookstores, setBookstores] = useState<Bookstore[]>([]);
+  const [selectedBookstore, setSelectedBookstore] = useState<string | null>(null);
 
   useEffect(() => {
-    loadData();
+    loadInitialData();
   }, []);
 
-  useEffect(() => {
-    if (searchQuery.trim() === '') {
-      setFilteredBooks([]);
-    } else {
-      const query = searchQuery.toLowerCase();
-      setFilteredBooks(
-        books.filter(
-          (book) =>
-            book.titolo.toLowerCase().includes(query) ||
-            book.isbn.includes(query)
-        ).slice(0, 5)
-      );
-    }
-  }, [searchQuery, books]);
-
-  const loadData = async () => {
+  const loadInitialData = async () => {
     try {
       const storedUserId = await AsyncStorage.getItem('user_id');
       setUserId(storedUserId);
-
-      const response = await axios.get(`${API_URL}/api/books`);
-      setBooks(response.data);
+      
+      // Load bookstores
+      const res = await axios.get(`${API_URL}/api/bookstores`);
+      setBookstores(res.data);
     } catch (error) {
-      console.error('Error loading books:', error);
+      console.error('Error loading data:', error);
     }
   };
+
+  // Search books by query (title or ISBN)
+  const searchBooks = async (query: string) => {
+    if (query.length < 3) {
+      setSearchResults([]);
+      return;
+    }
+    
+    try {
+      // Get user info for class filtering
+      const userInfo = await AsyncStorage.getItem('user_info');
+      const user = userInfo ? JSON.parse(userInfo) : null;
+      
+      // Search with class filter
+      const params: any = { search: query, limit: 10 };
+      if (user) {
+        params.classe = user.classe;
+        params.tipo_scuola = user.tipo_scuola;
+      }
+      
+      const response = await axios.get(`${API_URL}/api/books`, { params });
+      setSearchResults(response.data);
+    } catch (error) {
+      console.error('Error searching books:', error);
+    }
+  };
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      searchBooks(searchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -121,9 +203,8 @@ export default function CreateListingScreen() {
   };
 
   const calculatePrice = () => {
-    if (!selectedBook || !selectedCondition) return 0;
-    const condition = CONDITIONS.find((c) => c.key === selectedCondition);
-    if (!condition) return 0;
+    if (!selectedBook) return 0;
+    const condition = calculateCondition(conditionAnswers);
     return (selectedBook.prezzo_ministeriale * condition.percentage) / 100;
   };
 
@@ -132,16 +213,16 @@ export default function CreateListingScreen() {
       Alert.alert('Errore', 'Seleziona un libro');
       return;
     }
-    if (!selectedCondition) {
-      Alert.alert('Errore', 'Seleziona la condizione del libro');
-      return;
-    }
 
     setLoading(true);
     try {
       await axios.post(`${API_URL}/api/listings?user_id=${userId}`, {
         book_id: selectedBook.id,
-        condizione: selectedCondition,
+        condition_answers: conditionAnswers,
+        ha_fascicoli: hasFascicoli,
+        fascicoli_totali: fascicoliTotali,
+        fascicoli_presenti: fascicoliPresenti,
+        bookstore_id: selectedBookstore,
         note: note || null,
         foto_base64: photo || null,
       });
@@ -149,12 +230,7 @@ export default function CreateListingScreen() {
       Alert.alert(
         'Annuncio creato!',
         `Il tuo libro è ora in vendita a €${calculatePrice().toFixed(2)}`,
-        [
-          {
-            text: 'OK',
-            onPress: () => router.back(),
-          },
-        ]
+        [{ text: 'OK', onPress: () => router.back() }]
       );
     } catch (error: any) {
       console.error('Error creating listing:', error);
@@ -167,16 +243,26 @@ export default function CreateListingScreen() {
     }
   };
 
+  const currentCondition = calculateCondition(conditionAnswers);
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
+      <Stack.Screen 
+        options={{ 
+          title: 'Vendi un libro',
+          headerStyle: { backgroundColor: '#1a472a' },
+          headerTintColor: '#fff',
+        }} 
+      />
+      
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Book Selection */}
+        {/* Step 1: Book Selection */}
         <Text style={styles.sectionTitle}>1. Seleziona il libro</Text>
         
         {selectedBook ? (
@@ -184,13 +270,17 @@ export default function CreateListingScreen() {
             <View style={styles.selectedBookInfo}>
               <Text style={styles.selectedBookTitle}>{selectedBook.titolo}</Text>
               <Text style={styles.selectedBookAuthor}>{selectedBook.autore}</Text>
+              <Text style={styles.selectedBookISBN}>ISBN: {selectedBook.isbn}</Text>
               <Text style={styles.selectedBookPrice}>
                 Prezzo listino: €{selectedBook.prezzo_ministeriale.toFixed(2)}
               </Text>
             </View>
             <TouchableOpacity
               style={styles.changeBookButton}
-              onPress={() => setSelectedBook(null)}
+              onPress={() => {
+                setSelectedBook(null);
+                setSearchQuery('');
+              }}
             >
               <Ionicons name="close-circle" size={24} color="#ff4444" />
             </TouchableOpacity>
@@ -207,20 +297,21 @@ export default function CreateListingScreen() {
               />
             </View>
 
-            {filteredBooks.length > 0 && (
+            {searchResults.length > 0 && (
               <View style={styles.searchResults}>
-                {filteredBooks.map((book) => (
+                {searchResults.map((book) => (
                   <TouchableOpacity
                     key={book.id}
                     style={styles.searchResultItem}
                     onPress={() => {
                       setSelectedBook(book);
                       setSearchQuery('');
-                      setFilteredBooks([]);
+                      setSearchResults([]);
                     }}
                   >
                     <Text style={styles.searchResultTitle}>{book.titolo}</Text>
                     <Text style={styles.searchResultAuthor}>{book.autore}</Text>
+                    <Text style={styles.searchResultISBN}>ISBN: {book.isbn}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -228,47 +319,178 @@ export default function CreateListingScreen() {
           </View>
         )}
 
-        {/* Condition Selection */}
+        {/* Step 2: Condition Questions */}
         {selectedBook && (
           <>
             <Text style={styles.sectionTitle}>2. Condizione del libro</Text>
-            <View style={styles.conditionsContainer}>
-              {CONDITIONS.map((condition) => (
-                <TouchableOpacity
-                  key={condition.key}
-                  style={[
-                    styles.conditionItem,
-                    selectedCondition === condition.key && styles.conditionItemSelected,
-                  ]}
-                  onPress={() => setSelectedCondition(condition.key)}
-                >
-                  <View style={styles.conditionHeader}>
-                    <Text
+            <Text style={styles.sectionSubtitle}>
+              Rispondi a queste 4 domande - il prezzo viene calcolato automaticamente
+            </Text>
+            
+            {CONDITION_QUESTIONS.map((q) => (
+              <View key={q.key} style={styles.questionCard}>
+                <View style={styles.questionHeader}>
+                  <Ionicons name={q.icon as any} size={20} color="#1a472a" />
+                  <Text style={styles.questionText}>{q.question}</Text>
+                </View>
+                <View style={styles.optionsRow}>
+                  {q.options.map((opt) => (
+                    <TouchableOpacity
+                      key={opt.value}
                       style={[
-                        styles.conditionLabel,
-                        selectedCondition === condition.key && styles.conditionLabelSelected,
+                        styles.optionButton,
+                        conditionAnswers[q.key] === opt.value && styles.optionButtonSelected,
                       ]}
+                      onPress={() =>
+                        setConditionAnswers({ ...conditionAnswers, [q.key]: opt.value })
+                      }
                     >
-                      {condition.label}
-                    </Text>
-                    {selectedCondition === condition.key && (
-                      <Ionicons name="checkmark-circle" size={20} color="#1a472a" />
-                    )}
-                  </View>
-                  <Text style={styles.conditionDescription}>{condition.description}</Text>
-                  <Text style={styles.conditionPrice}>
-                    €{((selectedBook.prezzo_ministeriale * condition.percentage) / 100).toFixed(2)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+                      <Text style={styles.optionEmoji}>{opt.emoji}</Text>
+                      <Text
+                        style={[
+                          styles.optionLabel,
+                          conditionAnswers[q.key] === opt.value && styles.optionLabelSelected,
+                        ]}
+                      >
+                        {opt.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            ))}
+
+            {/* Condition Result */}
+            <View style={styles.conditionResult}>
+              <Text style={styles.conditionResultLabel}>Condizione calcolata:</Text>
+              <Text style={styles.conditionResultValue}>{currentCondition.label}</Text>
+              <Text style={styles.conditionResultPrice}>
+                Prezzo: €{calculatePrice().toFixed(2)}
+              </Text>
             </View>
           </>
         )}
 
-        {/* Photo */}
-        {selectedBook && selectedCondition && (
+        {/* Step 3: Fascicoli */}
+        {selectedBook && (
           <>
-            <Text style={styles.sectionTitle}>3. Foto (opzionale)</Text>
+            <Text style={styles.sectionTitle}>3. Fascicoli allegati</Text>
+            <View style={styles.fascicoliCard}>
+              <TouchableOpacity
+                style={styles.fascicoliToggle}
+                onPress={() => setHasFascicoli(!hasFascicoli)}
+              >
+                <Ionicons
+                  name={hasFascicoli ? 'checkbox' : 'square-outline'}
+                  size={24}
+                  color="#1a472a"
+                />
+                <Text style={styles.fascicoliToggleText}>
+                  Questo libro ha fascicoli/allegati
+                </Text>
+              </TouchableOpacity>
+
+              {hasFascicoli && (
+                <View style={styles.fascicoliInputs}>
+                  <View style={styles.fascicoliInputRow}>
+                    <Text style={styles.fascicoliInputLabel}>Fascicoli totali previsti:</Text>
+                    <View style={styles.counterContainer}>
+                      <TouchableOpacity
+                        style={styles.counterButton}
+                        onPress={() => setFascicoliTotali(Math.max(0, fascicoliTotali - 1))}
+                      >
+                        <Ionicons name="remove" size={20} color="#1a472a" />
+                      </TouchableOpacity>
+                      <Text style={styles.counterValue}>{fascicoliTotali}</Text>
+                      <TouchableOpacity
+                        style={styles.counterButton}
+                        onPress={() => setFascicoliTotali(fascicoliTotali + 1)}
+                      >
+                        <Ionicons name="add" size={20} color="#1a472a" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                  
+                  <View style={styles.fascicoliInputRow}>
+                    <Text style={styles.fascicoliInputLabel}>Fascicoli che hai:</Text>
+                    <View style={styles.counterContainer}>
+                      <TouchableOpacity
+                        style={styles.counterButton}
+                        onPress={() => setFascicoliPresenti(Math.max(0, fascicoliPresenti - 1))}
+                      >
+                        <Ionicons name="remove" size={20} color="#1a472a" />
+                      </TouchableOpacity>
+                      <Text style={styles.counterValue}>{fascicoliPresenti}</Text>
+                      <TouchableOpacity
+                        style={styles.counterButton}
+                        onPress={() => setFascicoliPresenti(Math.min(fascicoliTotali, fascicoliPresenti + 1))}
+                      >
+                        <Ionicons name="add" size={20} color="#1a472a" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {fascicoliTotali > 0 && fascicoliPresenti < fascicoliTotali && (
+                    <View style={styles.fascicoliWarning}>
+                      <Ionicons name="warning" size={16} color="#e65100" />
+                      <Text style={styles.fascicoliWarningText}>
+                        Fascicoli mancanti: la condizione sarà "Molto usato"
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
+            </View>
+          </>
+        )}
+
+        {/* Step 4: Bookstore Selection */}
+        {selectedBook && (
+          <>
+            <Text style={styles.sectionTitle}>4. Punto di ritiro</Text>
+            <Text style={styles.sectionSubtitle}>
+              Seleziona dove consegnerai il libro
+            </Text>
+            
+            {bookstores.length > 0 ? (
+              <View style={styles.bookstoreList}>
+                {bookstores.map((store) => (
+                  <TouchableOpacity
+                    key={store.id}
+                    style={[
+                      styles.bookstoreItem,
+                      selectedBookstore === store.id && styles.bookstoreItemSelected,
+                    ]}
+                    onPress={() => setSelectedBookstore(store.id)}
+                  >
+                    <Ionicons
+                      name={selectedBookstore === store.id ? 'radio-button-on' : 'radio-button-off'}
+                      size={20}
+                      color="#1a472a"
+                    />
+                    <View style={styles.bookstoreInfo}>
+                      <Text style={styles.bookstoreName}>{store.nome}</Text>
+                      <Text style={styles.bookstoreAddress}>{store.indirizzo}</Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ) : (
+              <Text style={styles.noBookstoresText}>
+                Nessuna cartolibreria disponibile al momento
+              </Text>
+            )}
+          </>
+        )}
+
+        {/* Step 5: Photo */}
+        {selectedBook && (
+          <>
+            <Text style={styles.sectionTitle}>5. Foto (consigliata)</Text>
+            <Text style={styles.sectionSubtitle}>
+              📸 Scatta una foto della pagina peggiore per aumentare la fiducia
+            </Text>
+            
             <View style={styles.photoSection}>
               {photo ? (
                 <View style={styles.photoPreview}>
@@ -296,9 +518,13 @@ export default function CreateListingScreen() {
                 </View>
               )}
             </View>
+          </>
+        )}
 
-            {/* Note */}
-            <Text style={styles.sectionTitle}>4. Note (opzionale)</Text>
+        {/* Step 6: Notes */}
+        {selectedBook && (
+          <>
+            <Text style={styles.sectionTitle}>6. Note (opzionale)</Text>
             <TextInput
               style={styles.noteInput}
               placeholder="Aggiungi note sullo stato del libro..."
@@ -307,39 +533,49 @@ export default function CreateListingScreen() {
               multiline
               numberOfLines={3}
             />
+          </>
+        )}
 
-            {/* Summary */}
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryTitle}>Riepilogo</Text>
+        {/* Summary */}
+        {selectedBook && (
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryTitle}>Riepilogo</Text>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Libro:</Text>
+              <Text style={styles.summaryValue}>{selectedBook.titolo}</Text>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Condizione:</Text>
+              <Text style={styles.summaryValue}>{currentCondition.label}</Text>
+            </View>
+            {hasFascicoli && fascicoliTotali > 0 && (
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Libro:</Text>
-                <Text style={styles.summaryValue}>{selectedBook.titolo}</Text>
-              </View>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Condizione:</Text>
+                <Text style={styles.summaryLabel}>Fascicoli:</Text>
                 <Text style={styles.summaryValue}>
-                  {CONDITIONS.find((c) => c.key === selectedCondition)?.label}
+                  {fascicoliPresenti}/{fascicoliTotali}
                 </Text>
               </View>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Prezzo di vendita:</Text>
-                <Text style={styles.summaryPrice}>€{calculatePrice().toFixed(2)}</Text>
-              </View>
+            )}
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Prezzo di vendita:</Text>
+              <Text style={styles.summaryPrice}>€{calculatePrice().toFixed(2)}</Text>
             </View>
+          </View>
+        )}
 
-            {/* Submit */}
-            <TouchableOpacity
-              style={styles.submitButton}
-              onPress={handleSubmit}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.submitButtonText}>Pubblica Annuncio</Text>
-              )}
-            </TouchableOpacity>
-          </>
+        {/* Submit */}
+        {selectedBook && (
+          <TouchableOpacity
+            style={styles.submitButton}
+            onPress={handleSubmit}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.submitButtonText}>Pubblica Annuncio</Text>
+            )}
+          </TouchableOpacity>
         )}
       </ScrollView>
     </KeyboardAvoidingView>
@@ -358,8 +594,13 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
-    marginTop: 16,
+    color: '#1a472a',
+    marginTop: 20,
+    marginBottom: 8,
+  },
+  sectionSubtitle: {
+    fontSize: 13,
+    color: '#666',
     marginBottom: 12,
   },
   searchContainer: {
@@ -400,6 +641,11 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 2,
   },
+  searchResultISBN: {
+    fontSize: 11,
+    color: '#999',
+    marginTop: 2,
+  },
   selectedBookCard: {
     flexDirection: 'row',
     backgroundColor: '#e8f5e9',
@@ -421,6 +667,11 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 2,
   },
+  selectedBookISBN: {
+    fontSize: 12,
+    color: '#888',
+    marginTop: 4,
+  },
   selectedBookPrice: {
     fontSize: 14,
     fontWeight: '600',
@@ -430,43 +681,168 @@ const styles = StyleSheet.create({
   changeBookButton: {
     justifyContent: 'center',
   },
-  conditionsContainer: {
-    gap: 8,
-  },
-  conditionItem: {
+  questionCard: {
     backgroundColor: '#fff',
     borderRadius: 12,
     padding: 16,
+    marginBottom: 12,
+  },
+  questionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  questionText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#333',
+    flex: 1,
+  },
+  optionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  optionButton: {
+    flex: 1,
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 8,
     borderWidth: 2,
     borderColor: '#e0e0e0',
+    backgroundColor: '#fafafa',
   },
-  conditionItemSelected: {
+  optionButtonSelected: {
     borderColor: '#1a472a',
-    backgroundColor: '#f0f8f0',
+    backgroundColor: '#e8f5e9',
   },
-  conditionHeader: {
+  optionEmoji: {
+    fontSize: 20,
+    marginBottom: 4,
+  },
+  optionLabel: {
+    fontSize: 12,
+    color: '#666',
+  },
+  optionLabelSelected: {
+    color: '#1a472a',
+    fontWeight: '600',
+  },
+  conditionResult: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#1a472a',
+  },
+  conditionResultLabel: {
+    fontSize: 12,
+    color: '#666',
+  },
+  conditionResultValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginTop: 4,
+  },
+  conditionResultPrice: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1a472a',
+    marginTop: 8,
+  },
+  fascicoliCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+  },
+  fascicoliToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  fascicoliToggleText: {
+    fontSize: 14,
+    color: '#333',
+  },
+  fascicoliInputs: {
+    marginTop: 16,
+    gap: 12,
+  },
+  fascicoliInputRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  conditionLabel: {
-    fontSize: 16,
+  fascicoliInputLabel: {
+    fontSize: 14,
+    color: '#666',
+  },
+  counterContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  counterButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#e8f5e9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  counterValue: {
+    fontSize: 18,
+    fontWeight: '600',
+    minWidth: 24,
+    textAlign: 'center',
+  },
+  fascicoliWarning: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#fff3e0',
+    padding: 12,
+    borderRadius: 8,
+  },
+  fascicoliWarningText: {
+    fontSize: 12,
+    color: '#e65100',
+    flex: 1,
+  },
+  bookstoreList: {
+    gap: 8,
+  },
+  bookstoreItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    gap: 12,
+  },
+  bookstoreItemSelected: {
+    backgroundColor: '#e8f5e9',
+    borderWidth: 1,
+    borderColor: '#1a472a',
+  },
+  bookstoreInfo: {
+    flex: 1,
+  },
+  bookstoreName: {
+    fontSize: 14,
     fontWeight: '600',
     color: '#333',
   },
-  conditionLabelSelected: {
-    color: '#1a472a',
-  },
-  conditionDescription: {
+  bookstoreAddress: {
     fontSize: 12,
     color: '#666',
-    marginTop: 4,
+    marginTop: 2,
   },
-  conditionPrice: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1a472a',
-    marginTop: 8,
+  noBookstoresText: {
+    textAlign: 'center',
+    color: '#999',
+    padding: 20,
   },
   photoSection: {
     backgroundColor: '#fff',

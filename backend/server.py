@@ -30,13 +30,38 @@ api_router = APIRouter(prefix="/api")
 
 # ============== MODELS ==============
 
-# Book conditions with pricing percentages
-BOOK_CONDITIONS = {
+# Book conditions with pricing percentages (OLD SYSTEM - kept for backwards compatibility)
+BOOK_CONDITIONS_OLD = {
     "nuovo": 0.85,           # 85% - New with 15% discount
     "come_nuovo": 0.60,      # 60%
     "ottime_condizioni": 0.50,  # 50%
     "buono": 0.40,           # 40%
     "scarso": 0.30           # 30%
+}
+
+# NEW SIMPLIFIED CONDITION SYSTEM - 3 questions that auto-calculate condition
+# Question answers: 0 = none, 1 = some, 2 = many
+# Total score: 0-2 = Perfetto, 3-4 = Buono, 5+ = Molto Usato
+CONDITION_PRICING = {
+    "perfetto": 0.70,        # 70% - Perfect condition
+    "buono": 0.50,           # 50% - Good condition  
+    "molto_usato": 0.30      # 30% - Very used
+}
+
+def calculate_condition_from_answers(sottolineature: int, copertina: int, pagine: int, esercizi: int) -> str:
+    """Calculate book condition based on 4 questions (0=none, 1=some, 2=many)"""
+    total_score = sottolineature + copertina + pagine + esercizi
+    if total_score <= 2:
+        return "perfetto"
+    elif total_score <= 5:
+        return "buono"
+    else:
+        return "molto_usato"
+
+# For backwards compatibility
+BOOK_CONDITIONS = {
+    **BOOK_CONDITIONS_OLD,
+    **CONDITION_PRICING
 }
 
 def generate_username():
@@ -49,6 +74,16 @@ def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
 
 # User Models
+
+# Child profile for multi-profile support
+class ChildProfile(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    nome_figlio: str  # Child's name (optional, for parent reference)
+    scuola: str
+    classe: str
+    sezione: str
+    tipo_scuola: str  # primo_grado or secondo_grado
+
 class UserCreate(BaseModel):
     nome: str
     cognome: str
@@ -78,6 +113,9 @@ class User(BaseModel):
     username: str  # Auto-generated anonymous username
     is_premium: bool = False
     premium_expires: Optional[datetime] = None
+    # Multi-profile support - additional child profiles
+    profili_figli: List[dict] = []  # List of ChildProfile dicts
+    active_profile_id: Optional[str] = None  # Currently selected profile
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 class UserPublic(BaseModel):
@@ -115,11 +153,26 @@ class Book(BookBase):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 # Book Listing (user selling a book)
+class BookConditionAnswers(BaseModel):
+    """4 questions for automatic condition calculation"""
+    sottolineature: int = 0  # 0=nessuna, 1=poche, 2=molte
+    copertina: int = 0       # 0=no, 1=un po', 2=molto
+    pagine: int = 0          # 0=nessuna, 1=qualcuna, 2=molte
+    esercizi: int = 0        # 0=no, 1=qualcuno, 2=molti
+
 class BookListingCreate(BaseModel):
     book_id: str
-    condizione: str  # nuovo, come_nuovo, ottime_condizioni, buono, scarso
+    condizione: Optional[str] = None  # OLD: nuovo, come_nuovo, etc. - kept for backwards compatibility
+    # NEW: condition answers (if provided, will override condizione)
+    condition_answers: Optional[BookConditionAnswers] = None
     note: Optional[str] = None
     foto_base64: Optional[str] = None
+    # Fascicoli (workbook supplements)
+    ha_fascicoli: bool = True  # Default assumes book comes with supplements
+    fascicoli_totali: int = 0  # How many supplements the book should have
+    fascicoli_presenti: int = 0  # How many the seller has
+    # Bookstore selection for pickup
+    bookstore_id: Optional[str] = None
 
 class BookListing(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -132,8 +185,18 @@ class BookListing(BaseModel):
     book_materia: str
     book_classe: str
     prezzo_ministeriale: float
-    condizione: str
+    condizione: str  # perfetto, buono, molto_usato (or old values)
+    # Condition details from questions
+    condition_details: Optional[dict] = None  # Store answers: {sottolineature, copertina, pagine, esercizi}
     prezzo_vendita: float  # Calculated based on condition
+    # Fascicoli info
+    ha_fascicoli: bool = True
+    fascicoli_totali: int = 0
+    fascicoli_presenti: int = 0
+    prezzo_fascicoli: float = 0.0  # 10% of book price divided by total supplements
+    # Bookstore selection
+    bookstore_id: Optional[str] = None
+    bookstore_nome: Optional[str] = None
     note: Optional[str] = None
     foto_base64: Optional[str] = None
     stato: str = "disponibile"  # disponibile, prenotato, venduto
@@ -283,6 +346,123 @@ async def upgrade_to_premium(user_id: str):
     
     return {"message": "Upgrade a Premium completato", "scadenza": expire_date}
 
+# ============== CHILD PROFILES ROUTES ==============
+
+class AddChildProfileRequest(BaseModel):
+    nome_figlio: str
+    scuola: str
+    classe: str
+    sezione: str
+    tipo_scuola: str
+
+@api_router.post("/users/{user_id}/profiles")
+async def add_child_profile(user_id: str, profile_data: AddChildProfileRequest):
+    """Add a new child profile to user account"""
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+    
+    new_profile = {
+        "id": str(uuid.uuid4()),
+        "nome_figlio": profile_data.nome_figlio,
+        "scuola": profile_data.scuola,
+        "classe": profile_data.classe,
+        "sezione": profile_data.sezione,
+        "tipo_scuola": profile_data.tipo_scuola
+    }
+    
+    profili = user.get("profili_figli", [])
+    profili.append(new_profile)
+    
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"profili_figli": profili}}
+    )
+    
+    return {"message": "Profilo figlio aggiunto", "profile": new_profile}
+
+@api_router.get("/users/{user_id}/profiles")
+async def get_child_profiles(user_id: str):
+    """Get all child profiles for a user"""
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+    
+    # Include the main profile as the first one
+    main_profile = {
+        "id": "main",
+        "nome_figlio": "Profilo principale",
+        "scuola": user["scuola"],
+        "classe": user["classe"],
+        "sezione": user["sezione"],
+        "tipo_scuola": user.get("tipo_scuola", "")
+    }
+    
+    profiles = [main_profile] + user.get("profili_figli", [])
+    return profiles
+
+@api_router.put("/users/{user_id}/profiles/{profile_id}/activate")
+async def activate_profile(user_id: str, profile_id: str):
+    """Set the active profile for a user"""
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+    
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"active_profile_id": profile_id if profile_id != "main" else None}}
+    )
+    
+    return {"message": "Profilo attivato", "active_profile_id": profile_id}
+
+@api_router.delete("/users/{user_id}/profiles/{profile_id}")
+async def delete_child_profile(user_id: str, profile_id: str):
+    """Delete a child profile"""
+    if profile_id == "main":
+        raise HTTPException(status_code=400, detail="Non puoi eliminare il profilo principale")
+    
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+    
+    profili = [p for p in user.get("profili_figli", []) if p["id"] != profile_id]
+    
+    # If deleted profile was active, reset to main
+    update_fields = {"profili_figli": profili}
+    if user.get("active_profile_id") == profile_id:
+        update_fields["active_profile_id"] = None
+    
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": update_fields}
+    )
+    
+    return {"message": "Profilo eliminato"}
+
+@api_router.get("/users/{user_id}/active-profile")
+async def get_active_profile(user_id: str):
+    """Get the currently active profile info for a user"""
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+    
+    active_id = user.get("active_profile_id")
+    
+    if active_id:
+        for profile in user.get("profili_figli", []):
+            if profile["id"] == active_id:
+                return profile
+    
+    # Return main profile
+    return {
+        "id": "main",
+        "nome_figlio": "Profilo principale",
+        "scuola": user["scuola"],
+        "classe": user["classe"],
+        "sezione": user["sezione"],
+        "tipo_scuola": user.get("tipo_scuola", "")
+    }
+
 # ============== BOOKS ROUTES ==============
 
 @api_router.post("/books", response_model=Book)
@@ -338,12 +518,48 @@ async def create_listing(listing_data: BookListingCreate, user_id: str):
     if not book:
         raise HTTPException(status_code=404, detail="Libro non trovato")
     
+    # Determine condition and price
+    condition_details = None
+    condizione = listing_data.condizione
+    
+    # NEW SYSTEM: If condition_answers provided, calculate condition automatically
+    if listing_data.condition_answers:
+        ca = listing_data.condition_answers
+        condizione = calculate_condition_from_answers(
+            ca.sottolineature, ca.copertina, ca.pagine, ca.esercizi
+        )
+        condition_details = {
+            "sottolineature": ca.sottolineature,
+            "copertina": ca.copertina,
+            "pagine": ca.pagine,
+            "esercizi": ca.esercizi
+        }
+        
+        # If missing supplements, downgrade to "molto_usato"
+        if listing_data.ha_fascicoli and listing_data.fascicoli_totali > 0:
+            if listing_data.fascicoli_presenti < listing_data.fascicoli_totali:
+                condizione = "molto_usato"
+    
     # Validate condition
-    if listing_data.condizione not in BOOK_CONDITIONS:
+    if condizione not in BOOK_CONDITIONS:
         raise HTTPException(status_code=400, detail="Condizione non valida")
     
-    # Calculate price based on condition
-    prezzo_vendita = book["prezzo_ministeriale"] * BOOK_CONDITIONS[listing_data.condizione]
+    # Calculate base price based on condition
+    prezzo_vendita = book["prezzo_ministeriale"] * BOOK_CONDITIONS[condizione]
+    
+    # Calculate supplement price (10% of book price for all supplements)
+    prezzo_fascicoli = 0.0
+    if listing_data.fascicoli_totali > 0:
+        prezzo_totale_fascicoli = book["prezzo_ministeriale"] * 0.10
+        if listing_data.fascicoli_presenti > 0:
+            prezzo_fascicoli = round((prezzo_totale_fascicoli / listing_data.fascicoli_totali) * listing_data.fascicoli_presenti, 2)
+    
+    # Get bookstore name if provided
+    bookstore_nome = None
+    if listing_data.bookstore_id:
+        bookstore = await db.bookstores.find_one({"id": listing_data.bookstore_id})
+        if bookstore:
+            bookstore_nome = bookstore["nome"]
     
     listing = BookListing(
         seller_id=user_id,
@@ -355,8 +571,15 @@ async def create_listing(listing_data: BookListingCreate, user_id: str):
         book_materia=book["materia"],
         book_classe=book["classe"],
         prezzo_ministeriale=book["prezzo_ministeriale"],
-        condizione=listing_data.condizione,
+        condizione=condizione,
+        condition_details=condition_details,
         prezzo_vendita=round(prezzo_vendita, 2),
+        ha_fascicoli=listing_data.ha_fascicoli,
+        fascicoli_totali=listing_data.fascicoli_totali,
+        fascicoli_presenti=listing_data.fascicoli_presenti,
+        prezzo_fascicoli=prezzo_fascicoli,
+        bookstore_id=listing_data.bookstore_id,
+        bookstore_nome=bookstore_nome,
         note=listing_data.note,
         foto_base64=listing_data.foto_base64
     )
