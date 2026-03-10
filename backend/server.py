@@ -146,27 +146,55 @@ class UserPublic(BaseModel):
 # Book Models
 class BookBase(BaseModel):
     titolo: str
-    autore: str
+    autore: Optional[str] = None  # Old format
+    autori: Optional[str] = None  # MIUR format
     isbn: str
-    materia: str
-    prezzo_ministeriale: float
-    classe: str  # Which class needs this book
+    materia: Optional[str] = None  # Old format
+    disciplina: Optional[str] = None  # MIUR format
+    prezzo_ministeriale: Optional[float] = None  # Old format
+    prezzo_copertina: Optional[float] = None  # MIUR format
+    classe: Optional[str] = None  # Which class needs this book
     tipo_scuola: Optional[str] = None  # primo_grado or secondo_grado
     editore: Optional[str] = None
+    # MIUR additional fields
+    sottotitolo: Optional[str] = None
+    volume: Optional[str] = None
+    is_volume_unico: Optional[bool] = None
+    tipi_scuola: Optional[List[str]] = None
+    anni_corso: Optional[List[int]] = None
+    nuova_adozione: Optional[bool] = None
+    perc_usato_disponibile: Optional[int] = None
+    motivo_usato: Optional[str] = None
+    regione: Optional[str] = None
+    provincia: Optional[str] = None
+    num_scuole_adottanti: Optional[int] = None
 
 class BookCreate(BaseModel):
     titolo: str
-    autore: str
+    autore: Optional[str] = None
     isbn: str
-    materia: str
-    prezzo_ministeriale: float
-    classe: str
+    materia: Optional[str] = None
+    prezzo_ministeriale: Optional[float] = None
+    classe: Optional[str] = None
     tipo_scuola: Optional[str] = None
     editore: Optional[str] = None
 
 class Book(BookBase):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    id: Optional[str] = Field(default_factory=lambda: str(uuid.uuid4()))
+    created_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
+    
+    # Helper properties to get values regardless of format
+    @property
+    def get_autore(self) -> str:
+        return self.autore or self.autori or "Autore non specificato"
+    
+    @property
+    def get_materia(self) -> str:
+        return self.materia or self.disciplina or "Materia non specificata"
+    
+    @property
+    def get_prezzo(self) -> float:
+        return self.prezzo_ministeriale or self.prezzo_copertina or 0.0
 
 # Book Listing (user selling a book)
 class BookConditionAnswers(BaseModel):
