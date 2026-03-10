@@ -19,7 +19,8 @@ interface Book {
   listing_id: string;
   book_id: string;
   titolo: string;
-  autore: string;
+  autore?: string;
+  autori?: string;
   prezzo_vendita: number;
   condizione: string;
   condition_details?: {
@@ -29,6 +30,9 @@ interface Book {
     esercizi: number;
   };
 }
+
+// Helper function
+const getBookAuthor = (book: Book): string => book.autore || book.autori || 'N/A';
 
 interface Seller {
   seller_id: string;
@@ -234,7 +238,7 @@ export default function RadarSellersScreen() {
                           <Text style={styles.bookTitle} numberOfLines={2}>
                             {book.titolo}
                           </Text>
-                          <Text style={styles.bookAuthor}>{book.autore}</Text>
+                          <Text style={styles.bookAuthor}>{getBookAuthor(book)}</Text>
                           <Text style={styles.bookCondition}>
                             {CONDITION_LABELS[book.condizione] || book.condizione}
                           </Text>

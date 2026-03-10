@@ -25,11 +25,14 @@ interface Listing {
   seller_username: string;
   book_id: string;
   book_titolo: string;
-  book_autore: string;
+  book_autore?: string;
+  book_autori?: string;
   book_isbn: string;
-  book_materia: string;
-  book_classe: string;
-  prezzo_ministeriale: number;
+  book_materia?: string;
+  book_disciplina?: string;
+  book_classe?: string;
+  prezzo_ministeriale?: number;
+  prezzo_copertina?: number;
   condizione: string;
   condition_details?: {
     sottolineature: number;
@@ -47,6 +50,16 @@ interface Listing {
   foto_base64?: string;
   stato: string;
 }
+
+// Helper functions
+const getListingAuthor = (listing: Listing | null): string => {
+  if (!listing) return 'N/A';
+  return listing.book_autore || listing.book_autori || 'N/A';
+};
+const getListingPrice = (listing: Listing | null): number => {
+  if (!listing) return 0;
+  return listing.prezzo_ministeriale || listing.prezzo_copertina || 0;
+};
 
 interface Bookstore {
   id: string;

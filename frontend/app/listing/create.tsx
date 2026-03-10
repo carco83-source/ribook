@@ -75,12 +75,39 @@ const calculateCondition = (answers: Record<string, number>) => {
 interface Book {
   id: string;
   titolo: string;
-  autore: string;
+  autore?: string;
+  autori?: string;
   isbn: string;
-  materia: string;
-  prezzo_ministeriale: number;
-  classe: string;
+  materia?: string;
+  disciplina?: string;
+  prezzo_ministeriale?: number;
+  prezzo_copertina?: number;
+  classe?: string;
+  // MIUR additional fields
+  sottotitolo?: string;
+  volume?: string;
+  is_volume_unico?: boolean;
+  tipi_scuola?: string[];
+  anni_corso?: number[];
+  perc_usato_disponibile?: number;
+  motivo_usato?: string;
+  editore?: string;
 }
+
+// Helper to get price from book (handles both formats)
+const getBookPrice = (book: Book): number => {
+  return book.prezzo_ministeriale || book.prezzo_copertina || 0;
+};
+
+// Helper to get author from book (handles both formats)
+const getBookAuthor = (book: Book): string => {
+  return book.autore || book.autori || 'Autore non specificato';
+};
+
+// Helper to get subject from book (handles both formats)
+const getBookSubject = (book: Book): string => {
+  return book.materia || book.disciplina || 'Materia non specificata';
+};
 
 interface Bookstore {
   id: string;
@@ -205,7 +232,7 @@ export default function CreateListingScreen() {
   const calculatePrice = () => {
     if (!selectedBook) return 0;
     const condition = calculateCondition(conditionAnswers);
-    return (selectedBook.prezzo_ministeriale * condition.percentage) / 100;
+    return (getBookPrice(selectedBook) * condition.percentage) / 100;
   };
 
   const handleSubmit = async () => {
@@ -269,11 +296,20 @@ export default function CreateListingScreen() {
           <View style={styles.selectedBookCard}>
             <View style={styles.selectedBookInfo}>
               <Text style={styles.selectedBookTitle}>{selectedBook.titolo}</Text>
-              <Text style={styles.selectedBookAuthor}>{selectedBook.autore}</Text>
+              <Text style={styles.selectedBookAuthor}>{getBookAuthor(selectedBook)}</Text>
               <Text style={styles.selectedBookISBN}>ISBN: {selectedBook.isbn}</Text>
               <Text style={styles.selectedBookPrice}>
-                Prezzo listino: €{selectedBook.prezzo_ministeriale.toFixed(2)}
+                Prezzo listino: €{getBookPrice(selectedBook).toFixed(2)}
               </Text>
+              {selectedBook.perc_usato_disponibile !== undefined && (
+                <Text style={[
+                  styles.selectedBookUsato,
+                  { color: selectedBook.perc_usato_disponibile >= 50 ? '#4CAF50' : 
+                           selectedBook.perc_usato_disponibile >= 30 ? '#FF9800' : '#f44336' }
+                ]}>
+                  Disponibilità usato: {selectedBook.perc_usato_disponibile}%
+                </Text>
+              )}
             </View>
             <TouchableOpacity
               style={styles.changeBookButton}
@@ -301,7 +337,7 @@ export default function CreateListingScreen() {
               <View style={styles.searchResults}>
                 {searchResults.map((book) => (
                   <TouchableOpacity
-                    key={book.id}
+                    key={book.id || book.isbn}
                     style={styles.searchResultItem}
                     onPress={() => {
                       setSelectedBook(book);
@@ -310,7 +346,7 @@ export default function CreateListingScreen() {
                     }}
                   >
                     <Text style={styles.searchResultTitle}>{book.titolo}</Text>
-                    <Text style={styles.searchResultAuthor}>{book.autore}</Text>
+                    <Text style={styles.searchResultAuthor}>{getBookAuthor(book)}</Text>
                     <Text style={styles.searchResultISBN}>ISBN: {book.isbn}</Text>
                   </TouchableOpacity>
                 ))}
@@ -694,6 +730,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1a472a',
     marginTop: 8,
+  },
+  selectedBookUsato: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 4,
   },
   changeBookButton: {
     justifyContent: 'center',

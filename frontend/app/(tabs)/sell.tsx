@@ -20,15 +20,22 @@ const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 interface Listing {
   id: string;
   book_titolo: string;
-  book_autore: string;
-  book_materia: string;
+  book_autore?: string;
+  book_autori?: string;
+  book_materia?: string;
+  book_disciplina?: string;
   condizione: string;
   prezzo_vendita: number;
-  prezzo_ministeriale: number;
+  prezzo_ministeriale?: number;
+  prezzo_copertina?: number;
   stato: string;
   foto_base64?: string;
   created_at: string;
 }
+
+// Helper functions
+const getListingAuthor = (item: Listing): string => item.book_autore || item.book_autori || 'N/A';
+const getListingPrice = (item: Listing): number => item.prezzo_ministeriale || item.prezzo_copertina || 0;
 
 export default function SellScreen() {
   const router = useRouter();
@@ -160,7 +167,7 @@ export default function SellScreen() {
           </View>
 
           <Text style={styles.listingTitle} numberOfLines={2}>{item.book_titolo}</Text>
-          <Text style={styles.listingAuthor}>{item.book_autore}</Text>
+          <Text style={styles.listingAuthor}>{getListingAuthor(item)}</Text>
 
           <View style={styles.listingMeta}>
             <View style={styles.conditionBadge}>
@@ -169,7 +176,7 @@ export default function SellScreen() {
               </Text>
             </View>
             <Text style={styles.originalPrice}>
-              Listino: €{item.prezzo_ministeriale.toFixed(2)}
+              Listino: €{getListingPrice(item).toFixed(2)}
             </Text>
           </View>
 

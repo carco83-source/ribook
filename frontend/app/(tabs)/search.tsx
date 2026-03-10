@@ -20,12 +20,22 @@ const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 interface Book {
   id: string;
   titolo: string;
-  autore: string;
+  autore?: string;
+  autori?: string;
   isbn: string;
-  materia: string;
-  prezzo_ministeriale: number;
-  classe: string;
+  materia?: string;
+  disciplina?: string;
+  prezzo_ministeriale?: number;
+  prezzo_copertina?: number;
+  classe?: string;
+  editore?: string;
+  perc_usato_disponibile?: number;
 }
+
+// Helper functions for book data
+const getBookAuthor = (book: Book): string => book.autore || book.autori || 'N/A';
+const getBookSubject = (book: Book): string => book.materia || book.disciplina || 'N/A';
+const getBookPrice = (book: Book): number => book.prezzo_ministeriale || book.prezzo_copertina || 0;
 
 export default function SearchScreen() {
   const router = useRouter();
@@ -52,9 +62,9 @@ export default function SearchScreen() {
         books.filter(
           (book) =>
             book.titolo.toLowerCase().includes(query) ||
-            book.autore.toLowerCase().includes(query) ||
+            getBookAuthor(book).toLowerCase().includes(query) ||
             book.isbn.includes(query) ||
-            book.materia.toLowerCase().includes(query)
+            getBookSubject(book).toLowerCase().includes(query)
         )
       );
     }
@@ -151,18 +161,20 @@ export default function SearchScreen() {
       <View style={styles.bookCard}>
         <View style={styles.bookInfo}>
           <Text style={styles.bookTitle} numberOfLines={2}>{item.titolo}</Text>
-          <Text style={styles.bookAuthor}>{item.autore}</Text>
+          <Text style={styles.bookAuthor}>{getBookAuthor(item)}</Text>
           <View style={styles.bookMeta}>
             <View style={styles.metaBadge}>
-              <Text style={styles.metaText}>{item.materia}</Text>
+              <Text style={styles.metaText}>{getBookSubject(item)}</Text>
             </View>
-            <View style={styles.metaBadge}>
-              <Text style={styles.metaText}>Classe {item.classe}</Text>
-            </View>
+            {item.classe && (
+              <View style={styles.metaBadge}>
+                <Text style={styles.metaText}>Classe {item.classe}</Text>
+              </View>
+            )}
           </View>
           <View style={styles.priceRow}>
             <Text style={styles.bookPrice}>
-              €{item.prezzo_ministeriale.toFixed(2)}
+              €{getBookPrice(item).toFixed(2)}
             </Text>
             <Text style={styles.bookIsbn}>ISBN: {item.isbn}</Text>
           </View>
