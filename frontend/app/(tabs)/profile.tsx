@@ -22,6 +22,7 @@ export default function ProfileScreen() {
   const [userData, setUserData] = useState<any>(null);
   const [stats, setStats] = useState<any>(null);
   const [childProfiles, setChildProfiles] = useState<any[]>([]);
+  const [bookFlow, setBookFlow] = useState<any>(null);
 
   useEffect(() => {
     loadUserData();
@@ -49,6 +50,14 @@ export default function ProfileScreen() {
       // Get child profiles
       const profilesRes = await axios.get(`${API_URL}/api/users/${userId}/profiles`);
       setChildProfiles(profilesRes.data.filter((p: any) => p.id !== 'main'));
+
+      // Get class compatibility / book flow data
+      try {
+        const bookFlowRes = await axios.get(`${API_URL}/api/radar/${userId}/class-compatibility`);
+        setBookFlow(bookFlowRes.data);
+      } catch (e) {
+        console.log('Book flow data not available');
+      }
 
       setUserData({
         ...response.data,
@@ -142,6 +151,93 @@ export default function ProfileScreen() {
           <Text style={styles.editProfileButtonText}>Modifica Profilo</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Book Flow Widget - Comprare/Vendere basato sulla classe */}
+      {bookFlow && userData?.classe && (
+        <View style={styles.bookFlowSection}>
+          <Text style={styles.bookFlowTitle}>
+            Flusso Libri - {userData.classe}ª Media
+          </Text>
+          <Text style={styles.bookFlowSubtitle}>
+            Basato sul D.P.R. 157/1989 (adozioni triennali)
+          </Text>
+          
+          <View style={styles.bookFlowContainer}>
+            {/* Colonna Sinistra - Comprare da classe superiore */}
+            {bookFlow.classes.find((c: any) => c.classe > parseInt(userData.classe)) && (
+              <View style={styles.bookFlowColumn}>
+                <View style={[styles.bookFlowHeader, { backgroundColor: '#4CAF50' }]}>
+                  <Ionicons name="arrow-down-circle" size={24} color="#fff" />
+                  <Text style={styles.bookFlowHeaderText}>COMPRA da</Text>
+                  <Text style={styles.bookFlowHeaderClass}>
+                    {bookFlow.classes.find((c: any) => c.classe > parseInt(userData.classe))?.classe}ª Media
+                  </Text>
+                </View>
+                <View style={styles.bookFlowBody}>
+                  <View style={styles.bookFlowStat}>
+                    <Text style={styles.bookFlowNumber}>
+                      {bookFlow.classes.find((c: any) => c.classe > parseInt(userData.classe))?.usable_for_you || 0}
+                    </Text>
+                    <Text style={styles.bookFlowLabel}>Libri usati{'\n'}disponibili</Text>
+                  </View>
+                  <View style={styles.bookFlowDivider} />
+                  <View style={styles.bookFlowStat}>
+                    <Text style={[styles.bookFlowNumber, { color: '#FF9800' }]}>
+                      {bookFlow.classes.find((c: any) => c.classe > parseInt(userData.classe))?.books_count - 
+                       (bookFlow.classes.find((c: any) => c.classe > parseInt(userData.classe))?.usable_for_you || 0) || 0}
+                    </Text>
+                    <Text style={styles.bookFlowLabel}>Da comprare{'\n'}nuovi</Text>
+                  </View>
+                </View>
+              </View>
+            )}
+
+            {/* Colonna Centrale - Riepilogo */}
+            <View style={styles.bookFlowCenter}>
+              <View style={styles.bookFlowCenterBadge}>
+                <Text style={styles.bookFlowCenterClass}>{userData.classe}ª</Text>
+              </View>
+              <Text style={styles.bookFlowCenterText}>TU</Text>
+              <Text style={styles.bookFlowCompatibility}>
+                {bookFlow.summary?.overall_compatibility || 0}%
+              </Text>
+              <Text style={styles.bookFlowCompatibilityLabel}>compatibilità</Text>
+            </View>
+
+            {/* Colonna Destra - Vendere a classe inferiore */}
+            {bookFlow.classes.find((c: any) => c.classe < parseInt(userData.classe)) && (
+              <View style={styles.bookFlowColumn}>
+                <View style={[styles.bookFlowHeader, { backgroundColor: '#2196F3' }]}>
+                  <Ionicons name="arrow-up-circle" size={24} color="#fff" />
+                  <Text style={styles.bookFlowHeaderText}>VENDI a</Text>
+                  <Text style={styles.bookFlowHeaderClass}>
+                    {bookFlow.classes.find((c: any) => c.classe < parseInt(userData.classe))?.classe}ª Media
+                  </Text>
+                </View>
+                <View style={styles.bookFlowBody}>
+                  <View style={styles.bookFlowStat}>
+                    <Text style={styles.bookFlowNumber}>
+                      {bookFlow.classes.find((c: any) => c.classe < parseInt(userData.classe))?.books_count || 0}
+                    </Text>
+                    <Text style={styles.bookFlowLabel}>Studenti{'\n'}interessati</Text>
+                  </View>
+                  <View style={styles.bookFlowDivider} />
+                  <View style={styles.bookFlowStat}>
+                    <Text style={[styles.bookFlowNumber, { color: '#4CAF50' }]}>
+                      {bookFlow.classes.find((c: any) => c.classe < parseInt(userData.classe))?.sellers_count || 0}
+                    </Text>
+                    <Text style={styles.bookFlowLabel}>Venditori{'\n'}attivi</Text>
+                  </View>
+                </View>
+              </View>
+            )}
+          </View>
+
+          <Text style={styles.bookFlowHint}>
+            {bookFlow.summary?.message || 'Caricamento...'}
+          </Text>
+        </View>
+      )}
 
       {/* User Stats */}
       {stats && (
@@ -701,5 +797,127 @@ const styles = StyleSheet.create({
     color: '#1a472a',
     fontSize: 14,
     fontWeight: '500',
+  },
+  // Book Flow Widget styles
+  bookFlowSection: {
+    marginHorizontal: 16,
+    marginTop: 16,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  bookFlowTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1a472a',
+    textAlign: 'center',
+  },
+  bookFlowSubtitle: {
+    fontSize: 11,
+    color: '#888',
+    textAlign: 'center',
+    marginTop: 4,
+    marginBottom: 16,
+  },
+  bookFlowContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'stretch',
+  },
+  bookFlowColumn: {
+    flex: 1,
+    marginHorizontal: 4,
+  },
+  bookFlowHeader: {
+    padding: 10,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  bookFlowHeaderText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  bookFlowHeaderClass: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  bookFlowBody: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 8,
+    alignItems: 'center',
+  },
+  bookFlowStat: {
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  bookFlowNumber: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1a472a',
+  },
+  bookFlowLabel: {
+    fontSize: 10,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 2,
+  },
+  bookFlowDivider: {
+    width: '80%',
+    height: 1,
+    backgroundColor: '#e0e0e0',
+    marginVertical: 8,
+  },
+  bookFlowCenter: {
+    width: 70,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 20,
+  },
+  bookFlowCenterBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#1a472a',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bookFlowCenterClass: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  bookFlowCenterText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1a472a',
+    marginTop: 4,
+  },
+  bookFlowCompatibility: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#4CAF50',
+    marginTop: 8,
+  },
+  bookFlowCompatibilityLabel: {
+    fontSize: 9,
+    color: '#666',
+  },
+  bookFlowHint: {
+    fontSize: 11,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 12,
+    fontStyle: 'italic',
+    paddingHorizontal: 8,
   },
 });
