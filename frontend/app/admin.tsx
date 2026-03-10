@@ -200,27 +200,55 @@ export default function AdminScreen() {
           <ActivityIndicator size="large" color="#1a472a" style={{ marginTop: 40 }} />
         ) : activeTab === 'stats' ? (
           <View style={styles.statsContainer}>
-            {/* Stats Cards */}
+            {/* Main Stats Cards */}
             <View style={styles.statsGrid}>
+              <View style={[styles.statCard, { backgroundColor: '#e8f5e9' }]}>
+                <Ionicons name="people" size={32} color="#388e3c" />
+                <Text style={styles.statNumber}>{stats?.users || 0}</Text>
+                <Text style={styles.statLabel}>Utenti Totali</Text>
+                <Text style={styles.statSubLabel}>
+                  {stats?.premium_users || 0} Premium
+                </Text>
+              </View>
               <View style={[styles.statCard, { backgroundColor: '#e3f2fd' }]}>
                 <Ionicons name="book" size={32} color="#1976d2" />
                 <Text style={styles.statNumber}>{stats?.books || 0}</Text>
                 <Text style={styles.statLabel}>Libri nel DB</Text>
               </View>
-              <View style={[styles.statCard, { backgroundColor: '#e8f5e9' }]}>
-                <Ionicons name="pricetag" size={32} color="#388e3c" />
-                <Text style={styles.statNumber}>{stats?.listings || 0}</Text>
-                <Text style={styles.statLabel}>Annunci Attivi</Text>
-              </View>
               <View style={[styles.statCard, { backgroundColor: '#fff3e0' }]}>
-                <Ionicons name="storefront" size={32} color="#f57c00" />
-                <Text style={styles.statNumber}>{stats?.bookstores || 0}</Text>
-                <Text style={styles.statLabel}>Cartolibrerie</Text>
+                <Ionicons name="pricetag" size={32} color="#f57c00" />
+                <Text style={styles.statNumber}>{stats?.listings || 0}</Text>
+                <Text style={styles.statLabel}>Annunci</Text>
+                <Text style={styles.statSubLabel}>
+                  {stats?.listings_available || 0} disponibili
+                </Text>
               </View>
               <View style={[styles.statCard, { backgroundColor: '#fce4ec' }]}>
                 <Ionicons name="swap-horizontal" size={32} color="#c2185b" />
-                <Text style={styles.statNumber}>{stats?.transactions || 0}</Text>
-                <Text style={styles.statLabel}>Transazioni</Text>
+                <Text style={styles.statNumber}>{stats?.listings_sold || 0}</Text>
+                <Text style={styles.statLabel}>Venduti</Text>
+              </View>
+            </View>
+
+            {/* Revenue Card */}
+            <View style={styles.revenueCard}>
+              <View style={styles.revenueHeader}>
+                <Ionicons name="cash" size={28} color="#1a472a" />
+                <Text style={styles.revenueTitle}>Ricavi Totali</Text>
+              </View>
+              <Text style={styles.revenueAmount}>€{stats?.revenue?.toFixed(2) || '0.00'}</Text>
+              <Text style={styles.revenueNote}>Commissioni da utenti Free (15%)</Text>
+            </View>
+
+            {/* Quick Info */}
+            <View style={styles.infoRow}>
+              <View style={styles.infoItem}>
+                <Ionicons name="storefront" size={20} color="#666" />
+                <Text style={styles.infoText}>{stats?.bookstores || 0} Cartolibrerie Partner</Text>
+              </View>
+              <View style={styles.infoItem}>
+                <Ionicons name="star" size={20} color="#f4a460" />
+                <Text style={styles.infoText}>{stats?.premium_users || 0} Utenti Premium</Text>
               </View>
             </View>
 
@@ -243,7 +271,26 @@ export default function AdminScreen() {
           </View>
         ) : (
           <View style={styles.transactionsContainer}>
-            <Text style={styles.emptyText}>Nessuna transazione recente</Text>
+            {recentTransactions && recentTransactions.length > 0 ? (
+              recentTransactions.map((trans: any, index: number) => (
+                <View key={index} style={styles.transactionCard}>
+                  <View style={styles.transactionInfo}>
+                    <Text style={styles.transactionTitle}>{trans.book_titolo}</Text>
+                    <Text style={styles.transactionSeller}>
+                      Venditore: {trans.seller_username}
+                    </Text>
+                    <Text style={styles.transactionStatus}>
+                      Stato: {trans.stato}
+                    </Text>
+                  </View>
+                  <Text style={styles.transactionPrice}>
+                    €{trans.prezzo_vendita?.toFixed(2)}
+                  </Text>
+                </View>
+              ))
+            ) : (
+              <Text style={styles.emptyText}>Nessuna transazione recente</Text>
+            )}
           </View>
         )}
       </ScrollView>
@@ -416,5 +463,87 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: '#666',
     marginTop: 40,
+  },
+  statSubLabel: {
+    fontSize: 11,
+    color: '#999',
+    marginTop: 2,
+  },
+  revenueCard: {
+    backgroundColor: '#fff',
+    padding: 20,
+    borderRadius: 12,
+    marginTop: 16,
+    borderWidth: 2,
+    borderColor: '#1a472a',
+  },
+  revenueHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  revenueTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1a472a',
+  },
+  revenueAmount: {
+    fontSize: 36,
+    fontWeight: 'bold',
+    color: '#1a472a',
+    marginTop: 8,
+  },
+  revenueNote: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 16,
+  },
+  infoItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    padding: 12,
+    borderRadius: 8,
+    gap: 8,
+  },
+  infoText: {
+    fontSize: 13,
+    color: '#666',
+  },
+  transactionCard: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  transactionInfo: {
+    flex: 1,
+  },
+  transactionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+  },
+  transactionSeller: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
+  },
+  transactionStatus: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 2,
+  },
+  transactionPrice: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1a472a',
   },
 });
