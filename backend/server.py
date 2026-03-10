@@ -1017,6 +1017,201 @@ async def get_radar_view(user_id: str):
         "books_searching": len(user_requests)
     }
 
+
+@api_router.get("/radar/{user_id}/class-compatibility")
+async def get_class_compatibility(user_id: str):
+    """
+    Get cross-class book compatibility based on D.P.R. 157/1989
+    Shows which books from other classes could be useful for the user
+    """
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+    
+    user_classe = int(user.get("classe", 1))
+    user_scuola = user.get("scuola", "")
+    user_tipo = user.get("tipo_scuola", "primo_grado")
+    
+    # Define which classes to check based on user's class
+    # For middle school: 1, 2, 3
+    # For high school biennio: 1, 2
+    # For high school triennio: 3, 4, 5
+    if user_tipo == "primo_grado":
+        all_classes = [1, 2, 3]
+    else:
+        all_classes = [1, 2, 3, 4, 5]
+    
+    other_classes = [c for c in all_classes if c != user_classe]
+    
+    # Find all available listings from the same school but different classes
+    pipeline = [
+        {
+            "$match": {
+                "seller_id": {"$ne": user_id},
+                "stato": "disponibile"
+            }
+        },
+        {
+            "$lookup": {
+                "from": "users",
+                "localField": "seller_id",
+                "foreignField": "id",
+                "as": "seller_info"
+            }
+        },
+        {"$unwind": "$seller_info"},
+        {
+            "$match": {
+                "seller_info.scuola": user_scuola,
+                "seller_info.classe": {"$in": [str(c) for c in other_classes]}
+            }
+        }
+    ]
+    
+    listings = await db.listings.aggregate(pipeline).to_list(500)
+    
+    # Organize by class
+    class_data = {}
+    for c in other_classes:
+        class_data[str(c)] = {
+            "classe": c,
+            "sellers_count": 0,
+            "books_count": 0,
+            "usable_for_you": 0,  # Books you could use (volume unico or matching anno)
+            "total_value": 0,
+            "usato_medio": 0,
+            "sellers": {},
+            "books": []
+        }
+    
+    for listing in listings:
+        seller = listing.get("seller_info", {})
+        seller_classe = seller.get("classe", "1")
+        
+        if seller_classe not in class_data:
+            continue
+        
+        cd = class_data[seller_classe]
+        seller_id = seller.get("id")
+        
+        # Track unique sellers
+        if seller_id not in cd["sellers"]:
+            cd["sellers"][seller_id] = {
+                "username": seller.get("username", ""),
+                "sezione": seller.get("sezione", ""),
+                "books_count": 0
+            }
+            cd["sellers_count"] += 1
+        
+        cd["sellers"][seller_id]["books_count"] += 1
+        cd["books_count"] += 1
+        cd["total_value"] += listing.get("prezzo_vendita", 0)
+        
+        # Check if book is usable for the user
+        # Volume unico = usable by all classes in the cycle
+        # Otherwise check if the book's anni_corso includes user's class
+        is_volume_unico = listing.get("is_volume_unico", False)
+        anni_corso = listing.get("anni_corso", [])
+        
+        is_usable = is_volume_unico or user_classe in anni_corso
+        
+        if is_usable:
+            cd["usable_for_you"] += 1
+        
+        # Add book info
+        cd["books"].append({
+            "listing_id": listing.get("id"),
+            "titolo": listing.get("book_titolo", "")[:50],
+            "prezzo_vendita": listing.get("prezzo_vendita", 0),
+            "condizione": listing.get("condizione", ""),
+            "is_volume_unico": is_volume_unico,
+            "anni_corso": anni_corso,
+            "is_usable_for_you": is_usable,
+            "perc_usato": listing.get("perc_usato_disponibile", 0),
+            "seller_username": seller.get("username", "")
+        })
+    
+    # Calculate averages and format response
+    result = {
+        "user_classe": user_classe,
+        "user_scuola": user_scuola,
+        "classes": []
+    }
+    
+    for c in sorted(other_classes):
+        cd = class_data[str(c)]
+        if cd["books_count"] > 0:
+            cd["usato_medio"] = sum(b["perc_usato"] for b in cd["books"]) / cd["books_count"]
+        
+        # Calculate compatibility percentage
+        if cd["books_count"] > 0:
+            compatibility = round((cd["usable_for_you"] / cd["books_count"]) * 100, 1)
+        else:
+            compatibility = 0
+        
+        # Determine class relationship
+        if c < user_classe:
+            relationship = "precedente"
+            relationship_desc = f"Studenti di {c}ª che hanno già usato questi libri"
+        else:
+            relationship = "successiva"
+            relationship_desc = f"Studenti di {c}ª che non useranno più questi libri"
+        
+        result["classes"].append({
+            "classe": c,
+            "relationship": relationship,
+            "relationship_desc": relationship_desc,
+            "sellers_count": cd["sellers_count"],
+            "books_count": cd["books_count"],
+            "usable_for_you": cd["usable_for_you"],
+            "compatibility_percentage": compatibility,
+            "total_value": round(cd["total_value"], 2),
+            "usato_medio_percentage": round(cd["usato_medio"], 1),
+            "top_sellers": [
+                {
+                    "username": s["username"],
+                    "sezione": s["sezione"],
+                    "books_count": s["books_count"]
+                }
+                for s in sorted(cd["sellers"].values(), key=lambda x: -x["books_count"])[:3]
+            ],
+            "sample_books": sorted(cd["books"], key=lambda x: -x["is_usable_for_you"])[:5]
+        })
+    
+    # Add summary
+    total_usable = sum(c["usable_for_you"] for c in result["classes"])
+    total_books = sum(c["books_count"] for c in result["classes"])
+    
+    result["summary"] = {
+        "total_sellers": sum(c["sellers_count"] for c in result["classes"]),
+        "total_books_available": total_books,
+        "total_usable_for_you": total_usable,
+        "overall_compatibility": round((total_usable / total_books * 100), 1) if total_books > 0 else 0,
+        "message": _get_compatibility_message(user_classe, result["classes"])
+    }
+    
+    return result
+
+
+def _get_compatibility_message(user_classe: int, classes_data: list) -> str:
+    """Generate a helpful message about cross-class compatibility"""
+    usable_books = sum(c["usable_for_you"] for c in classes_data)
+    
+    if usable_books == 0:
+        return "Nessun libro compatibile trovato al momento. Attiva il Radar per essere notificato!"
+    
+    from_lower = sum(c["usable_for_you"] for c in classes_data if c["classe"] < user_classe)
+    from_higher = sum(c["usable_for_you"] for c in classes_data if c["classe"] > user_classe)
+    
+    messages = []
+    if from_lower > 0:
+        messages.append(f"{from_lower} libri da classi precedenti (già usati, ottimo usato!)")
+    if from_higher > 0:
+        messages.append(f"{from_higher} libri da classi successive (volumi unici)")
+    
+    return " • ".join(messages)
+
+
 @api_router.get("/radar/{user_id}/sellers")
 async def get_radar_sellers(user_id: str, filter_type: Optional[str] = None):
     """Get list of sellers with their books that match user's wanted books"""

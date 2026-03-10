@@ -33,6 +33,41 @@ interface Match {
   same_section: boolean;
 }
 
+interface ClassCompatibility {
+  classe: number;
+  relationship: string;
+  relationship_desc: string;
+  sellers_count: number;
+  books_count: number;
+  usable_for_you: number;
+  compatibility_percentage: number;
+  total_value: number;
+  usato_medio_percentage: number;
+  top_sellers: { username: string; sezione: string; books_count: number }[];
+  sample_books: {
+    listing_id: string;
+    titolo: string;
+    prezzo_vendita: number;
+    condizione: string;
+    is_volume_unico: boolean;
+    is_usable_for_you: boolean;
+    seller_username: string;
+  }[];
+}
+
+interface ClassCompatibilityData {
+  user_classe: number;
+  user_scuola: string;
+  classes: ClassCompatibility[];
+  summary: {
+    total_sellers: number;
+    total_books_available: number;
+    total_usable_for_you: number;
+    overall_compatibility: number;
+    message: string;
+  };
+}
+
 export default function RadarScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -41,6 +76,7 @@ export default function RadarScreen() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [userId, setUserId] = useState<string | null>(null);
   const [isPremium, setIsPremium] = useState(false);
+  const [classCompatibility, setClassCompatibility] = useState<ClassCompatibilityData | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -68,6 +104,10 @@ export default function RadarScreen() {
       // Get matches
       const matchesResponse = await axios.get(`${API_URL}/api/matches/${storedUserId}`);
       setMatches(matchesResponse.data.matches || []);
+
+      // Get class compatibility data
+      const classCompatResponse = await axios.get(`${API_URL}/api/radar/${storedUserId}/class-compatibility`);
+      setClassCompatibility(classCompatResponse.data);
     } catch (error) {
       console.error('Error loading radar data:', error);
     } finally {
@@ -248,6 +288,146 @@ export default function RadarScreen() {
           </View>
         )}
       </View>
+
+      {/* Cross-Class Compatibility Section */}
+      {classCompatibility && classCompatibility.classes.length > 0 && (
+        <View style={styles.classCompatSection}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="swap-horizontal" size={24} color="#1a472a" />
+            <Text style={styles.sectionTitle}>Compatibilità tra Classi</Text>
+          </View>
+          
+          <Text style={styles.classCompatSubtitle}>
+            Sei in {classCompatibility.user_classe}ª media - Ecco cosa puoi trovare dalle altre classi
+          </Text>
+
+          {/* Summary Card */}
+          <View style={styles.compatSummaryCard}>
+            <View style={styles.compatSummaryRow}>
+              <View style={styles.compatSummaryStat}>
+                <Text style={styles.compatSummaryNumber}>{classCompatibility.summary.total_books_available}</Text>
+                <Text style={styles.compatSummaryLabel}>Libri totali</Text>
+              </View>
+              <View style={styles.compatSummaryDivider} />
+              <View style={styles.compatSummaryStat}>
+                <Text style={[styles.compatSummaryNumber, { color: '#4CAF50' }]}>
+                  {classCompatibility.summary.total_usable_for_you}
+                </Text>
+                <Text style={styles.compatSummaryLabel}>Usabili per te</Text>
+              </View>
+              <View style={styles.compatSummaryDivider} />
+              <View style={styles.compatSummaryStat}>
+                <Text style={[styles.compatSummaryNumber, { color: '#2196F3' }]}>
+                  {classCompatibility.summary.overall_compatibility}%
+                </Text>
+                <Text style={styles.compatSummaryLabel}>Compatibilità</Text>
+              </View>
+            </View>
+            <Text style={styles.compatMessage}>{classCompatibility.summary.message}</Text>
+          </View>
+
+          {/* Per-Class Cards */}
+          {classCompatibility.classes.map((classData) => (
+            <View key={classData.classe} style={styles.classCard}>
+              <View style={styles.classCardHeader}>
+                <View style={styles.classInfo}>
+                  <View style={[
+                    styles.classBadge, 
+                    { backgroundColor: classData.relationship === 'precedente' ? '#4CAF50' : '#2196F3' }
+                  ]}>
+                    <Text style={styles.classBadgeText}>{classData.classe}ª Media</Text>
+                  </View>
+                  <View style={styles.classRelationship}>
+                    <Ionicons 
+                      name={classData.relationship === 'precedente' ? 'arrow-up' : 'arrow-down'} 
+                      size={14} 
+                      color={classData.relationship === 'precedente' ? '#4CAF50' : '#2196F3'} 
+                    />
+                    <Text style={[
+                      styles.classRelationshipText,
+                      { color: classData.relationship === 'precedente' ? '#4CAF50' : '#2196F3' }
+                    ]}>
+                      {classData.relationship === 'precedente' ? 'Classe precedente' : 'Classe successiva'}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.classStats}>
+                  <Text style={styles.classCompatPercent}>{classData.compatibility_percentage}%</Text>
+                  <Text style={styles.classCompatLabel}>compatibile</Text>
+                </View>
+              </View>
+
+              <Text style={styles.classDescription}>{classData.relationship_desc}</Text>
+
+              <View style={styles.classMetaRow}>
+                <View style={styles.classMeta}>
+                  <Ionicons name="people-outline" size={16} color="#666" />
+                  <Text style={styles.classMetaText}>{classData.sellers_count} venditori</Text>
+                </View>
+                <View style={styles.classMeta}>
+                  <Ionicons name="book-outline" size={16} color="#666" />
+                  <Text style={styles.classMetaText}>{classData.books_count} libri</Text>
+                </View>
+                <View style={styles.classMeta}>
+                  <Ionicons name="checkmark-circle-outline" size={16} color="#4CAF50" />
+                  <Text style={[styles.classMetaText, { color: '#4CAF50' }]}>
+                    {classData.usable_for_you} per te
+                  </Text>
+                </View>
+              </View>
+
+              {/* Sample Books */}
+              {classData.sample_books.length > 0 && (
+                <View style={styles.sampleBooksContainer}>
+                  <Text style={styles.sampleBooksTitle}>Libri in vendita:</Text>
+                  {classData.sample_books.slice(0, 3).map((book, idx) => (
+                    <TouchableOpacity 
+                      key={idx} 
+                      style={[
+                        styles.sampleBookItem,
+                        book.is_usable_for_you && styles.sampleBookUsable
+                      ]}
+                      onPress={() => router.push(`/listing/${book.listing_id}`)}
+                    >
+                      <View style={styles.sampleBookInfo}>
+                        <Text style={styles.sampleBookTitle} numberOfLines={1}>
+                          {book.titolo}
+                        </Text>
+                        <Text style={styles.sampleBookSeller}>
+                          da {book.seller_username}
+                        </Text>
+                      </View>
+                      <View style={styles.sampleBookRight}>
+                        {book.is_volume_unico && (
+                          <View style={styles.volumeUnicoBadge}>
+                            <Text style={styles.volumeUnicoText}>Vol. Unico</Text>
+                          </View>
+                        )}
+                        <Text style={styles.sampleBookPrice}>€{book.prezzo_vendita.toFixed(2)}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
+              {/* Top Sellers */}
+              {classData.top_sellers.length > 0 && (
+                <View style={styles.topSellersContainer}>
+                  <Text style={styles.topSellersTitle}>Top venditori:</Text>
+                  <View style={styles.topSellersList}>
+                    {classData.top_sellers.map((seller, idx) => (
+                      <View key={idx} style={styles.topSellerBadge}>
+                        <Text style={styles.topSellerName}>{seller.username}</Text>
+                        <Text style={styles.topSellerBooks}>({seller.books_count})</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+            </View>
+          ))}
+        </View>
+      )}
 
       {/* Matches List */}
       {matches.length > 0 && (
@@ -529,5 +709,226 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 10,
     fontWeight: 'bold',
+  },
+  // Cross-Class Compatibility Styles
+  classCompatSection: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  classCompatSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 16,
+    marginLeft: 4,
+  },
+  compatSummaryCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  compatSummaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+  },
+  compatSummaryStat: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  compatSummaryNumber: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1a472a',
+  },
+  compatSummaryLabel: {
+    fontSize: 11,
+    color: '#666',
+    marginTop: 4,
+  },
+  compatSummaryDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: '#e0e0e0',
+  },
+  compatMessage: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 12,
+    fontStyle: 'italic',
+  },
+  classCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  classCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  classInfo: {
+    flex: 1,
+  },
+  classBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
+  },
+  classBadgeText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  classRelationship: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+  },
+  classRelationshipText: {
+    fontSize: 12,
+    marginLeft: 4,
+  },
+  classStats: {
+    alignItems: 'flex-end',
+  },
+  classCompatPercent: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#1a472a',
+  },
+  classCompatLabel: {
+    fontSize: 11,
+    color: '#666',
+  },
+  classDescription: {
+    fontSize: 13,
+    color: '#555',
+    marginBottom: 12,
+  },
+  classMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    marginBottom: 12,
+    gap: 16,
+  },
+  classMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  classMetaText: {
+    fontSize: 12,
+    color: '#666',
+    marginLeft: 4,
+  },
+  sampleBooksContainer: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+  },
+  sampleBooksTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  sampleBookItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  sampleBookUsable: {
+    backgroundColor: '#e8f5e9',
+    marginHorizontal: -8,
+    paddingHorizontal: 8,
+    borderRadius: 4,
+  },
+  sampleBookInfo: {
+    flex: 1,
+  },
+  sampleBookTitle: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#333',
+  },
+  sampleBookSeller: {
+    fontSize: 11,
+    color: '#888',
+    marginTop: 2,
+  },
+  sampleBookRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  volumeUnicoBadge: {
+    backgroundColor: '#e3f2fd',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  volumeUnicoText: {
+    fontSize: 10,
+    color: '#1976D2',
+    fontWeight: '600',
+  },
+  sampleBookPrice: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#1a472a',
+  },
+  topSellersContainer: {
+    marginTop: 4,
+  },
+  topSellersTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 6,
+  },
+  topSellersList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  topSellerBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f0f0f0',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  topSellerName: {
+    fontSize: 12,
+    color: '#333',
+  },
+  topSellerBooks: {
+    fontSize: 10,
+    color: '#666',
+    marginLeft: 4,
   },
 });
