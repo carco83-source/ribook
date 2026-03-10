@@ -20,6 +20,7 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [upgrading, setUpgrading] = useState(false);
   const [userData, setUserData] = useState<any>(null);
+  const [stats, setStats] = useState<any>(null);
 
   useEffect(() => {
     loadUserData();
@@ -39,6 +40,10 @@ export default function ProfileScreen() {
 
       // Get full user data
       const response = await axios.get(`${API_URL}/api/users/${userId}`);
+      
+      // Get user stats
+      const statsRes = await axios.get(`${API_URL}/api/users/${userId}/stats`);
+      setStats(statsRes.data);
 
       setUserData({
         ...response.data,
@@ -125,6 +130,38 @@ export default function ProfileScreen() {
           </View>
         )}
       </View>
+
+      {/* User Stats */}
+      {stats && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Le tue statistiche</Text>
+          <View style={styles.statsGrid}>
+            <View style={styles.statCard}>
+              <Text style={styles.statNumber}>{stats.total_sales}</Text>
+              <Text style={styles.statLabel}>Venduti</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={styles.statNumber}>{stats.total_purchases}</Text>
+              <Text style={styles.statLabel}>Acquistati</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={styles.statNumber}>{stats.active_listings}</Text>
+              <Text style={styles.statLabel}>In vendita</Text>
+            </View>
+            <View style={styles.statCard}>
+              <View style={styles.ratingContainer}>
+                <Ionicons name="star" size={18} color="#FFD700" />
+                <Text style={styles.statNumber}>
+                  {stats.rating > 0 ? stats.rating.toFixed(1) : '-'}
+                </Text>
+              </View>
+              <Text style={styles.statLabel}>
+                {stats.rating_count > 0 ? `${stats.rating_count} recensioni` : 'Nessuna recensione'}
+              </Text>
+            </View>
+          </View>
+        </View>
+      )}
 
       {/* School Info */}
       <View style={styles.section}>
@@ -517,5 +554,34 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#999',
     marginTop: 2,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  statCard: {
+    flex: 1,
+    minWidth: '45%',
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  statNumber: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1a472a',
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  ratingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
 });

@@ -116,6 +116,22 @@ class User(BaseModel):
     # Multi-profile support - additional child profiles
     profili_figli: List[dict] = []  # List of ChildProfile dicts
     active_profile_id: Optional[str] = None  # Currently selected profile
+    # User statistics
+    total_sales: int = 0  # Total books sold
+    total_purchases: int = 0  # Total books purchased
+    rating: float = 0.0  # Average rating (0-5)
+    rating_count: int = 0  # Number of ratings received
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+# Review model
+class Review(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    listing_id: str  # The transaction this review is for
+    reviewer_id: str  # Who is leaving the review
+    reviewee_id: str  # Who is being reviewed
+    rating: int  # 1-5 stars
+    comment: Optional[str] = None
+    type: str  # "seller" or "buyer"
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 class UserPublic(BaseModel):
@@ -1440,6 +1456,158 @@ async def admin_toggle_premium(user_id: str):
     await db.users.update_one({"id": user_id}, {"$set": update})
     
     return {"message": f"Utente ora è {'Premium' if new_status else 'Free'}", "is_premium": new_status}
+
+# ============== REVIEW ROUTES ==============
+
+class ReviewCreate(BaseModel):
+    listing_id: str
+    rating: int  # 1-5
+    comment: Optional[str] = None
+
+@api_router.post("/reviews")
+async def create_review(review_data: ReviewCreate, reviewer_id: str):
+    """Create a review for a completed transaction"""
+    # Get listing
+    listing = await db.listings.find_one({"id": review_data.listing_id})
+    if not listing:
+        raise HTTPException(status_code=404, detail="Transazione non trovata")
+    
+    if listing.get("stato") != "ritirato":
+        raise HTTPException(status_code=400, detail="Puoi recensire solo transazioni completate")
+    
+    # Determine who is being reviewed
+    seller_id = listing["seller_id"]
+    buyer_id = listing.get("buyer_id")
+    
+    if reviewer_id == seller_id:
+        # Seller reviewing buyer
+        reviewee_id = buyer_id
+        review_type = "buyer"
+    elif reviewer_id == buyer_id:
+        # Buyer reviewing seller
+        reviewee_id = seller_id
+        review_type = "seller"
+    else:
+        raise HTTPException(status_code=403, detail="Non sei parte di questa transazione")
+    
+    # Check if already reviewed
+    existing = await db.reviews.find_one({
+        "listing_id": review_data.listing_id,
+        "reviewer_id": reviewer_id
+    })
+    if existing:
+        raise HTTPException(status_code=400, detail="Hai già recensito questa transazione")
+    
+    # Validate rating
+    if review_data.rating < 1 or review_data.rating > 5:
+        raise HTTPException(status_code=400, detail="Rating deve essere tra 1 e 5")
+    
+    # Create review
+    review = Review(
+        listing_id=review_data.listing_id,
+        reviewer_id=reviewer_id,
+        reviewee_id=reviewee_id,
+        rating=review_data.rating,
+        comment=review_data.comment,
+        type=review_type
+    )
+    
+    await db.reviews.insert_one(review.dict())
+    
+    # Update reviewee's rating
+    all_reviews = await db.reviews.find({"reviewee_id": reviewee_id}).to_list(100)
+    avg_rating = sum(r["rating"] for r in all_reviews) / len(all_reviews)
+    
+    await db.users.update_one(
+        {"id": reviewee_id},
+        {"$set": {
+            "rating": round(avg_rating, 1),
+            "rating_count": len(all_reviews)
+        }}
+    )
+    
+    return {"message": "Recensione aggiunta", "review_id": review.id}
+
+@api_router.get("/users/{user_id}/reviews")
+async def get_user_reviews(user_id: str):
+    """Get all reviews for a user"""
+    reviews = await db.reviews.find({"reviewee_id": user_id}).to_list(100)
+    
+    result = []
+    for review in reviews:
+        review.pop('_id', None)
+        # Get reviewer username
+        reviewer = await db.users.find_one({"id": review["reviewer_id"]})
+        if reviewer:
+            review["reviewer_username"] = reviewer["username"]
+        result.append(review)
+    
+    return result
+
+@api_router.get("/users/{user_id}/stats")
+async def get_user_stats(user_id: str):
+    """Get user statistics"""
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+    
+    # Count sales
+    sales = await db.listings.count_documents({
+        "seller_id": user_id,
+        "stato": "ritirato"
+    })
+    
+    # Count purchases
+    purchases = await db.listings.count_documents({
+        "buyer_id": user_id,
+        "stato": "ritirato"
+    })
+    
+    # Count active listings
+    active_listings = await db.listings.count_documents({
+        "seller_id": user_id,
+        "stato": "disponibile"
+    })
+    
+    # Count pending deliveries
+    pending_deliveries = await db.listings.count_documents({
+        "seller_id": user_id,
+        "stato": "venduto"
+    })
+    
+    return {
+        "total_sales": sales,
+        "total_purchases": purchases,
+        "active_listings": active_listings,
+        "pending_deliveries": pending_deliveries,
+        "rating": user.get("rating", 0),
+        "rating_count": user.get("rating_count", 0),
+        "is_premium": user.get("is_premium", False)
+    }
+
+@api_router.get("/listings/{listing_id}/can-review")
+async def can_review_listing(listing_id: str, user_id: str):
+    """Check if user can review this listing"""
+    listing = await db.listings.find_one({"id": listing_id})
+    if not listing:
+        return {"can_review": False, "reason": "Transazione non trovata"}
+    
+    if listing.get("stato") != "ritirato":
+        return {"can_review": False, "reason": "Transazione non ancora completata"}
+    
+    # Check if user is part of transaction
+    if user_id not in [listing.get("seller_id"), listing.get("buyer_id")]:
+        return {"can_review": False, "reason": "Non sei parte di questa transazione"}
+    
+    # Check if already reviewed
+    existing = await db.reviews.find_one({
+        "listing_id": listing_id,
+        "reviewer_id": user_id
+    })
+    if existing:
+        return {"can_review": False, "reason": "Hai già recensito"}
+    
+    return {"can_review": True}
 
 # ============== CHAT ROUTES ==============
 
