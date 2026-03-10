@@ -529,6 +529,115 @@ async def get_books(classe: Optional[str] = None, materia: Optional[str] = None,
     books = await db.books.find(query).skip(skip).limit(limit).to_list(limit)
     return [Book(**book) for book in books]
 
+# ============== USED BOOK STATISTICS (D.P.R. 157/1989) ==============
+# These routes MUST come before /books/{book_id} to avoid route conflicts
+
+@api_router.get("/books/usato-stats")
+async def get_usato_stats_route(tipo_scuola: Optional[str] = None, anno_corso: Optional[int] = None):
+    """
+    Get statistics on used book availability based on D.P.R. 157/1989
+    (textbooks must be adopted for 3-year cycles)
+    """
+    query = {}
+    if tipo_scuola:
+        query["tipi_scuola"] = tipo_scuola
+    if anno_corso:
+        query["anni_corso"] = anno_corso
+    
+    books = await db.books.find(query).to_list(10000)
+    
+    if not books:
+        return {
+            "total_books": 0,
+            "perc_usato_medio": 0,
+            "perc_nuovo_medio": 100,
+            "breakdown": {},
+            "normativa": "D.P.R. 157/1989 - Adozioni triennali"
+        }
+    
+    nuove_adozioni = sum(1 for b in books if b.get("perc_usato_disponibile", 0) == 0)
+    volumi_unici = sum(1 for b in books if b.get("perc_usato_disponibile", 0) == 33)
+    volumi_annuali = sum(1 for b in books if b.get("perc_usato_disponibile", 0) == 66)
+    
+    total = len(books)
+    avg_usato = sum(b.get("perc_usato_disponibile", 0) for b in books) / total if total > 0 else 0
+    
+    return {
+        "total_books": total,
+        "perc_usato_medio": round(avg_usato, 1),
+        "perc_nuovo_medio": round(100 - avg_usato, 1),
+        "breakdown": {
+            "nuove_adozioni": {
+                "count": nuove_adozioni,
+                "perc_totale": round(nuove_adozioni * 100 / total, 1) if total > 0 else 0,
+                "perc_usato": 0,
+                "descrizione": "Primo anno di adozione - nessun usato sul mercato"
+            },
+            "volumi_unici": {
+                "count": volumi_unici,
+                "perc_totale": round(volumi_unici * 100 / total, 1) if total > 0 else 0,
+                "perc_usato": 33,
+                "descrizione": "Volume unico per ciclo - solo chi ha terminato può vendere"
+            },
+            "volumi_annuali": {
+                "count": volumi_annuali,
+                "perc_totale": round(volumi_annuali * 100 / total, 1) if total > 0 else 0,
+                "perc_usato": 66,
+                "descrizione": "Volume specifico per anno - buona disponibilità usato"
+            }
+        },
+        "normativa": "D.P.R. 157/1989 - Le adozioni dei libri di testo devono essere mantenute per almeno 3 anni"
+    }
+
+
+@api_router.get("/books/usato-previsione/{isbn}")
+async def get_usato_prediction_route(isbn: str):
+    """Get used book availability prediction for a specific ISBN"""
+    book = await db.books.find_one({"isbn": isbn})
+    if not book:
+        raise HTTPException(status_code=404, detail="Libro non trovato nel database")
+    
+    book.pop("_id", None)
+    
+    active_listings = await db.listings.count_documents({
+        "book_id": isbn,
+        "stato": "disponibile"
+    })
+    
+    perc_usato = book.get("perc_usato_disponibile", 0)
+    
+    # Generate advice
+    if perc_usato == 0:
+        consiglio = "Nuova adozione: probabilmente dovrai acquistare nuovo. Controlla comunque il Radar!"
+    elif perc_usato <= 33:
+        if active_listings > 0:
+            consiglio = f"Volume unico ma ci sono {active_listings} annunci! Controlla subito il Radar."
+        else:
+            consiglio = "Volume unico: disponibilità limitata. Cerca presto per trovare usato."
+    else:
+        if active_listings > 0:
+            consiglio = f"Buona disponibilità usato! {active_listings} annunci attivi. Ottimo momento per acquistare."
+        else:
+            consiglio = "Buona probabilità di trovare usato. Attiva il Radar per essere notificato."
+    
+    return {
+        "isbn": isbn,
+        "titolo": book.get("titolo", ""),
+        "autori": book.get("autori", ""),
+        "editore": book.get("editore", ""),
+        "prezzo_copertina": book.get("prezzo_copertina", 0),
+        "is_volume_unico": book.get("is_volume_unico", False),
+        "nuova_adozione": book.get("nuova_adozione", False),
+        "perc_usato_disponibile": perc_usato,
+        "motivo_usato": book.get("motivo_usato", ""),
+        "tipi_scuola": book.get("tipi_scuola", []),
+        "anni_corso": book.get("anni_corso", []),
+        "num_scuole_adottanti": book.get("num_scuole_adottanti", 0),
+        "annunci_attivi": active_listings,
+        "consiglio": consiglio
+    }
+
+
 @api_router.get("/books/{book_id}", response_model=Book)
 async def get_book(book_id: str):
     book = await db.books.find_one({"id": book_id})
@@ -800,6 +909,7 @@ async def get_matches(user_id: str, limit: int = 50):
     matches.sort(key=lambda x: x["compatibility_score"], reverse=True)
     
     return {"matches": matches, "total": len(matches)}
+
 
 @api_router.get("/radar/{user_id}")
 async def get_radar_view(user_id: str):
