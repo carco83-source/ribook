@@ -8,6 +8,9 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Share,
+  Platform,
+  Linking,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -108,6 +111,50 @@ export default function ListingDetailScreen() {
     }
     const commission = listing.prezzo_vendita * 0.15;
     return { commission, total: listing.prezzo_vendita };
+  };
+
+  const handleShare = async () => {
+    if (!listing) return;
+    
+    const message = `📚 ${listing.book_titolo}\n` +
+      `✍️ ${listing.book_autore}\n` +
+      `💰 Prezzo: €${listing.prezzo_vendita.toFixed(2)}\n` +
+      `📖 Condizione: ${getConditionLabel(listing.condizione)}\n\n` +
+      `Trovato su ScambiaLibri - L'app per scambiare libri scolastici usati a Catanzaro!`;
+
+    try {
+      await Share.share({
+        message,
+        title: `${listing.book_titolo} in vendita su ScambiaLibri`,
+      });
+    } catch (error) {
+      console.error('Error sharing:', error);
+    }
+  };
+
+  const handleShareWhatsApp = async () => {
+    if (!listing) return;
+    
+    const message = `📚 *${listing.book_titolo}*\n` +
+      `✍️ ${listing.book_autore}\n` +
+      `💰 Prezzo: €${listing.prezzo_vendita.toFixed(2)}\n` +
+      `📖 Condizione: ${getConditionLabel(listing.condizione)}\n\n` +
+      `Trovato su ScambiaLibri!`;
+
+    const url = `whatsapp://send?text=${encodeURIComponent(message)}`;
+    
+    try {
+      const canOpen = await Linking.canOpenURL(url);
+      if (canOpen) {
+        await Linking.openURL(url);
+      } else {
+        // Fallback to web WhatsApp
+        await Linking.openURL(`https://wa.me/?text=${encodeURIComponent(message)}`);
+      }
+    } catch (error) {
+      console.error('Error sharing to WhatsApp:', error);
+      Alert.alert('Errore', 'Impossibile aprire WhatsApp');
+    }
   };
 
   const handlePurchase = async () => {
@@ -228,6 +275,18 @@ export default function ListingDetailScreen() {
               {getConditionLabel(listing.condizione)}
             </Text>
           </View>
+        </View>
+
+        {/* Share Buttons */}
+        <View style={styles.shareRow}>
+          <TouchableOpacity style={styles.shareButton} onPress={handleShare}>
+            <Ionicons name="share-outline" size={20} color="#1a472a" />
+            <Text style={styles.shareButtonText}>Condividi</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.shareButton, styles.whatsappButton]} onPress={handleShareWhatsApp}>
+            <Ionicons name="logo-whatsapp" size={20} color="#25D366" />
+            <Text style={[styles.shareButtonText, { color: '#25D366' }]}>WhatsApp</Text>
+          </TouchableOpacity>
         </View>
 
         <Text style={styles.title}>{listing.book_titolo}</Text>
@@ -773,5 +832,31 @@ const styles = StyleSheet.create({
   bookstoreAvailableName: {
     fontSize: 14,
     color: '#333',
+  },
+  shareRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  shareButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#1a472a',
+  },
+  shareButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#1a472a',
+  },
+  whatsappButton: {
+    borderColor: '#25D366',
   },
 });
