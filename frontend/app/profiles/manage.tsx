@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { Picker } from '@react-native-picker/picker';
-import { SCUOLE_CATANZARO } from '../../components/schools';
+import { SCUOLE_PRIMO_GRADO, SCUOLE_SECONDO_GRADO, getClassiByType, SEZIONI } from '../../src/constants/schools';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -147,18 +147,14 @@ export default function ManageProfilesScreen() {
 
   const getScuoleByTipo = () => {
     if (newProfile.tipo_scuola === 'primo_grado') {
-      return SCUOLE_CATANZARO.filter(s => s.tipo === 'media');
+      return SCUOLE_PRIMO_GRADO;
     } else {
-      return SCUOLE_CATANZARO.filter(s => s.tipo === 'superiore');
+      return SCUOLE_SECONDO_GRADO;
     }
   };
 
   const getClassi = () => {
-    if (newProfile.tipo_scuola === 'primo_grado') {
-      return ['1', '2', '3'];
-    } else {
-      return ['1', '2', '3', '4', '5'];
-    }
+    return getClassiByType(newProfile.tipo_scuola as 'primo_grado' | 'secondo_grado');
   };
 
   if (loading) {
