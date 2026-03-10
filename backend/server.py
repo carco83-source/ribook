@@ -1177,21 +1177,66 @@ async def get_radar_view(user_id: str):
 async def get_class_compatibility(user_id: str):
     """
     Calcola il flusso TEORICO dei libri tra classi per una SPECIFICA scuola.
-    
-    LOGICA:
-    Per uno studente di 2ª media della Casalinuovo:
-    
-    1. VENDERE alla 1ª media:
-       - I miei libri di 1ª (Storia 1, Inglese 1, etc.)
-       - Solo se lo STESSO libro (stesso editore/serie) è ancora nella lista adozioni 1ª
-    
-    2. COMPRARE dalla 3ª media:
-       - I libri di 2ª che i 3ª hanno usato l'anno scorso
-       - Se il 3ª ha "Storia 2" della stessa edizione che serve a me → compro usato
-    
-    3. NUOVI da comprare:
-       - Libri dove l'edizione è cambiata (editore diverso tra anni)
+    Confronta EDITORE + TITOLO BASE per determinare se stessa serie/edizione.
     """
+    import re
+    
+    def get_base_title(title: str) -> str:
+        """Estrae il titolo base rimuovendo volume, numeri, edizione, etc."""
+        title = title.upper().strip()
+        # Rimuovi "VOLUME X", "VOL. X", "V. X"
+        title = re.sub(r'\s*(VOLUME|VOL\.?|V\.?)\s*\d+.*', '', title, flags=re.IGNORECASE)
+        # Rimuovi "(LDM)", "+EBOOK", etc.
+        title = re.sub(r'\s*\(LDM.*', '', title, flags=re.IGNORECASE)
+        title = re.sub(r'\s*\+\s*EBOOK.*', '', title, flags=re.IGNORECASE)
+        # Rimuovi numeri alla fine (es. "STORIA 1" -> "STORIA")
+        title = re.sub(r'\s+\d+\s*$', '', title)
+        # Rimuovi trattini finali
+        title = re.sub(r'\s*-\s*$', '', title)
+        return title.strip()
+    
+    def has_edition_marker(title: str) -> str:
+        """Estrae indicatore di edizione se presente"""
+        title = title.upper()
+        # Cerca pattern di edizione: "2ED.", "EDIZIONE VERDE", "ED. BLU", etc.
+        match = re.search(r'(\d+ED\.?|EDIZIONE\s+\w+|ED\.\s*\w+)', title)
+        return match.group(1) if match else ""
+    
+    def same_series(book1: dict, book2: dict) -> bool:
+        """Verifica se due libri sono della stessa serie (stesso editore E stessa edizione)"""
+        # Deve avere stesso editore
+        if book1.get("editore", "").upper() != book2.get("editore", "").upper():
+            return False
+        
+        t1 = book1.get("titolo", "").upper()
+        t2 = book2.get("titolo", "").upper()
+        
+        # Se uno ha indicatore di edizione e l'altro no, o sono diversi → NON stessa serie
+        ed1 = has_edition_marker(t1)
+        ed2 = has_edition_marker(t2)
+        if ed1 != ed2:
+            return False  # Edizioni diverse!
+        
+        # Confronto titolo base
+        base1 = get_base_title(t1)
+        base2 = get_base_title(t2)
+        
+        # Rimuovi anche indicatori di edizione per il confronto parole
+        base1 = re.sub(r'\d+ED\.?', '', base1).strip()
+        base2 = re.sub(r'\d+ED\.?', '', base2).strip()
+        
+        words1 = set(base1.split())
+        words2 = set(base2.split())
+        # Rimuovi trattini isolati
+        words1.discard('-')
+        words2.discard('-')
+        
+        if not words1 or not words2:
+            return False
+        common = words1.intersection(words2)
+        similarity = len(common) / max(len(words1), len(words2))
+        return similarity >= 0.8  # 80% parole in comune
+    
     user = await db.users.find_one({"id": user_id})
     if not user:
         raise HTTPException(status_code=404, detail="Utente non trovato")
@@ -1206,7 +1251,6 @@ async def get_class_compatibility(user_id: str):
         school = await db.schools.find_one({"nome": {"$regex": scuola_nome.split(" ")[0], "$options": "i"}})
         if school:
             codice_scuola = school.get("codice", "")
-            # Salva per il futuro
             await db.users.update_one({"id": user_id}, {"$set": {"codice_scuola": codice_scuola}})
     
     if not codice_scuola:
@@ -1224,7 +1268,7 @@ async def get_class_compatibility(user_id: str):
         "is_volume_unico": {"$ne": True}
     }).to_list(100)
     
-    # Libri classe PRECEDENTE (cosa avevo io l'anno scorso / cosa serve a chi entra)
+    # Libri classe PRECEDENTE
     libri_prec = []
     if classe_precedente:
         libri_prec = await db.books.find({
@@ -1233,7 +1277,7 @@ async def get_class_compatibility(user_id: str):
             "is_volume_unico": {"$ne": True}
         }).to_list(100)
     
-    # Libri classe SUCCESSIVA (cosa hanno i 3ª che mi può servire)
+    # Libri classe SUCCESSIVA
     libri_succ = []
     if classe_successiva:
         libri_succ = await db.books.find({
@@ -1254,7 +1298,8 @@ async def get_class_compatibility(user_id: str):
                     "editore": b.get("editore", "").strip().upper(),
                     "autori": b.get("autori", ""),
                     "prezzo": b.get("prezzo_copertina", 0),
-                    "volume": b.get("volume", "")
+                    "volume": b.get("volume", ""),
+                    "titolo_base": get_base_title(b.get("titolo", ""))
                 }
         return result
     
@@ -1269,8 +1314,8 @@ async def get_class_compatibility(user_id: str):
     for disc, book_prec in prec_books_disc.items():
         if disc in my_books_disc:
             my_book = my_books_disc[disc]
-            # Stesso editore = stessa serie = VENDIBILE
-            if book_prec["editore"] == my_book["editore"]:
+            # Verifica stessa serie (editore + titolo base)
+            if same_series(book_prec, my_book):
                 vendibili.append({
                     "disciplina": disc,
                     "titolo": book_prec["titolo"][:50],
@@ -1281,19 +1326,19 @@ async def get_class_compatibility(user_id: str):
             else:
                 non_vendibili.append({
                     "disciplina": disc,
-                    "titolo": book_prec["titolo"][:50],
-                    "vecchio": book_prec["editore"],
-                    "nuovo": my_book["editore"],
+                    "titolo_vecchio": book_prec["titolo"][:40],
+                    "titolo_nuovo": my_book["titolo"][:40],
+                    "editore_vecchio": book_prec["editore"],
+                    "editore_nuovo": my_book["editore"],
                     "status": "EDIZIONE CAMBIATA"
                 })
         else:
-            # Materia non in 2ª, ma era in 1ª - vendibile
             vendibili.append({
                 "disciplina": disc,
                 "titolo": book_prec["titolo"][:50],
                 "editore": book_prec["editore"],
                 "prezzo_consigliato": round(book_prec["prezzo"] * 0.5, 2),
-                "status": "VENDIBILE (solo in 1ª)"
+                "status": "VENDIBILE (solo in questa classe)"
             })
     
     # === CALCOLA COMPRARE USATO (dalla classe successiva) ===
@@ -1303,8 +1348,8 @@ async def get_class_compatibility(user_id: str):
     for disc, my_book in my_books_disc.items():
         if disc in succ_books_disc:
             book_succ = succ_books_disc[disc]
-            # Stesso editore = posso comprare usato dalla 3ª
-            if my_book["editore"] == book_succ["editore"]:
+            # Verifica stessa serie
+            if same_series(my_book, book_succ):
                 comprare_usato.append({
                     "disciplina": disc,
                     "titolo": my_book["titolo"][:50],
@@ -1319,15 +1364,14 @@ async def get_class_compatibility(user_id: str):
                     "disciplina": disc,
                     "titolo": my_book["titolo"][:50],
                     "prezzo": my_book["prezzo"],
-                    "motivo": f"Edizione cambiata: {book_succ['editore']} → {my_book['editore']}"
+                    "motivo": f"Edizione diversa dalla 3ª"
                 })
         else:
-            # Materia non in 3ª - devo comprare nuovo
             comprare_nuovo.append({
                 "disciplina": disc,
                 "titolo": my_book["titolo"][:50],
                 "prezzo": my_book["prezzo"],
-                "motivo": "Materia non presente in 3ª"
+                "motivo": "Materia non in 3ª"
             })
     
     # === CALCOLI FINALI ===
