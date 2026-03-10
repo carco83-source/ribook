@@ -159,38 +159,33 @@ export default function ProfileScreen() {
             Flusso Libri - {userData.classe}ª Media
           </Text>
           <Text style={styles.bookFlowSubtitle}>
-            Basato sul D.P.R. 157/1989 (adozioni triennali)
+            {bookFlow.summary?.nota_volumi_unici || 'Basato sul D.P.R. 157/1989'}
           </Text>
           
           <View style={styles.bookFlowContainer}>
-            {/* Colonna Sinistra - Comprare da classe superiore */}
-            {bookFlow.classes.find((c: any) => c.classe > parseInt(userData.classe)) && (
-              <View style={styles.bookFlowColumn}>
-                <View style={[styles.bookFlowHeader, { backgroundColor: '#4CAF50' }]}>
-                  <Ionicons name="arrow-down-circle" size={24} color="#fff" />
-                  <Text style={styles.bookFlowHeaderText}>COMPRA da</Text>
-                  <Text style={styles.bookFlowHeaderClass}>
-                    {bookFlow.classes.find((c: any) => c.classe > parseInt(userData.classe))?.classe}ª Media
+            {/* Colonna Sinistra - COMPRA USATO */}
+            <View style={styles.bookFlowColumn}>
+              <View style={[styles.bookFlowHeader, { backgroundColor: '#4CAF50' }]}>
+                <Ionicons name="cart" size={20} color="#fff" />
+                <Text style={styles.bookFlowHeaderText}>COMPRA</Text>
+                <Text style={styles.bookFlowHeaderClass}>USATO</Text>
+              </View>
+              <View style={styles.bookFlowBody}>
+                <View style={styles.bookFlowStat}>
+                  <Text style={styles.bookFlowNumber}>
+                    {bookFlow.comprare?.totale || 0}
                   </Text>
+                  <Text style={styles.bookFlowLabel}>Disponibili</Text>
                 </View>
-                <View style={styles.bookFlowBody}>
-                  <View style={styles.bookFlowStat}>
-                    <Text style={styles.bookFlowNumber}>
-                      {bookFlow.classes.find((c: any) => c.classe > parseInt(userData.classe))?.usable_for_you || 0}
-                    </Text>
-                    <Text style={styles.bookFlowLabel}>Libri usati{'\n'}disponibili</Text>
-                  </View>
-                  <View style={styles.bookFlowDivider} />
-                  <View style={styles.bookFlowStat}>
-                    <Text style={[styles.bookFlowNumber, { color: '#FF9800' }]}>
-                      {bookFlow.classes.find((c: any) => c.classe > parseInt(userData.classe))?.books_count - 
-                       (bookFlow.classes.find((c: any) => c.classe > parseInt(userData.classe))?.usable_for_you || 0) || 0}
-                    </Text>
-                    <Text style={styles.bookFlowLabel}>Da comprare{'\n'}nuovi</Text>
-                  </View>
+                <View style={styles.bookFlowDivider} />
+                <View style={styles.bookFlowStat}>
+                  <Text style={[styles.bookFlowNumber, { fontSize: 16, color: '#4CAF50' }]}>
+                    €{bookFlow.comprare?.risparmio_stimato?.toFixed(0) || 0}
+                  </Text>
+                  <Text style={styles.bookFlowLabel}>Risparmio</Text>
                 </View>
               </View>
-            )}
+            </View>
 
             {/* Colonna Centrale - Riepilogo */}
             <View style={styles.bookFlowCenter}>
@@ -199,43 +194,56 @@ export default function ProfileScreen() {
               </View>
               <Text style={styles.bookFlowCenterText}>TU</Text>
               <Text style={styles.bookFlowCompatibility}>
-                {bookFlow.summary?.overall_compatibility || 0}%
+                {bookFlow.summary?.percentuale_usato?.toFixed(0) || 0}%
               </Text>
-              <Text style={styles.bookFlowCompatibilityLabel}>compatibilità</Text>
+              <Text style={styles.bookFlowCompatibilityLabel}>usato</Text>
             </View>
 
-            {/* Colonna Destra - Vendere a classe inferiore */}
-            {bookFlow.classes.find((c: any) => c.classe < parseInt(userData.classe)) && (
-              <View style={styles.bookFlowColumn}>
-                <View style={[styles.bookFlowHeader, { backgroundColor: '#2196F3' }]}>
-                  <Ionicons name="arrow-up-circle" size={24} color="#fff" />
-                  <Text style={styles.bookFlowHeaderText}>VENDI a</Text>
-                  <Text style={styles.bookFlowHeaderClass}>
-                    {bookFlow.classes.find((c: any) => c.classe < parseInt(userData.classe))?.classe}ª Media
+            {/* Colonna Destra - COMPRA NUOVO */}
+            <View style={styles.bookFlowColumn}>
+              <View style={[styles.bookFlowHeader, { backgroundColor: '#FF9800' }]}>
+                <Ionicons name="pricetag" size={20} color="#fff" />
+                <Text style={styles.bookFlowHeaderText}>COMPRA</Text>
+                <Text style={styles.bookFlowHeaderClass}>NUOVO</Text>
+              </View>
+              <View style={styles.bookFlowBody}>
+                <View style={styles.bookFlowStat}>
+                  <Text style={styles.bookFlowNumber}>
+                    {bookFlow.nuovi?.totale || 0}
                   </Text>
+                  <Text style={styles.bookFlowLabel}>Necessari</Text>
                 </View>
-                <View style={styles.bookFlowBody}>
-                  <View style={styles.bookFlowStat}>
-                    <Text style={styles.bookFlowNumber}>
-                      {bookFlow.classes.find((c: any) => c.classe < parseInt(userData.classe))?.books_count || 0}
-                    </Text>
-                    <Text style={styles.bookFlowLabel}>Studenti{'\n'}interessati</Text>
-                  </View>
-                  <View style={styles.bookFlowDivider} />
-                  <View style={styles.bookFlowStat}>
-                    <Text style={[styles.bookFlowNumber, { color: '#4CAF50' }]}>
-                      {bookFlow.classes.find((c: any) => c.classe < parseInt(userData.classe))?.sellers_count || 0}
-                    </Text>
-                    <Text style={styles.bookFlowLabel}>Venditori{'\n'}attivi</Text>
-                  </View>
+                <View style={styles.bookFlowDivider} />
+                <View style={styles.bookFlowStat}>
+                  <Text style={[styles.bookFlowNumber, { fontSize: 16, color: '#FF9800' }]}>
+                    €{bookFlow.nuovi?.costo_stimato?.toFixed(0) || 0}
+                  </Text>
+                  <Text style={styles.bookFlowLabel}>Costo</Text>
                 </View>
               </View>
-            )}
+            </View>
           </View>
 
-          <Text style={styles.bookFlowHint}>
-            {bookFlow.summary?.message || 'Caricamento...'}
-          </Text>
+          {/* Sezione VENDI */}
+          {bookFlow.vendere && bookFlow.vendere.totale > 0 && (
+            <View style={styles.bookFlowSellSection}>
+              <View style={[styles.bookFlowHeader, { backgroundColor: '#2196F3', marginBottom: 8 }]}>
+                <Ionicons name="arrow-up-circle" size={20} color="#fff" />
+                <Text style={styles.bookFlowHeaderText}>{bookFlow.vendere.titolo}</Text>
+              </View>
+              <View style={styles.bookFlowSellStats}>
+                <View style={styles.bookFlowSellStat}>
+                  <Text style={styles.bookFlowSellNumber}>{bookFlow.vendere.totale}</Text>
+                  <Text style={styles.bookFlowSellLabel}>Libri vendibili</Text>
+                </View>
+                <View style={styles.bookFlowSellStat}>
+                  <Text style={styles.bookFlowSellNumber}>{bookFlow.vendere.studenti_interessati}</Text>
+                  <Text style={styles.bookFlowSellLabel}>Studenti in 1ª</Text>
+                </View>
+              </View>
+              <Text style={styles.bookFlowSellHint}>{bookFlow.vendere.descrizione}</Text>
+            </View>
+          )}
         </View>
       )}
 
@@ -919,5 +927,34 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontStyle: 'italic',
     paddingHorizontal: 8,
+  },
+  bookFlowSellSection: {
+    marginTop: 16,
+    backgroundColor: '#f0f7ff',
+    borderRadius: 12,
+    padding: 12,
+  },
+  bookFlowSellStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 8,
+  },
+  bookFlowSellStat: {
+    alignItems: 'center',
+  },
+  bookFlowSellNumber: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#2196F3',
+  },
+  bookFlowSellLabel: {
+    fontSize: 11,
+    color: '#666',
+  },
+  bookFlowSellHint: {
+    fontSize: 11,
+    color: '#666',
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
 });

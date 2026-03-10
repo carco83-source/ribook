@@ -1176,8 +1176,22 @@ async def get_radar_view(user_id: str):
 @api_router.get("/radar/{user_id}/class-compatibility")
 async def get_class_compatibility(user_id: str):
     """
-    Get cross-class book compatibility based on D.P.R. 157/1989
-    Shows which books from other classes could be useful for the user
+    Calcola la compatibilità libri tra classi basandosi su:
+    
+    REGOLE CORRETTE (D.P.R. 157/1989):
+    1. VOLUMI UNICI (Religione, Arte, Ed.Fisica, Musica, Tecnologia, Grammatica):
+       - Si comprano SOLO in 1ª media
+       - NON vanno contati per 2ª e 3ª (li hai già!)
+    
+    2. LIBRI ANNUALI:
+       - Cambiano ogni anno
+       - Puoi comprare usato SOLO se stesso ISBN (stessa edizione)
+       - Se l'edizione è cambiata → devi comprare nuovo
+    
+    FLUSSO PER 2ª MEDIA:
+    - COMPRARE: Libri annuali di 2ª che studenti di 1ª (ora in 2ª) vendono
+    - VENDERE: I tuoi libri annuali di 1ª a chi entra in 1ª
+    - NUOVI: Libri con edizione cambiata o nuove adozioni
     """
     user = await db.users.find_one({"id": user_id})
     if not user:
@@ -1187,18 +1201,36 @@ async def get_class_compatibility(user_id: str):
     user_scuola = user.get("scuola", "")
     user_tipo = user.get("tipo_scuola", "primo_grado")
     
-    # Define which classes to check based on user's class
-    # For middle school: 1, 2, 3
-    # For high school biennio: 1, 2
-    # For high school triennio: 3, 4, 5
+    # Definisci classi del ciclo
     if user_tipo == "primo_grado":
         all_classes = [1, 2, 3]
     else:
         all_classes = [1, 2, 3, 4, 5]
     
-    other_classes = [c for c in all_classes if c != user_classe]
+    # Per comprare usato: guardo chi era nella MIA classe l'anno scorso (ora classe+1)
+    # Per vendere: guardo chi entra nella classe che ho appena finito (classe-1 per loro)
+    classe_precedente = user_classe - 1 if user_classe > 1 else None
+    classe_successiva = user_classe + 1 if user_classe < max(all_classes) else None
     
-    # Find all available listings from the same school but different classes
+    # === STEP 1: Trova i libri della TUA lista adozioni (cosa ti serve quest'anno) ===
+    # Prendo i libri dal DB MIUR per la tua classe
+    my_books_needed = await db.books.find({
+        "tipi_scuola": "MM" if user_tipo == "primo_grado" else {"$in": ["NO", "NT"]},
+        "anni_corso": user_classe
+    }).to_list(500)
+    
+    # Separa volumi unici da annuali
+    my_volumi_unici_isbn = set()
+    my_libri_annuali_isbn = set()
+    
+    for book in my_books_needed:
+        isbn = book.get("isbn", "")
+        if book.get("is_volume_unico", False):
+            my_volumi_unici_isbn.add(isbn)
+        else:
+            my_libri_annuali_isbn.add(isbn)
+    
+    # === STEP 2: Trova annunci disponibili dalla stessa scuola ===
     pipeline = [
         {
             "$match": {
@@ -1217,154 +1249,165 @@ async def get_class_compatibility(user_id: str):
         {"$unwind": "$seller_info"},
         {
             "$match": {
-                "seller_info.scuola": user_scuola,
-                "seller_info.classe": {"$in": [str(c) for c in other_classes]}
+                "seller_info.scuola": user_scuola
             }
         }
     ]
     
-    listings = await db.listings.aggregate(pipeline).to_list(500)
+    all_listings = await db.listings.aggregate(pipeline).to_list(500)
     
-    # Organize by class
-    class_data = {}
-    for c in other_classes:
-        class_data[str(c)] = {
-            "classe": c,
-            "sellers_count": 0,
-            "books_count": 0,
-            "usable_for_you": 0,  # Books you could use (volume unico or matching anno)
-            "total_value": 0,
-            "usato_medio": 0,
-            "sellers": {},
-            "books": []
-        }
+    # === STEP 3: Calcola cosa puoi COMPRARE usato ===
+    # Puoi comprare libri ANNUALI (non unici!) il cui ISBN è nella tua lista
+    libri_acquistabili_usato = []
+    libri_da_comprare_nuovo = []
     
-    for listing in listings:
-        seller = listing.get("seller_info", {})
-        seller_classe = seller.get("classe", "1")
+    # Set di ISBN già trovati usati
+    isbn_trovati_usato = set()
+    
+    for listing in all_listings:
+        isbn = listing.get("book_isbn", "") or listing.get("book_id", "")
+        is_volume_unico = listing.get("is_volume_unico", False)
         
-        if seller_classe not in class_data:
+        # IGNORA volumi unici se NON sei in 1ª (li hai già!)
+        if is_volume_unico and user_classe > 1:
             continue
         
-        cd = class_data[seller_classe]
-        seller_id = seller.get("id")
+        # Controlla se questo ISBN è nella TUA lista annuale
+        if isbn in my_libri_annuali_isbn:
+            isbn_trovati_usato.add(isbn)
+            libri_acquistabili_usato.append({
+                "listing_id": listing.get("id"),
+                "isbn": isbn,
+                "titolo": listing.get("book_titolo", "")[:60],
+                "prezzo_vendita": listing.get("prezzo_vendita", 0),
+                "condizione": listing.get("condizione", ""),
+                "seller_username": listing.get("seller_info", {}).get("username", ""),
+                "seller_classe": listing.get("seller_info", {}).get("classe", "")
+            })
         
-        # Track unique sellers
-        if seller_id not in cd["sellers"]:
-            cd["sellers"][seller_id] = {
-                "username": seller.get("username", ""),
-                "sezione": seller.get("sezione", ""),
-                "books_count": 0
-            }
-            cd["sellers_count"] += 1
+        # Se sei in 1ª, puoi comprare anche volumi unici usati
+        if is_volume_unico and user_classe == 1 and isbn in my_volumi_unici_isbn:
+            isbn_trovati_usato.add(isbn)
+            libri_acquistabili_usato.append({
+                "listing_id": listing.get("id"),
+                "isbn": isbn,
+                "titolo": listing.get("book_titolo", "")[:60] + " (Vol.Unico)",
+                "prezzo_vendita": listing.get("prezzo_vendita", 0),
+                "condizione": listing.get("condizione", ""),
+                "seller_username": listing.get("seller_info", {}).get("username", ""),
+                "seller_classe": listing.get("seller_info", {}).get("classe", ""),
+                "is_volume_unico": True
+            })
+    
+    # === STEP 4: Calcola cosa devi comprare NUOVO ===
+    # Libri annuali che ti servono ma non hai trovato usato
+    for book in my_books_needed:
+        isbn = book.get("isbn", "")
+        is_unico = book.get("is_volume_unico", False)
         
-        cd["sellers"][seller_id]["books_count"] += 1
-        cd["books_count"] += 1
-        cd["total_value"] += listing.get("prezzo_vendita", 0)
+        # Volumi unici: nuovo solo se sei in 1ª
+        if is_unico:
+            if user_classe == 1 and isbn not in isbn_trovati_usato:
+                libri_da_comprare_nuovo.append({
+                    "isbn": isbn,
+                    "titolo": book.get("titolo", "")[:60] + " (Vol.Unico)",
+                    "prezzo": book.get("prezzo_copertina", 0),
+                    "motivo": "Volume unico - si compra solo in 1ª"
+                })
+        else:
+            # Libro annuale non trovato usato
+            if isbn not in isbn_trovati_usato:
+                libri_da_comprare_nuovo.append({
+                    "isbn": isbn,
+                    "titolo": book.get("titolo", "")[:60],
+                    "prezzo": book.get("prezzo_copertina", 0),
+                    "motivo": "Nessun usato disponibile" if isbn not in isbn_trovati_usato else "Edizione cambiata"
+                })
+    
+    # === STEP 5: Calcola cosa puoi VENDERE ===
+    # I tuoi libri ANNUALI dell'anno scorso (classe-1) a chi entra in quella classe
+    libri_vendibili = []
+    
+    if classe_precedente:
+        # Trova libri per la classe precedente
+        libri_classe_prec = await db.books.find({
+            "tipi_scuola": "MM" if user_tipo == "primo_grado" else {"$in": ["NO", "NT"]},
+            "anni_corso": classe_precedente
+        }).to_list(200)
         
-        # Check if book is usable for the user
-        # Volume unico = usable by all classes in the cycle
-        # Otherwise check if the book's anni_corso includes user's class
-        is_volume_unico = listing.get("is_volume_unico", False)
-        anni_corso = listing.get("anni_corso", [])
-        
-        is_usable = is_volume_unico or user_classe in anni_corso
-        
-        if is_usable:
-            cd["usable_for_you"] += 1
-        
-        # Add book info
-        cd["books"].append({
-            "listing_id": listing.get("id"),
-            "titolo": listing.get("book_titolo", "")[:50],
-            "prezzo_vendita": listing.get("prezzo_vendita", 0),
-            "condizione": listing.get("condizione", ""),
-            "is_volume_unico": is_volume_unico,
-            "anni_corso": anni_corso,
-            "is_usable_for_you": is_usable,
-            "perc_usato": listing.get("perc_usato_disponibile", 0),
-            "seller_username": seller.get("username", "")
+        for book in libri_classe_prec:
+            if not book.get("is_volume_unico", False):  # Solo annuali!
+                libri_vendibili.append({
+                    "isbn": book.get("isbn", ""),
+                    "titolo": book.get("titolo", "")[:60],
+                    "prezzo_consigliato": round(book.get("prezzo_copertina", 0) * 0.5, 2),
+                    "destinatari": f"Studenti che entrano in {classe_precedente}ª"
+                })
+    
+    # === STEP 6: Conta studenti interessati (potenziali acquirenti) ===
+    # Conta utenti nella classe precedente alla tua (che potrebbero comprare i tuoi libri vecchi)
+    studenti_interessati = 0
+    if classe_precedente:
+        studenti_interessati = await db.users.count_documents({
+            "scuola": user_scuola,
+            "classe": str(classe_precedente)
         })
     
-    # Calculate averages and format response
-    result = {
+    # === RISULTATO FINALE ===
+    totale_libri_necessari = len(my_libri_annuali_isbn)
+    if user_classe == 1:
+        totale_libri_necessari += len(my_volumi_unici_isbn)
+    
+    usati_trovati = len(set(l["isbn"] for l in libri_acquistabili_usato))
+    nuovi_necessari = len(libri_da_comprare_nuovo)
+    
+    # Calcola risparmio potenziale
+    risparmio_usato = sum(
+        (next((b.get("prezzo_copertina", 0) for b in my_books_needed if b.get("isbn") == l["isbn"]), 0) - l["prezzo_vendita"])
+        for l in libri_acquistabili_usato
+    )
+    
+    costo_nuovi = sum(l["prezzo"] for l in libri_da_comprare_nuovo)
+    
+    return {
         "user_classe": user_classe,
         "user_scuola": user_scuola,
-        "classes": []
+        "is_prima_media": user_classe == 1,
+        
+        "comprare": {
+            "titolo": f"Puoi comprare USATO",
+            "descrizione": "Libri annuali con stesso ISBN disponibili" if user_classe > 1 else "Libri disponibili usati",
+            "totale": usati_trovati,
+            "risparmio_stimato": round(risparmio_usato, 2),
+            "libri": libri_acquistabili_usato[:10]  # Top 10
+        },
+        
+        "nuovi": {
+            "titolo": "Devi comprare NUOVO",
+            "descrizione": "Nessun usato disponibile o edizione cambiata",
+            "totale": nuovi_necessari,
+            "costo_stimato": round(costo_nuovi, 2),
+            "libri": libri_da_comprare_nuovo[:10]  # Top 10
+        },
+        
+        "vendere": {
+            "titolo": f"Puoi vendere a {classe_precedente}ª" if classe_precedente else "Non puoi vendere",
+            "descrizione": f"I tuoi libri annuali di {classe_precedente}ª media" if classe_precedente else "Sei in 1ª, non hai libri da vendere",
+            "totale": len(libri_vendibili),
+            "studenti_interessati": studenti_interessati,
+            "libri": libri_vendibili[:10]  # Top 10
+        },
+        
+        "summary": {
+            "libri_necessari_totale": totale_libri_necessari,
+            "usati_disponibili": usati_trovati,
+            "nuovi_necessari": nuovi_necessari,
+            "percentuale_usato": round((usati_trovati / totale_libri_necessari * 100), 1) if totale_libri_necessari > 0 else 0,
+            "percentuale_nuovo": round((nuovi_necessari / totale_libri_necessari * 100), 1) if totale_libri_necessari > 0 else 0,
+            "risparmio_totale_stimato": round(risparmio_usato, 2),
+            "nota_volumi_unici": "I volumi unici (Religione, Arte, Ed.Fisica, Musica, Tecnologia, Grammatica) si comprano solo in 1ª media" if user_classe > 1 else "In 1ª media devi comprare anche i volumi unici"
+        }
     }
-    
-    for c in sorted(other_classes):
-        cd = class_data[str(c)]
-        if cd["books_count"] > 0:
-            cd["usato_medio"] = sum(b["perc_usato"] for b in cd["books"]) / cd["books_count"]
-        
-        # Calculate compatibility percentage
-        if cd["books_count"] > 0:
-            compatibility = round((cd["usable_for_you"] / cd["books_count"]) * 100, 1)
-        else:
-            compatibility = 0
-        
-        # Determine class relationship
-        if c < user_classe:
-            relationship = "precedente"
-            relationship_desc = f"Studenti di {c}ª che hanno già usato questi libri"
-        else:
-            relationship = "successiva"
-            relationship_desc = f"Studenti di {c}ª che non useranno più questi libri"
-        
-        result["classes"].append({
-            "classe": c,
-            "relationship": relationship,
-            "relationship_desc": relationship_desc,
-            "sellers_count": cd["sellers_count"],
-            "books_count": cd["books_count"],
-            "usable_for_you": cd["usable_for_you"],
-            "compatibility_percentage": compatibility,
-            "total_value": round(cd["total_value"], 2),
-            "usato_medio_percentage": round(cd["usato_medio"], 1),
-            "top_sellers": [
-                {
-                    "username": s["username"],
-                    "sezione": s["sezione"],
-                    "books_count": s["books_count"]
-                }
-                for s in sorted(cd["sellers"].values(), key=lambda x: -x["books_count"])[:3]
-            ],
-            "sample_books": sorted(cd["books"], key=lambda x: -x["is_usable_for_you"])[:5]
-        })
-    
-    # Add summary
-    total_usable = sum(c["usable_for_you"] for c in result["classes"])
-    total_books = sum(c["books_count"] for c in result["classes"])
-    
-    result["summary"] = {
-        "total_sellers": sum(c["sellers_count"] for c in result["classes"]),
-        "total_books_available": total_books,
-        "total_usable_for_you": total_usable,
-        "overall_compatibility": round((total_usable / total_books * 100), 1) if total_books > 0 else 0,
-        "message": _get_compatibility_message(user_classe, result["classes"])
-    }
-    
-    return result
-
-
-def _get_compatibility_message(user_classe: int, classes_data: list) -> str:
-    """Generate a helpful message about cross-class compatibility"""
-    usable_books = sum(c["usable_for_you"] for c in classes_data)
-    
-    if usable_books == 0:
-        return "Nessun libro compatibile trovato al momento. Attiva il Radar per essere notificato!"
-    
-    from_lower = sum(c["usable_for_you"] for c in classes_data if c["classe"] < user_classe)
-    from_higher = sum(c["usable_for_you"] for c in classes_data if c["classe"] > user_classe)
-    
-    messages = []
-    if from_lower > 0:
-        messages.append(f"{from_lower} libri da classi precedenti (già usati, ottimo usato!)")
-    if from_higher > 0:
-        messages.append(f"{from_higher} libri da classi successive (volumi unici)")
-    
-    return " • ".join(messages)
 
 
 @api_router.get("/radar/{user_id}/sellers")
