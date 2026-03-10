@@ -289,143 +289,99 @@ export default function RadarScreen() {
         )}
       </View>
 
-      {/* Cross-Class Compatibility Section */}
-      {classCompatibility && classCompatibility.classes.length > 0 && (
+      {/* Book Flow Section - Simplified */}
+      {classCompatibility && classCompatibility.summary && (
         <View style={styles.classCompatSection}>
           <View style={styles.sectionHeader}>
             <Ionicons name="swap-horizontal" size={24} color="#1a472a" />
-            <Text style={styles.sectionTitle}>Compatibilità tra Classi</Text>
+            <Text style={styles.sectionTitle}>Flusso Libri - {classCompatibility.user_classe}ª Media</Text>
           </View>
           
           <Text style={styles.classCompatSubtitle}>
-            Sei in {classCompatibility.user_classe}ª media - Ecco cosa puoi trovare dalle altre classi
+            {classCompatibility.summary?.nota_volumi_unici || 'Basato sul D.P.R. 157/1989'}
           </Text>
 
           {/* Summary Card */}
           <View style={styles.compatSummaryCard}>
             <View style={styles.compatSummaryRow}>
               <View style={styles.compatSummaryStat}>
-                <Text style={styles.compatSummaryNumber}>{classCompatibility.summary.total_books_available}</Text>
-                <Text style={styles.compatSummaryLabel}>Libri totali</Text>
+                <Text style={[styles.compatSummaryNumber, { color: '#4CAF50' }]}>
+                  {classCompatibility.comprare?.totale || 0}
+                </Text>
+                <Text style={styles.compatSummaryLabel}>Usati{'\n'}disponibili</Text>
               </View>
               <View style={styles.compatSummaryDivider} />
               <View style={styles.compatSummaryStat}>
-                <Text style={[styles.compatSummaryNumber, { color: '#4CAF50' }]}>
-                  {classCompatibility.summary.total_usable_for_you}
+                <Text style={[styles.compatSummaryNumber, { color: '#FF9800' }]}>
+                  {classCompatibility.nuovi?.totale || 0}
                 </Text>
-                <Text style={styles.compatSummaryLabel}>Usabili per te</Text>
+                <Text style={styles.compatSummaryLabel}>Da comprare{'\n'}nuovi</Text>
               </View>
               <View style={styles.compatSummaryDivider} />
               <View style={styles.compatSummaryStat}>
                 <Text style={[styles.compatSummaryNumber, { color: '#2196F3' }]}>
-                  {classCompatibility.summary.overall_compatibility}%
+                  {classCompatibility.summary?.percentuale_usato?.toFixed(0) || 0}%
                 </Text>
-                <Text style={styles.compatSummaryLabel}>Compatibilità</Text>
+                <Text style={styles.compatSummaryLabel}>Usato</Text>
               </View>
             </View>
-            <Text style={styles.compatMessage}>{classCompatibility.summary.message}</Text>
+            <Text style={styles.compatMessage}>
+              Risparmio stimato con usato: €{classCompatibility.comprare?.risparmio_stimato?.toFixed(0) || 0}
+            </Text>
           </View>
 
-          {/* Per-Class Cards */}
-          {classCompatibility.classes.map((classData) => (
-            <View key={classData.classe} style={styles.classCard}>
-              <View style={styles.classCardHeader}>
-                <View style={styles.classInfo}>
-                  <View style={[
-                    styles.classBadge, 
-                    { backgroundColor: classData.relationship === 'precedente' ? '#4CAF50' : '#2196F3' }
-                  ]}>
-                    <Text style={styles.classBadgeText}>{classData.classe}ª Media</Text>
-                  </View>
-                  <View style={styles.classRelationship}>
-                    <Ionicons 
-                      name={classData.relationship === 'precedente' ? 'arrow-up' : 'arrow-down'} 
-                      size={14} 
-                      color={classData.relationship === 'precedente' ? '#4CAF50' : '#2196F3'} 
-                    />
-                    <Text style={[
-                      styles.classRelationshipText,
-                      { color: classData.relationship === 'precedente' ? '#4CAF50' : '#2196F3' }
-                    ]}>
-                      {classData.relationship === 'precedente' ? 'Classe precedente' : 'Classe successiva'}
+          {/* Available Used Books */}
+          {classCompatibility.comprare?.libri && classCompatibility.comprare.libri.length > 0 && (
+            <View style={styles.classCard}>
+              <View style={[styles.bookFlowHeader, { backgroundColor: '#4CAF50', marginBottom: 12 }]}>
+                <Ionicons name="cart" size={18} color="#fff" />
+                <Text style={styles.bookFlowHeaderText}>LIBRI USATI DISPONIBILI</Text>
+              </View>
+              {classCompatibility.comprare.libri.slice(0, 5).map((book: any, idx: number) => (
+                <TouchableOpacity 
+                  key={idx} 
+                  style={styles.sampleBookItem}
+                  onPress={() => router.push(`/listing/${book.listing_id}`)}
+                >
+                  <View style={styles.sampleBookInfo}>
+                    <Text style={styles.sampleBookTitle} numberOfLines={1}>
+                      {book.titolo}
+                    </Text>
+                    <Text style={styles.sampleBookSeller}>
+                      da {book.seller_username} • {book.condizione}
                     </Text>
                   </View>
-                </View>
-                <View style={styles.classStats}>
-                  <Text style={styles.classCompatPercent}>{classData.compatibility_percentage}%</Text>
-                  <Text style={styles.classCompatLabel}>compatibile</Text>
-                </View>
-              </View>
-
-              <Text style={styles.classDescription}>{classData.relationship_desc}</Text>
-
-              <View style={styles.classMetaRow}>
-                <View style={styles.classMeta}>
-                  <Ionicons name="people-outline" size={16} color="#666" />
-                  <Text style={styles.classMetaText}>{classData.sellers_count} venditori</Text>
-                </View>
-                <View style={styles.classMeta}>
-                  <Ionicons name="book-outline" size={16} color="#666" />
-                  <Text style={styles.classMetaText}>{classData.books_count} libri</Text>
-                </View>
-                <View style={styles.classMeta}>
-                  <Ionicons name="checkmark-circle-outline" size={16} color="#4CAF50" />
-                  <Text style={[styles.classMetaText, { color: '#4CAF50' }]}>
-                    {classData.usable_for_you} per te
-                  </Text>
-                </View>
-              </View>
-
-              {/* Sample Books */}
-              {classData.sample_books.length > 0 && (
-                <View style={styles.sampleBooksContainer}>
-                  <Text style={styles.sampleBooksTitle}>Libri in vendita:</Text>
-                  {classData.sample_books.slice(0, 3).map((book, idx) => (
-                    <TouchableOpacity 
-                      key={idx} 
-                      style={[
-                        styles.sampleBookItem,
-                        book.is_usable_for_you && styles.sampleBookUsable
-                      ]}
-                      onPress={() => router.push(`/listing/${book.listing_id}`)}
-                    >
-                      <View style={styles.sampleBookInfo}>
-                        <Text style={styles.sampleBookTitle} numberOfLines={1}>
-                          {book.titolo}
-                        </Text>
-                        <Text style={styles.sampleBookSeller}>
-                          da {book.seller_username}
-                        </Text>
-                      </View>
-                      <View style={styles.sampleBookRight}>
-                        {book.is_volume_unico && (
-                          <View style={styles.volumeUnicoBadge}>
-                            <Text style={styles.volumeUnicoText}>Vol. Unico</Text>
-                          </View>
-                        )}
-                        <Text style={styles.sampleBookPrice}>€{book.prezzo_vendita.toFixed(2)}</Text>
-                      </View>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-
-              {/* Top Sellers */}
-              {classData.top_sellers.length > 0 && (
-                <View style={styles.topSellersContainer}>
-                  <Text style={styles.topSellersTitle}>Top venditori:</Text>
-                  <View style={styles.topSellersList}>
-                    {classData.top_sellers.map((seller, idx) => (
-                      <View key={idx} style={styles.topSellerBadge}>
-                        <Text style={styles.topSellerName}>{seller.username}</Text>
-                        <Text style={styles.topSellerBooks}>({seller.books_count})</Text>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-              )}
+                  <Text style={styles.sampleBookPrice}>€{book.prezzo_vendita?.toFixed(2)}</Text>
+                </TouchableOpacity>
+              ))}
             </View>
-          ))}
+          )}
+
+          {/* Sell Section */}
+          {classCompatibility.vendere && classCompatibility.vendere.totale > 0 && (
+            <View style={styles.classCard}>
+              <View style={[styles.bookFlowHeader, { backgroundColor: '#2196F3', marginBottom: 12 }]}>
+                <Ionicons name="arrow-up-circle" size={18} color="#fff" />
+                <Text style={styles.bookFlowHeaderText}>{classCompatibility.vendere.titolo}</Text>
+              </View>
+              <View style={styles.compatSummaryRow}>
+                <View style={styles.compatSummaryStat}>
+                  <Text style={[styles.compatSummaryNumber, { color: '#2196F3' }]}>
+                    {classCompatibility.vendere.totale}
+                  </Text>
+                  <Text style={styles.compatSummaryLabel}>Libri{'\n'}vendibili</Text>
+                </View>
+                <View style={styles.compatSummaryDivider} />
+                <View style={styles.compatSummaryStat}>
+                  <Text style={[styles.compatSummaryNumber, { color: '#2196F3' }]}>
+                    {classCompatibility.vendere.studenti_interessati}
+                  </Text>
+                  <Text style={styles.compatSummaryLabel}>Studenti{'\n'}in 1ª</Text>
+                </View>
+              </View>
+              <Text style={styles.compatMessage}>{classCompatibility.vendere.descrizione}</Text>
+            </View>
+          )}
         </View>
       )}
 
@@ -930,5 +886,18 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#666',
     marginLeft: 4,
+  },
+  // Book Flow Header styles
+  bookFlowHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+    borderRadius: 8,
+    gap: 8,
+  },
+  bookFlowHeaderText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
 });
