@@ -424,6 +424,66 @@ export default function RadarScreen() {
                   </View>
                 </View>
 
+                {/* Libri Vendibili */}
+                {compatibility.vendere?.libri_vendibili && compatibility.vendere.libri_vendibili.length > 0 && (
+                  <View style={styles.classCard}>
+                    <Text style={[styles.sampleBooksTitle, { color: '#2196F3' }]}>
+                      Libri che {child?.nome_figlio} può vendere alla {compatibility.vendere?.classe_destinazione}ª:
+                    </Text>
+                    {compatibility.vendere.libri_vendibili.map((book: any, idx: number) => (
+                      <View key={idx} style={styles.sampleBookItem}>
+                        <View style={styles.sampleBookInfo}>
+                          <Text style={styles.sampleBookTitle} numberOfLines={1}>
+                            {book.disciplina}
+                          </Text>
+                          <Text style={styles.sampleBookSeller} numberOfLines={1}>
+                            {book.titolo}
+                          </Text>
+                        </View>
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <Text style={[styles.sampleBookPrice, { color: '#2196F3' }]}>
+                            €{book.prezzo_consigliato?.toFixed(2)}
+                          </Text>
+                          <Text style={{ fontSize: 10, color: '#4CAF50' }}>
+                            vendibile
+                          </Text>
+                        </View>
+                      </View>
+                    ))}
+                    {/* Link per vendere */}
+                    <TouchableOpacity
+                      style={[styles.viewSellersButton, { backgroundColor: '#2196F3', marginTop: 12 }]}
+                      onPress={() => router.push('/(tabs)/sell')}
+                    >
+                      <Ionicons name="pricetag" size={18} color="#fff" />
+                      <Text style={styles.viewSellersButtonText}>Vendi questi libri</Text>
+                      <Ionicons name="arrow-forward" size={14} color="#fff" />
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {/* Libri NON Vendibili (edizione cambiata) */}
+                {compatibility.vendere?.libri_non_vendibili && compatibility.vendere.libri_non_vendibili.length > 0 && (
+                  <View style={[styles.classCard, { borderLeftColor: '#f44336', borderLeftWidth: 3 }]}>
+                    <Text style={[styles.sampleBooksTitle, { color: '#f44336' }]}>
+                      Libri NON vendibili (edizione cambiata):
+                    </Text>
+                    {compatibility.vendere.libri_non_vendibili.map((book: any, idx: number) => (
+                      <View key={idx} style={styles.sampleBookItem}>
+                        <View style={styles.sampleBookInfo}>
+                          <Text style={styles.sampleBookTitle} numberOfLines={1}>
+                            {book.disciplina}
+                          </Text>
+                          <Text style={[styles.sampleBookSeller, { color: '#f44336' }]} numberOfLines={1}>
+                            {book.status}
+                          </Text>
+                        </View>
+                        <Ionicons name="close-circle" size={20} color="#f44336" />
+                      </View>
+                    ))}
+                  </View>
+                )}
+
                 {/* Libri Usati Disponibili */}
                 {compatibility.comprare?.libri_usati && compatibility.comprare.libri_usati.length > 0 && (
                   <View style={styles.classCard}>
