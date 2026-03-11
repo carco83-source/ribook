@@ -45,6 +45,18 @@ const getBookAuthor = (book: Book): string => book.autore || book.autori || 'N/A
 const getBookSubject = (book: Book): string => book.materia || book.disciplina || 'N/A';
 const getBookPrice = (book: Book): number => book.prezzo_ministeriale || book.prezzo_copertina || 0;
 
+interface Listing {
+  id: string;
+  book_titolo: string;
+  prezzo: number;
+  condizione: string;
+  seller_name?: string;
+  seller_rating?: number;
+  created_at?: string;
+  note?: string;
+  punto_scambio?: string;
+}
+
 export default function SearchScreen() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
@@ -60,6 +72,12 @@ export default function SearchScreen() {
   const [selectedChild, setSelectedChild] = useState<ChildProfile | null>(null);
   const [showChildPicker, setShowChildPicker] = useState(false);
   const [targetClasse, setTargetClasse] = useState<number | null>(null);
+
+  // Listings modal
+  const [showListingsModal, setShowListingsModal] = useState(false);
+  const [selectedBook, setSelectedBook] = useState<Book | null>(null);
+  const [bookListings, setBookListings] = useState<Listing[]>([]);
+  const [loadingListings, setLoadingListings] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -146,24 +164,64 @@ export default function SearchScreen() {
   const handleAddRequest = async (book: Book) => {
     if (!userId) return;
 
-    if (userRequests.includes(book.id)) {
+    // First, show available listings for this book
+    setSelectedBook(book);
+    setShowListingsModal(true);
+    setLoadingListings(true);
+
+    try {
+      const response = await axios.get(`${API_URL}/api/listings/book/${book.isbn || book.id}`);
+      setBookListings(response.data.listings || []);
+    } catch (error) {
+      console.error('Error loading listings:', error);
+      setBookListings([]);
+    } finally {
+      setLoadingListings(false);
+    }
+  };
+
+  const handleCreateRequest = async () => {
+    if (!userId || !selectedBook) return;
+
+    if (userRequests.includes(selectedBook.id)) {
       Alert.alert('Info', 'Stai già cercando questo libro');
       return;
     }
 
     try {
       await axios.post(`${API_URL}/api/requests?user_id=${userId}`, {
-        book_id: book.id,
+        book_id: selectedBook.id,
       });
 
-      setUserRequests([...userRequests, book.id]);
+      setUserRequests([...userRequests, selectedBook.id]);
+      setShowListingsModal(false);
       Alert.alert(
-        'Aggiunto!',
-        `"${book.titolo}" è stato aggiunto alla tua lista di ricerca.`
+        'Richiesta creata!',
+        `Verrai notificato quando qualcuno metterà in vendita "${selectedBook.titolo}".`
       );
     } catch (error) {
       console.error('Error adding request:', error);
-      Alert.alert('Errore', 'Impossibile aggiungere la richiesta');
+      Alert.alert('Errore', 'Impossibile creare la richiesta');
+    }
+  };
+
+  const handleSelectListing = (listing: Listing) => {
+    // Navigate to listing detail page
+    setShowListingsModal(false);
+    router.push(`/listing/${listing.id}`);
+  };
+
+  const getConditionColor = (condizione: string): string => {
+    switch (condizione?.toLowerCase()) {
+      case 'perfetto':
+        return '#4CAF50';
+      case 'buono':
+        return '#FF9800';
+      case 'usato':
+      case 'molto_usato':
+        return '#f44336';
+      default:
+        return '#666';
     }
   };
 
@@ -418,6 +476,117 @@ export default function SearchScreen() {
             )}
           </View>
         </TouchableOpacity>
+      </Modal>
+
+      {/* Listings Modal */}
+      <Modal
+        visible={showListingsModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowListingsModal(false)}
+      >
+        <View style={styles.listingsModalOverlay}>
+          <View style={styles.listingsModalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Annunci Disponibili</Text>
+              <TouchableOpacity onPress={() => setShowListingsModal(false)}>
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+
+            {selectedBook && (
+              <View style={styles.selectedBookHeader}>
+                <Text style={styles.selectedBookTitle} numberOfLines={2}>
+                  {selectedBook.titolo}
+                </Text>
+                <Text style={styles.selectedBookSubject}>
+                  {getBookSubject(selectedBook)}
+                </Text>
+                <Text style={styles.selectedBookNewPrice}>
+                  Prezzo nuovo: €{getBookPrice(selectedBook).toFixed(2)}
+                </Text>
+              </View>
+            )}
+
+            {loadingListings ? (
+              <View style={styles.listingsLoading}>
+                <ActivityIndicator size="large" color="#1a472a" />
+                <Text style={styles.listingsLoadingText}>Cercando annunci...</Text>
+              </View>
+            ) : bookListings.length > 0 ? (
+              <FlatList
+                data={bookListings}
+                keyExtractor={(item) => item.id}
+                style={styles.listingsList}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.listingCard}
+                    onPress={() => handleSelectListing(item)}
+                  >
+                    <View style={styles.listingHeader}>
+                      <View style={styles.listingSellerInfo}>
+                        <Ionicons name="person-circle" size={32} color="#1a472a" />
+                        <View>
+                          <Text style={styles.listingSellerName}>
+                            {item.seller_name || 'Venditore'}
+                          </Text>
+                          <View style={styles.listingRating}>
+                            <Ionicons name="star" size={12} color="#FFD700" />
+                            <Text style={styles.listingRatingText}>
+                              {(item.seller_rating || 5).toFixed(1)}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                      <View style={styles.listingPriceContainer}>
+                        <Text style={styles.listingPrice}>€{item.prezzo?.toFixed(2)}</Text>
+                        <View style={[
+                          styles.listingConditionBadge,
+                          { backgroundColor: getConditionColor(item.condizione) }
+                        ]}>
+                          <Text style={styles.listingConditionText}>
+                            {item.condizione?.charAt(0).toUpperCase() + item.condizione?.slice(1)}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                    {item.punto_scambio && (
+                      <View style={styles.listingLocation}>
+                        <Ionicons name="location-outline" size={14} color="#666" />
+                        <Text style={styles.listingLocationText}>{item.punto_scambio}</Text>
+                      </View>
+                    )}
+                    {item.note && (
+                      <Text style={styles.listingNote} numberOfLines={2}>
+                        "{item.note}"
+                      </Text>
+                    )}
+                    <View style={styles.listingAction}>
+                      <Text style={styles.listingActionText}>Vedi dettagli</Text>
+                      <Ionicons name="chevron-forward" size={16} color="#1a472a" />
+                    </View>
+                  </TouchableOpacity>
+                )}
+              />
+            ) : (
+              <View style={styles.noListingsContainer}>
+                <Ionicons name="book-outline" size={64} color="#ccc" />
+                <Text style={styles.noListingsTitle}>Nessun annuncio disponibile</Text>
+                <Text style={styles.noListingsSubtext}>
+                  Al momento non ci sono venditori per questo libro.
+                  Puoi creare una richiesta e verrai notificato quando sarà disponibile.
+                </Text>
+                <TouchableOpacity
+                  style={styles.createRequestButton}
+                  onPress={handleCreateRequest}
+                >
+                  <Ionicons name="notifications-outline" size={20} color="#fff" />
+                  <Text style={styles.createRequestButtonText}>Crea Richiesta</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        </View>
       </Modal>
     </View>
   );
@@ -718,6 +887,171 @@ const styles = StyleSheet.create({
   },
   addChildButtonText: {
     color: '#fff',
+    fontWeight: 'bold',
+  },
+  // Listings Modal Styles
+  listingsModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  listingsModalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '90%',
+    paddingBottom: 40,
+  },
+  selectedBookHeader: {
+    padding: 16,
+    backgroundColor: '#f8f9fa',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  selectedBookTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  selectedBookSubject: {
+    fontSize: 13,
+    color: '#666',
+    marginTop: 4,
+  },
+  selectedBookNewPrice: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 4,
+  },
+  listingsLoading: {
+    padding: 48,
+    alignItems: 'center',
+  },
+  listingsLoadingText: {
+    marginTop: 12,
+    color: '#666',
+    fontSize: 14,
+  },
+  listingsList: {
+    maxHeight: 400,
+  },
+  listingCard: {
+    margin: 12,
+    marginBottom: 0,
+    padding: 16,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  listingHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  listingSellerInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  listingSellerName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginLeft: 8,
+  },
+  listingRating: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  listingRatingText: {
+    fontSize: 12,
+    color: '#666',
+    marginLeft: 2,
+  },
+  listingPriceContainer: {
+    alignItems: 'flex-end',
+  },
+  listingPrice: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1a472a',
+  },
+  listingConditionBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+    marginTop: 4,
+  },
+  listingConditionText: {
+    fontSize: 11,
+    color: '#fff',
+    fontWeight: '600',
+  },
+  listingLocation: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+  },
+  listingLocationText: {
+    fontSize: 12,
+    color: '#666',
+    marginLeft: 4,
+  },
+  listingNote: {
+    fontSize: 12,
+    color: '#666',
+    fontStyle: 'italic',
+    marginTop: 8,
+  },
+  listingAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+  },
+  listingActionText: {
+    fontSize: 13,
+    color: '#1a472a',
+    fontWeight: '600',
+  },
+  noListingsContainer: {
+    padding: 32,
+    alignItems: 'center',
+  },
+  noListingsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginTop: 16,
+  },
+  noListingsSubtext: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 8,
+    lineHeight: 20,
+  },
+  createRequestButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1a472a',
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 12,
+    marginTop: 24,
+    gap: 8,
+  },
+  createRequestButtonText: {
+    color: '#fff',
+    fontSize: 16,
     fontWeight: 'bold',
   },
 });

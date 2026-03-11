@@ -1005,6 +1005,47 @@ async def get_listings(classe: Optional[str] = None, materia: Optional[str] = No
         listing.pop('_id', None)
     return listings
 
+@api_router.get("/listings/book/{book_id}")
+async def get_listings_for_book(book_id: str, stato: str = "disponibile"):
+    """Get all available listings for a specific book"""
+    # Find book by ID or ISBN
+    book = await db.books.find_one({"$or": [{"id": book_id}, {"isbn": book_id}]})
+    if not book:
+        return {"listings": [], "book": None, "message": "Libro non trovato"}
+    
+    # Find listings for this book
+    query = {
+        "$or": [
+            {"book_id": book.get("id")},
+            {"book_isbn": book.get("isbn")}
+        ],
+        "stato": stato
+    }
+    
+    projection = {"foto_base64": 0}
+    listings = await db.listings.find(query, projection).sort("created_at", -1).to_list(50)
+    
+    # Enrich with seller info
+    for listing in listings:
+        listing.pop('_id', None)
+        # Get seller info
+        seller = await db.users.find_one({"id": listing.get("seller_id")})
+        if seller:
+            listing["seller_name"] = seller.get("nome", seller.get("username", "Utente"))
+            listing["seller_rating"] = seller.get("rating", 5.0)
+    
+    return {
+        "listings": listings,
+        "book": {
+            "id": book.get("id"),
+            "titolo": book.get("titolo"),
+            "disciplina": book.get("disciplina"),
+            "prezzo_copertina": book.get("prezzo_copertina") or book.get("prezzo_ministeriale"),
+            "isbn": book.get("isbn")
+        },
+        "total": len(listings)
+    }
+
 @api_router.get("/listings/user/{user_id}")
 async def get_user_listings(user_id: str, limit: int = 50):
     # Exclude foto_base64 from list view
