@@ -1486,154 +1486,248 @@ async def get_class_compatibility(user_id: str):
             "ciclo_info": f"{'Scuola Media' if user_tipo == 'primo_grado' else 'Superiore'} - {cycle_name.capitalize()}"
         }
     }
-    libri_acquistabili_usato = []
-    libri_da_comprare_nuovo = []
+
+
+@api_router.get("/profiles/{user_id}/children/{child_id}/compatibility")
+async def get_child_compatibility(user_id: str, child_id: str):
+    """
+    Calcola la compatibilità libri per un profilo figlio specifico.
+    Riutilizza la stessa logica dell'endpoint class-compatibility.
+    """
+    import re
     
-    # Set di ISBN già trovati usati
-    isbn_trovati_usato = set()
+    # Trova l'utente e il profilo figlio
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
     
-    for listing in all_listings:
-        isbn = listing.get("book_isbn", "") or listing.get("book_id", "")
-        is_volume_unico = listing.get("is_volume_unico", False)
-        
-        # IGNORA volumi unici se NON sei in 1ª (li hai già!)
-        if is_volume_unico and user_classe > 1:
-            continue
-        
-        # Controlla se questo ISBN è nella TUA lista annuale
-        if isbn in my_libri_annuali_isbn:
-            isbn_trovati_usato.add(isbn)
-            libri_acquistabili_usato.append({
-                "listing_id": listing.get("id"),
-                "isbn": isbn,
-                "titolo": listing.get("book_titolo", "")[:60],
-                "prezzo_vendita": listing.get("prezzo_vendita", 0),
-                "condizione": listing.get("condizione", ""),
-                "seller_username": listing.get("seller_info", {}).get("username", ""),
-                "seller_classe": listing.get("seller_info", {}).get("classe", "")
-            })
-        
-        # Se sei in 1ª, puoi comprare anche volumi unici usati
-        if is_volume_unico and user_classe == 1 and isbn in my_volumi_unici_isbn:
-            isbn_trovati_usato.add(isbn)
-            libri_acquistabili_usato.append({
-                "listing_id": listing.get("id"),
-                "isbn": isbn,
-                "titolo": listing.get("book_titolo", "")[:60] + " (Vol.Unico)",
-                "prezzo_vendita": listing.get("prezzo_vendita", 0),
-                "condizione": listing.get("condizione", ""),
-                "seller_username": listing.get("seller_info", {}).get("username", ""),
-                "seller_classe": listing.get("seller_info", {}).get("classe", ""),
-                "is_volume_unico": True
-            })
+    profili_figli = user.get("profili_figli", [])
+    child_profile = next((p for p in profili_figli if p.get("id") == child_id), None)
     
-    # === STEP 4: Calcola cosa devi comprare NUOVO ===
-    # Libri annuali che ti servono ma non hai trovato usato
-    for book in my_books_needed:
-        isbn = book.get("isbn", "")
-        is_unico = book.get("is_volume_unico", False)
-        
-        # Volumi unici: nuovo solo se sei in 1ª
-        if is_unico:
-            if user_classe == 1 and isbn not in isbn_trovati_usato:
-                libri_da_comprare_nuovo.append({
-                    "isbn": isbn,
-                    "titolo": book.get("titolo", "")[:60] + " (Vol.Unico)",
-                    "prezzo": book.get("prezzo_copertina", 0),
-                    "motivo": "Volume unico - si compra solo in 1ª"
+    if not child_profile:
+        raise HTTPException(status_code=404, detail="Profilo figlio non trovato")
+    
+    # Estrai i dati del profilo figlio
+    child_classe = int(child_profile.get("classe", 1))
+    child_tipo = child_profile.get("tipo_scuola", "primo_grado")
+    child_codice_scuola = child_profile.get("codice_scuola", "")
+    child_nome = child_profile.get("nome_figlio", "Figlio")
+    child_scuola = child_profile.get("scuola", "")
+    
+    if not child_codice_scuola:
+        return {
+            "error": "Codice scuola non configurato per questo profilo",
+            "child_name": child_nome,
+            "child_classe": child_classe
+        }
+    
+    # Funzioni helper (stesse dell'altro endpoint)
+    def get_series_name(title: str) -> str:
+        title = title.upper().strip()
+        title = re.sub(r'\s*V\.?\s*\d+', '', title, flags=re.IGNORECASE)
+        if '+' in title:
+            title = title.split('+')[0]
+        title = re.sub(r'\s*\(LDM.*?\)', '', title, flags=re.IGNORECASE)
+        title = re.sub(r'\s*-?\s*(VOLUME|VOL\.?)\s*\d+.*', '', title, flags=re.IGNORECASE)
+        title = re.sub(r'\s*-\s*\d+.*', '', title)
+        title = re.sub(r'\s+(LE\s+SCIENZE)\s+\d+', r' \1', title)
+        title = re.sub(r'\s+\d+\s*$', '', title)
+        words = title.split()
+        if len(words) > 1:
+            anno_specific = {'ARITMETICA', 'ALGEBRA', 'GEOMETRIA', 'ANTOLOGIA', 'LETTERATURA'}
+            words = [w for w in words if w not in anno_specific]
+        title = ' '.join(words).strip()
+        title = re.sub(r'\s*-\s*$', '', title).strip()
+        return title
+    
+    def has_edition_marker(title: str) -> str:
+        title = title.upper()
+        match = re.search(r'(\d+ED\.?|EDIZIONE\s+\w+|ED\.\s*\w+)', title)
+        return match.group(1) if match else ""
+    
+    def same_series(book1: dict, book2: dict) -> bool:
+        if book1.get("editore", "").upper() != book2.get("editore", "").upper():
+            return False
+        t1 = book1.get("titolo", "").upper()
+        t2 = book2.get("titolo", "").upper()
+        ed1 = has_edition_marker(t1)
+        ed2 = has_edition_marker(t2)
+        if ed1 != ed2:
+            return False
+        series1 = get_series_name(t1)
+        series2 = get_series_name(t2)
+        if series1 == series2:
+            return True
+        words1 = set(series1.split())
+        words2 = set(series2.split())
+        words1.discard('-')
+        words2.discard('-')
+        if not words1 or not words2:
+            return False
+        common = words1.intersection(words2)
+        min_words = min(len(words1), len(words2))
+        similarity = len(common) / max(len(words1), len(words2))
+        return similarity >= 0.7 and len(common) >= min(2, min_words)
+    
+    # Gestione cicli
+    def get_cycle_info(classe: int, tipo_scuola: str):
+        if tipo_scuola == "primo_grado":
+            return (1, 3, "media")
+        else:
+            if classe <= 2:
+                return (1, 2, "biennio")
+            else:
+                return (3, 5, "triennio")
+    
+    cycle_min, cycle_max, cycle_name = get_cycle_info(child_classe, child_tipo)
+    classe_precedente = child_classe - 1 if child_classe > cycle_min else None
+    classe_successiva = child_classe + 1 if child_classe < cycle_max else None
+    
+    # Carica libri
+    my_books = await db.books.find({
+        "scuole_adottanti": child_codice_scuola,
+        "anni_corso": child_classe,
+        "is_volume_unico": {"$ne": True}
+    }).to_list(100)
+    
+    libri_prec = []
+    if classe_precedente:
+        libri_prec = await db.books.find({
+            "scuole_adottanti": child_codice_scuola,
+            "anni_corso": classe_precedente,
+            "is_volume_unico": {"$ne": True}
+        }).to_list(100)
+    
+    libri_succ = []
+    if classe_successiva:
+        libri_succ = await db.books.find({
+            "scuole_adottanti": child_codice_scuola,
+            "anni_corso": classe_successiva,
+            "is_volume_unico": {"$ne": True}
+        }).to_list(100)
+    
+    # Organizza per disciplina
+    def books_by_discipline(books):
+        result = {}
+        for b in books:
+            disc = b.get("disciplina", "").strip().upper()
+            if disc and disc not in result:
+                result[disc] = {
+                    "isbn": b.get("isbn", ""),
+                    "titolo": b.get("titolo", ""),
+                    "editore": b.get("editore", "").strip().upper(),
+                    "autori": b.get("autori", ""),
+                    "prezzo": b.get("prezzo_copertina", 0),
+                    "titolo_base": get_series_name(b.get("titolo", ""))
+                }
+        return result
+    
+    my_books_disc = books_by_discipline(my_books)
+    prec_books_disc = books_by_discipline(libri_prec)
+    succ_books_disc = books_by_discipline(libri_succ)
+    
+    # Calcola vendere
+    vendibili = []
+    non_vendibili = []
+    
+    for disc, my_book in my_books_disc.items():
+        if disc in prec_books_disc:
+            book_prec = prec_books_disc[disc]
+            if same_series(my_book, book_prec):
+                vendibili.append({
+                    "disciplina": disc,
+                    "titolo": my_book["titolo"][:50],
+                    "editore": my_book["editore"],
+                    "prezzo_consigliato": round(my_book["prezzo"] * 0.5, 2),
+                    "status": "VENDIBILE"
+                })
+            else:
+                non_vendibili.append({
+                    "disciplina": disc,
+                    "titolo_vecchio": my_book["titolo"][:40],
+                    "titolo_nuovo": book_prec["titolo"][:40],
+                    "status": "EDIZIONE CAMBIATA"
+                })
+    
+    # Calcola comprare
+    comprare_usato = []
+    comprare_nuovo = []
+    
+    for disc, my_book in my_books_disc.items():
+        if disc in succ_books_disc:
+            book_succ = succ_books_disc[disc]
+            if same_series(my_book, book_succ):
+                comprare_usato.append({
+                    "disciplina": disc,
+                    "titolo": my_book["titolo"][:50],
+                    "editore": my_book["editore"],
+                    "prezzo_nuovo": my_book["prezzo"],
+                    "prezzo_usato": round(my_book["prezzo"] * 0.5, 2),
+                    "risparmio": round(my_book["prezzo"] * 0.5, 2),
+                    "status": "USATO DISPONIBILE"
+                })
+            else:
+                comprare_nuovo.append({
+                    "disciplina": disc,
+                    "titolo": my_book["titolo"][:50],
+                    "prezzo": my_book["prezzo"],
+                    "motivo": f"Edizione diversa dalla {classe_successiva}ª"
                 })
         else:
-            # Libro annuale non trovato usato
-            if isbn not in isbn_trovati_usato:
-                libri_da_comprare_nuovo.append({
-                    "isbn": isbn,
-                    "titolo": book.get("titolo", "")[:60],
-                    "prezzo": book.get("prezzo_copertina", 0),
-                    "motivo": "Nessun usato disponibile" if isbn not in isbn_trovati_usato else "Edizione cambiata"
-                })
+            comprare_nuovo.append({
+                "disciplina": disc,
+                "titolo": my_book["titolo"][:50],
+                "prezzo": my_book["prezzo"],
+                "motivo": f"Materia non in {classe_successiva}ª" if classe_successiva else "Fine ciclo"
+            })
     
-    # === STEP 5: Calcola cosa puoi VENDERE ===
-    # I tuoi libri ANNUALI dell'anno scorso (classe-1) a chi entra in quella classe
-    libri_vendibili = []
-    
-    if classe_precedente:
-        # Trova libri per la classe precedente
-        libri_classe_prec = await db.books.find({
-            "tipi_scuola": "MM" if user_tipo == "primo_grado" else {"$in": ["NO", "NT"]},
-            "anni_corso": classe_precedente
-        }).to_list(200)
-        
-        for book in libri_classe_prec:
-            if not book.get("is_volume_unico", False):  # Solo annuali!
-                libri_vendibili.append({
-                    "isbn": book.get("isbn", ""),
-                    "titolo": book.get("titolo", "")[:60],
-                    "prezzo_consigliato": round(book.get("prezzo_copertina", 0) * 0.5, 2),
-                    "destinatari": f"Studenti che entrano in {classe_precedente}ª"
-                })
-    
-    # === STEP 6: Conta studenti interessati (potenziali acquirenti) ===
-    # Conta utenti nella classe precedente alla tua (che potrebbero comprare i tuoi libri vecchi)
-    studenti_interessati = 0
-    if classe_precedente:
-        studenti_interessati = await db.users.count_documents({
-            "scuola": user_scuola,
-            "classe": str(classe_precedente)
-        })
-    
-    # === RISULTATO FINALE ===
-    totale_libri_necessari = len(my_libri_annuali_isbn)
-    if user_classe == 1:
-        totale_libri_necessari += len(my_volumi_unici_isbn)
-    
-    usati_trovati = len(set(l["isbn"] for l in libri_acquistabili_usato))
-    nuovi_necessari = len(libri_da_comprare_nuovo)
-    
-    # Calcola risparmio potenziale
-    risparmio_usato = sum(
-        (next((b.get("prezzo_copertina", 0) for b in my_books_needed if b.get("isbn") == l["isbn"]), 0) - l["prezzo_vendita"])
-        for l in libri_acquistabili_usato
-    )
-    
-    costo_nuovi = sum(l["prezzo"] for l in libri_da_comprare_nuovo)
+    # Calcoli finali
+    num_vendibili = len(vendibili)
+    num_non_vendibili = len(non_vendibili)
+    num_usato = len(comprare_usato)
+    num_nuovo = len(comprare_nuovo)
+    risparmio = sum(l["risparmio"] for l in comprare_usato)
+    costo_nuovi = sum(l["prezzo"] for l in comprare_nuovo)
     
     return {
-        "user_classe": user_classe,
-        "user_scuola": user_scuola,
-        "is_prima_media": user_classe == 1,
+        "child_id": child_id,
+        "child_name": child_nome,
+        "child_classe": child_classe,
+        "child_scuola": child_scuola,
+        "codice_scuola": child_codice_scuola,
+        "tipo_scuola": child_tipo,
+        "ciclo": cycle_name,
+        
+        "vendere": {
+            "classe_destinazione": classe_precedente,
+            "totale_vendibili": num_vendibili,
+            "totale_non_vendibili": num_non_vendibili,
+            "libri_vendibili": vendibili,
+            "libri_non_vendibili": non_vendibili
+        },
         
         "comprare": {
-            "titolo": f"Puoi comprare USATO",
-            "descrizione": "Libri annuali con stesso ISBN disponibili" if user_classe > 1 else "Libri disponibili usati",
-            "totale": usati_trovati,
-            "risparmio_stimato": round(risparmio_usato, 2),
-            "libri": libri_acquistabili_usato[:10]  # Top 10
+            "classe_origine": classe_successiva,
+            "totale_usati": num_usato,
+            "risparmio_totale": round(risparmio, 2),
+            "libri_usati": comprare_usato
         },
         
         "nuovi": {
-            "titolo": "Devi comprare NUOVO",
-            "descrizione": "Nessun usato disponibile o edizione cambiata",
-            "totale": nuovi_necessari,
-            "costo_stimato": round(costo_nuovi, 2),
-            "libri": libri_da_comprare_nuovo[:10]  # Top 10
-        },
-        
-        "vendere": {
-            "titolo": f"Puoi vendere a {classe_precedente}ª" if classe_precedente else "Non puoi vendere",
-            "descrizione": f"I tuoi libri annuali di {classe_precedente}ª media" if classe_precedente else "Sei in 1ª, non hai libri da vendere",
-            "totale": len(libri_vendibili),
-            "studenti_interessati": studenti_interessati,
-            "libri": libri_vendibili[:10]  # Top 10
+            "totale": num_nuovo,
+            "costo_totale": round(costo_nuovi, 2),
+            "libri": comprare_nuovo
         },
         
         "summary": {
-            "libri_necessari_totale": totale_libri_necessari,
-            "usati_disponibili": usati_trovati,
-            "nuovi_necessari": nuovi_necessari,
-            "percentuale_usato": round((usati_trovati / totale_libri_necessari * 100), 1) if totale_libri_necessari > 0 else 0,
-            "percentuale_nuovo": round((nuovi_necessari / totale_libri_necessari * 100), 1) if totale_libri_necessari > 0 else 0,
-            "risparmio_totale_stimato": round(risparmio_usato, 2),
-            "nota_volumi_unici": "I volumi unici (Religione, Arte, Ed.Fisica, Musica, Tecnologia, Grammatica) si comprano solo in 1ª media" if user_classe > 1 else "In 1ª media devi comprare anche i volumi unici"
+            "totale_miei_libri": len(my_books_disc),
+            "vendibili": num_vendibili,
+            "non_vendibili": num_non_vendibili,
+            "usati": num_usato,
+            "nuovi": num_nuovo,
+            "risparmio_stimato": round(risparmio, 2),
+            "costo_nuovi": round(costo_nuovi, 2),
+            "ciclo_info": f"{'Scuola Media' if child_tipo == 'primo_grado' else 'Superiore'} - {cycle_name.capitalize()}"
         }
     }
 

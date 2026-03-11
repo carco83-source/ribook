@@ -22,7 +22,7 @@ export default function ProfileScreen() {
   const [userData, setUserData] = useState<any>(null);
   const [stats, setStats] = useState<any>(null);
   const [childProfiles, setChildProfiles] = useState<any[]>([]);
-  const [bookFlow, setBookFlow] = useState<any>(null);
+  const [childrenCompatibility, setChildrenCompatibility] = useState<{[key: string]: any}>({});
 
   useEffect(() => {
     loadUserData();
@@ -47,17 +47,23 @@ export default function ProfileScreen() {
       const statsRes = await axios.get(`${API_URL}/api/users/${userId}/stats`);
       setStats(statsRes.data);
 
-      // Get child profiles
-      const profilesRes = await axios.get(`${API_URL}/api/users/${userId}/profiles`);
-      setChildProfiles(profilesRes.data.filter((p: any) => p.id !== 'main'));
+      // Get child profiles from user data
+      const profili = response.data.profili_figli || [];
+      setChildProfiles(profili);
 
-      // Get class compatibility / book flow data
-      try {
-        const bookFlowRes = await axios.get(`${API_URL}/api/radar/${userId}/class-compatibility`);
-        setBookFlow(bookFlowRes.data);
-      } catch (e) {
-        console.log('Book flow data not available');
+      // Load compatibility for each child profile
+      const compatibilityData: {[key: string]: any} = {};
+      for (const child of profili) {
+        try {
+          const compRes = await axios.get(
+            `${API_URL}/api/profiles/${userId}/children/${child.id}/compatibility`
+          );
+          compatibilityData[child.id] = compRes.data;
+        } catch (e) {
+          console.log(`Failed to load compatibility for ${child.nome_figlio}`);
+        }
       }
+      setChildrenCompatibility(compatibilityData);
 
       setUserData({
         ...response.data,
@@ -152,77 +158,106 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Book Flow Widget - Layout a 3 colonne */}
-      {bookFlow && userData?.classe && (
+      {/* Child Profiles with Book Flow */}
+      {childProfiles.length > 0 && (
         <View style={styles.bookFlowSection}>
-          <Text style={styles.bookFlowTitle}>Flusso Libri</Text>
-          <Text style={styles.bookFlowSubtitle}>
-            Calcolo teorico basato sulle adozioni della tua scuola
-          </Text>
+          <Text style={styles.bookFlowTitle}>Flusso Libri dei tuoi figli</Text>
           
-          <View style={styles.bookFlowContainer}>
-            {/* LEFT - VENDI alla 1ª */}
-            <View style={styles.bookFlowColumn}>
-              <View style={[styles.bookFlowHeader, { backgroundColor: '#2196F3' }]}>
-                <Text style={styles.bookFlowHeaderClass}>
-                  {bookFlow.vendere?.classe_destinazione || 1}ª MEDIA
-                </Text>
-              </View>
-              <View style={styles.bookFlowBody}>
-                <Ionicons name="arrow-up-circle" size={28} color="#2196F3" />
-                <Text style={[styles.bookFlowAction, { color: '#2196F3' }]}>VENDI</Text>
-                <Text style={[styles.bookFlowNumber, { color: '#2196F3' }]}>
-                  {bookFlow.vendere?.totale_vendibili || 0}
-                </Text>
-                <Text style={styles.bookFlowLabel}>libri</Text>
-              </View>
-              {(bookFlow.vendere?.totale_non_vendibili || 0) > 0 && (
-                <Text style={[styles.bookFlowHint, { color: '#f44336' }]}>
-                  {bookFlow.vendere?.totale_non_vendibili} ed. cambiate
-                </Text>
-              )}
-            </View>
-
-            {/* CENTER - TU - NUOVI */}
-            <View style={styles.bookFlowColumn}>
-              <View style={[styles.bookFlowHeader, { backgroundColor: '#1a472a' }]}>
-                <Text style={styles.bookFlowHeaderClass}>{userData.classe}ª MEDIA</Text>
-              </View>
-              <View style={styles.bookFlowBody}>
-                <View style={styles.bookFlowCenterBadge}>
-                  <Text style={styles.bookFlowCenterClass}>TU</Text>
+          {childProfiles.map((child) => {
+            const compatibility = childrenCompatibility[child.id];
+            if (!compatibility) return null;
+            
+            const isMedia = child.tipo_scuola === 'primo_grado';
+            const tipoLabel = isMedia ? 'MEDIA' : 'SUP';
+            
+            return (
+              <View key={child.id} style={styles.childBookFlowCard}>
+                {/* Child Header */}
+                <View style={styles.childHeader}>
+                  <View style={styles.childNameBadge}>
+                    <Ionicons name="person" size={16} color="#fff" />
+                    <Text style={styles.childNameText}>{child.nome_figlio}</Text>
+                  </View>
+                  <Text style={styles.childSchoolText} numberOfLines={1}>
+                    {child.scuola}
+                  </Text>
                 </View>
-                <Text style={[styles.bookFlowAction, { color: '#FF9800' }]}>NUOVI</Text>
-                <Text style={[styles.bookFlowNumber, { color: '#FF9800' }]}>
-                  {bookFlow.nuovi?.totale || 0}
-                </Text>
-                <Text style={styles.bookFlowLabel}>da comprare</Text>
-              </View>
-              <Text style={styles.bookFlowHint}>
-                €{bookFlow.nuovi?.costo_totale?.toFixed(0) || 0}
-              </Text>
-            </View>
+                
+                {/* Three Column Layout */}
+                <View style={styles.bookFlowContainer}>
+                  {/* LEFT - VENDI */}
+                  <View style={styles.bookFlowColumn}>
+                    <View style={[styles.bookFlowHeader, { backgroundColor: '#2196F3' }]}>
+                      <Text style={styles.bookFlowHeaderClass}>
+                        {compatibility.vendere?.classe_destinazione 
+                          ? `${compatibility.vendere.classe_destinazione}ª ${tipoLabel}` 
+                          : 'N/A'}
+                      </Text>
+                    </View>
+                    <View style={styles.bookFlowBody}>
+                      <Ionicons name="arrow-up-circle" size={24} color="#2196F3" />
+                      <Text style={[styles.bookFlowAction, { color: '#2196F3' }]}>VENDI</Text>
+                      <Text style={[styles.bookFlowNumber, { color: '#2196F3' }]}>
+                        {compatibility.vendere?.totale_vendibili || 0}
+                      </Text>
+                      <Text style={styles.bookFlowLabel}>libri</Text>
+                    </View>
+                    {(compatibility.vendere?.totale_non_vendibili || 0) > 0 && (
+                      <Text style={[styles.bookFlowHint, { color: '#f44336' }]}>
+                        {compatibility.vendere?.totale_non_vendibili} ed. cambiate
+                      </Text>
+                    )}
+                  </View>
 
-            {/* RIGHT - COMPRA dalla 3ª */}
-            <View style={styles.bookFlowColumn}>
-              <View style={[styles.bookFlowHeader, { backgroundColor: '#4CAF50' }]}>
-                <Text style={styles.bookFlowHeaderClass}>
-                  {bookFlow.comprare?.classe_origine || 3}ª MEDIA
-                </Text>
+                  {/* CENTER - TU */}
+                  <View style={styles.bookFlowColumn}>
+                    <View style={[styles.bookFlowHeader, { backgroundColor: '#1a472a' }]}>
+                      <Text style={styles.bookFlowHeaderClass}>
+                        {child.classe}ª {tipoLabel}
+                      </Text>
+                    </View>
+                    <View style={styles.bookFlowBody}>
+                      <View style={styles.bookFlowCenterBadge}>
+                        <Text style={styles.bookFlowCenterClass}>{child.nome_figlio?.charAt(0) || '?'}</Text>
+                      </View>
+                      <Text style={[styles.bookFlowAction, { color: '#FF9800' }]}>NUOVI</Text>
+                      <Text style={[styles.bookFlowNumber, { color: '#FF9800' }]}>
+                        {compatibility.nuovi?.totale || 0}
+                      </Text>
+                      <Text style={styles.bookFlowLabel}>da comprare</Text>
+                    </View>
+                    <Text style={styles.bookFlowHint}>
+                      €{compatibility.nuovi?.costo_totale?.toFixed(0) || 0}
+                    </Text>
+                  </View>
+
+                  {/* RIGHT - COMPRA */}
+                  <View style={styles.bookFlowColumn}>
+                    <View style={[styles.bookFlowHeader, { backgroundColor: '#4CAF50' }]}>
+                      <Text style={styles.bookFlowHeaderClass}>
+                        {compatibility.comprare?.classe_origine 
+                          ? `${compatibility.comprare.classe_origine}ª ${tipoLabel}` 
+                          : 'N/A'}
+                      </Text>
+                    </View>
+                    <View style={styles.bookFlowBody}>
+                      <Ionicons name="cart" size={24} color="#4CAF50" />
+                      <Text style={[styles.bookFlowAction, { color: '#4CAF50' }]}>COMPRA</Text>
+                      <Text style={[styles.bookFlowNumber, { color: '#4CAF50' }]}>
+                        {compatibility.comprare?.totale_usati || 0}
+                      </Text>
+                      <Text style={styles.bookFlowLabel}>usati</Text>
+                    </View>
+                    <Text style={styles.bookFlowHint}>
+                      {compatibility.comprare?.risparmio_totale > 0 
+                        ? `Risparmio €${compatibility.comprare.risparmio_totale.toFixed(0)}`
+                        : 'Fine ciclo'}
+                    </Text>
+                  </View>
+                </View>
               </View>
-              <View style={styles.bookFlowBody}>
-                <Ionicons name="cart" size={28} color="#4CAF50" />
-                <Text style={[styles.bookFlowAction, { color: '#4CAF50' }]}>COMPRA</Text>
-                <Text style={[styles.bookFlowNumber, { color: '#4CAF50' }]}>
-                  {bookFlow.comprare?.totale_usati || 0}
-                </Text>
-                <Text style={styles.bookFlowLabel}>usati</Text>
-              </View>
-              <Text style={styles.bookFlowHint}>
-                Risparmio €{bookFlow.comprare?.risparmio_totale?.toFixed(0) || 0}
-              </Text>
-            </View>
-          </View>
+            );
+          })}
         </View>
       )}
 
@@ -940,5 +975,40 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
     fontStyle: 'italic',
+  },
+  childBookFlowCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    marginBottom: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  childHeader: {
+    backgroundColor: '#f8f9fa',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  childNameBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1a472a',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
+    marginBottom: 6,
+  },
+  childNameText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginLeft: 6,
+  },
+  childSchoolText: {
+    fontSize: 13,
+    color: '#666',
+    marginLeft: 4,
   },
 });
