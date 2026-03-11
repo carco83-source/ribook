@@ -293,69 +293,63 @@ export default function ProfileScreen() {
         </View>
       )}
 
-      {/* School Info - Main profile + Children */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Scuole</Text>
-        
-        {/* Main Profile */}
-        <View style={styles.profileCard}>
-          <View style={styles.profileCardHeader}>
-            <View style={styles.profileBadge}>
-              <Text style={styles.profileBadgeText}>Profilo principale</Text>
-            </View>
-          </View>
-          <View style={styles.infoRow}>
-            <Ionicons name="school-outline" size={20} color="#666" />
-            <Text style={styles.infoText}>{userData?.scuola}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Ionicons name="bookmark-outline" size={20} color="#666" />
-            <Text style={styles.infoText}>
-              Classe {userData?.classe} - Sezione {userData?.sezione}
-            </Text>
-          </View>
-        </View>
-
-        {/* Child Profiles */}
-        {childProfiles.length > 0 && childProfiles.map((profile) => (
-          <View key={profile.id} style={styles.profileCard}>
-            <View style={styles.profileCardHeader}>
-              <View style={[styles.profileBadge, { backgroundColor: '#e8f5e9' }]}>
-                <Text style={[styles.profileBadgeText, { color: '#4CAF50' }]}>
-                  {profile.nome_figlio}
+      {/* School Info - Children Only (Valerio è il genitore, non ha scuola) */}
+      {childProfiles.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Scuole dei figli</Text>
+          
+          {/* Child Profiles */}
+          {childProfiles.map((profile) => (
+            <View key={profile.id} style={styles.profileCard}>
+              <View style={styles.profileCardHeader}>
+                <View style={[styles.profileBadge, { backgroundColor: '#e8f5e9' }]}>
+                  <Text style={[styles.profileBadgeText, { color: '#4CAF50' }]}>
+                    {profile.nome_figlio}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.infoRow}>
+                <Ionicons name="school-outline" size={20} color="#666" />
+                <Text style={styles.infoText}>{profile.scuola}</Text>
+              </View>
+              <View style={styles.infoRow}>
+                <Ionicons name="bookmark-outline" size={20} color="#666" />
+                <Text style={styles.infoText}>
+                  Classe {profile.classe} - Sezione {profile.sezione}
+                </Text>
+              </View>
+              <View style={styles.infoRow}>
+                <Ionicons name="school" size={20} color="#666" />
+                <Text style={styles.infoText}>
+                  {profile.tipo_scuola === 'primo_grado' ? 'Scuola Media' : 'Scuola Superiore'}
                 </Text>
               </View>
             </View>
-            <View style={styles.infoRow}>
-              <Ionicons name="school-outline" size={20} color="#666" />
-              <Text style={styles.infoText}>{profile.scuola}</Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Ionicons name="bookmark-outline" size={20} color="#666" />
-              <Text style={styles.infoText}>
-                Classe {profile.classe} - Sezione {profile.sezione}
-              </Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Ionicons name="school" size={20} color="#666" />
-              <Text style={styles.infoText}>
-                {profile.tipo_scuola === 'primo_grado' ? 'Scuola Media' : 'Scuola Superiore'}
-              </Text>
-            </View>
-          </View>
-        ))}
+          ))}
 
-        {/* Add Child Profile Button */}
-        <TouchableOpacity 
-          style={styles.addChildButton}
-          onPress={() => router.push('/profiles/manage')}
-        >
-          <Ionicons name="add-circle-outline" size={20} color="#1a472a" />
-          <Text style={styles.addChildButtonText}>
-            {childProfiles.length > 0 ? 'Gestisci profili figli' : 'Aggiungi profilo figlio'}
-          </Text>
-        </TouchableOpacity>
-      </View>
+          {/* Add Child Profile Button */}
+          <TouchableOpacity 
+            style={styles.addChildButton}
+            onPress={() => router.push('/profiles/manage')}
+          >
+            <Ionicons name="add-circle-outline" size={20} color="#1a472a" />
+            <Text style={styles.addChildButtonText}>Gestisci profili figli</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Add first child if no children */}
+      {childProfiles.length === 0 && (
+        <View style={styles.section}>
+          <TouchableOpacity 
+            style={styles.addChildButton}
+            onPress={() => router.push('/profiles/manage')}
+          >
+            <Ionicons name="add-circle-outline" size={20} color="#1a472a" />
+            <Text style={styles.addChildButtonText}>Aggiungi profilo figlio</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Premium Section */}
       {!userData?.isPremium && (
