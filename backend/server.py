@@ -1297,8 +1297,31 @@ async def get_class_compatibility(user_id: str):
     if not codice_scuola:
         return {"error": "Codice scuola non trovato", "user_classe": user_classe}
     
-    classe_precedente = user_classe - 1 if user_classe > 1 else None
-    classe_successiva = user_classe + 1 if user_classe <= 3 else None
+    # === GESTIONE CICLI SCOLASTICI ===
+    # Scuola media (primo grado): ciclo unico 1-2-3
+    # Scuola superiore (secondo grado): 
+    #   - Biennio: 1-2
+    #   - Triennio: 3-4-5
+    
+    def get_cycle_info(classe: int, tipo_scuola: str):
+        """
+        Restituisce info sul ciclo: (classe_min, classe_max, nome_ciclo)
+        """
+        if tipo_scuola == "primo_grado":
+            # Scuola media: ciclo unico 1-2-3
+            return (1, 3, "media")
+        else:
+            # Scuola superiore
+            if classe <= 2:
+                return (1, 2, "biennio")
+            else:
+                return (3, 5, "triennio")
+    
+    cycle_min, cycle_max, cycle_name = get_cycle_info(user_classe, user_tipo)
+    
+    # Classi adiacenti NELLO STESSO CICLO
+    classe_precedente = user_classe - 1 if user_classe > cycle_min else None
+    classe_successiva = user_classe + 1 if user_classe < cycle_max else None
     
     # === LIBRI DELLA MIA SCUOLA per ogni classe ===
     
@@ -1405,14 +1428,14 @@ async def get_class_compatibility(user_id: str):
                     "disciplina": disc,
                     "titolo": my_book["titolo"][:50],
                     "prezzo": my_book["prezzo"],
-                    "motivo": f"Edizione diversa dalla 3ª"
+                    "motivo": f"Edizione diversa dalla {classe_successiva}ª"
                 })
         else:
             comprare_nuovo.append({
                 "disciplina": disc,
                 "titolo": my_book["titolo"][:50],
                 "prezzo": my_book["prezzo"],
-                "motivo": "Materia non in 3ª"
+                "motivo": f"Materia non in {classe_successiva}ª" if classe_successiva else "Fine ciclo"
             })
     
     # === CALCOLI FINALI ===
@@ -1428,6 +1451,8 @@ async def get_class_compatibility(user_id: str):
         "user_classe": user_classe,
         "scuola": user.get("scuola", ""),
         "codice_scuola": codice_scuola,
+        "tipo_scuola": user_tipo,
+        "ciclo": cycle_name,
         
         "vendere": {
             "classe_destinazione": classe_precedente,
@@ -1452,12 +1477,13 @@ async def get_class_compatibility(user_id: str):
         
         "summary": {
             "totale_miei_libri": len(my_books_disc),
-            "vendibili_1a": num_vendibili,
-            "non_vendibili_1a": num_non_vendibili,
-            "usati_3a": num_usato,
+            "vendibili": num_vendibili,
+            "non_vendibili": num_non_vendibili,
+            "usati": num_usato,
             "nuovi": num_nuovo,
             "risparmio_stimato": round(risparmio, 2),
-            "costo_nuovi": round(costo_nuovi, 2)
+            "costo_nuovi": round(costo_nuovi, 2),
+            "ciclo_info": f"{'Scuola Media' if user_tipo == 'primo_grado' else 'Superiore'} - {cycle_name.capitalize()}"
         }
     }
     libri_acquistabili_usato = []
