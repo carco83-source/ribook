@@ -88,17 +88,54 @@ export default function SellScreen() {
   const [showListingForm, setShowListingForm] = useState(false);
   
   // Form fields
-  const [listingCondition, setListingCondition] = useState('buono');
-  const [listingPrice, setListingPrice] = useState('');
   const [listingPhotos, setListingPhotos] = useState<string[]>([]);
   const [hasWritings, setHasWritings] = useState(false);
   const [hasHighlights, setHasHighlights] = useState(false);
   const [hasFolds, setHasFolds] = useState(false);
-  const [coverCondition, setCoverCondition] = useState('buona');
-  const [pagesCondition, setPagesCondition] = useState('buone');
+  const [coverCondition, setCoverCondition] = useState('perfetta');
+  const [pagesCondition, setPagesCondition] = useState('perfette');
   const [selectedBookshop, setSelectedBookshop] = useState('');
   const [notes, setNotes] = useState('');
   const [creatingListing, setCreatingListing] = useState(false);
+
+  // Calcolo automatico condizione e prezzo
+  const calculateCondition = () => {
+    // Sistema a punti: si parte da 100 e si sottraggono punti per ogni difetto
+    let score = 100;
+    
+    // Difetti
+    if (hasWritings) score -= 20;      // Scritte a penna/matita
+    if (hasHighlights) score -= 15;    // Evidenziature
+    if (hasFolds) score -= 10;         // Pieghe/Orecchie
+    
+    // Condizione copertina
+    if (coverCondition === 'buona') score -= 10;
+    if (coverCondition === 'usurata') score -= 25;
+    
+    // Condizione pagine
+    if (pagesCondition === 'buone') score -= 10;
+    if (pagesCondition === 'ingiallite') score -= 20;
+    
+    // Determina condizione finale
+    if (score >= 80) return 'perfetto';
+    if (score >= 50) return 'buono';
+    return 'molto_usato';
+  };
+
+  const getConditionPercentage = (condition: string) => {
+    switch (condition) {
+      case 'perfetto': return 0.60;   // 60%
+      case 'buono': return 0.50;      // 50%
+      case 'molto_usato': return 0.40; // 40%
+      default: return 0.50;
+    }
+  };
+
+  const calculatedCondition = calculateCondition();
+  const conditionPercentage = getConditionPercentage(calculatedCondition);
+  const calculatedPrice = selectedBook 
+    ? ((selectedBook.prezzo_copertina || 0) * conditionPercentage).toFixed(2)
+    : '0.00';
 
   // Bookshop options
   const bookshops = [
@@ -179,15 +216,13 @@ export default function SellScreen() {
     setSelectedBook(book);
     setShowBookPicker(false);
     
-    // Reset form
-    setListingPrice((book.prezzo_suggerito || (book.prezzo_copertina || 0) * 0.5).toFixed(2));
-    setListingCondition('buono');
+    // Reset form - condizione e prezzo saranno calcolati automaticamente
     setListingPhotos([]);
     setHasWritings(false);
     setHasHighlights(false);
     setHasFolds(false);
-    setCoverCondition('buona');
-    setPagesCondition('buone');
+    setCoverCondition('perfetta');
+    setPagesCondition('perfette');
     setSelectedBookshop('privato');
     setNotes('');
     
@@ -244,12 +279,6 @@ export default function SellScreen() {
   const createListing = async () => {
     if (!selectedBook || !userId) return;
 
-    const price = parseFloat(listingPrice);
-    if (isNaN(price) || price <= 0) {
-      Alert.alert('Errore', 'Inserisci un prezzo valido');
-      return;
-    }
-
     if (listingPhotos.length === 0) {
       Alert.alert('Foto richiesta', 'Aggiungi almeno una foto del libro');
       return;
@@ -264,8 +293,8 @@ export default function SellScreen() {
         book_autori: selectedBook.autori,
         book_disciplina: selectedBook.disciplina,
         prezzo_copertina: selectedBook.prezzo_copertina,
-        condizione: listingCondition,
-        prezzo_vendita: price,
+        condizione: calculatedCondition,
+        prezzo_vendita: parseFloat(calculatedPrice),
         foto_base64: listingPhotos[0], // Main photo
         foto_aggiuntive: listingPhotos.slice(1), // Additional photos
         has_writings: hasWritings,
@@ -277,6 +306,7 @@ export default function SellScreen() {
         notes: notes,
         child_profile_id: selectedChild?.id,
         child_name: selectedChild?.nome_figlio,
+        condition_percentage: conditionPercentage,
       });
 
       Alert.alert('Successo!', 'Annuncio creato con successo');
