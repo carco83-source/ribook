@@ -162,6 +162,26 @@ export default function TransactionsScreen() {
 
   return (
     <View style={styles.container}>
+      {/* Quick Links */}
+      <View style={styles.quickLinksContainer}>
+        <TouchableOpacity
+          style={styles.quickLinkButton}
+          onPress={() => router.push('/my-purchases')}
+        >
+          <Ionicons name="cart" size={20} color="#1a472a" />
+          <Text style={styles.quickLinkText}>I miei acquisti</Text>
+          <Ionicons name="chevron-forward" size={16} color="#999" />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.quickLinkButton}
+          onPress={() => router.push('/my-sales')}
+        >
+          <Ionicons name="pricetag" size={20} color="#1a472a" />
+          <Text style={styles.quickLinkText}>Le mie vendite</Text>
+          <Ionicons name="chevron-forward" size={16} color="#999" />
+        </TouchableOpacity>
+      </View>
+
       <View style={styles.tabContainer}>
         <TouchableOpacity
           style={[styles.tab, activeTab === 'acquisti' && styles.activeTab]}
@@ -242,6 +262,25 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  quickLinksContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    gap: 8,
+  },
+  quickLinkButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    padding: 14,
+    borderRadius: 12,
+    gap: 12,
+  },
+  quickLinkText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#333',
   },
   tabContainer: {
     flexDirection: 'row',
