@@ -98,6 +98,41 @@ export default function SellScreen() {
   const [notes, setNotes] = useState('');
   const [creatingListing, setCreatingListing] = useState(false);
 
+  // Multi-select bookshops
+  const [selectedBookshops, setSelectedBookshops] = useState<string[]>([]);
+
+  // Bookshops data with addresses for Google Maps
+  const bookshopsData = [
+    { 
+      id: 'lapostrofo', 
+      name: "Cartolibreria L'Apostrofo", 
+      address: 'Via Genova 24, Viale Crotone 138, 88100 Catanzaro',
+      phone: '0961 34375',
+      coordinates: { lat: 38.9055, lng: 16.5942 }
+    },
+    { 
+      id: 'palaia', 
+      name: 'Cartolibreria Palaia Luigi', 
+      address: 'Via Santa Maria 1, 88100 Catanzaro',
+      phone: '0961 63173',
+      coordinates: { lat: 38.9047, lng: 16.5876 }
+    },
+    { 
+      id: 'aemme77', 
+      name: 'AEMME 77 di Ruoppolo Francesco', 
+      address: 'Viale Tommaso Campanella 68, 88100 Catanzaro',
+      phone: '0961 770643',
+      coordinates: { lat: 38.9015, lng: 16.5963 }
+    },
+    { 
+      id: 'nica', 
+      name: 'Cartolibreria NiCa', 
+      address: 'Viale Magna Grecia 179, 88100 Catanzaro',
+      phone: '0961 191 3149',
+      coordinates: { lat: 38.8892, lng: 16.5834 }
+    },
+  ];
+
   // Calcolo automatico condizione e prezzo
   const calculateCondition = () => {
     // Sistema a punti: si parte da 100 e si sottraggono punti per ogni difetto
@@ -138,12 +173,15 @@ export default function SellScreen() {
     : '0.00';
 
   // Bookshop options
-  const bookshops = [
-    { id: 'privato', name: 'Vendita Privata' },
-    { id: 'cartoleria_centro', name: 'Cartolibreria Centro' },
-    { id: 'libreria_scolastica', name: 'Libreria Scolastica' },
-    { id: 'altro', name: 'Altra Cartolibreria' },
-  ];
+  const toggleBookshop = (shopId: string) => {
+    setSelectedBookshops(prev => {
+      if (prev.includes(shopId)) {
+        return prev.filter(id => id !== shopId);
+      } else {
+        return [...prev, shopId];
+      }
+    });
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -223,7 +261,7 @@ export default function SellScreen() {
     setHasFolds(false);
     setCoverCondition('perfetta');
     setPagesCondition('perfette');
-    setSelectedBookshop('privato');
+    setSelectedBookshops([]);
     setNotes('');
     
     setShowListingForm(true);
@@ -284,8 +322,16 @@ export default function SellScreen() {
       return;
     }
 
+    if (selectedBookshops.length === 0) {
+      Alert.alert('Punto di scambio richiesto', 'Seleziona almeno una cartolibreria');
+      return;
+    }
+
     setCreatingListing(true);
     try {
+      // Get selected bookshop details
+      const selectedShopsDetails = bookshopsData.filter(b => selectedBookshops.includes(b.id));
+      
       await axios.post(`${API_URL}/api/listings?user_id=${userId}`, {
         book_id: selectedBook.isbn || selectedBook.id,
         book_isbn: selectedBook.isbn,
@@ -302,7 +348,9 @@ export default function SellScreen() {
         has_folds: hasFolds,
         cover_condition: coverCondition,
         pages_condition: pagesCondition,
-        bookshop: selectedBookshop,
+        bookstore_ids: selectedBookshops,
+        bookstore_names: selectedShopsDetails.map(s => s.name),
+        bookstore_addresses: selectedShopsDetails.map(s => s.address),
         notes: notes,
         child_profile_id: selectedChild?.id,
         child_name: selectedChild?.nome_figlio,
@@ -651,32 +699,53 @@ export default function SellScreen() {
               </View>
               <Text style={styles.photoHint}>Aggiungi fino a 4 foto</Text>
 
-              {/* Bookshop Selection */}
-              <Text style={styles.formLabel}>Punto di scambio</Text>
+              {/* Bookshop Selection - Multi-select */}
+              <Text style={styles.formLabel}>Punti di scambio *</Text>
+              <Text style={styles.bookshopHint}>Seleziona una o più cartolibrerie dove consegnerai il libro</Text>
               <View style={styles.bookshopOptions}>
-                {bookshops.map((shop) => (
-                  <TouchableOpacity
-                    key={shop.id}
-                    style={[
-                      styles.bookshopOption,
-                      selectedBookshop === shop.id && styles.bookshopOptionActive
-                    ]}
-                    onPress={() => setSelectedBookshop(shop.id)}
-                  >
-                    <Ionicons 
-                      name={selectedBookshop === shop.id ? "radio-button-on" : "radio-button-off"} 
-                      size={20} 
-                      color={selectedBookshop === shop.id ? "#1a472a" : "#666"} 
-                    />
-                    <Text style={[
-                      styles.bookshopOptionText,
-                      selectedBookshop === shop.id && styles.bookshopOptionTextActive
-                    ]}>
-                      {shop.name}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                {bookshopsData.map((shop) => {
+                  const isSelected = selectedBookshops.includes(shop.id);
+                  return (
+                    <TouchableOpacity
+                      key={shop.id}
+                      style={[
+                        styles.bookshopCard,
+                        isSelected && styles.bookshopCardActive
+                      ]}
+                      onPress={() => toggleBookshop(shop.id)}
+                    >
+                      <View style={styles.bookshopHeader}>
+                        <Ionicons 
+                          name={isSelected ? "checkbox" : "square-outline"} 
+                          size={24} 
+                          color={isSelected ? "#1a472a" : "#666"} 
+                        />
+                        <Text style={[
+                          styles.bookshopName,
+                          isSelected && styles.bookshopNameActive
+                        ]}>
+                          {shop.name}
+                        </Text>
+                      </View>
+                      <View style={styles.bookshopDetails}>
+                        <View style={styles.bookshopDetailRow}>
+                          <Ionicons name="location-outline" size={14} color="#666" />
+                          <Text style={styles.bookshopAddress}>{shop.address}</Text>
+                        </View>
+                        <View style={styles.bookshopDetailRow}>
+                          <Ionicons name="call-outline" size={14} color="#666" />
+                          <Text style={styles.bookshopPhone}>{shop.phone}</Text>
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
+              {selectedBookshops.length > 0 && (
+                <Text style={styles.selectedBookshopsCount}>
+                  {selectedBookshops.length} cartolibreri{selectedBookshops.length === 1 ? 'a' : 'e'} selezionat{selectedBookshops.length === 1 ? 'a' : 'e'}
+                </Text>
+              )}
 
               {/* Notes */}
               <Text style={styles.formLabel}>Note aggiuntive (opzionale)</Text>
@@ -1329,9 +1398,66 @@ const styles = StyleSheet.create({
     color: '#1a472a',
     fontWeight: '600',
   },
-  // Bookshop
+  // Bookshop - Multi-select cards
   bookshopOptions: {
-    gap: 8,
+    gap: 12,
+    marginBottom: 8,
+  },
+  bookshopCard: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 2,
+    borderColor: '#e0e0e0',
+  },
+  bookshopCardActive: {
+    backgroundColor: '#e8f5e9',
+    borderColor: '#1a472a',
+  },
+  bookshopHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 8,
+  },
+  bookshopName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#333',
+    flex: 1,
+  },
+  bookshopNameActive: {
+    color: '#1a472a',
+  },
+  bookshopDetails: {
+    marginLeft: 34,
+    gap: 4,
+  },
+  bookshopDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  bookshopAddress: {
+    fontSize: 12,
+    color: '#666',
+    flex: 1,
+  },
+  bookshopPhone: {
+    fontSize: 12,
+    color: '#666',
+  },
+  bookshopHint: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 12,
+  },
+  selectedBookshopsCount: {
+    fontSize: 13,
+    color: '#1a472a',
+    fontWeight: '500',
+    marginTop: 4,
+    marginBottom: 8,
   },
   bookshopOption: {
     flexDirection: 'row',

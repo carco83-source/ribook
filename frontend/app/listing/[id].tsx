@@ -436,12 +436,61 @@ export default function ListingDetailScreen() {
         {listing.bookstore_names && listing.bookstore_names.length > 0 && (
           <View style={styles.bookstoresAvailableCard}>
             <Text style={styles.bookstoresAvailableTitle}>Punti di ritiro disponibili</Text>
-            {listing.bookstore_names.map((name, index) => (
-              <View key={index} style={styles.bookstoreAvailableItem}>
-                <Ionicons name="storefront-outline" size={16} color="#1a472a" />
-                <Text style={styles.bookstoreAvailableName}>{name}</Text>
-              </View>
-            ))}
+            <Text style={styles.bookstoresAvailableSubtitle}>Seleziona dove vuoi ritirare il libro</Text>
+            {listing.bookstore_names.map((name: string, index: number) => {
+              const address = listing.bookstore_addresses?.[index] || '';
+              const isSelected = selectedBookstore?.nome === name;
+              
+              return (
+                <TouchableOpacity
+                  key={index}
+                  style={[
+                    styles.bookstoreAvailableCard,
+                    isSelected && styles.bookstoreAvailableCardSelected
+                  ]}
+                  onPress={() => setSelectedBookstore({ 
+                    id: listing.bookstore_ids?.[index] || '', 
+                    nome: name 
+                  })}
+                >
+                  <View style={styles.bookstoreAvailableHeader}>
+                    <Ionicons 
+                      name={isSelected ? "radio-button-on" : "radio-button-off"} 
+                      size={22} 
+                      color={isSelected ? "#1a472a" : "#666"} 
+                    />
+                    <View style={styles.bookstoreAvailableInfo}>
+                      <Text style={[
+                        styles.bookstoreAvailableName,
+                        isSelected && styles.bookstoreAvailableNameSelected
+                      ]}>
+                        {name}
+                      </Text>
+                      {address && (
+                        <Text style={styles.bookstoreAvailableAddress}>{address}</Text>
+                      )}
+                    </View>
+                  </View>
+                  {address && (
+                    <TouchableOpacity
+                      style={styles.mapsButton}
+                      onPress={() => {
+                        const encodedAddress = encodeURIComponent(address);
+                        const mapsUrl = Platform.select({
+                          ios: `maps:0,0?q=${encodedAddress}`,
+                          android: `geo:0,0?q=${encodedAddress}`,
+                          default: `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`
+                        });
+                        Linking.openURL(mapsUrl as string);
+                      }}
+                    >
+                      <Ionicons name="navigate" size={16} color="#1a472a" />
+                      <Text style={styles.mapsButtonText}>Indicazioni</Text>
+                    </TouchableOpacity>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
           </View>
         )}
 
@@ -1126,5 +1175,55 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#fff',
     fontWeight: 'bold',
+  },
+  // Bookstore selection for purchase
+  bookstoresAvailableSubtitle: {
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 12,
+  },
+  bookstoreAvailableCard: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 2,
+    borderColor: '#e0e0e0',
+  },
+  bookstoreAvailableCardSelected: {
+    backgroundColor: '#e8f5e9',
+    borderColor: '#1a472a',
+  },
+  bookstoreAvailableHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  bookstoreAvailableInfo: {
+    flex: 1,
+  },
+  bookstoreAvailableNameSelected: {
+    color: '#1a472a',
+  },
+  bookstoreAvailableAddress: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
+  },
+  mapsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#e8f5e9',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignSelf: 'flex-end',
+    marginTop: 10,
+  },
+  mapsButtonText: {
+    fontSize: 13,
+    color: '#1a472a',
+    fontWeight: '600',
   },
 });

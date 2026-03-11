@@ -217,6 +217,24 @@ class BookListingCreate(BaseModel):
     fascicoli_presenti: int = 0  # How many the seller has
     # Bookstore selection for pickup - MULTIPLE selection
     bookstore_ids: List[str] = []  # List of bookstore IDs where seller can deliver
+    bookstore_names: List[str] = []  # List of bookstore names
+    bookstore_addresses: List[str] = []  # List of bookstore addresses
+    # Additional fields from frontend
+    book_isbn: Optional[str] = None
+    book_titolo: Optional[str] = None
+    book_autori: Optional[str] = None
+    book_disciplina: Optional[str] = None
+    prezzo_copertina: Optional[float] = None
+    prezzo_vendita: Optional[float] = None
+    foto_aggiuntive: Optional[List[str]] = None
+    has_writings: bool = False
+    has_highlights: bool = False
+    has_folds: bool = False
+    cover_condition: Optional[str] = None
+    pages_condition: Optional[str] = None
+    child_profile_id: Optional[str] = None
+    child_name: Optional[str] = None
+    condition_percentage: Optional[float] = None
 
 class BookListing(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -241,6 +259,7 @@ class BookListing(BaseModel):
     # Bookstore selection - MULTIPLE bookstores where seller can deliver
     bookstore_ids: List[str] = []  # List of bookstore IDs
     bookstore_names: List[str] = []  # List of bookstore names for display
+    bookstore_addresses: List[str] = []  # List of bookstore addresses for display
     note: Optional[str] = None
     foto_base64: Optional[str] = None
     # Stati: disponibile -> venduto -> in_consegna -> consegnato -> ritirato
@@ -955,33 +974,41 @@ async def create_listing(listing_data: BookListingCreate, user_id: str):
         if listing_data.fascicoli_presenti > 0:
             prezzo_fascicoli = round((prezzo_totale_fascicoli / listing_data.fascicoli_totali) * listing_data.fascicoli_presenti, 2)
     
-    # Get bookstore names for multiple selection
-    bookstore_names = []
-    if listing_data.bookstore_ids:
+    # Get bookstore names and addresses
+    bookstore_names = listing_data.bookstore_names if listing_data.bookstore_names else []
+    bookstore_addresses = listing_data.bookstore_addresses if listing_data.bookstore_addresses else []
+    
+    # If names/addresses not provided from frontend, try to get from DB
+    if listing_data.bookstore_ids and not bookstore_names:
         for bs_id in listing_data.bookstore_ids:
             bookstore = await db.bookstores.find_one({"id": bs_id})
             if bookstore:
-                bookstore_names.append(bookstore["nome"])
+                bookstore_names.append(bookstore.get("nome", ""))
+                bookstore_addresses.append(bookstore.get("indirizzo", ""))
+    
+    # Use frontend-provided price if available, otherwise calculate
+    final_price = listing_data.prezzo_vendita if listing_data.prezzo_vendita else round(prezzo_vendita, 2)
     
     listing = BookListing(
         seller_id=user_id,
         seller_username=user["username"],
         book_id=book["id"],
-        book_titolo=book["titolo"],
-        book_autore=book["autore"],
-        book_isbn=book["isbn"],
-        book_materia=book["materia"],
-        book_classe=book["classe"],
-        prezzo_ministeriale=book["prezzo_ministeriale"],
+        book_titolo=listing_data.book_titolo or book.get("titolo", ""),
+        book_autore=listing_data.book_autori or book.get("autore", ""),
+        book_isbn=listing_data.book_isbn or book.get("isbn", ""),
+        book_materia=listing_data.book_disciplina or book.get("materia", book.get("disciplina", "")),
+        book_classe=book.get("classe", ""),
+        prezzo_ministeriale=listing_data.prezzo_copertina or book.get("prezzo_ministeriale", 0),
         condizione=condizione,
         condition_details=condition_details,
-        prezzo_vendita=round(prezzo_vendita, 2),
+        prezzo_vendita=final_price,
         ha_fascicoli=listing_data.ha_fascicoli,
         fascicoli_totali=listing_data.fascicoli_totali,
         fascicoli_presenti=listing_data.fascicoli_presenti,
         prezzo_fascicoli=prezzo_fascicoli,
         bookstore_ids=listing_data.bookstore_ids,
         bookstore_names=bookstore_names,
+        bookstore_addresses=bookstore_addresses,
         note=listing_data.note,
         foto_base64=listing_data.foto_base64
     )
