@@ -651,26 +651,27 @@ export default function SellScreen() {
               </View>
               <Text style={styles.photoHint}>Aggiungi fino a 4 foto</Text>
 
-              {/* Condition - Traffic Light */}
-              <Text style={styles.formLabel}>Condizione Generale</Text>
-              <View style={styles.trafficLightContainer}>
-                {CONDITION_OPTIONS.map((option) => (
-                  <TouchableOpacity
-                    key={option.value}
-                    style={[
-                      styles.trafficLightOption,
-                      listingCondition === option.value && { borderColor: option.color, borderWidth: 3 }
-                    ]}
-                    onPress={() => setListingCondition(option.value)}
-                  >
-                    <View style={[styles.trafficLight, { backgroundColor: option.color }]}>
-                      <Ionicons name={option.icon as any} size={24} color="#fff" />
+              {/* Condizione Calcolata Automaticamente */}
+              <Text style={styles.formLabel}>Condizione Calcolata</Text>
+              <View style={styles.calculatedConditionContainer}>
+                {(() => {
+                  const condConfig = CONDITION_OPTIONS.find(c => c.value === calculatedCondition) || CONDITION_OPTIONS[1];
+                  return (
+                    <View style={[styles.calculatedConditionBox, { borderColor: condConfig.color }]}>
+                      <View style={[styles.trafficLight, { backgroundColor: condConfig.color }]}>
+                        <Ionicons name={condConfig.icon as any} size={32} color="#fff" />
+                      </View>
+                      <View style={styles.calculatedConditionInfo}>
+                        <Text style={[styles.calculatedConditionLabel, { color: condConfig.color }]}>
+                          {condConfig.label}
+                        </Text>
+                        <Text style={styles.calculatedConditionHint}>
+                          Calcolato in base ai difetti selezionati
+                        </Text>
+                      </View>
                     </View>
-                    <Text style={[styles.trafficLightLabel, { color: option.color }]}>
-                      {option.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                  );
+                })()}
               </View>
 
               {/* Detailed Conditions */}
@@ -787,23 +788,22 @@ export default function SellScreen() {
                 ))}
               </View>
 
-              {/* Price */}
+              {/* Price - Calcolato Automaticamente */}
               <Text style={styles.formLabel}>Prezzo di vendita</Text>
-              <View style={styles.priceInputContainer}>
-                <Text style={styles.euroSign}>€</Text>
-                <TextInput
-                  style={styles.priceInput}
-                  value={listingPrice}
-                  onChangeText={setListingPrice}
-                  keyboardType="decimal-pad"
-                  placeholder="0.00"
-                />
+              <View style={styles.calculatedPriceContainer}>
+                <View style={styles.calculatedPriceBox}>
+                  <Text style={styles.calculatedPriceLabel}>Prezzo calcolato</Text>
+                  <Text style={styles.calculatedPriceValue}>€{calculatedPrice}</Text>
+                  <Text style={styles.calculatedPricePercentage}>
+                    {Math.round(conditionPercentage * 100)}% del prezzo di copertina
+                  </Text>
+                </View>
+                {selectedBook && selectedBook.prezzo_copertina && (
+                  <Text style={styles.originalPriceHint}>
+                    Prezzo copertina: €{selectedBook.prezzo_copertina.toFixed(2)}
+                  </Text>
+                )}
               </View>
-              {selectedBook && (
-                <Text style={styles.priceSuggestion}>
-                  Prezzo suggerito: €{selectedBook.prezzo_suggerito?.toFixed(2) || ((selectedBook.prezzo_copertina || 0) * 0.5).toFixed(2)} (50% del nuovo)
-                </Text>
-              )}
 
               {/* Notes */}
               <Text style={styles.formLabel}>Note aggiuntive (opzionale)</Text>
@@ -1192,6 +1192,65 @@ const styles = StyleSheet.create({
   trafficLightLabel: {
     fontSize: 12,
     fontWeight: '600',
+  },
+  // Calculated condition styles
+  calculatedConditionContainer: {
+    marginBottom: 8,
+  },
+  calculatedConditionBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    borderWidth: 3,
+  },
+  calculatedConditionInfo: {
+    marginLeft: 16,
+    flex: 1,
+  },
+  calculatedConditionLabel: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  calculatedConditionHint: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
+  },
+  // Calculated price styles
+  calculatedPriceContainer: {
+    marginBottom: 8,
+  },
+  calculatedPriceBox: {
+    backgroundColor: '#e8f5e9',
+    padding: 20,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#1a472a',
+  },
+  calculatedPriceLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 4,
+  },
+  calculatedPriceValue: {
+    fontSize: 36,
+    fontWeight: 'bold',
+    color: '#1a472a',
+  },
+  calculatedPricePercentage: {
+    fontSize: 13,
+    color: '#4CAF50',
+    marginTop: 4,
+    fontWeight: '500',
+  },
+  originalPriceHint: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 8,
+    textAlign: 'center',
   },
   // Details
   detailsContainer: {

@@ -370,11 +370,12 @@ async def login_user(credentials: UserLogin):
     return {
         "user_id": user["id"],
         "username": user["username"],
-        "nome": user["nome"],
-        "is_premium": user["is_premium"],
-        "scuola": user["scuola"],
-        "classe": user["classe"],
-        "sezione": user["sezione"]
+        "nome": user.get("nome", ""),
+        "is_premium": user.get("is_premium", False),
+        "scuola": user.get("scuola"),
+        "classe": user.get("classe"),
+        "sezione": user.get("sezione"),
+        "profili_figli": user.get("profili_figli", [])
     }
 
 @api_router.get("/users/{user_id}")

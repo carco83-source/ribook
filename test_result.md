@@ -308,7 +308,8 @@ metadata:
   run_ui: false
 
 test_plan:
-  current_focus: []
+  current_focus:
+    - "Sell Books Tab - Automatic Condition/Price Calculation"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
@@ -320,3 +321,5 @@ agent_communication:
     message: "Ho corretto la logica di compatibilità libri nel backend. Ora l'API /api/radar/{user_id}/class-compatibility identifica correttamente quando l'edizione è cambiata confrontando TITOLO BASE + EDIZIONE + EDITORE. Test con user_id=58ac430d-da2a-4954-bb2f-feea6de1f30c. Risultato atteso: SCIENZE non vendibile (2ED. vs vecchia), ITALIANO non vendibile (editore diverso), FRANCESE da comprare nuovo (libro diverso), MATEMATICA da comprare nuovo (Algebra vs Aritmetica)."
   - agent: "testing"
     message: "Class Compatibility API testing completed successfully! All 17 test cases passed with 100% success rate. The API correctly handles edition comparison logic, publisher verification, and book flow calculations between classes. Tested user 58ac430d-da2a-4954-bb2f-feea6de1f30c (2nd grade at Casalinuovo) and confirmed all expected results: 5 vendibili to 1st grade, 2 non_vendibili (SCIENZE edition change, ITALIANO publisher difference), 5 usati available from 3rd grade, and 2 books to buy new (FRANCESE and MATEMATICA due to edition differences). Backend logic is working perfectly."
+  - agent: "main"
+    message: "Ho implementato il calcolo automatico della condizione e del prezzo nella pagina sell.tsx. Il sistema calcola automaticamente la condizione (Perfetto/Buono/Molto Usato) in base ai difetti selezionati (scritte, evidenziature, pieghe, condizione copertina, condizione pagine) e imposta il prezzo automaticamente (60%/50%/40% del prezzo di copertina). Ho anche corretto un bug nel backend (/api/auth/login) che causava un errore 500 quando l'utente non aveva i campi scuola/classe/sezione. Test da eseguire: 1) Login con carco83@gmail.com/password123, 2) Navigare su Vendi tab, 3) Cliccare 'Vendi Libro', 4) Selezionare George, 5) Selezionare un libro, 6) Verificare che la condizione e il prezzo vengono calcolati automaticamente in base ai difetti selezionati."
