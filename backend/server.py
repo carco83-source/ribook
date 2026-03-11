@@ -1181,19 +1181,52 @@ async def get_class_compatibility(user_id: str):
     """
     import re
     
-    def get_base_title(title: str) -> str:
-        """Estrae il titolo base rimuovendo volume, numeri, edizione, etc."""
+    def get_series_name(title: str) -> str:
+        """
+        Estrae il NOME DELLA SERIE dal titolo.
+        Es: "ESATTO! ARITMETICA 2 + GEOMETRIA 2..." → "ESATTO!"
+        Es: "OSSERVARE E CAPIRE LE SCIENZE 2ED. - VOLUME 1" → "OSSERVARE E CAPIRE LE SCIENZE"
+        Es: "GEOAGENDA EDIZIONE ROSSA - VOLUME 1" → "GEOAGENDA EDIZIONE ROSSA"
+        Es: "LIBRO APERTO V.2+BUSSOLA" → "LIBRO APERTO"
+        """
         title = title.upper().strip()
-        # Rimuovi "VOLUME X", "VOL. X", "V. X"
-        title = re.sub(r'\s*(VOLUME|VOL\.?|V\.?)\s*\d+.*', '', title, flags=re.IGNORECASE)
-        # Rimuovi "(LDM)", "+EBOOK", etc.
-        title = re.sub(r'\s*\(LDM.*', '', title, flags=re.IGNORECASE)
-        title = re.sub(r'\s*\+\s*EBOOK.*', '', title, flags=re.IGNORECASE)
-        # Rimuovi numeri alla fine (es. "STORIA 1" -> "STORIA")
+        
+        # Rimuovi "V.X" o "V X" (versione abbreviata di volume)
+        title = re.sub(r'\s*V\.?\s*\d+', '', title, flags=re.IGNORECASE)
+        
+        # Prima rimuovi tutto dopo " + " (materiali aggiuntivi)
+        if '+' in title:
+            title = title.split('+')[0]
+        
+        # Rimuovi "(LDM)" e simili
+        title = re.sub(r'\s*\(LDM.*?\)', '', title, flags=re.IGNORECASE)
+        
+        # Rimuovi "- VOLUME X" o "VOLUME X"
+        title = re.sub(r'\s*-?\s*(VOLUME|VOL\.?)\s*\d+.*', '', title, flags=re.IGNORECASE)
+        
+        # Rimuovi " - " seguito da numeri
+        title = re.sub(r'\s*-\s*\d+.*', '', title)
+        
+        # Rimuovi "LE SCIENZE X" -> "LE SCIENZE"
+        title = re.sub(r'\s+(LE\s+SCIENZE)\s+\d+', r' \1', title)
+        
+        # Rimuovi numeri finali isolati (es. "STORIA 1" → "STORIA")
         title = re.sub(r'\s+\d+\s*$', '', title)
-        # Rimuovi trattini finali
-        title = re.sub(r'\s*-\s*$', '', title)
-        return title.strip()
+        
+        # Rimuovi parole specifiche per anno: ARITMETICA, ALGEBRA, GEOMETRIA (cambiano ogni anno)
+        # Ma SOLO se ci sono altre parole prima (per non cancellare tutto)
+        words = title.split()
+        if len(words) > 1:
+            # Rimuovi parole che cambiano tra anni della stessa serie
+            anno_specific = {'ARITMETICA', 'ALGEBRA', 'GEOMETRIA', 'ANTOLOGIA', 'LETTERATURA'}
+            words = [w for w in words if w not in anno_specific]
+        
+        title = ' '.join(words).strip()
+        
+        # Rimuovi trattini e spazi finali
+        title = re.sub(r'\s*-\s*$', '', title).strip()
+        
+        return title
     
     def has_edition_marker(title: str) -> str:
         """Estrae indicatore di edizione se presente"""
@@ -1203,7 +1236,11 @@ async def get_class_compatibility(user_id: str):
         return match.group(1) if match else ""
     
     def same_series(book1: dict, book2: dict) -> bool:
-        """Verifica se due libri sono della stessa serie (stesso editore E stessa edizione)"""
+        """
+        Verifica se due libri sono della stessa SERIE editoriale.
+        Es: "ESATTO! ARITMETICA 2" e "ESATTO! ALGEBRA" sono la stessa serie.
+        Ma "OSSERVARE E CAPIRE 2ED." e "OSSERVARE E CAPIRE" sono edizioni diverse.
+        """
         # Deve avere stesso editore
         if book1.get("editore", "").upper() != book2.get("editore", "").upper():
             return False
@@ -1217,25 +1254,29 @@ async def get_class_compatibility(user_id: str):
         if ed1 != ed2:
             return False  # Edizioni diverse!
         
-        # Confronto titolo base
-        base1 = get_base_title(t1)
-        base2 = get_base_title(t2)
+        # Estrai il nome della serie
+        series1 = get_series_name(t1)
+        series2 = get_series_name(t2)
         
-        # Rimuovi anche indicatori di edizione per il confronto parole
-        base1 = re.sub(r'\d+ED\.?', '', base1).strip()
-        base2 = re.sub(r'\d+ED\.?', '', base2).strip()
+        # Se i nomi serie sono uguali → stessa serie
+        if series1 == series2:
+            return True
         
-        words1 = set(base1.split())
-        words2 = set(base2.split())
-        # Rimuovi trattini isolati
+        # Confronto con similarità per gestire piccole differenze
+        words1 = set(series1.split())
+        words2 = set(series2.split())
         words1.discard('-')
         words2.discard('-')
         
         if not words1 or not words2:
             return False
+        
         common = words1.intersection(words2)
+        # Almeno 70% di parole in comune E almeno 2 parole in comune
+        min_words = min(len(words1), len(words2))
         similarity = len(common) / max(len(words1), len(words2))
-        return similarity >= 0.8  # 80% parole in comune
+        
+        return similarity >= 0.7 and len(common) >= min(2, min_words)
     
     user = await db.users.find_one({"id": user_id})
     if not user:
@@ -1299,7 +1340,7 @@ async def get_class_compatibility(user_id: str):
                     "autori": b.get("autori", ""),
                     "prezzo": b.get("prezzo_copertina", 0),
                     "volume": b.get("volume", ""),
-                    "titolo_base": get_base_title(b.get("titolo", ""))
+                    "titolo_base": get_series_name(b.get("titolo", ""))
                 }
         return result
     
