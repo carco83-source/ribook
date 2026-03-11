@@ -298,7 +298,7 @@ export default function RadarScreen() {
           </View>
           
           <Text style={styles.classCompatSubtitle}>
-            {classCompatibility.summary?.nota_volumi_unici || 'Basato sul D.P.R. 157/1989'}
+            Calcolo teorico basato sulle adozioni della tua scuola
           </Text>
 
           {/* Three Column Layout */}
@@ -306,17 +306,23 @@ export default function RadarScreen() {
             {/* LEFT - VENDI alla 1ª */}
             <View style={styles.bookFlowColumnNew}>
               <View style={[styles.bookFlowColumnHeader, { backgroundColor: '#2196F3' }]}>
-                <Text style={styles.bookFlowColumnHeaderText}>1ª MEDIA</Text>
+                <Text style={styles.bookFlowColumnHeaderText}>
+                  {classCompatibility.vendere?.classe_destinazione || 1}ª MEDIA
+                </Text>
               </View>
               <View style={styles.bookFlowColumnBody}>
                 <Ionicons name="arrow-up-circle" size={28} color="#2196F3" />
                 <Text style={styles.bookFlowColumnAction}>VENDI</Text>
-                <Text style={styles.bookFlowColumnNumber}>{classCompatibility.vendere?.totale || 0}</Text>
-                <Text style={styles.bookFlowColumnLabel}>usati</Text>
+                <Text style={styles.bookFlowColumnNumber}>
+                  {classCompatibility.vendere?.totale_vendibili || 0}
+                </Text>
+                <Text style={styles.bookFlowColumnLabel}>libri</Text>
               </View>
-              <Text style={styles.bookFlowColumnHint}>
-                {classCompatibility.vendere?.studenti_interessati || 0} studenti interessati
-              </Text>
+              {(classCompatibility.vendere?.totale_non_vendibili || 0) > 0 && (
+                <Text style={[styles.bookFlowColumnHint, { color: '#f44336' }]}>
+                  {classCompatibility.vendere?.totale_non_vendibili} ed. cambiate
+                </Text>
+              )}
             </View>
 
             {/* CENTER - TU (2ª) - NUOVI */}
@@ -335,49 +341,102 @@ export default function RadarScreen() {
                 <Text style={styles.bookFlowColumnLabel}>da comprare</Text>
               </View>
               <Text style={styles.bookFlowColumnHint}>
-                €{classCompatibility.nuovi?.costo_stimato?.toFixed(0) || 0} stimati
+                €{classCompatibility.nuovi?.costo_totale?.toFixed(0) || 0} stimati
               </Text>
             </View>
 
             {/* RIGHT - COMPRA dalla 3ª */}
             <View style={styles.bookFlowColumnNew}>
               <View style={[styles.bookFlowColumnHeader, { backgroundColor: '#4CAF50' }]}>
-                <Text style={styles.bookFlowColumnHeaderText}>3ª MEDIA</Text>
+                <Text style={styles.bookFlowColumnHeaderText}>
+                  {classCompatibility.comprare?.classe_origine || 3}ª MEDIA
+                </Text>
               </View>
               <View style={styles.bookFlowColumnBody}>
                 <Ionicons name="cart" size={28} color="#4CAF50" />
                 <Text style={[styles.bookFlowColumnAction, { color: '#4CAF50' }]}>COMPRA</Text>
                 <Text style={[styles.bookFlowColumnNumber, { color: '#4CAF50' }]}>
-                  {classCompatibility.comprare?.totale || 0}
+                  {classCompatibility.comprare?.totale_usati || 0}
                 </Text>
                 <Text style={styles.bookFlowColumnLabel}>usati</Text>
               </View>
               <Text style={styles.bookFlowColumnHint}>
-                Risparmio €{classCompatibility.comprare?.risparmio_stimato?.toFixed(0) || 0}
+                Risparmio €{classCompatibility.comprare?.risparmio_totale?.toFixed(0) || 0}
               </Text>
             </View>
           </View>
 
-          {/* Available Used Books */}
-          {classCompatibility.comprare?.libri && classCompatibility.comprare.libri.length > 0 && (
+          {/* Libri Usati Teoricamente Disponibili */}
+          {classCompatibility.comprare?.libri_usati && classCompatibility.comprare.libri_usati.length > 0 && (
             <View style={styles.classCard}>
-              <Text style={styles.sampleBooksTitle}>Libri usati disponibili ora:</Text>
-              {classCompatibility.comprare.libri.slice(0, 3).map((book: any, idx: number) => (
-                <TouchableOpacity 
-                  key={idx} 
-                  style={styles.sampleBookItem}
-                  onPress={() => router.push(`/listing/${book.listing_id}`)}
-                >
+              <Text style={styles.sampleBooksTitle}>
+                Libri che puoi comprare usato dalla {classCompatibility.comprare?.classe_origine}ª:
+              </Text>
+              {classCompatibility.comprare.libri_usati.slice(0, 4).map((book: any, idx: number) => (
+                <View key={idx} style={styles.sampleBookItem}>
                   <View style={styles.sampleBookInfo}>
                     <Text style={styles.sampleBookTitle} numberOfLines={1}>
+                      {book.disciplina}
+                    </Text>
+                    <Text style={styles.sampleBookSeller} numberOfLines={1}>
                       {book.titolo}
                     </Text>
-                    <Text style={styles.sampleBookSeller}>
-                      da {book.seller_username}
+                  </View>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={[styles.sampleBookPrice, { color: '#4CAF50' }]}>
+                      €{book.prezzo_usato?.toFixed(2)}
+                    </Text>
+                    <Text style={{ fontSize: 10, color: '#888', textDecorationLine: 'line-through' }}>
+                      €{book.prezzo_nuovo?.toFixed(2)}
                     </Text>
                   </View>
-                  <Text style={styles.sampleBookPrice}>€{book.prezzo_vendita?.toFixed(2)}</Text>
-                </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* Libri da Comprare Nuovi */}
+          {classCompatibility.nuovi?.libri && classCompatibility.nuovi.libri.length > 0 && (
+            <View style={styles.classCard}>
+              <Text style={[styles.sampleBooksTitle, { color: '#FF9800' }]}>
+                Libri da comprare nuovi (edizione cambiata):
+              </Text>
+              {classCompatibility.nuovi.libri.slice(0, 3).map((book: any, idx: number) => (
+                <View key={idx} style={styles.sampleBookItem}>
+                  <View style={styles.sampleBookInfo}>
+                    <Text style={styles.sampleBookTitle} numberOfLines={1}>
+                      {book.disciplina}
+                    </Text>
+                    <Text style={[styles.sampleBookSeller, { color: '#FF9800' }]} numberOfLines={1}>
+                      {book.motivo}
+                    </Text>
+                  </View>
+                  <Text style={[styles.sampleBookPrice, { color: '#FF9800' }]}>
+                    €{book.prezzo?.toFixed(2)}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* Libri Non Vendibili */}
+          {classCompatibility.vendere?.libri_non_vendibili && classCompatibility.vendere.libri_non_vendibili.length > 0 && (
+            <View style={styles.classCard}>
+              <Text style={[styles.sampleBooksTitle, { color: '#f44336' }]}>
+                Libri che non puoi vendere (edizione cambiata):
+              </Text>
+              {classCompatibility.vendere.libri_non_vendibili.map((book: any, idx: number) => (
+                <View key={idx} style={styles.sampleBookItem}>
+                  <View style={styles.sampleBookInfo}>
+                    <Text style={styles.sampleBookTitle} numberOfLines={1}>
+                      {book.disciplina}
+                    </Text>
+                    <Text style={[styles.sampleBookSeller, { color: '#f44336' }]} numberOfLines={1}>
+                      1ª richiede: {book.titolo_nuovo?.substring(0, 30)}...
+                    </Text>
+                  </View>
+                  <Ionicons name="close-circle" size={20} color="#f44336" />
+                </View>
               ))}
             </View>
           )}

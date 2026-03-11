@@ -157,26 +157,30 @@ export default function ProfileScreen() {
         <View style={styles.bookFlowSection}>
           <Text style={styles.bookFlowTitle}>Flusso Libri</Text>
           <Text style={styles.bookFlowSubtitle}>
-            {bookFlow.summary?.nota_volumi_unici || 'Basato sul D.P.R. 157/1989'}
+            Calcolo teorico basato sulle adozioni della tua scuola
           </Text>
           
           <View style={styles.bookFlowContainer}>
             {/* LEFT - VENDI alla 1ª */}
             <View style={styles.bookFlowColumn}>
               <View style={[styles.bookFlowHeader, { backgroundColor: '#2196F3' }]}>
-                <Text style={styles.bookFlowHeaderClass}>1ª MEDIA</Text>
+                <Text style={styles.bookFlowHeaderClass}>
+                  {bookFlow.vendere?.classe_destinazione || 1}ª MEDIA
+                </Text>
               </View>
               <View style={styles.bookFlowBody}>
                 <Ionicons name="arrow-up-circle" size={28} color="#2196F3" />
                 <Text style={[styles.bookFlowAction, { color: '#2196F3' }]}>VENDI</Text>
                 <Text style={[styles.bookFlowNumber, { color: '#2196F3' }]}>
-                  {bookFlow.vendere?.totale || 0}
+                  {bookFlow.vendere?.totale_vendibili || 0}
                 </Text>
-                <Text style={styles.bookFlowLabel}>usati</Text>
+                <Text style={styles.bookFlowLabel}>libri</Text>
               </View>
-              <Text style={styles.bookFlowHint}>
-                {bookFlow.vendere?.studenti_interessati || 0} studenti
-              </Text>
+              {(bookFlow.vendere?.totale_non_vendibili || 0) > 0 && (
+                <Text style={[styles.bookFlowHint, { color: '#f44336' }]}>
+                  {bookFlow.vendere?.totale_non_vendibili} ed. cambiate
+                </Text>
+              )}
             </View>
 
             {/* CENTER - TU - NUOVI */}
@@ -195,25 +199,27 @@ export default function ProfileScreen() {
                 <Text style={styles.bookFlowLabel}>da comprare</Text>
               </View>
               <Text style={styles.bookFlowHint}>
-                €{bookFlow.nuovi?.costo_stimato?.toFixed(0) || 0}
+                €{bookFlow.nuovi?.costo_totale?.toFixed(0) || 0}
               </Text>
             </View>
 
             {/* RIGHT - COMPRA dalla 3ª */}
             <View style={styles.bookFlowColumn}>
               <View style={[styles.bookFlowHeader, { backgroundColor: '#4CAF50' }]}>
-                <Text style={styles.bookFlowHeaderClass}>3ª MEDIA</Text>
+                <Text style={styles.bookFlowHeaderClass}>
+                  {bookFlow.comprare?.classe_origine || 3}ª MEDIA
+                </Text>
               </View>
               <View style={styles.bookFlowBody}>
                 <Ionicons name="cart" size={28} color="#4CAF50" />
                 <Text style={[styles.bookFlowAction, { color: '#4CAF50' }]}>COMPRA</Text>
                 <Text style={[styles.bookFlowNumber, { color: '#4CAF50' }]}>
-                  {bookFlow.comprare?.totale || 0}
+                  {bookFlow.comprare?.totale_usati || 0}
                 </Text>
                 <Text style={styles.bookFlowLabel}>usati</Text>
               </View>
               <Text style={styles.bookFlowHint}>
-                Risparmio €{bookFlow.comprare?.risparmio_stimato?.toFixed(0) || 0}
+                Risparmio €{bookFlow.comprare?.risparmio_totale?.toFixed(0) || 0}
               </Text>
             </View>
           </View>

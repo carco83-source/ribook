@@ -167,15 +167,18 @@ backend:
 
   - task: "Matching/Radar system"
     implemented: true
-    working: "NA"
+    working: true
     file: "/app/backend/server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Implemented /api/matches and /api/radar endpoints - needs testing"
+      - working: true
+        agent: "testing"
+        comment: "Tested class compatibility API endpoint. All 17 test cases passed. API correctly identifies edition changes (SCIENZE 2ED. vs old), publisher differences (ITALIANO Feltrinelli vs D'Anna), and calculates proper book flows between classes. Expected results confirmed: 5 vendibili, 2 non_vendibili, 5 usati disponibili, 2 da comprare nuovi."
 
   - task: "Bookstores CRUD"
     implemented: true
@@ -305,10 +308,7 @@ metadata:
   run_ui: false
 
 test_plan:
-  current_focus:
-    - "Book Requests"
-    - "Matching/Radar system"
-    - "Transactions with commission"
+  current_focus: []
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
@@ -316,3 +316,7 @@ test_plan:
 agent_communication:
   - agent: "main"
     message: "MVP created for ScambiaLibri app. Backend has all core endpoints implemented. Please test the matching system and transactions flow."
+  - agent: "main"
+    message: "Ho corretto la logica di compatibilità libri nel backend. Ora l'API /api/radar/{user_id}/class-compatibility identifica correttamente quando l'edizione è cambiata confrontando TITOLO BASE + EDIZIONE + EDITORE. Test con user_id=58ac430d-da2a-4954-bb2f-feea6de1f30c. Risultato atteso: SCIENZE non vendibile (2ED. vs vecchia), ITALIANO non vendibile (editore diverso), FRANCESE da comprare nuovo (libro diverso), MATEMATICA da comprare nuovo (Algebra vs Aritmetica)."
+  - agent: "testing"
+    message: "Class Compatibility API testing completed successfully! All 17 test cases passed with 100% success rate. The API correctly handles edition comparison logic, publisher verification, and book flow calculations between classes. Tested user 58ac430d-da2a-4954-bb2f-feea6de1f30c (2nd grade at Casalinuovo) and confirmed all expected results: 5 vendibili to 1st grade, 2 non_vendibili (SCIENZE edition change, ITALIANO publisher difference), 5 usati available from 3rd grade, and 2 books to buy new (FRANCESE and MATEMATICA due to edition differences). Backend logic is working perfectly."

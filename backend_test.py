@@ -351,6 +351,197 @@ def test_transactions(results, buyer_data, bookstores):
     else:
         results.fail_test("Create Transaction", f"Status {response.status_code}: {response.text}")
 
+def test_class_compatibility(results):
+    """Test the class compatibility API endpoint for ScambiaLibri app"""
+    print("\n🎯 Testing Class Compatibility API...")
+    
+    # Test with the specific user ID from the test request
+    test_user_id = "58ac430d-da2a-4954-bb2f-feea6de1f30c"
+    
+    response = make_request("GET", f"/radar/{test_user_id}/class-compatibility")
+    if response is None:
+        results.fail_test("Class Compatibility API - Request", "Request failed - server unreachable")
+        return
+        
+    if response.status_code == 200:
+        compatibility_data = response.json()
+        
+        # Check basic response structure
+        required_sections = ["vendere", "comprare", "nuovi", "summary"]
+        missing_sections = [section for section in required_sections if section not in compatibility_data]
+        
+        if missing_sections:
+            results.fail_test("Class Compatibility API - Structure", f"Missing sections: {missing_sections}")
+            return
+        
+        # Test VENDERE section (to 1st grade)
+        vendere = compatibility_data["vendere"]
+        required_vendere_fields = ["totale_vendibili", "totale_non_vendibili", "libri_vendibili", "libri_non_vendibili"]
+        
+        if all(field in vendere for field in required_vendere_fields):
+            # Check expected numbers based on test request
+            totale_vendibili = vendere["totale_vendibili"]
+            totale_non_vendibili = vendere["totale_non_vendibili"]
+            
+            # Expected: around 5 vendibili, 2 non vendibili
+            if 4 <= totale_vendibili <= 6:
+                results.pass_test("Class Compatibility - Vendibili Count")
+            else:
+                results.fail_test("Class Compatibility - Vendibili Count", 
+                                f"Expected ~5 vendibili, got {totale_vendibili}")
+            
+            if totale_non_vendibili == 2:
+                results.pass_test("Class Compatibility - Non Vendibili Count")
+            else:
+                results.fail_test("Class Compatibility - Non Vendibili Count", 
+                                f"Expected 2 non vendibili, got {totale_non_vendibili}")
+                
+            # Check for SCIENZE with "EDIZIONE CAMBIATA" status
+            non_vendibili = vendere["libri_non_vendibili"]
+            scienze_found = False
+            italiano_found = False
+            
+            for libro in non_vendibili:
+                disciplina = libro.get("disciplina", "").upper()
+                status = libro.get("status", "")
+                
+                if "SCIENZE" in disciplina:
+                    scienze_found = True
+                    if "EDIZIONE CAMBIATA" in status:
+                        results.pass_test("Class Compatibility - SCIENZE Edition Check")
+                    else:
+                        results.fail_test("Class Compatibility - SCIENZE Edition Check", 
+                                        f"Expected 'EDIZIONE CAMBIATA' for SCIENZE, got '{status}'")
+                
+                elif "ITALIANO" in disciplina:
+                    italiano_found = True
+                    results.pass_test("Class Compatibility - ITALIANO Publisher Check")
+            
+            if not scienze_found:
+                results.fail_test("Class Compatibility - SCIENZE Found", "SCIENZE not found in non_vendibili")
+            if not italiano_found:
+                results.fail_test("Class Compatibility - ITALIANO Found", "ITALIANO not found in non_vendibili")
+                
+        else:
+            results.fail_test("Class Compatibility - Vendere Structure", 
+                            f"Missing vendere fields: {[f for f in required_vendere_fields if f not in vendere]}")
+        
+        # Test COMPRARE section (from 3rd grade)
+        comprare = compatibility_data["comprare"]
+        required_comprare_fields = ["totale_usati", "libri_usati"]
+        
+        if all(field in comprare for field in required_comprare_fields):
+            totale_usati = comprare["totale_usati"]
+            
+            # Expected: around 5 usati
+            if 4 <= totale_usati <= 6:
+                results.pass_test("Class Compatibility - Usati Count")
+            else:
+                results.fail_test("Class Compatibility - Usati Count", 
+                                f"Expected ~5 usati, got {totale_usati}")
+                
+            # Check for SCIENZE and ITALIANO in libri_usati
+            libri_usati = comprare["libri_usati"]
+            scienze_usato = False
+            italiano_usato = False
+            
+            for libro in libri_usati:
+                disciplina = libro.get("disciplina", "").upper()
+                if "SCIENZE" in disciplina:
+                    scienze_usato = True
+                elif "ITALIANO" in disciplina:
+                    italiano_usato = True
+            
+            if scienze_usato:
+                results.pass_test("Class Compatibility - SCIENZE Available Used")
+            else:
+                results.fail_test("Class Compatibility - SCIENZE Available Used", "SCIENZE not found in libri_usati")
+                
+            if italiano_usato:
+                results.pass_test("Class Compatibility - ITALIANO Available Used")
+            else:
+                results.fail_test("Class Compatibility - ITALIANO Available Used", "ITALIANO not found in libri_usati")
+                
+        else:
+            results.fail_test("Class Compatibility - Comprare Structure", 
+                            f"Missing comprare fields: {[f for f in required_comprare_fields if f not in comprare]}")
+        
+        # Test NUOVI section (books to buy new)
+        nuovi = compatibility_data["nuovi"]
+        required_nuovi_fields = ["totale", "libri"]
+        
+        if all(field in nuovi for field in required_nuovi_fields):
+            totale_nuovi = nuovi["totale"]
+            
+            # Expected: 2 books to buy new
+            if totale_nuovi == 2:
+                results.pass_test("Class Compatibility - Nuovi Count")
+            else:
+                results.fail_test("Class Compatibility - Nuovi Count", 
+                                f"Expected 2 nuovi, got {totale_nuovi}")
+                
+            # Check for FRANCESE and MATEMATICA
+            libri_nuovi = nuovi["libri"]
+            francese_found = False
+            matematica_found = False
+            
+            for libro in libri_nuovi:
+                disciplina = libro.get("disciplina", "").upper()
+                motivo = libro.get("motivo", "")
+                
+                if "FRANCESE" in disciplina:
+                    francese_found = True
+                    if "diversa dalla" in motivo.lower():
+                        results.pass_test("Class Compatibility - FRANCESE Edition Reason")
+                    else:
+                        results.fail_test("Class Compatibility - FRANCESE Edition Reason", 
+                                        f"Expected edition difference reason for FRANCESE, got '{motivo}'")
+                
+                elif "MATEMATICA" in disciplina:
+                    matematica_found = True
+                    results.pass_test("Class Compatibility - MATEMATICA Found")
+            
+            if not francese_found:
+                results.fail_test("Class Compatibility - FRANCESE Found", "FRANCESE not found in nuovi")
+            if not matematica_found:
+                results.fail_test("Class Compatibility - MATEMATICA Found", "MATEMATICA not found in nuovi")
+                
+        else:
+            results.fail_test("Class Compatibility - Nuovi Structure", 
+                            f"Missing nuovi fields: {[f for f in required_nuovi_fields if f not in nuovi]}")
+        
+        # Test summary section
+        summary = compatibility_data["summary"]
+        if isinstance(summary, dict):
+            results.pass_test("Class Compatibility - Summary Structure")
+        else:
+            results.fail_test("Class Compatibility - Summary Structure", "Summary is not a dictionary")
+        
+        # Overall API success
+        results.pass_test("Class Compatibility API - Overall Response")
+        
+        # Print detailed analysis for debugging
+        print("\n📊 Class Compatibility Analysis:")
+        print(f"   User Class: {compatibility_data.get('user_classe', 'N/A')}")
+        print(f"   School: {compatibility_data.get('scuola', 'N/A')}")
+        print(f"   School Code: {compatibility_data.get('codice_scuola', 'N/A')}")
+        print(f"   Vendibili: {vendere.get('totale_vendibili', 0)}")
+        print(f"   Non Vendibili: {vendere.get('totale_non_vendibili', 0)}")
+        print(f"   Usati Disponibili: {comprare.get('totale_usati', 0)}")
+        print(f"   Da Comprare Nuovi: {nuovi.get('totale', 0)}")
+        
+        if vendere.get('libri_non_vendibili'):
+            print("\n   Non Vendibili Details:")
+            for libro in vendere['libri_non_vendibili'][:3]:  # Show first 3
+                print(f"     - {libro.get('disciplina', 'N/A')}: {libro.get('status', 'N/A')}")
+        
+    elif response.status_code == 404:
+        results.fail_test("Class Compatibility API - User Not Found", 
+                        f"User ID {test_user_id} not found in database")
+    else:
+        results.fail_test("Class Compatibility API - Status Code", 
+                        f"Expected 200, got {response.status_code}: {response.text}")
+
 def test_premium_upgrade(results, user_data):
     """Test premium upgrade functionality"""
     print("\n⭐ Testing Premium Upgrade...")
@@ -407,6 +598,7 @@ def main():
     # Run core functionality tests
     test_book_requests(results, test_buyer, books)
     test_matching_system(results, test_buyer)
+    test_class_compatibility(results)
     test_transactions(results, test_buyer, bookstores)
     test_premium_upgrade(results, test_buyer)
     
