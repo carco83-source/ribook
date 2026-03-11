@@ -11,6 +11,8 @@ import {
   Share,
   Platform,
   Linking,
+  Modal,
+  TextInput,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -79,6 +81,21 @@ export default function ListingDetailScreen() {
   const [isPremium, setIsPremium] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [purchasing, setPurchasing] = useState(false);
+
+  // Report modal state
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportReason, setReportReason] = useState('');
+  const [reportDescription, setReportDescription] = useState('');
+  const [sendingReport, setSendingReport] = useState(false);
+
+  const REPORT_REASONS = [
+    { value: 'foto_inappropriata', label: 'Foto inappropriata o offensiva' },
+    { value: 'foto_non_corrispondente', label: 'Foto non corrisponde al libro' },
+    { value: 'prezzo_ingannevole', label: 'Prezzo ingannevole' },
+    { value: 'condizione_falsa', label: 'Condizione del libro falsa' },
+    { value: 'spam', label: 'Spam o annuncio duplicato' },
+    { value: 'altro', label: 'Altro' },
+  ];
 
   useEffect(() => {
     loadData();
@@ -167,6 +184,42 @@ export default function ListingDetailScreen() {
     } catch (error) {
       console.error('Error sharing to WhatsApp:', error);
       Alert.alert('Errore', 'Impossibile aprire WhatsApp');
+    }
+  };
+
+  const handleReport = async () => {
+    if (!reportReason) {
+      Alert.alert('Errore', 'Seleziona un motivo per la segnalazione');
+      return;
+    }
+
+    setSendingReport(true);
+    try {
+      await axios.post(
+        `${API_URL}/api/listings/${listing?.id}/report?reporter_id=${userId}`,
+        {
+          motivo: reportReason,
+          descrizione: reportDescription.trim() || undefined,
+        }
+      );
+
+      setShowReportModal(false);
+      setReportReason('');
+      setReportDescription('');
+      
+      Alert.alert(
+        'Segnalazione inviata',
+        'Grazie per la segnalazione. Il nostro team la esaminerà al più presto.',
+        [{ text: 'OK' }]
+      );
+    } catch (error: any) {
+      console.error('Error sending report:', error);
+      Alert.alert(
+        'Errore',
+        error.response?.data?.detail || 'Impossibile inviare la segnalazione'
+      );
+    } finally {
+      setSendingReport(false);
     }
   };
 
@@ -299,6 +352,10 @@ export default function ListingDetailScreen() {
           <TouchableOpacity style={[styles.shareButton, styles.whatsappButton]} onPress={handleShareWhatsApp}>
             <Ionicons name="logo-whatsapp" size={20} color="#25D366" />
             <Text style={[styles.shareButtonText, { color: '#25D366' }]}>WhatsApp</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.shareButton, styles.reportButton]} onPress={() => setShowReportModal(true)}>
+            <Ionicons name="flag-outline" size={20} color="#f44336" />
+            <Text style={[styles.shareButtonText, { color: '#f44336' }]}>Segnala</Text>
           </TouchableOpacity>
         </View>
 
@@ -507,6 +564,90 @@ export default function ListingDetailScreen() {
           )}
         </TouchableOpacity>
       </View>
+
+      {/* Report Modal */}
+      <Modal
+        visible={showReportModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowReportModal(false)}
+      >
+        <View style={styles.reportModalOverlay}>
+          <View style={styles.reportModalContent}>
+            <View style={styles.reportModalHeader}>
+              <Text style={styles.reportModalTitle}>Segnala Annuncio</Text>
+              <TouchableOpacity onPress={() => setShowReportModal(false)}>
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.reportModalSubtitle}>
+              Perché vuoi segnalare questo annuncio?
+            </Text>
+
+            <View style={styles.reportReasons}>
+              {REPORT_REASONS.map((reason) => (
+                <TouchableOpacity
+                  key={reason.value}
+                  style={[
+                    styles.reportReasonOption,
+                    reportReason === reason.value && styles.reportReasonSelected
+                  ]}
+                  onPress={() => setReportReason(reason.value)}
+                >
+                  <Ionicons
+                    name={reportReason === reason.value ? "radio-button-on" : "radio-button-off"}
+                    size={20}
+                    color={reportReason === reason.value ? "#f44336" : "#666"}
+                  />
+                  <Text style={[
+                    styles.reportReasonText,
+                    reportReason === reason.value && styles.reportReasonTextSelected
+                  ]}>
+                    {reason.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={styles.reportDescLabel}>Descrizione (opzionale)</Text>
+            <TextInput
+              style={styles.reportDescInput}
+              value={reportDescription}
+              onChangeText={setReportDescription}
+              placeholder="Aggiungi dettagli sulla segnalazione..."
+              multiline
+              numberOfLines={3}
+            />
+
+            <View style={styles.reportModalButtons}>
+              <TouchableOpacity
+                style={styles.reportCancelButton}
+                onPress={() => setShowReportModal(false)}
+              >
+                <Text style={styles.reportCancelButtonText}>Annulla</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.reportSubmitButton,
+                  (!reportReason || sendingReport) && styles.reportSubmitButtonDisabled
+                ]}
+                onPress={handleReport}
+                disabled={!reportReason || sendingReport}
+              >
+                {sendingReport ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <>
+                    <Ionicons name="flag" size={18} color="#fff" />
+                    <Text style={styles.reportSubmitButtonText}>Invia Segnalazione</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -848,28 +989,142 @@ const styles = StyleSheet.create({
   },
   shareRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 8,
     marginTop: 12,
     marginBottom: 8,
+    flexWrap: 'wrap',
   },
   shareButton: {
     flex: 1,
+    minWidth: 100,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: 4,
     paddingVertical: 10,
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#1a472a',
   },
   shareButtonText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '500',
     color: '#1a472a',
   },
   whatsappButton: {
     borderColor: '#25D366',
+  },
+  reportButton: {
+    borderColor: '#f44336',
+  },
+  // Report Modal Styles
+  reportModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  reportModalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    maxHeight: '85%',
+  },
+  reportModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  reportModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  reportModalSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 16,
+  },
+  reportReasons: {
+    marginBottom: 20,
+  },
+  reportReasonOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    marginBottom: 8,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    gap: 10,
+  },
+  reportReasonSelected: {
+    backgroundColor: '#ffebee',
+    borderColor: '#f44336',
+  },
+  reportReasonText: {
+    fontSize: 14,
+    color: '#333',
+    flex: 1,
+  },
+  reportReasonTextSelected: {
+    color: '#f44336',
+    fontWeight: '500',
+  },
+  reportDescLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  reportDescInput: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    padding: 12,
+    fontSize: 14,
+    minHeight: 80,
+    textAlignVertical: 'top',
+    marginBottom: 20,
+  },
+  reportModalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 20,
+  },
+  reportCancelButton: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    alignItems: 'center',
+  },
+  reportCancelButtonText: {
+    fontSize: 16,
+    color: '#666',
+    fontWeight: '500',
+  },
+  reportSubmitButton: {
+    flex: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    padding: 14,
+    borderRadius: 10,
+    backgroundColor: '#f44336',
+  },
+  reportSubmitButtonDisabled: {
+    backgroundColor: '#ccc',
+  },
+  reportSubmitButtonText: {
+    fontSize: 16,
+    color: '#fff',
+    fontWeight: 'bold',
   },
 });

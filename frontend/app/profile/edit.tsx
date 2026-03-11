@@ -68,8 +68,8 @@ export default function EditProfileScreen() {
   };
 
   const handleSave = async () => {
-    if (!nome.trim() || !scuola.trim() || !classe.trim() || !sezione.trim()) {
-      Alert.alert('Errore', 'Compila tutti i campi obbligatori');
+    if (!nome.trim()) {
+      Alert.alert('Errore', 'Il nome è obbligatorio');
       return;
     }
 
@@ -77,16 +77,20 @@ export default function EditProfileScreen() {
     try {
       const userId = await AsyncStorage.getItem('user_id');
       
-      await axios.put(`${API_URL}/api/users/${userId}`, {
+      const updateData: any = {
         nome,
         cognome,
         email,
         telefono,
-        scuola,
-        classe,
-        sezione,
-        tipo_scuola: tipoScuola,
-      });
+      };
+
+      // Only include school data if provided (not required for parent accounts)
+      if (scuola.trim()) updateData.scuola = scuola;
+      if (classe.trim()) updateData.classe = classe;
+      if (sezione.trim()) updateData.sezione = sezione;
+      if (tipoScuola) updateData.tipo_scuola = tipoScuola;
+
+      await axios.put(`${API_URL}/api/users/${userId}`, updateData);
 
       // Update local storage
       await AsyncStorage.setItem('user_nome', nome);
