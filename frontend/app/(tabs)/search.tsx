@@ -117,39 +117,24 @@ export default function SearchScreen() {
     setSearchQuery('');
 
     try {
-      // Calculate target classe (classe successiva per comprare)
-      const childClasse = parseInt(child.classe);
-      const isMedia = child.tipo_scuola === 'primo_grado';
+      // Use the new endpoint with compatibility logic
+      const response = await axios.get(
+        `${API_URL}/api/profiles/${userId}/children/${child.id}/books-to-buy`
+      );
       
-      // Determine cycle limits
-      let maxClasse = isMedia ? 3 : (childClasse <= 2 ? 2 : 5);
-      let nextClasse = childClasse + 1;
-      
-      if (nextClasse > maxClasse) {
-        // Fine ciclo - non può comprare
+      if (response.data.books && response.data.books.length > 0) {
+        setBooks(response.data.books);
+        setFilteredBooks(response.data.books);
+        setTargetClasse(response.data.classe_origine);
+      } else {
         Alert.alert(
           'Fine Ciclo',
-          `${child.nome_figlio} è all'ultimo anno del ciclo, non ci sono libri da comprare dalla classe successiva.`
+          response.data.message || `${child.nome_figlio} è all'ultimo anno del ciclo, non ci sono libri da comprare usati.`
         );
         setBooks([]);
         setFilteredBooks([]);
         setTargetClasse(null);
-        setLoadingBooks(false);
-        return;
       }
-
-      setTargetClasse(nextClasse);
-
-      // Load books for the target classe from the child's school
-      const booksResponse = await axios.get(
-        `${API_URL}/api/books?codice_scuola=${child.codice_scuola}&classe=${nextClasse}&limit=100`
-      );
-      
-      // Filter out volume unici (books used for multiple years)
-      const annualBooks = booksResponse.data.filter((book: any) => !book.is_volume_unico);
-      
-      setBooks(annualBooks);
-      setFilteredBooks(annualBooks);
     } catch (error) {
       console.error('Error loading books:', error);
       Alert.alert('Errore', 'Impossibile caricare i libri');

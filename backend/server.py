@@ -1773,6 +1773,272 @@ async def get_child_compatibility(user_id: str, child_id: str):
     }
 
 
+@api_router.get("/profiles/{user_id}/children/{child_id}/books-to-sell")
+async def get_books_to_sell(user_id: str, child_id: str):
+    """
+    Restituisce la lista dei libri che il figlio può VENDERE (con logica compatibilità).
+    Solo i libri della classe precedente che sono compatibili con quelli della classe attuale.
+    """
+    import re
+    
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+    
+    profili_figli = user.get("profili_figli", [])
+    child_profile = next((p for p in profili_figli if p.get("id") == child_id), None)
+    
+    if not child_profile:
+        raise HTTPException(status_code=404, detail="Profilo figlio non trovato")
+    
+    child_classe = int(child_profile.get("classe", 1))
+    child_tipo = child_profile.get("tipo_scuola", "primo_grado")
+    child_codice_scuola = child_profile.get("codice_scuola", "")
+    
+    if not child_codice_scuola:
+        return {"books": [], "error": "Codice scuola non configurato"}
+    
+    # Helper functions
+    def get_series_name(title: str) -> str:
+        title = title.upper().strip()
+        title = re.sub(r'\s*V\.?\s*\d+', '', title, flags=re.IGNORECASE)
+        if '+' in title:
+            title = title.split('+')[0]
+        title = re.sub(r'\s*\(LDM.*?\)', '', title, flags=re.IGNORECASE)
+        title = re.sub(r'\s*-?\s*(VOLUME|VOL\.?)\s*\d+.*', '', title, flags=re.IGNORECASE)
+        title = re.sub(r'\s*-\s*\d+.*', '', title)
+        title = re.sub(r'\s+(LE\s+SCIENZE)\s+\d+', r' \1', title)
+        title = re.sub(r'\s+\d+\s*$', '', title)
+        words = title.split()
+        if len(words) > 1:
+            anno_specific = {'ARITMETICA', 'ALGEBRA', 'GEOMETRIA', 'ANTOLOGIA', 'LETTERATURA'}
+            words = [w for w in words if w not in anno_specific]
+        title = ' '.join(words).strip()
+        title = re.sub(r'\s*-\s*$', '', title).strip()
+        return title
+    
+    def has_edition_marker(title: str) -> str:
+        title = title.upper()
+        match = re.search(r'(\d+ED\.?|EDIZIONE\s+\w+|ED\.\s*\w+)', title)
+        return match.group(1) if match else ""
+    
+    def same_series(book1: dict, book2: dict) -> bool:
+        if book1.get("editore", "").upper() != book2.get("editore", "").upper():
+            return False
+        t1 = book1.get("titolo", "").upper()
+        t2 = book2.get("titolo", "").upper()
+        ed1 = has_edition_marker(t1)
+        ed2 = has_edition_marker(t2)
+        if ed1 != ed2:
+            return False
+        series1 = get_series_name(t1)
+        series2 = get_series_name(t2)
+        if series1 == series2:
+            return True
+        words1 = set(series1.split())
+        words2 = set(series2.split())
+        words1.discard('-')
+        words2.discard('-')
+        if not words1 or not words2:
+            return False
+        common = words1.intersection(words2)
+        min_words = min(len(words1), len(words2))
+        similarity = len(common) / max(len(words1), len(words2))
+        return similarity >= 0.7 and len(common) >= min(2, min_words)
+    
+    # Calcola classe precedente
+    isMedia = child_tipo == "primo_grado"
+    minClasse = 1 if isMedia else (1 if child_classe <= 2 else 3)
+    classe_precedente = child_classe - 1 if child_classe > minClasse else None
+    
+    if not classe_precedente:
+        return {"books": [], "message": "Primo anno del ciclo - niente da vendere"}
+    
+    # Carica libri della classe ATTUALE (che il figlio ha ORA)
+    my_books = await db.books.find({
+        "scuole_adottanti": child_codice_scuola,
+        "anni_corso": child_classe,
+        "is_volume_unico": {"$ne": True}
+    }).to_list(100)
+    
+    # Carica libri della classe PRECEDENTE (che servono a chi è sotto)
+    libri_prec = await db.books.find({
+        "scuole_adottanti": child_codice_scuola,
+        "anni_corso": classe_precedente,
+        "is_volume_unico": {"$ne": True}
+    }).to_list(100)
+    
+    # Organizza per disciplina
+    my_books_disc = {}
+    for b in my_books:
+        disc = b.get("disciplina", "").strip().upper()
+        if disc and disc not in my_books_disc:
+            my_books_disc[disc] = b
+    
+    prec_books_disc = {}
+    for b in libri_prec:
+        disc = b.get("disciplina", "").strip().upper()
+        if disc and disc not in prec_books_disc:
+            prec_books_disc[disc] = b
+    
+    # Trova libri vendibili (stessa serie tra precedente e attuale)
+    vendibili = []
+    for disc, book_prec in prec_books_disc.items():
+        if disc in my_books_disc:
+            my_book = my_books_disc[disc]
+            if same_series(book_prec, my_book):
+                vendibili.append({
+                    "id": book_prec.get("isbn", ""),
+                    "isbn": book_prec.get("isbn", ""),
+                    "titolo": book_prec.get("titolo", ""),
+                    "autori": book_prec.get("autori", ""),
+                    "disciplina": disc,
+                    "editore": book_prec.get("editore", ""),
+                    "prezzo_copertina": book_prec.get("prezzo_copertina", 0),
+                    "prezzo_suggerito": round(book_prec.get("prezzo_copertina", 0) * 0.5, 2),
+                    "classe_destinazione": classe_precedente
+                })
+    
+    return {
+        "books": vendibili,
+        "classe_destinazione": classe_precedente,
+        "totale": len(vendibili)
+    }
+
+
+@api_router.get("/profiles/{user_id}/children/{child_id}/books-to-buy")
+async def get_books_to_buy(user_id: str, child_id: str):
+    """
+    Restituisce la lista dei libri che il figlio può COMPRARE USATI (con logica compatibilità).
+    """
+    import re
+    
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+    
+    profili_figli = user.get("profili_figli", [])
+    child_profile = next((p for p in profili_figli if p.get("id") == child_id), None)
+    
+    if not child_profile:
+        raise HTTPException(status_code=404, detail="Profilo figlio non trovato")
+    
+    child_classe = int(child_profile.get("classe", 1))
+    child_tipo = child_profile.get("tipo_scuola", "primo_grado")
+    child_codice_scuola = child_profile.get("codice_scuola", "")
+    
+    if not child_codice_scuola:
+        return {"books": [], "error": "Codice scuola non configurato"}
+    
+    # Helper functions (stesse di sopra)
+    def get_series_name(title: str) -> str:
+        title = title.upper().strip()
+        title = re.sub(r'\s*V\.?\s*\d+', '', title, flags=re.IGNORECASE)
+        if '+' in title:
+            title = title.split('+')[0]
+        title = re.sub(r'\s*\(LDM.*?\)', '', title, flags=re.IGNORECASE)
+        title = re.sub(r'\s*-?\s*(VOLUME|VOL\.?)\s*\d+.*', '', title, flags=re.IGNORECASE)
+        title = re.sub(r'\s*-\s*\d+.*', '', title)
+        title = re.sub(r'\s+(LE\s+SCIENZE)\s+\d+', r' \1', title)
+        title = re.sub(r'\s+\d+\s*$', '', title)
+        words = title.split()
+        if len(words) > 1:
+            anno_specific = {'ARITMETICA', 'ALGEBRA', 'GEOMETRIA', 'ANTOLOGIA', 'LETTERATURA'}
+            words = [w for w in words if w not in anno_specific]
+        title = ' '.join(words).strip()
+        title = re.sub(r'\s*-\s*$', '', title).strip()
+        return title
+    
+    def has_edition_marker(title: str) -> str:
+        title = title.upper()
+        match = re.search(r'(\d+ED\.?|EDIZIONE\s+\w+|ED\.\s*\w+)', title)
+        return match.group(1) if match else ""
+    
+    def same_series(book1: dict, book2: dict) -> bool:
+        if book1.get("editore", "").upper() != book2.get("editore", "").upper():
+            return False
+        t1 = book1.get("titolo", "").upper()
+        t2 = book2.get("titolo", "").upper()
+        ed1 = has_edition_marker(t1)
+        ed2 = has_edition_marker(t2)
+        if ed1 != ed2:
+            return False
+        series1 = get_series_name(t1)
+        series2 = get_series_name(t2)
+        if series1 == series2:
+            return True
+        words1 = set(series1.split())
+        words2 = set(series2.split())
+        words1.discard('-')
+        words2.discard('-')
+        if not words1 or not words2:
+            return False
+        common = words1.intersection(words2)
+        min_words = min(len(words1), len(words2))
+        similarity = len(common) / max(len(words1), len(words2))
+        return similarity >= 0.7 and len(common) >= min(2, min_words)
+    
+    # Calcola classe successiva
+    isMedia = child_tipo == "primo_grado"
+    maxClasse = 3 if isMedia else (2 if child_classe <= 2 else 5)
+    classe_successiva = child_classe + 1 if child_classe < maxClasse else None
+    
+    if not classe_successiva:
+        return {"books": [], "message": "Ultimo anno del ciclo - niente da comprare usato"}
+    
+    # Carica libri della classe ATTUALE (che servono al figlio)
+    my_books = await db.books.find({
+        "scuole_adottanti": child_codice_scuola,
+        "anni_corso": child_classe,
+        "is_volume_unico": {"$ne": True}
+    }).to_list(100)
+    
+    # Carica libri della classe SUCCESSIVA (per confronto serie)
+    libri_succ = await db.books.find({
+        "scuole_adottanti": child_codice_scuola,
+        "anni_corso": classe_successiva,
+        "is_volume_unico": {"$ne": True}
+    }).to_list(100)
+    
+    # Organizza per disciplina
+    my_books_disc = {}
+    for b in my_books:
+        disc = b.get("disciplina", "").strip().upper()
+        if disc and disc not in my_books_disc:
+            my_books_disc[disc] = b
+    
+    succ_books_disc = {}
+    for b in libri_succ:
+        disc = b.get("disciplina", "").strip().upper()
+        if disc and disc not in succ_books_disc:
+            succ_books_disc[disc] = b
+    
+    # Trova libri comprabilità usati (stessa serie)
+    comprabilità = []
+    for disc, my_book in my_books_disc.items():
+        if disc in succ_books_disc:
+            book_succ = succ_books_disc[disc]
+            if same_series(my_book, book_succ):
+                comprabilità.append({
+                    "id": my_book.get("isbn", ""),
+                    "isbn": my_book.get("isbn", ""),
+                    "titolo": my_book.get("titolo", ""),
+                    "autori": my_book.get("autori", ""),
+                    "disciplina": disc,
+                    "editore": my_book.get("editore", ""),
+                    "prezzo_copertina": my_book.get("prezzo_copertina", 0),
+                    "prezzo_usato": round(my_book.get("prezzo_copertina", 0) * 0.5, 2),
+                    "risparmio": round(my_book.get("prezzo_copertina", 0) * 0.5, 2),
+                    "classe_origine": classe_successiva
+                })
+    
+    return {
+        "books": comprabilità,
+        "classe_origine": classe_successiva,
+        "totale": len(comprabilità)
+    }
+
+
 @api_router.get("/radar/{user_id}/sellers")
 async def get_radar_sellers(user_id: str, filter_type: Optional[str] = None):
     """Get list of sellers with their books that match user's wanted books"""

@@ -12,6 +12,7 @@ import {
   Modal,
   TextInput,
   ScrollView,
+  Switch,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -41,10 +42,10 @@ interface Book {
   id: string;
   isbn: string;
   titolo: string;
-  autore?: string;
   autori?: string;
   disciplina?: string;
   prezzo_copertina?: number;
+  prezzo_suggerito?: number;
   editore?: string;
 }
 
@@ -57,11 +58,12 @@ interface ChildProfile {
   tipo_scuola: string;
 }
 
-// Helper functions
-const getListingAuthor = (item: Listing): string => item.book_autore || item.book_autori || 'N/A';
-const getListingPrice = (item: Listing): number => item.prezzo_ministeriale || item.prezzo_copertina || 0;
-const getBookAuthor = (book: Book): string => book.autore || book.autori || 'N/A';
-const getBookPrice = (book: Book): number => book.prezzo_copertina || 0;
+// Condition options with traffic light colors
+const CONDITION_OPTIONS = [
+  { value: 'perfetto', label: 'Perfetto', color: '#4CAF50', icon: 'checkmark-circle' },
+  { value: 'buono', label: 'Buono', color: '#FF9800', icon: 'alert-circle' },
+  { value: 'molto_usato', label: 'Molto Usato', color: '#f44336', icon: 'close-circle' },
+];
 
 export default function SellScreen() {
   const router = useRouter();
@@ -84,10 +86,27 @@ export default function SellScreen() {
   // Selected book for listing
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
   const [showListingForm, setShowListingForm] = useState(false);
+  
+  // Form fields
   const [listingCondition, setListingCondition] = useState('buono');
   const [listingPrice, setListingPrice] = useState('');
-  const [listingPhoto, setListingPhoto] = useState<string | null>(null);
+  const [listingPhotos, setListingPhotos] = useState<string[]>([]);
+  const [hasWritings, setHasWritings] = useState(false);
+  const [hasHighlights, setHasHighlights] = useState(false);
+  const [hasFolds, setHasFolds] = useState(false);
+  const [coverCondition, setCoverCondition] = useState('buona');
+  const [pagesCondition, setPagesCondition] = useState('buone');
+  const [selectedBookshop, setSelectedBookshop] = useState('');
+  const [notes, setNotes] = useState('');
   const [creatingListing, setCreatingListing] = useState(false);
+
+  // Bookshop options
+  const bookshops = [
+    { id: 'privato', name: 'Vendita Privata' },
+    { id: 'cartoleria_centro', name: 'Cartolibreria Centro' },
+    { id: 'libreria_scolastica', name: 'Libreria Scolastica' },
+    { id: 'altro', name: 'Altra Cartolibreria' },
+  ];
 
   useFocusEffect(
     useCallback(() => {
@@ -132,36 +151,22 @@ export default function SellScreen() {
     setLoadingBooks(true);
 
     try {
-      const childClasse = parseInt(child.classe);
-      const isMedia = child.tipo_scuola === 'primo_grado';
-      
-      // Calculate target class (classe precedente per vendere)
-      let minClasse = isMedia ? 1 : (childClasse <= 2 ? 1 : 3);
-      let prevClasse = childClasse - 1;
-      
-      if (prevClasse < minClasse) {
-        Alert.alert(
-          'Inizio Ciclo',
-          `${child.nome_figlio} è al primo anno del ciclo, non ha libri da vendere alla classe precedente.`
-        );
-        setBooksToSell([]);
-        setTargetClasse(null);
-        setLoadingBooks(false);
-        return;
-      }
-
-      setTargetClasse(prevClasse);
-
-      // Load books from PREVIOUS class (the books the child used last year)
-      const booksResponse = await axios.get(
-        `${API_URL}/api/books?codice_scuola=${child.codice_scuola}&classe=${prevClasse}&limit=100`
+      // Use the new endpoint with compatibility logic
+      const response = await axios.get(
+        `${API_URL}/api/profiles/${userId}/children/${child.id}/books-to-sell`
       );
       
-      // Filter out volume unici (books used for multiple years - not sellable)
-      const annualBooks = booksResponse.data.filter((book: any) => !book.is_volume_unico);
-      
-      setBooksToSell(annualBooks);
-      setShowBookPicker(true);
+      if (response.data.books && response.data.books.length > 0) {
+        setBooksToSell(response.data.books);
+        setTargetClasse(response.data.classe_destinazione);
+        setShowBookPicker(true);
+      } else {
+        Alert.alert(
+          'Nessun libro vendibile',
+          response.data.message || `${child.nome_figlio} non ha libri compatibili da vendere.`
+        );
+        setBooksToSell([]);
+      }
     } catch (error) {
       console.error('Error loading books:', error);
       Alert.alert('Errore', 'Impossibile caricare i libri');
@@ -173,13 +178,28 @@ export default function SellScreen() {
   const selectBookToSell = (book: Book) => {
     setSelectedBook(book);
     setShowBookPicker(false);
-    setListingPrice((getBookPrice(book) * 0.5).toFixed(2));
+    
+    // Reset form
+    setListingPrice((book.prezzo_suggerito || (book.prezzo_copertina || 0) * 0.5).toFixed(2));
     setListingCondition('buono');
-    setListingPhoto(null);
+    setListingPhotos([]);
+    setHasWritings(false);
+    setHasHighlights(false);
+    setHasFolds(false);
+    setCoverCondition('buona');
+    setPagesCondition('buone');
+    setSelectedBookshop('privato');
+    setNotes('');
+    
     setShowListingForm(true);
   };
 
   const pickImage = async () => {
+    if (listingPhotos.length >= 4) {
+      Alert.alert('Limite raggiunto', 'Puoi caricare massimo 4 foto');
+      return;
+    }
+
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
@@ -189,11 +209,16 @@ export default function SellScreen() {
     });
 
     if (!result.canceled && result.assets[0].base64) {
-      setListingPhoto(result.assets[0].base64);
+      setListingPhotos([...listingPhotos, result.assets[0].base64]);
     }
   };
 
   const takePhoto = async () => {
+    if (listingPhotos.length >= 4) {
+      Alert.alert('Limite raggiunto', 'Puoi caricare massimo 4 foto');
+      return;
+    }
+
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!permission.granted) {
       Alert.alert('Permesso negato', 'Serve il permesso per usare la fotocamera');
@@ -208,8 +233,12 @@ export default function SellScreen() {
     });
 
     if (!result.canceled && result.assets[0].base64) {
-      setListingPhoto(result.assets[0].base64);
+      setListingPhotos([...listingPhotos, result.assets[0].base64]);
     }
+  };
+
+  const removePhoto = (index: number) => {
+    setListingPhotos(listingPhotos.filter((_, i) => i !== index));
   };
 
   const createListing = async () => {
@@ -221,19 +250,33 @@ export default function SellScreen() {
       return;
     }
 
+    if (listingPhotos.length === 0) {
+      Alert.alert('Foto richiesta', 'Aggiungi almeno una foto del libro');
+      return;
+    }
+
     setCreatingListing(true);
     try {
       await axios.post(`${API_URL}/api/listings?user_id=${userId}`, {
         book_id: selectedBook.isbn || selectedBook.id,
         book_isbn: selectedBook.isbn,
         book_titolo: selectedBook.titolo,
-        book_autori: getBookAuthor(selectedBook),
+        book_autori: selectedBook.autori,
         book_disciplina: selectedBook.disciplina,
-        prezzo_copertina: getBookPrice(selectedBook),
+        prezzo_copertina: selectedBook.prezzo_copertina,
         condizione: listingCondition,
         prezzo_vendita: price,
-        foto_base64: listingPhoto,
+        foto_base64: listingPhotos[0], // Main photo
+        foto_aggiuntive: listingPhotos.slice(1), // Additional photos
+        has_writings: hasWritings,
+        has_highlights: hasHighlights,
+        has_folds: hasFolds,
+        cover_condition: coverCondition,
+        pages_condition: pagesCondition,
+        bookshop: selectedBookshop,
+        notes: notes,
         child_profile_id: selectedChild?.id,
+        child_name: selectedChild?.nome_figlio,
       });
 
       Alert.alert('Successo!', 'Annuncio creato con successo');
@@ -262,12 +305,8 @@ export default function SellScreen() {
                 `${API_URL}/api/listings/${listingId}?user_id=${userId}`
               );
               setListings(listings.filter((l) => l.id !== listingId));
-              Alert.alert('Eliminato', 'Annuncio eliminato con successo');
             } catch (error: any) {
-              Alert.alert(
-                'Errore',
-                error.response?.data?.detail || 'Impossibile eliminare'
-              );
+              Alert.alert('Errore', error.response?.data?.detail || 'Impossibile eliminare');
             }
           },
         },
@@ -275,17 +314,8 @@ export default function SellScreen() {
     );
   };
 
-  const getConditionLabel = (condition: string) => {
-    const labels: { [key: string]: string } = {
-      nuovo: 'Nuovo',
-      come_nuovo: 'Come Nuovo',
-      ottime_condizioni: 'Ottime',
-      buono: 'Buono',
-      scarso: 'Scarso',
-      perfetto: 'Perfetto',
-      molto_usato: 'Molto usato',
-    };
-    return labels[condition] || condition;
+  const getConditionConfig = (condition: string) => {
+    return CONDITION_OPTIONS.find(c => c.value === condition) || CONDITION_OPTIONS[1];
   };
 
   const getStatoConfig = (stato: string) => {
@@ -296,8 +326,6 @@ export default function SellScreen() {
         return { color: '#FF9800', label: 'Da consegnare', icon: 'time' };
       case 'consegnato':
         return { color: '#2196F3', label: 'Consegnato', icon: 'checkmark-circle' };
-      case 'ritirato':
-        return { color: '#9C27B0', label: 'Completato', icon: 'trophy' };
       default:
         return { color: '#666', label: stato, icon: 'ellipse' };
     }
@@ -305,6 +333,7 @@ export default function SellScreen() {
 
   const renderListing = ({ item }: { item: Listing }) => {
     const statoConfig = getStatoConfig(item.stato);
+    const condConfig = getConditionConfig(item.condizione);
     
     return (
       <View style={styles.listingCard}>
@@ -317,9 +346,7 @@ export default function SellScreen() {
         
         <View style={styles.listingContent}>
           <View style={styles.listingHeader}>
-            <View
-              style={[styles.statoBadge, { backgroundColor: statoConfig.color }]}
-            >
+            <View style={[styles.statoBadge, { backgroundColor: statoConfig.color }]}>
               <Ionicons name={statoConfig.icon as any} size={12} color="#fff" />
               <Text style={styles.statoText}>{statoConfig.label}</Text>
             </View>
@@ -327,11 +354,13 @@ export default function SellScreen() {
           </View>
 
           <Text style={styles.listingTitle} numberOfLines={2}>{item.book_titolo}</Text>
-          <Text style={styles.listingAuthor}>{getListingAuthor(item)}</Text>
 
           <View style={styles.listingMeta}>
-            <View style={styles.conditionBadge}>
-              <Text style={styles.conditionText}>{getConditionLabel(item.condizione)}</Text>
+            <View style={[styles.conditionBadge, { borderColor: condConfig.color }]}>
+              <Ionicons name={condConfig.icon as any} size={14} color={condConfig.color} />
+              <Text style={[styles.conditionText, { color: condConfig.color }]}>
+                {condConfig.label}
+              </Text>
             </View>
           </View>
 
@@ -359,7 +388,7 @@ export default function SellScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Header with Add Button */}
+      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>I tuoi annunci</Text>
         <TouchableOpacity
@@ -444,7 +473,7 @@ export default function SellScreen() {
                     onPress={() => canSell && selectChildForSelling(child)}
                     disabled={!canSell}
                   >
-                    <View style={styles.childOptionIcon}>
+                    <View style={[styles.childOptionIcon, { backgroundColor: canSell ? '#e8f5e9' : '#f0f0f0' }]}>
                       <Ionicons name="person" size={24} color={canSell ? "#1a472a" : "#999"} />
                     </View>
                     <View style={styles.childOptionInfo}>
@@ -491,7 +520,7 @@ export default function SellScreen() {
 
             {selectedChild && targetClasse && (
               <Text style={styles.modalSubtitle}>
-                Libri di {selectedChild.nome_figlio} della {targetClasse}ª da vendere
+                Libri di {selectedChild.nome_figlio} vendibili alla {targetClasse}ª
               </Text>
             )}
 
@@ -511,10 +540,10 @@ export default function SellScreen() {
                         {item.titolo}
                       </Text>
                       <Text style={styles.bookOptionAuthor}>
-                        {item.disciplina} - {getBookAuthor(item)}
+                        {item.disciplina}
                       </Text>
                       <Text style={styles.bookOptionPrice}>
-                        Prezzo suggerito: €{(getBookPrice(item) * 0.5).toFixed(2)}
+                        Prezzo suggerito: €{item.prezzo_suggerito?.toFixed(2) || ((item.prezzo_copertina || 0) * 0.5).toFixed(2)}
                       </Text>
                     </View>
                     <Ionicons name="add-circle" size={28} color="#1a472a" />
@@ -522,7 +551,11 @@ export default function SellScreen() {
                 )}
                 ListEmptyComponent={
                   <View style={styles.emptyBooks}>
-                    <Text style={styles.emptyBooksText}>Nessun libro trovato</Text>
+                    <Ionicons name="book-outline" size={48} color="#ccc" />
+                    <Text style={styles.emptyBooksText}>Nessun libro vendibile</Text>
+                    <Text style={styles.emptyBooksSubtext}>
+                      I libri potrebbero avere edizione diversa
+                    </Text>
                   </View>
                 }
               />
@@ -531,7 +564,7 @@ export default function SellScreen() {
         </View>
       </Modal>
 
-      {/* Listing Form Modal */}
+      {/* Detailed Listing Form Modal */}
       <Modal
         visible={showListingForm}
         transparent={true}
@@ -539,7 +572,7 @@ export default function SellScreen() {
         onRequestClose={() => setShowListingForm(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxHeight: '90%' }]}>
+          <View style={[styles.modalContent, { maxHeight: '95%' }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Dettagli Annuncio</Text>
               <TouchableOpacity onPress={() => setShowListingForm(false)}>
@@ -548,73 +581,188 @@ export default function SellScreen() {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
+              {/* Book Info */}
               {selectedBook && (
                 <View style={styles.selectedBookInfo}>
                   <Text style={styles.selectedBookTitle}>{selectedBook.titolo}</Text>
                   <Text style={styles.selectedBookAuthor}>
-                    {selectedBook.disciplina} - {getBookAuthor(selectedBook)}
+                    {selectedBook.disciplina}
                   </Text>
                 </View>
               )}
 
-              {/* Photo Section */}
-              <Text style={styles.formLabel}>Foto del libro</Text>
-              <View style={styles.photoSection}>
-                {listingPhoto ? (
-                  <View style={styles.photoPreview}>
+              {/* Photos Section */}
+              <Text style={styles.formLabel}>Foto del libro *</Text>
+              <View style={styles.photosGrid}>
+                {listingPhotos.map((photo, index) => (
+                  <View key={index} style={styles.photoItem}>
                     <Image
-                      source={{ uri: `data:image/jpeg;base64,${listingPhoto}` }}
-                      style={styles.previewImage}
+                      source={{ uri: `data:image/jpeg;base64,${photo}` }}
+                      style={styles.photoThumbnail}
                     />
                     <TouchableOpacity
-                      style={styles.removePhotoButton}
-                      onPress={() => setListingPhoto(null)}
+                      style={styles.removePhotoBtn}
+                      onPress={() => removePhoto(index)}
                     >
-                      <Ionicons name="close-circle" size={24} color="#ff4444" />
+                      <Ionicons name="close-circle" size={22} color="#ff4444" />
                     </TouchableOpacity>
                   </View>
-                ) : (
-                  <View style={styles.photoButtons}>
-                    <TouchableOpacity style={styles.photoButton} onPress={takePhoto}>
+                ))}
+                {listingPhotos.length < 4 && (
+                  <View style={styles.addPhotoButtons}>
+                    <TouchableOpacity style={styles.addPhotoBtn} onPress={takePhoto}>
                       <Ionicons name="camera" size={24} color="#1a472a" />
-                      <Text style={styles.photoButtonText}>Scatta</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.photoButton} onPress={pickImage}>
+                    <TouchableOpacity style={styles.addPhotoBtn} onPress={pickImage}>
                       <Ionicons name="images" size={24} color="#1a472a" />
-                      <Text style={styles.photoButtonText}>Galleria</Text>
                     </TouchableOpacity>
                   </View>
                 )}
               </View>
+              <Text style={styles.photoHint}>Aggiungi fino a 4 foto</Text>
 
-              {/* Condition Section */}
-              <Text style={styles.formLabel}>Condizione</Text>
-              <View style={styles.conditionOptions}>
-                {['perfetto', 'buono', 'molto_usato'].map((cond) => (
+              {/* Condition - Traffic Light */}
+              <Text style={styles.formLabel}>Condizione Generale</Text>
+              <View style={styles.trafficLightContainer}>
+                {CONDITION_OPTIONS.map((option) => (
                   <TouchableOpacity
-                    key={cond}
+                    key={option.value}
                     style={[
-                      styles.conditionOption,
-                      listingCondition === cond && styles.conditionOptionActive,
+                      styles.trafficLightOption,
+                      listingCondition === option.value && { borderColor: option.color, borderWidth: 3 }
                     ]}
-                    onPress={() => setListingCondition(cond)}
+                    onPress={() => setListingCondition(option.value)}
                   >
-                    <Text style={[
-                      styles.conditionOptionText,
-                      listingCondition === cond && styles.conditionOptionTextActive,
-                    ]}>
-                      {getConditionLabel(cond)}
+                    <View style={[styles.trafficLight, { backgroundColor: option.color }]}>
+                      <Ionicons name={option.icon as any} size={24} color="#fff" />
+                    </View>
+                    <Text style={[styles.trafficLightLabel, { color: option.color }]}>
+                      {option.label}
                     </Text>
                   </TouchableOpacity>
                 ))}
               </View>
 
-              {/* Price Section */}
+              {/* Detailed Conditions */}
+              <Text style={styles.formLabel}>Dettagli Condizione</Text>
+              <View style={styles.detailsContainer}>
+                <View style={styles.detailRow}>
+                  <View style={styles.detailInfo}>
+                    <Ionicons name="pencil" size={20} color="#666" />
+                    <Text style={styles.detailLabel}>Scritte a penna/matita</Text>
+                  </View>
+                  <Switch
+                    value={hasWritings}
+                    onValueChange={setHasWritings}
+                    trackColor={{ false: '#e0e0e0', true: '#FF9800' }}
+                    thumbColor={hasWritings ? '#fff' : '#fff'}
+                  />
+                </View>
+
+                <View style={styles.detailRow}>
+                  <View style={styles.detailInfo}>
+                    <Ionicons name="color-fill" size={20} color="#666" />
+                    <Text style={styles.detailLabel}>Evidenziature</Text>
+                  </View>
+                  <Switch
+                    value={hasHighlights}
+                    onValueChange={setHasHighlights}
+                    trackColor={{ false: '#e0e0e0', true: '#FF9800' }}
+                    thumbColor={hasHighlights ? '#fff' : '#fff'}
+                  />
+                </View>
+
+                <View style={styles.detailRow}>
+                  <View style={styles.detailInfo}>
+                    <Ionicons name="document" size={20} color="#666" />
+                    <Text style={styles.detailLabel}>Pieghe/Orecchie</Text>
+                  </View>
+                  <Switch
+                    value={hasFolds}
+                    onValueChange={setHasFolds}
+                    trackColor={{ false: '#e0e0e0', true: '#FF9800' }}
+                    thumbColor={hasFolds ? '#fff' : '#fff'}
+                  />
+                </View>
+              </View>
+
+              {/* Cover Condition */}
+              <Text style={styles.formLabel}>Condizione Copertina</Text>
+              <View style={styles.optionsRow}>
+                {['perfetta', 'buona', 'usurata'].map((opt) => (
+                  <TouchableOpacity
+                    key={opt}
+                    style={[
+                      styles.optionChip,
+                      coverCondition === opt && styles.optionChipActive
+                    ]}
+                    onPress={() => setCoverCondition(opt)}
+                  >
+                    <Text style={[
+                      styles.optionChipText,
+                      coverCondition === opt && styles.optionChipTextActive
+                    ]}>
+                      {opt.charAt(0).toUpperCase() + opt.slice(1)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Pages Condition */}
+              <Text style={styles.formLabel}>Condizione Pagine</Text>
+              <View style={styles.optionsRow}>
+                {['perfette', 'buone', 'ingiallite'].map((opt) => (
+                  <TouchableOpacity
+                    key={opt}
+                    style={[
+                      styles.optionChip,
+                      pagesCondition === opt && styles.optionChipActive
+                    ]}
+                    onPress={() => setPagesCondition(opt)}
+                  >
+                    <Text style={[
+                      styles.optionChipText,
+                      pagesCondition === opt && styles.optionChipTextActive
+                    ]}>
+                      {opt.charAt(0).toUpperCase() + opt.slice(1)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Bookshop Selection */}
+              <Text style={styles.formLabel}>Punto di scambio</Text>
+              <View style={styles.bookshopOptions}>
+                {bookshops.map((shop) => (
+                  <TouchableOpacity
+                    key={shop.id}
+                    style={[
+                      styles.bookshopOption,
+                      selectedBookshop === shop.id && styles.bookshopOptionActive
+                    ]}
+                    onPress={() => setSelectedBookshop(shop.id)}
+                  >
+                    <Ionicons 
+                      name={selectedBookshop === shop.id ? "radio-button-on" : "radio-button-off"} 
+                      size={20} 
+                      color={selectedBookshop === shop.id ? "#1a472a" : "#666"} 
+                    />
+                    <Text style={[
+                      styles.bookshopOptionText,
+                      selectedBookshop === shop.id && styles.bookshopOptionTextActive
+                    ]}>
+                      {shop.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Price */}
               <Text style={styles.formLabel}>Prezzo di vendita</Text>
-              <View style={styles.priceInput}>
+              <View style={styles.priceInputContainer}>
                 <Text style={styles.euroSign}>€</Text>
                 <TextInput
-                  style={styles.priceTextInput}
+                  style={styles.priceInput}
                   value={listingPrice}
                   onChangeText={setListingPrice}
                   keyboardType="decimal-pad"
@@ -623,11 +771,22 @@ export default function SellScreen() {
               </View>
               {selectedBook && (
                 <Text style={styles.priceSuggestion}>
-                  Prezzo suggerito: €{(getBookPrice(selectedBook) * 0.5).toFixed(2)} (50% del nuovo)
+                  Prezzo suggerito: €{selectedBook.prezzo_suggerito?.toFixed(2) || ((selectedBook.prezzo_copertina || 0) * 0.5).toFixed(2)} (50% del nuovo)
                 </Text>
               )}
 
-              {/* Submit Button */}
+              {/* Notes */}
+              <Text style={styles.formLabel}>Note aggiuntive (opzionale)</Text>
+              <TextInput
+                style={styles.notesInput}
+                value={notes}
+                onChangeText={setNotes}
+                placeholder="Es: Alcune pagine sottolineate a matita..."
+                multiline
+                numberOfLines={3}
+              />
+
+              {/* Submit */}
               <TouchableOpacity
                 style={[styles.submitButton, creatingListing && styles.submitButtonDisabled]}
                 onPress={createListing}
@@ -736,27 +895,24 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#333',
-    marginBottom: 4,
-  },
-  listingAuthor: {
-    fontSize: 13,
-    color: '#666',
     marginBottom: 8,
   },
   listingMeta: {
     flexDirection: 'row',
-    alignItems: 'center',
     marginBottom: 12,
   },
   conditionBadge: {
-    backgroundColor: '#f0f0f0',
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,
+    borderWidth: 1,
+    gap: 4,
   },
   conditionText: {
     fontSize: 12,
-    color: '#666',
+    fontWeight: '500',
   },
   deleteButton: {
     flexDirection: 'row',
@@ -828,7 +984,6 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#e8f5e9',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -876,7 +1031,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
   },
-  // Book picker styles
+  // Book picker
   bookOption: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -909,9 +1064,16 @@ const styles = StyleSheet.create({
     padding: 40,
   },
   emptyBooksText: {
-    color: '#999',
+    fontSize: 16,
+    color: '#666',
+    marginTop: 12,
   },
-  // Listing form styles
+  emptyBooksSubtext: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 4,
+  },
+  // Form styles
   selectedBookInfo: {
     backgroundColor: '#e8f5e9',
     padding: 16,
@@ -932,70 +1094,147 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#333',
-    marginBottom: 8,
+    marginBottom: 10,
     marginTop: 16,
   },
-  photoSection: {
-    marginBottom: 8,
-  },
-  photoButtons: {
+  // Photos
+  photosGrid: {
     flexDirection: 'row',
-    gap: 12,
+    flexWrap: 'wrap',
+    gap: 10,
   },
-  photoButton: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#f0f0f0',
-    padding: 20,
-    borderRadius: 12,
-    gap: 8,
-  },
-  photoButtonText: {
-    fontSize: 13,
-    color: '#1a472a',
-    fontWeight: '500',
-  },
-  photoPreview: {
+  photoItem: {
     position: 'relative',
   },
-  previewImage: {
-    width: '100%',
-    height: 200,
-    borderRadius: 12,
-    backgroundColor: '#f0f0f0',
+  photoThumbnail: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
   },
-  removePhotoButton: {
+  removePhotoBtn: {
     position: 'absolute',
-    top: 8,
-    right: 8,
+    top: -8,
+    right: -8,
   },
-  conditionOptions: {
+  addPhotoButtons: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 10,
   },
-  conditionOption: {
+  addPhotoBtn: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    backgroundColor: '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#ddd',
+    borderStyle: 'dashed',
+  },
+  photoHint: {
+    fontSize: 11,
+    color: '#999',
+    marginTop: 6,
+  },
+  // Traffic light
+  trafficLightContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  trafficLightOption: {
     flex: 1,
     alignItems: 'center',
     padding: 12,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 8,
+    borderRadius: 12,
+    backgroundColor: '#f8f9fa',
     borderWidth: 2,
     borderColor: 'transparent',
   },
-  conditionOptionActive: {
-    borderColor: '#1a472a',
-    backgroundColor: '#e8f5e9',
+  trafficLight: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
   },
-  conditionOptionText: {
+  trafficLightLabel: {
     fontSize: 12,
+    fontWeight: '600',
+  },
+  // Details
+  detailsContainer: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    padding: 4,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+  },
+  detailInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  detailLabel: {
+    fontSize: 14,
+    color: '#333',
+  },
+  // Options
+  optionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  optionChip: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#f0f0f0',
+    alignItems: 'center',
+  },
+  optionChipActive: {
+    backgroundColor: '#e8f5e9',
+    borderWidth: 1,
+    borderColor: '#1a472a',
+  },
+  optionChipText: {
+    fontSize: 13,
     color: '#666',
   },
-  conditionOptionTextActive: {
+  optionChipTextActive: {
     color: '#1a472a',
-    fontWeight: 'bold',
+    fontWeight: '600',
   },
-  priceInput: {
+  // Bookshop
+  bookshopOptions: {
+    gap: 8,
+  },
+  bookshopOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    gap: 10,
+  },
+  bookshopOptionActive: {
+    backgroundColor: '#e8f5e9',
+  },
+  bookshopOptionText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  bookshopOptionTextActive: {
+    color: '#1a472a',
+    fontWeight: '500',
+  },
+  // Price
+  priceInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#f0f0f0',
@@ -1003,13 +1242,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   euroSign: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#1a472a',
   },
-  priceTextInput: {
+  priceInput: {
     flex: 1,
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
     color: '#333',
     padding: 16,
@@ -1019,6 +1258,16 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 8,
   },
+  // Notes
+  notesInput: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 14,
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  // Submit
   submitButton: {
     flexDirection: 'row',
     alignItems: 'center',
