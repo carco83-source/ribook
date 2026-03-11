@@ -1776,8 +1776,13 @@ async def get_child_compatibility(user_id: str, child_id: str):
 @api_router.get("/profiles/{user_id}/children/{child_id}/books-to-sell")
 async def get_books_to_sell(user_id: str, child_id: str):
     """
-    Restituisce la lista dei libri che il figlio può VENDERE (con logica compatibilità).
-    Solo i libri della classe precedente che sono compatibili con quelli della classe attuale.
+    Restituisce la lista dei libri che il figlio può VENDERE.
+    
+    Logica:
+    1. Libri ANNUALI della classe precedente → vendibili se stessa serie/edizione
+    2. Libri PLURIENNALI → vendibili SOLO se max(anni_corso) < classe_attuale
+       (cioè la materia è finita e il libro non serve più)
+    3. Libri QUINQUENNALI (es. Religione [1,2,3,4,5]) → MAI vendibili
     """
     import re
     
@@ -1846,63 +1851,144 @@ async def get_books_to_sell(user_id: str, child_id: str):
         similarity = len(common) / max(len(words1), len(words2))
         return similarity >= 0.7 and len(common) >= min(2, min_words)
     
-    # Calcola classe precedente
+    def is_quinquennale(anni_corso: list) -> bool:
+        """Verifica se è un volume che copre tutti e 5 gli anni (o tutti e 3 per le medie)"""
+        if not anni_corso:
+            return False
+        # Per superiori: [1,2,3,4,5] o quasi
+        if len(anni_corso) >= 5:
+            return True
+        # Per medie: [1,2,3]
+        if child_tipo == "primo_grado" and len(anni_corso) >= 3:
+            return True
+        return False
+    
+    # Calcola classe precedente (per libri annuali)
     isMedia = child_tipo == "primo_grado"
     minClasse = 1 if isMedia else (1 if child_classe <= 2 else 3)
     classe_precedente = child_classe - 1 if child_classe > minClasse else None
     
-    if not classe_precedente:
-        return {"books": [], "message": "Primo anno del ciclo - niente da vendere"}
+    if not classe_precedente and child_classe == 1:
+        return {"books": [], "message": "Primo anno - niente da vendere"}
     
-    # Carica libri della classe ATTUALE (che il figlio ha ORA)
-    my_books = await db.books.find({
-        "scuole_adottanti": child_codice_scuola,
-        "anni_corso": child_classe,
-        "is_volume_unico": {"$ne": True}
-    }).to_list(100)
-    
-    # Carica libri della classe PRECEDENTE (che servono a chi è sotto)
-    libri_prec = await db.books.find({
-        "scuole_adottanti": child_codice_scuola,
-        "anni_corso": classe_precedente,
-        "is_volume_unico": {"$ne": True}
-    }).to_list(100)
-    
-    # Organizza per disciplina
-    my_books_disc = {}
-    for b in my_books:
-        disc = b.get("disciplina", "").strip().upper()
-        if disc and disc not in my_books_disc:
-            my_books_disc[disc] = b
-    
-    prec_books_disc = {}
-    for b in libri_prec:
-        disc = b.get("disciplina", "").strip().upper()
-        if disc and disc not in prec_books_disc:
-            prec_books_disc[disc] = b
-    
-    # Trova libri vendibili (stessa serie tra precedente e attuale)
     vendibili = []
-    for disc, book_prec in prec_books_disc.items():
-        if disc in my_books_disc:
-            my_book = my_books_disc[disc]
-            if same_series(book_prec, my_book):
+    
+    # === PARTE 1: Libri ANNUALI della classe precedente ===
+    if classe_precedente:
+        # Carica libri della classe ATTUALE (che il figlio ha ORA)
+        my_books = await db.books.find({
+            "scuole_adottanti": child_codice_scuola,
+            "anni_corso": child_classe
+        }).to_list(200)
+        
+        # Carica libri della classe PRECEDENTE
+        libri_prec = await db.books.find({
+            "scuole_adottanti": child_codice_scuola,
+            "anni_corso": classe_precedente
+        }).to_list(200)
+        
+        # Organizza per disciplina
+        my_books_disc = {}
+        for b in my_books:
+            disc = b.get("disciplina", "").strip().upper()
+            if disc and disc not in my_books_disc:
+                my_books_disc[disc] = b
+        
+        # Trova libri annuali vendibili
+        for b in libri_prec:
+            anni = b.get("anni_corso", [])
+            disc = b.get("disciplina", "").strip().upper()
+            
+            # Salta i quinquennali/triennali
+            if is_quinquennale(anni):
+                continue
+            
+            # Se è un libro che copre PIÙ anni, controlla se la materia continua
+            if len(anni) > 1:
+                # Se max(anni) >= classe_attuale, il libro serve ancora → non vendibile
+                if max(anni) >= child_classe:
+                    continue
+                # Altrimenti la materia è finita → vendibile
                 vendibili.append({
-                    "id": book_prec.get("isbn", ""),
-                    "isbn": book_prec.get("isbn", ""),
-                    "titolo": book_prec.get("titolo", ""),
-                    "autori": book_prec.get("autori", ""),
+                    "id": b.get("isbn", ""),
+                    "isbn": b.get("isbn", ""),
+                    "titolo": b.get("titolo", ""),
+                    "autori": b.get("autori", ""),
                     "disciplina": disc,
-                    "editore": book_prec.get("editore", ""),
-                    "prezzo_copertina": book_prec.get("prezzo_copertina", 0),
-                    "prezzo_suggerito": round(book_prec.get("prezzo_copertina", 0) * 0.5, 2),
-                    "classe_destinazione": classe_precedente
+                    "editore": b.get("editore", ""),
+                    "prezzo_copertina": b.get("prezzo_copertina", 0),
+                    "prezzo_suggerito": round(b.get("prezzo_copertina", 0) * 0.5, 2),
+                    "classe_destinazione": classe_precedente,
+                    "tipo": "pluriennale_finito"
                 })
+            else:
+                # Libro ANNUALE - verifica compatibilità serie con classe attuale
+                if disc in my_books_disc:
+                    my_book = my_books_disc[disc]
+                    if same_series(b, my_book):
+                        vendibili.append({
+                            "id": b.get("isbn", ""),
+                            "isbn": b.get("isbn", ""),
+                            "titolo": b.get("titolo", ""),
+                            "autori": b.get("autori", ""),
+                            "disciplina": disc,
+                            "editore": b.get("editore", ""),
+                            "prezzo_copertina": b.get("prezzo_copertina", 0),
+                            "prezzo_suggerito": round(b.get("prezzo_copertina", 0) * 0.5, 2),
+                            "classe_destinazione": classe_precedente,
+                            "tipo": "annuale"
+                        })
+    
+    # === PARTE 2: Libri PLURIENNALI che sono finiti ===
+    # Cerca tutti i libri della scuola che il figlio potrebbe aver usato in passato
+    # e che ora non servono più (max_anno < classe_attuale)
+    all_past_books = await db.books.find({
+        "scuole_adottanti": child_codice_scuola,
+        "anni_corso": {"$lt": child_classe}  # Libri di classi precedenti
+    }).to_list(300)
+    
+    # Trova libri pluriennali la cui materia è finita
+    already_added = set(v["isbn"] for v in vendibili)
+    for b in all_past_books:
+        isbn = b.get("isbn", "")
+        if isbn in already_added:
+            continue
+            
+        anni = b.get("anni_corso", [])
+        disc = b.get("disciplina", "").strip().upper()
+        
+        # Salta i quinquennali
+        if is_quinquennale(anni):
+            continue
+        
+        # Se è pluriennale e max(anni) < classe_attuale → vendibile
+        if len(anni) > 1 and max(anni) < child_classe:
+            vendibili.append({
+                "id": isbn,
+                "isbn": isbn,
+                "titolo": b.get("titolo", ""),
+                "autori": b.get("autori", ""),
+                "disciplina": disc,
+                "editore": b.get("editore", ""),
+                "prezzo_copertina": b.get("prezzo_copertina", 0),
+                "prezzo_suggerito": round(b.get("prezzo_copertina", 0) * 0.5, 2),
+                "classe_destinazione": max(anni),  # Chi entra in quella classe lo vuole
+                "tipo": "pluriennale_finito"
+            })
+            already_added.add(isbn)
+    
+    # Rimuovi duplicati per ISBN
+    seen_isbn = set()
+    unique_vendibili = []
+    for v in vendibili:
+        if v["isbn"] not in seen_isbn:
+            seen_isbn.add(v["isbn"])
+            unique_vendibili.append(v)
     
     return {
-        "books": vendibili,
-        "classe_destinazione": classe_precedente,
-        "totale": len(vendibili)
+        "books": unique_vendibili,
+        "classe_attuale": child_classe,
+        "totale": len(unique_vendibili)
     }
 
 
