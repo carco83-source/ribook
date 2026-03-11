@@ -60,6 +60,7 @@ interface ChildProfile {
 
 // Condition options with traffic light colors
 const CONDITION_OPTIONS = [
+  { value: 'nuovo', label: 'Nuovo', color: '#2196F3', icon: 'sparkles' },
   { value: 'perfetto', label: 'Perfetto', color: '#4CAF50', icon: 'checkmark-circle' },
   { value: 'buono', label: 'Buono', color: '#FF9800', icon: 'alert-circle' },
   { value: 'molto_usato', label: 'Molto Usato', color: '#f44336', icon: 'close-circle' },
@@ -98,6 +99,9 @@ export default function SellScreen() {
   const [notes, setNotes] = useState('');
   const [creatingListing, setCreatingListing] = useState(false);
 
+  // Libro Nuovo flag
+  const [isNewBook, setIsNewBook] = useState(false);
+
   // Multi-select bookshops
   const [selectedBookshops, setSelectedBookshops] = useState<string[]>([]);
 
@@ -135,6 +139,11 @@ export default function SellScreen() {
 
   // Calcolo automatico condizione e prezzo
   const calculateCondition = () => {
+    // Se il libro è NUOVO, restituisci direttamente 'nuovo'
+    if (isNewBook) {
+      return 'nuovo';
+    }
+    
     // Sistema a punti: si parte da 100 e si sottraggono punti per ogni difetto
     let score = 100;
     
@@ -159,6 +168,7 @@ export default function SellScreen() {
 
   const getConditionPercentage = (condition: string) => {
     switch (condition) {
+      case 'nuovo': return 0.85;      // 85% (solo 15% di sconto)
       case 'perfetto': return 0.60;   // 60%
       case 'buono': return 0.50;      // 50%
       case 'molto_usato': return 0.40; // 40%
@@ -262,6 +272,7 @@ export default function SellScreen() {
     setCoverCondition('perfetta');
     setPagesCondition('perfette');
     setSelectedBookshops([]);
+    setIsNewBook(false);
     setNotes('');
     
     setShowListingForm(true);
@@ -767,91 +778,142 @@ export default function SellScreen() {
                 Indica le condizioni del libro per calcolare automaticamente il prezzo
               </Text>
 
-              {/* Detailed Conditions */}
-              <Text style={styles.formLabel}>Difetti presenti</Text>
-              <View style={styles.detailsContainer}>
-                <View style={styles.detailRow}>
-                  <View style={styles.detailInfo}>
-                    <Ionicons name="pencil" size={20} color="#666" />
-                    <Text style={styles.detailLabel}>Scritte a penna/matita</Text>
-                  </View>
-                  <Switch
-                    value={hasWritings}
-                    onValueChange={setHasWritings}
-                    trackColor={{ false: '#e0e0e0', true: '#FF9800' }}
-                    thumbColor={hasWritings ? '#fff' : '#fff'}
+              {/* NEW BOOK CHECKBOX */}
+              <TouchableOpacity
+                style={[
+                  styles.newBookCard,
+                  isNewBook && styles.newBookCardActive
+                ]}
+                onPress={() => setIsNewBook(!isNewBook)}
+              >
+                <View style={styles.newBookHeader}>
+                  <Ionicons 
+                    name={isNewBook ? "checkbox" : "square-outline"} 
+                    size={26} 
+                    color={isNewBook ? "#2196F3" : "#666"} 
                   />
-                </View>
-
-                <View style={styles.detailRow}>
-                  <View style={styles.detailInfo}>
-                    <Ionicons name="color-fill" size={20} color="#666" />
-                    <Text style={styles.detailLabel}>Evidenziature</Text>
-                  </View>
-                  <Switch
-                    value={hasHighlights}
-                    onValueChange={setHasHighlights}
-                    trackColor={{ false: '#e0e0e0', true: '#FF9800' }}
-                    thumbColor={hasHighlights ? '#fff' : '#fff'}
-                  />
-                </View>
-
-                <View style={styles.detailRow}>
-                  <View style={styles.detailInfo}>
-                    <Ionicons name="document" size={20} color="#666" />
-                    <Text style={styles.detailLabel}>Pieghe/Orecchie</Text>
-                  </View>
-                  <Switch
-                    value={hasFolds}
-                    onValueChange={setHasFolds}
-                    trackColor={{ false: '#e0e0e0', true: '#FF9800' }}
-                    thumbColor={hasFolds ? '#fff' : '#fff'}
-                  />
-                </View>
-              </View>
-
-              {/* Cover Condition */}
-              <Text style={styles.formLabel}>Condizione Copertina</Text>
-              <View style={styles.optionsRow}>
-                {['perfetta', 'buona', 'usurata'].map((opt) => (
-                  <TouchableOpacity
-                    key={opt}
-                    style={[
-                      styles.optionChip,
-                      coverCondition === opt && styles.optionChipActive
-                    ]}
-                    onPress={() => setCoverCondition(opt)}
-                  >
-                    <Text style={[
-                      styles.optionChipText,
-                      coverCondition === opt && styles.optionChipTextActive
-                    ]}>
-                      {opt.charAt(0).toUpperCase() + opt.slice(1)}
+                  <View style={styles.newBookInfo}>
+                    <Text style={[styles.newBookTitle, isNewBook && styles.newBookTitleActive]}>
+                      ✨ Libro Nuovo
                     </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              {/* Pages Condition */}
-              <Text style={styles.formLabel}>Condizione Pagine</Text>
-              <View style={styles.optionsRow}>
-                {['perfette', 'buone', 'ingiallite'].map((opt) => (
-                  <TouchableOpacity
-                    key={opt}
-                    style={[
-                      styles.optionChip,
-                      pagesCondition === opt && styles.optionChipActive
-                    ]}
-                    onPress={() => setPagesCondition(opt)}
-                  >
-                    <Text style={[
-                      styles.optionChipText,
-                      pagesCondition === opt && styles.optionChipTextActive
-                    ]}>
-                      {opt.charAt(0).toUpperCase() + opt.slice(1)}
+                    <Text style={styles.newBookSubtitle}>
+                      Mai usato, ancora nella confezione originale
                     </Text>
-                  </TouchableOpacity>
-                ))}
+                  </View>
+                </View>
+                {isNewBook && (
+                  <View style={styles.newBookBadge}>
+                    <Text style={styles.newBookBadgeText}>85% del prezzo di copertina</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+
+              {/* Disabled overlay message when book is new */}
+              {isNewBook && (
+                <View style={styles.disabledOverlayMessage}>
+                  <Ionicons name="information-circle" size={20} color="#2196F3" />
+                  <Text style={styles.disabledOverlayText}>
+                    Il libro è nuovo, non è necessario indicare le condizioni
+                  </Text>
+                </View>
+              )}
+
+              {/* Detailed Conditions - disabled if new */}
+              <View style={[isNewBook && styles.disabledSection]}>
+                <Text style={[styles.formLabel, isNewBook && styles.disabledText]}>Difetti presenti</Text>
+                <View style={styles.detailsContainer}>
+                  <View style={styles.detailRow}>
+                    <View style={styles.detailInfo}>
+                      <Ionicons name="pencil" size={20} color={isNewBook ? "#ccc" : "#666"} />
+                      <Text style={[styles.detailLabel, isNewBook && styles.disabledText]}>Scritte a penna/matita</Text>
+                    </View>
+                    <Switch
+                      value={hasWritings}
+                      onValueChange={setHasWritings}
+                      trackColor={{ false: '#e0e0e0', true: '#FF9800' }}
+                      thumbColor={hasWritings ? '#fff' : '#fff'}
+                      disabled={isNewBook}
+                    />
+                  </View>
+
+                  <View style={styles.detailRow}>
+                    <View style={styles.detailInfo}>
+                      <Ionicons name="color-fill" size={20} color={isNewBook ? "#ccc" : "#666"} />
+                      <Text style={[styles.detailLabel, isNewBook && styles.disabledText]}>Evidenziature</Text>
+                    </View>
+                    <Switch
+                      value={hasHighlights}
+                      onValueChange={setHasHighlights}
+                      trackColor={{ false: '#e0e0e0', true: '#FF9800' }}
+                      thumbColor={hasHighlights ? '#fff' : '#fff'}
+                      disabled={isNewBook}
+                    />
+                  </View>
+
+                  <View style={styles.detailRow}>
+                    <View style={styles.detailInfo}>
+                      <Ionicons name="document" size={20} color={isNewBook ? "#ccc" : "#666"} />
+                      <Text style={[styles.detailLabel, isNewBook && styles.disabledText]}>Pieghe/Orecchie</Text>
+                    </View>
+                    <Switch
+                      value={hasFolds}
+                      onValueChange={setHasFolds}
+                      trackColor={{ false: '#e0e0e0', true: '#FF9800' }}
+                      thumbColor={hasFolds ? '#fff' : '#fff'}
+                      disabled={isNewBook}
+                    />
+                  </View>
+                </View>
+
+                {/* Cover Condition */}
+                <Text style={[styles.formLabel, isNewBook && styles.disabledText]}>Condizione Copertina</Text>
+                <View style={styles.optionsRow}>
+                  {['perfetta', 'buona', 'usurata'].map((opt) => (
+                    <TouchableOpacity
+                      key={opt}
+                      style={[
+                        styles.optionChip,
+                        !isNewBook && coverCondition === opt && styles.optionChipActive,
+                        isNewBook && styles.optionChipDisabled
+                      ]}
+                      onPress={() => !isNewBook && setCoverCondition(opt)}
+                      disabled={isNewBook}
+                    >
+                      <Text style={[
+                        styles.optionChipText,
+                        !isNewBook && coverCondition === opt && styles.optionChipTextActive,
+                        isNewBook && styles.disabledText
+                      ]}>
+                        {opt.charAt(0).toUpperCase() + opt.slice(1)}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {/* Pages Condition */}
+                <Text style={[styles.formLabel, isNewBook && styles.disabledText]}>Condizione Pagine</Text>
+                <View style={styles.optionsRow}>
+                  {['perfette', 'buone', 'ingiallite'].map((opt) => (
+                    <TouchableOpacity
+                      key={opt}
+                      style={[
+                        styles.optionChip,
+                        !isNewBook && pagesCondition === opt && styles.optionChipActive,
+                        isNewBook && styles.optionChipDisabled
+                      ]}
+                      onPress={() => !isNewBook && setPagesCondition(opt)}
+                      disabled={isNewBook}
+                    >
+                      <Text style={[
+                        styles.optionChipText,
+                        !isNewBook && pagesCondition === opt && styles.optionChipTextActive,
+                        isNewBook && styles.disabledText
+                      ]}>
+                        {opt.charAt(0).toUpperCase() + opt.slice(1)}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               </View>
 
               {/* Condizione Calcolata Automaticamente */}
@@ -1350,6 +1412,79 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#666',
     marginBottom: 16,
+  },
+  // New Book Card
+  newBookCard: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: '#e0e0e0',
+  },
+  newBookCardActive: {
+    backgroundColor: '#e3f2fd',
+    borderColor: '#2196F3',
+  },
+  newBookHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  newBookInfo: {
+    flex: 1,
+  },
+  newBookTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  newBookTitleActive: {
+    color: '#2196F3',
+  },
+  newBookSubtitle: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
+  },
+  newBookBadge: {
+    backgroundColor: '#2196F3',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    alignSelf: 'flex-start',
+    marginTop: 12,
+    marginLeft: 38,
+  },
+  newBookBadgeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  // Disabled overlay for used book conditions
+  disabledOverlayMessage: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#e3f2fd',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  disabledOverlayText: {
+    fontSize: 13,
+    color: '#2196F3',
+    flex: 1,
+  },
+  disabledSection: {
+    opacity: 0.5,
+  },
+  disabledText: {
+    color: '#999',
+  },
+  optionChipDisabled: {
+    backgroundColor: '#f0f0f0',
+    borderColor: '#ddd',
   },
   // Details
   detailsContainer: {
