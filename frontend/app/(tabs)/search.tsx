@@ -145,8 +145,11 @@ export default function SearchScreen() {
         `${API_URL}/api/books?codice_scuola=${child.codice_scuola}&classe=${nextClasse}&limit=100`
       );
       
-      setBooks(booksResponse.data);
-      setFilteredBooks(booksResponse.data);
+      // Filter out volume unici (books used for multiple years)
+      const annualBooks = booksResponse.data.filter((book: any) => !book.is_volume_unico);
+      
+      setBooks(annualBooks);
+      setFilteredBooks(annualBooks);
     } catch (error) {
       console.error('Error loading books:', error);
       Alert.alert('Errore', 'Impossibile caricare i libri');

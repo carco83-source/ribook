@@ -157,7 +157,10 @@ export default function SellScreen() {
         `${API_URL}/api/books?codice_scuola=${child.codice_scuola}&classe=${prevClasse}&limit=100`
       );
       
-      setBooksToSell(booksResponse.data);
+      // Filter out volume unici (books used for multiple years - not sellable)
+      const annualBooks = booksResponse.data.filter((book: any) => !book.is_volume_unico);
+      
+      setBooksToSell(annualBooks);
       setShowBookPicker(true);
     } catch (error) {
       console.error('Error loading books:', error);

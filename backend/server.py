@@ -685,14 +685,40 @@ async def create_book(book_data: BookCreate):
     return book
 
 @api_router.get("/books", response_model=List[Book])
-async def get_books(classe: Optional[str] = None, materia: Optional[str] = None, tipo_scuola: Optional[str] = None, limit: int = 100, skip: int = 0, search: Optional[str] = None):
+async def get_books(
+    classe: Optional[str] = None, 
+    materia: Optional[str] = None, 
+    tipo_scuola: Optional[str] = None, 
+    codice_scuola: Optional[str] = None,
+    limit: int = 100, 
+    skip: int = 0, 
+    search: Optional[str] = None
+):
     query = {}
+    
+    # Filter by codice_scuola (school code)
+    if codice_scuola:
+        query["scuole_adottanti"] = codice_scuola
+    
+    # Filter by classe/anno_corso
     if classe:
-        query["classe"] = classe
+        try:
+            anno = int(classe)
+            query["anni_corso"] = anno
+        except ValueError:
+            query["classe"] = classe
+    
     if materia:
-        query["materia"] = materia
+        query["$or"] = [
+            {"materia": {"$regex": materia, "$options": "i"}},
+            {"disciplina": {"$regex": materia, "$options": "i"}}
+        ]
+    
     if tipo_scuola:
-        query["tipo_scuola"] = tipo_scuola
+        if tipo_scuola == "primo_grado":
+            query["tipi_scuola"] = "MM"
+        elif tipo_scuola == "secondo_grado":
+            query["tipi_scuola"] = {"$in": ["NO", "NT", "NB", "NA"]}
     
     # If searching by ISBN (13 digits), search directly without limit
     if search and search.isdigit() and len(search) >= 10:
@@ -706,11 +732,23 @@ async def get_books(classe: Optional[str] = None, materia: Optional[str] = None,
         return [Book(**book) for book in books]
     
     if search:
-        query["$or"] = [
-            {"titolo": {"$regex": search, "$options": "i"}},
-            {"autore": {"$regex": search, "$options": "i"}},
-            {"isbn": {"$regex": search, "$options": "i"}}
-        ]
+        if "$or" in query:
+            existing_or = query["$or"]
+            query["$and"] = [
+                {"$or": existing_or},
+                {"$or": [
+                    {"titolo": {"$regex": search, "$options": "i"}},
+                    {"autori": {"$regex": search, "$options": "i"}},
+                    {"isbn": {"$regex": search, "$options": "i"}}
+                ]}
+            ]
+            del query["$or"]
+        else:
+            query["$or"] = [
+                {"titolo": {"$regex": search, "$options": "i"}},
+                {"autori": {"$regex": search, "$options": "i"}},
+                {"isbn": {"$regex": search, "$options": "i"}}
+            ]
     
     books = await db.books.find(query).skip(skip).limit(limit).to_list(limit)
     return [Book(**book) for book in books]
