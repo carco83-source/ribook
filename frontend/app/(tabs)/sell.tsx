@@ -651,31 +651,55 @@ export default function SellScreen() {
               </View>
               <Text style={styles.photoHint}>Aggiungi fino a 4 foto</Text>
 
-              {/* Condizione Calcolata Automaticamente */}
-              <Text style={styles.formLabel}>Condizione Calcolata</Text>
-              <View style={styles.calculatedConditionContainer}>
-                {(() => {
-                  const condConfig = CONDITION_OPTIONS.find(c => c.value === calculatedCondition) || CONDITION_OPTIONS[1];
-                  return (
-                    <View style={[styles.calculatedConditionBox, { borderColor: condConfig.color }]}>
-                      <View style={[styles.trafficLight, { backgroundColor: condConfig.color }]}>
-                        <Ionicons name={condConfig.icon as any} size={32} color="#fff" />
-                      </View>
-                      <View style={styles.calculatedConditionInfo}>
-                        <Text style={[styles.calculatedConditionLabel, { color: condConfig.color }]}>
-                          {condConfig.label}
-                        </Text>
-                        <Text style={styles.calculatedConditionHint}>
-                          Calcolato in base ai difetti selezionati
-                        </Text>
-                      </View>
-                    </View>
-                  );
-                })()}
+              {/* Bookshop Selection */}
+              <Text style={styles.formLabel}>Punto di scambio</Text>
+              <View style={styles.bookshopOptions}>
+                {bookshops.map((shop) => (
+                  <TouchableOpacity
+                    key={shop.id}
+                    style={[
+                      styles.bookshopOption,
+                      selectedBookshop === shop.id && styles.bookshopOptionActive
+                    ]}
+                    onPress={() => setSelectedBookshop(shop.id)}
+                  >
+                    <Ionicons 
+                      name={selectedBookshop === shop.id ? "radio-button-on" : "radio-button-off"} 
+                      size={20} 
+                      color={selectedBookshop === shop.id ? "#1a472a" : "#666"} 
+                    />
+                    <Text style={[
+                      styles.bookshopOptionText,
+                      selectedBookshop === shop.id && styles.bookshopOptionTextActive
+                    ]}>
+                      {shop.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
               </View>
 
+              {/* Notes */}
+              <Text style={styles.formLabel}>Note aggiuntive (opzionale)</Text>
+              <TextInput
+                style={styles.notesInput}
+                value={notes}
+                onChangeText={setNotes}
+                placeholder="Es: Alcune pagine sottolineate a matita..."
+                multiline
+                numberOfLines={3}
+              />
+
+              {/* ========== SEZIONE STATO LIBRO ========== */}
+              <View style={styles.conditionSectionHeader}>
+                <Ionicons name="clipboard" size={20} color="#1a472a" />
+                <Text style={styles.conditionSectionTitle}>Stato del Libro</Text>
+              </View>
+              <Text style={styles.conditionSectionSubtitle}>
+                Indica le condizioni del libro per calcolare automaticamente il prezzo
+              </Text>
+
               {/* Detailed Conditions */}
-              <Text style={styles.formLabel}>Dettagli Condizione</Text>
+              <Text style={styles.formLabel}>Difetti presenti</Text>
               <View style={styles.detailsContainer}>
                 <View style={styles.detailRow}>
                   <View style={styles.detailInfo}>
@@ -761,31 +785,27 @@ export default function SellScreen() {
                 ))}
               </View>
 
-              {/* Bookshop Selection */}
-              <Text style={styles.formLabel}>Punto di scambio</Text>
-              <View style={styles.bookshopOptions}>
-                {bookshops.map((shop) => (
-                  <TouchableOpacity
-                    key={shop.id}
-                    style={[
-                      styles.bookshopOption,
-                      selectedBookshop === shop.id && styles.bookshopOptionActive
-                    ]}
-                    onPress={() => setSelectedBookshop(shop.id)}
-                  >
-                    <Ionicons 
-                      name={selectedBookshop === shop.id ? "radio-button-on" : "radio-button-off"} 
-                      size={20} 
-                      color={selectedBookshop === shop.id ? "#1a472a" : "#666"} 
-                    />
-                    <Text style={[
-                      styles.bookshopOptionText,
-                      selectedBookshop === shop.id && styles.bookshopOptionTextActive
-                    ]}>
-                      {shop.name}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+              {/* Condizione Calcolata Automaticamente */}
+              <Text style={styles.formLabel}>Condizione Calcolata</Text>
+              <View style={styles.calculatedConditionContainer}>
+                {(() => {
+                  const condConfig = CONDITION_OPTIONS.find(c => c.value === calculatedCondition) || CONDITION_OPTIONS[1];
+                  return (
+                    <View style={[styles.calculatedConditionBox, { borderColor: condConfig.color }]}>
+                      <View style={[styles.trafficLight, { backgroundColor: condConfig.color }]}>
+                        <Ionicons name={condConfig.icon as any} size={32} color="#fff" />
+                      </View>
+                      <View style={styles.calculatedConditionInfo}>
+                        <Text style={[styles.calculatedConditionLabel, { color: condConfig.color }]}>
+                          {condConfig.label}
+                        </Text>
+                        <Text style={styles.calculatedConditionHint}>
+                          Calcolato in base ai difetti selezionati
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })()}
               </View>
 
               {/* Price - Calcolato Automaticamente */}
@@ -804,17 +824,6 @@ export default function SellScreen() {
                   </Text>
                 )}
               </View>
-
-              {/* Notes */}
-              <Text style={styles.formLabel}>Note aggiuntive (opzionale)</Text>
-              <TextInput
-                style={styles.notesInput}
-                value={notes}
-                onChangeText={setNotes}
-                placeholder="Es: Alcune pagine sottolineate a matita..."
-                multiline
-                numberOfLines={3}
-              />
 
               {/* Submit */}
               <TouchableOpacity
@@ -1251,6 +1260,27 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 8,
     textAlign: 'center',
+  },
+  // Condition section header
+  conditionSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 24,
+    marginBottom: 4,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+  },
+  conditionSectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1a472a',
+  },
+  conditionSectionSubtitle: {
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 16,
   },
   // Details
   detailsContainer: {
