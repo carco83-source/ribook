@@ -382,7 +382,10 @@ async def get_user(user_id: str):
     user = await db.users.find_one({"id": user_id})
     if not user:
         raise HTTPException(status_code=404, detail="Utente non trovato")
-    return UserPublic(**user)
+    # Return full user data including profili_figli
+    user.pop("_id", None)
+    user.pop("password_hash", None)
+    return user
 
 
 class UpdateUserRequest(BaseModel):
