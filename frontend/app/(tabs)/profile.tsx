@@ -259,7 +259,7 @@ export default function ProfileScreen() {
             );
           })}
 
-          {/* Riepilogo Totale */}
+          {/* Riepilogo Totale con 3 caselle come i figli */}
           {childProfiles.length > 0 && (
             <View style={styles.summaryCard}>
               <Text style={styles.summaryTitle}>📊 Riepilogo Totale</Text>
@@ -269,61 +269,106 @@ export default function ProfileScreen() {
                 let totaleVendibili = 0;
                 let totaleAcquistabili = 0;
                 let totaleNuovi = 0;
-                let risparmioTotale = 0;
+                let costoUsati = 0;
                 let costoNuovi = 0;
+                let guadagnoVendite = 0;
 
                 Object.values(childrenCompatibility).forEach((comp: any) => {
                   totaleVendibili += comp.vendere?.totale_vendibili || 0;
                   totaleAcquistabili += comp.comprare?.totale_usati || 0;
                   totaleNuovi += comp.nuovi?.totale || 0;
-                  risparmioTotale += comp.comprare?.risparmio_totale || 0;
+                  
+                  // Costo libri usati (somma prezzo_usato)
+                  if (comp.comprare?.libri_usati) {
+                    comp.comprare.libri_usati.forEach((libro: any) => {
+                      costoUsati += libro.prezzo_usato || 0;
+                    });
+                  }
+                  
                   costoNuovi += comp.nuovi?.costo_totale || 0;
+                  
+                  // Guadagno dalla vendita (somma prezzo_consigliato)
+                  if (comp.vendere?.libri_vendibili) {
+                    comp.vendere.libri_vendibili.forEach((libro: any) => {
+                      guadagnoVendite += libro.prezzo_consigliato || 0;
+                    });
+                  }
                 });
 
+                const totaleSpesa = costoUsati + costoNuovi - guadagnoVendite;
+
                 return (
-                  <View style={styles.summaryGrid}>
-                    <View style={styles.summaryItem}>
-                      <View style={[styles.summaryIcon, { backgroundColor: '#e3f2fd' }]}>
-                        <Ionicons name="pricetag" size={22} color="#2196F3" />
-                      </View>
-                      <Text style={styles.summaryNumber}>{totaleVendibili}</Text>
-                      <Text style={styles.summaryLabel}>Da vendere</Text>
-                    </View>
-
-                    <View style={styles.summaryItem}>
-                      <View style={[styles.summaryIcon, { backgroundColor: '#e8f5e9' }]}>
-                        <Ionicons name="cart" size={22} color="#4CAF50" />
-                      </View>
-                      <Text style={styles.summaryNumber}>{totaleAcquistabili}</Text>
-                      <Text style={styles.summaryLabel}>Usati disponibili</Text>
-                    </View>
-
-                    <View style={styles.summaryItem}>
-                      <View style={[styles.summaryIcon, { backgroundColor: '#fff3e0' }]}>
-                        <Ionicons name="book" size={22} color="#FF9800" />
-                      </View>
-                      <Text style={styles.summaryNumber}>{totaleNuovi}</Text>
-                      <Text style={styles.summaryLabel}>Da comprare nuovi</Text>
-                    </View>
-
-                    {risparmioTotale > 0 && (
-                      <View style={styles.savingsRow}>
-                        <Ionicons name="wallet" size={20} color="#1a472a" />
-                        <Text style={styles.savingsText}>
-                          Risparmio stimato: <Text style={styles.savingsAmount}>€{risparmioTotale.toFixed(0)}</Text>
+                  <>
+                    {/* Three Column Layout - same style as child cards */}
+                    <View style={styles.bookFlowContainer}>
+                      {/* VENDI - BLU */}
+                      <View style={styles.bookFlowColumn}>
+                        <View style={[styles.bookFlowHeader, { backgroundColor: '#2196F3' }]}>
+                          <Text style={styles.bookFlowHeaderClass}>VENDI</Text>
+                        </View>
+                        <View style={styles.bookFlowBody}>
+                          <Ionicons name="arrow-up-circle" size={24} color="#2196F3" />
+                          <Text style={[styles.bookFlowNumber, { color: '#2196F3' }]}>
+                            {totaleVendibili}
+                          </Text>
+                          <Text style={styles.bookFlowLabel}>libri</Text>
+                        </View>
+                        <Text style={[styles.bookFlowHint, { color: '#2196F3' }]}>
+                          {guadagnoVendite > 0 ? `- €${guadagnoVendite.toFixed(0)}` : '€0'}
                         </Text>
                       </View>
-                    )}
 
-                    {costoNuovi > 0 && (
-                      <View style={styles.costRow}>
-                        <Ionicons name="card" size={18} color="#FF9800" />
-                        <Text style={styles.costText}>
-                          Costo libri nuovi: €{costoNuovi.toFixed(0)}
+                      {/* NUOVI - NERO */}
+                      <View style={styles.bookFlowColumn}>
+                        <View style={[styles.bookFlowHeader, { backgroundColor: '#1a472a' }]}>
+                          <Text style={styles.bookFlowHeaderClass}>NUOVI</Text>
+                        </View>
+                        <View style={styles.bookFlowBody}>
+                          <Ionicons name="book" size={24} color="#FF9800" />
+                          <Text style={[styles.bookFlowNumber, { color: '#FF9800' }]}>
+                            {totaleNuovi}
+                          </Text>
+                          <Text style={styles.bookFlowLabel}>da comprare</Text>
+                        </View>
+                        <Text style={[styles.bookFlowHint, { color: '#FF9800' }]}>
+                          + €{costoNuovi.toFixed(0)}
                         </Text>
                       </View>
-                    )}
-                  </View>
+
+                      {/* COMPRA USATI - VERDE */}
+                      <View style={styles.bookFlowColumn}>
+                        <View style={[styles.bookFlowHeader, { backgroundColor: '#4CAF50' }]}>
+                          <Text style={styles.bookFlowHeaderClass}>USATI</Text>
+                        </View>
+                        <View style={styles.bookFlowBody}>
+                          <Ionicons name="cart" size={24} color="#4CAF50" />
+                          <Text style={[styles.bookFlowNumber, { color: '#4CAF50' }]}>
+                            {totaleAcquistabili}
+                          </Text>
+                          <Text style={styles.bookFlowLabel}>da comprare</Text>
+                        </View>
+                        <Text style={[styles.bookFlowHint, { color: '#4CAF50' }]}>
+                          + €{costoUsati.toFixed(0)}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* TOTALE sotto le caselle */}
+                    <View style={styles.totalBalanceRow}>
+                      <View style={styles.totalBalanceContent}>
+                        <Text style={styles.totalBalanceLabel}>BILANCIO STIMATO</Text>
+                        <Text style={[
+                          styles.totalBalanceAmount,
+                          { color: totaleSpesa > 0 ? '#f44336' : '#4CAF50' }
+                        ]}>
+                          {totaleSpesa > 0 ? '+' : ''}€{totaleSpesa.toFixed(0)}
+                        </Text>
+                      </View>
+                      <Text style={styles.totalBalanceHint}>
+                        (Usati + Nuovi - Vendite)
+                      </Text>
+                    </View>
+                  </>
                 );
               })()}
             </View>
@@ -1149,5 +1194,35 @@ const styles = StyleSheet.create({
   costText: {
     fontSize: 14,
     color: '#FF9800',
+  },
+  // Total Balance styles
+  totalBalanceRow: {
+    marginTop: 20,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#1a472a',
+  },
+  totalBalanceContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  totalBalanceLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+  },
+  totalBalanceAmount: {
+    fontSize: 28,
+    fontWeight: 'bold',
+  },
+  totalBalanceHint: {
+    fontSize: 11,
+    color: '#999',
+    marginTop: 6,
+    fontStyle: 'italic',
   },
 });
