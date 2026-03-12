@@ -799,7 +799,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   headerTitle: {
-    fontSize: 22,
+    fontSize: 26,
     fontWeight: 'bold',
     color: '#1a472a',
   },
@@ -820,7 +820,7 @@ const styles = StyleSheet.create({
   },
   notificationBadgeText: {
     color: '#fff',
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: 'bold',
   },
   // Cross-Class Compatibility Styles
@@ -831,10 +831,10 @@ const styles = StyleSheet.create({
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 12,
   },
   classCompatSubtitle: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#666',
     marginBottom: 16,
     marginLeft: 4,
@@ -842,7 +842,7 @@ const styles = StyleSheet.create({
   compatSummaryCard: {
     backgroundColor: '#fff',
     borderRadius: 12,
-    padding: 16,
+    padding: 20,
     marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -860,12 +860,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   compatSummaryNumber: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
     color: '#1a472a',
   },
   compatSummaryLabel: {
-    fontSize: 11,
+    fontSize: 13,
     color: '#666',
     marginTop: 4,
   },
@@ -1048,20 +1048,20 @@ const styles = StyleSheet.create({
   bookFlowHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 10,
+    padding: 12,
     borderRadius: 8,
     gap: 8,
   },
   bookFlowHeaderText: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: 'bold',
   },
   // New Three Column Layout
   bookFlowThreeColumns: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 8,
+    gap: 10,
     marginBottom: 16,
   },
   bookFlowColumnNew: {
@@ -1076,70 +1076,72 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   bookFlowColumnHeader: {
-    paddingVertical: 8,
+    paddingVertical: 12,
     alignItems: 'center',
   },
   bookFlowColumnHeaderText: {
     color: '#fff',
-    fontSize: 11,
+    fontSize: 14,
     fontWeight: 'bold',
+    letterSpacing: 0.5,
   },
   bookFlowColumnBody: {
-    padding: 12,
+    padding: 16,
     alignItems: 'center',
   },
   bookFlowColumnAction: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '600',
     color: '#2196F3',
-    marginTop: 4,
+    marginTop: 6,
   },
   bookFlowColumnNumber: {
-    fontSize: 28,
+    fontSize: 36,
     fontWeight: 'bold',
     color: '#333',
   },
   bookFlowColumnLabel: {
-    fontSize: 11,
+    fontSize: 13,
     color: '#666',
+    marginTop: 2,
   },
   bookFlowColumnHint: {
-    fontSize: 9,
+    fontSize: 11,
     color: '#888',
     textAlign: 'center',
-    paddingBottom: 8,
-    paddingHorizontal: 4,
+    paddingBottom: 10,
+    paddingHorizontal: 6,
   },
   bookFlowYouBadge: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: '#1a472a',
     alignItems: 'center',
     justifyContent: 'center',
   },
   bookFlowYouText: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: 'bold',
   },
   // Child Profile Tabs
   childTabs: {
     flexDirection: 'row',
-    marginBottom: 12,
-    gap: 8,
+    marginBottom: 16,
+    gap: 10,
   },
   childTab: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 24,
     backgroundColor: '#e0e0e0',
   },
   childTabActive: {
     backgroundColor: '#1a472a',
   },
   childTabText: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
     color: '#666',
   },
