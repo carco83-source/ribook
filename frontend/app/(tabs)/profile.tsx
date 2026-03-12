@@ -258,6 +258,76 @@ export default function ProfileScreen() {
               </View>
             );
           })}
+
+          {/* Riepilogo Totale */}
+          {childProfiles.length > 0 && (
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryTitle}>📊 Riepilogo Totale</Text>
+              
+              {(() => {
+                // Calculate totals across all children
+                let totaleVendibili = 0;
+                let totaleAcquistabili = 0;
+                let totaleNuovi = 0;
+                let risparmioTotale = 0;
+                let costoNuovi = 0;
+
+                Object.values(childrenCompatibility).forEach((comp: any) => {
+                  totaleVendibili += comp.vendere?.totale_vendibili || 0;
+                  totaleAcquistabili += comp.comprare?.totale_usati || 0;
+                  totaleNuovi += comp.nuovi?.totale || 0;
+                  risparmioTotale += comp.comprare?.risparmio_totale || 0;
+                  costoNuovi += comp.nuovi?.costo_totale || 0;
+                });
+
+                return (
+                  <View style={styles.summaryGrid}>
+                    <View style={styles.summaryItem}>
+                      <View style={[styles.summaryIcon, { backgroundColor: '#e3f2fd' }]}>
+                        <Ionicons name="pricetag" size={22} color="#2196F3" />
+                      </View>
+                      <Text style={styles.summaryNumber}>{totaleVendibili}</Text>
+                      <Text style={styles.summaryLabel}>Da vendere</Text>
+                    </View>
+
+                    <View style={styles.summaryItem}>
+                      <View style={[styles.summaryIcon, { backgroundColor: '#e8f5e9' }]}>
+                        <Ionicons name="cart" size={22} color="#4CAF50" />
+                      </View>
+                      <Text style={styles.summaryNumber}>{totaleAcquistabili}</Text>
+                      <Text style={styles.summaryLabel}>Usati disponibili</Text>
+                    </View>
+
+                    <View style={styles.summaryItem}>
+                      <View style={[styles.summaryIcon, { backgroundColor: '#fff3e0' }]}>
+                        <Ionicons name="book" size={22} color="#FF9800" />
+                      </View>
+                      <Text style={styles.summaryNumber}>{totaleNuovi}</Text>
+                      <Text style={styles.summaryLabel}>Da comprare nuovi</Text>
+                    </View>
+
+                    {risparmioTotale > 0 && (
+                      <View style={styles.savingsRow}>
+                        <Ionicons name="wallet" size={20} color="#1a472a" />
+                        <Text style={styles.savingsText}>
+                          Risparmio stimato: <Text style={styles.savingsAmount}>€{risparmioTotale.toFixed(0)}</Text>
+                        </Text>
+                      </View>
+                    )}
+
+                    {costoNuovi > 0 && (
+                      <View style={styles.costRow}>
+                        <Ionicons name="card" size={18} color="#FF9800" />
+                        <Text style={styles.costText}>
+                          Costo libri nuovi: €{costoNuovi.toFixed(0)}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                );
+              })()}
+            </View>
+          )}
         </View>
       )}
 
@@ -1004,5 +1074,80 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#666',
     marginLeft: 4,
+  },
+  // Summary Card Styles
+  summaryCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 16,
+    borderWidth: 2,
+    borderColor: '#1a472a',
+  },
+  summaryTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1a472a',
+    marginBottom: 16,
+  },
+  summaryGrid: {
+    gap: 12,
+  },
+  summaryItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  summaryIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  summaryNumber: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333',
+    width: 40,
+  },
+  summaryLabel: {
+    fontSize: 14,
+    color: '#666',
+    flex: 1,
+  },
+  savingsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#e8f5e9',
+    padding: 14,
+    borderRadius: 10,
+    marginTop: 8,
+  },
+  savingsText: {
+    fontSize: 15,
+    color: '#1a472a',
+  },
+  savingsAmount: {
+    fontWeight: 'bold',
+    fontSize: 18,
+    color: '#1a472a',
+  },
+  costRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#fff3e0',
+    padding: 12,
+    borderRadius: 10,
+    marginTop: 8,
+  },
+  costText: {
+    fontSize: 14,
+    color: '#FF9800',
   },
 });
