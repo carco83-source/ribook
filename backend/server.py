@@ -1940,6 +1940,7 @@ async def generate_books_pdf(user_id: str, child_id: str):
     """
     Genera un PDF con la lista completa dei libri per una classe.
     Include: ISBN, Titolo, Autore, Editore, Prezzo, Volume, Da acquistare, Nuova adozione
+    Formato: A4 Orizzontale (Landscape) con margini 1cm
     """
     # Get user and child profile
     user = await db.users.find_one({"id": user_id})
@@ -1967,58 +1968,101 @@ async def generate_books_pdf(user_id: str, child_id: str):
         "anni_corso": child_classe
     }).to_list(200)
     
-    # Create PDF
+    # Create PDF - LANDSCAPE A4 with 1cm margins
+    # A4 Landscape = 297mm x 210mm
+    from reportlab.lib.pagesizes import A4, landscape
+    
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=1.5*cm, bottomMargin=1.5*cm,
-                           leftMargin=1*cm, rightMargin=1*cm)
+    page_width, page_height = landscape(A4)
+    doc = SimpleDocTemplate(
+        buffer, 
+        pagesize=landscape(A4), 
+        topMargin=1*cm, 
+        bottomMargin=1*cm,
+        leftMargin=1*cm, 
+        rightMargin=1*cm
+    )
+    
+    # Available width = 297mm - 2cm = 27.7cm
+    available_width = page_width - 2*cm
     
     elements = []
     styles = getSampleStyleSheet()
+    
+    # Custom styles for table cells (smaller font, allows wrapping)
+    cell_style = ParagraphStyle(
+        'CellStyle',
+        parent=styles['Normal'],
+        fontSize=8,
+        leading=10,
+        wordWrap='CJK'
+    )
+    
+    cell_style_small = ParagraphStyle(
+        'CellStyleSmall',
+        parent=styles['Normal'],
+        fontSize=7,
+        leading=9,
+        wordWrap='CJK'
+    )
     
     # Custom styles
     title_style = ParagraphStyle(
         'CustomTitle',
         parent=styles['Heading1'],
-        fontSize=18,
+        fontSize=16,
         alignment=TA_CENTER,
-        spaceAfter=20,
+        spaceAfter=10,
         textColor=colors.HexColor('#1a472a')
     )
     
     subtitle_style = ParagraphStyle(
         'CustomSubtitle',
         parent=styles['Normal'],
-        fontSize=12,
+        fontSize=11,
         alignment=TA_CENTER,
-        spaceAfter=30,
+        spaceAfter=20,
         textColor=colors.grey
     )
     
     # Title
     classe_label = f"{child_classe}ª {'Media' if child_tipo == 'primo_grado' else 'Superiore'}"
     elements.append(Paragraph(f"Lista Libri - {classe_label}", title_style))
-    elements.append(Paragraph(f"{child_nome} - {child_scuola}", subtitle_style))
-    elements.append(Paragraph(f"Anno Scolastico 2025/2026", subtitle_style))
+    elements.append(Paragraph(f"{child_nome} - {child_scuola} - Anno Scolastico 2025/2026", subtitle_style))
     
-    # Table header
-    table_data = [
-        ['Materia', 'Titolo', 'Autore', 'ISBN', 'Prezzo', 'Vol.', 'Acquist.', 'Nuovo']
-    ]
+    # Table header with Paragraph for wrapping
+    table_data = [[
+        Paragraph('<b>Materia</b>', cell_style),
+        Paragraph('<b>Titolo</b>', cell_style),
+        Paragraph('<b>Autori</b>', cell_style),
+        Paragraph('<b>Editore</b>', cell_style),
+        Paragraph('<b>ISBN</b>', cell_style),
+        Paragraph('<b>Prezzo</b>', cell_style),
+        Paragraph('<b>Vol.</b>', cell_style),
+        Paragraph('<b>Acquist.</b>', cell_style),
+        Paragraph('<b>Nuovo</b>', cell_style),
+        Paragraph('<b>Consigliato</b>', cell_style),
+    ]]
+    
+    # Column widths for landscape (total ~27.7cm = 277mm)
+    # Materia: 2.5cm, Titolo: 7cm, Autori: 3.5cm, Editore: 3cm, ISBN: 3cm, Prezzo: 1.5cm, Vol: 1.5cm, Acquist: 1.5cm, Nuovo: 1.5cm, Consigliato: 2.2cm
+    col_widths = [2.5*cm, 7*cm, 3.5*cm, 3*cm, 3*cm, 1.5*cm, 1.5*cm, 1.5*cm, 1.5*cm, 2.2*cm]
     
     # Add books to table
     total_price = 0
     for book in sorted(books, key=lambda x: x.get('disciplina', '')):
-        disciplina = book.get('disciplina', '')[:15]
-        titolo = book.get('titolo', '')[:35]
-        autori = book.get('autori', '')[:20] if book.get('autori') else '-'
-        isbn = book.get('isbn', '-')
+        disciplina = book.get('disciplina', '')
+        titolo = book.get('titolo', '')
+        autori = book.get('autori', '') or '-'
+        editore = book.get('editore', '') or '-'
+        isbn = book.get('isbn', '-') or '-'
         prezzo = book.get('prezzo_copertina') or book.get('prezzo_ministeriale') or 0
         
         # Volume info
         anni = book.get('anni_corso', [])
         if book.get('is_volume_unico'):
             if isinstance(anni, list) and len(anni) > 1:
-                vol = f"U ({min(anni)}-{max(anni)})"
+                vol = f"Unico ({min(anni)}-{max(anni)})"
             else:
                 vol = "Unico"
         else:
@@ -2030,56 +2074,71 @@ async def generate_books_pdf(user_id: str, child_id: str):
         # Nuova adozione
         nuova_adoz = "Sì" if book.get('nuova_adozione') else "No"
         
+        # Consigliato (from MUR data)
+        consigliato = "Sì" if book.get('consigliato') else "No"
+        
         table_data.append([
-            disciplina,
-            titolo,
-            autori,
-            isbn,
-            f"€{prezzo:.2f}" if prezzo else "-",
-            vol,
-            da_acquistare,
-            nuova_adoz
+            Paragraph(disciplina, cell_style_small),
+            Paragraph(titolo, cell_style_small),
+            Paragraph(autori, cell_style_small),
+            Paragraph(editore, cell_style_small),
+            Paragraph(isbn, cell_style_small),
+            Paragraph(f"€{prezzo:.2f}" if prezzo else "-", cell_style),
+            Paragraph(vol, cell_style_small),
+            Paragraph(da_acquistare, cell_style),
+            Paragraph(nuova_adoz, cell_style),
+            Paragraph(consigliato, cell_style),
         ])
         
         if prezzo and book.get('da_acquistare', True):
             total_price += prezzo
     
-    # Add total row
-    table_data.append(['', '', '', '', '', '', '', ''])
-    table_data.append(['', '', '', 'TOTALE:', f"€{total_price:.2f}", '', '', ''])
+    # Add empty row and total row
+    empty_row = [Paragraph('', cell_style) for _ in range(10)]
+    table_data.append(empty_row)
+    
+    total_row = [
+        Paragraph('', cell_style),
+        Paragraph('', cell_style),
+        Paragraph('', cell_style),
+        Paragraph('', cell_style),
+        Paragraph('<b>TOTALE:</b>', cell_style),
+        Paragraph(f'<b>€{total_price:.2f}</b>', cell_style),
+        Paragraph('', cell_style),
+        Paragraph('', cell_style),
+        Paragraph('', cell_style),
+        Paragraph('', cell_style),
+    ]
+    table_data.append(total_row)
     
     # Create table
-    col_widths = [2.2*cm, 4.5*cm, 2.5*cm, 2.8*cm, 1.5*cm, 1.5*cm, 1.3*cm, 1.3*cm]
     table = Table(table_data, colWidths=col_widths, repeatRows=1)
     
     table.setStyle(TableStyle([
         # Header
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a472a')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 9),
         ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
         ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
         ('TOPPADDING', (0, 0), (-1, 0), 8),
         
         # Body
-        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 1), (-1, -1), 8),
-        ('ALIGN', (4, 1), (4, -1), 'RIGHT'),  # Prezzo
-        ('ALIGN', (5, 1), (-1, -1), 'CENTER'),  # Vol, Acquist, Nuovo
-        ('BOTTOMPADDING', (0, 1), (-1, -1), 5),
-        ('TOPPADDING', (0, 1), (-1, -1), 5),
+        ('ALIGN', (5, 1), (5, -1), 'RIGHT'),  # Prezzo
+        ('ALIGN', (6, 1), (-1, -1), 'CENTER'),  # Vol, Acquist, Nuovo, Consigliato
+        ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
+        ('TOPPADDING', (0, 1), (-1, -1), 4),
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
         
         # Alternating row colors
         ('ROWBACKGROUNDS', (0, 1), (-1, -3), [colors.white, colors.HexColor('#f8f9fa')]),
         
         # Total row
-        ('FONTNAME', (3, -1), (-1, -1), 'Helvetica-Bold'),
-        ('FONTSIZE', (3, -1), (-1, -1), 10),
-        ('BACKGROUND', (3, -1), (4, -1), colors.HexColor('#e8f5e9')),
+        ('BACKGROUND', (4, -1), (5, -1), colors.HexColor('#e8f5e9')),
         
         # Grid
-        ('GRID', (0, 0), (-1, -3), 0.5, colors.HexColor('#e0e0e0')),
+        ('GRID', (0, 0), (-1, -3), 0.5, colors.HexColor('#d0d0d0')),
         ('BOX', (0, 0), (-1, -3), 1, colors.HexColor('#1a472a')),
     ]))
     
@@ -2089,13 +2148,13 @@ async def generate_books_pdf(user_id: str, child_id: str):
     footer_style = ParagraphStyle(
         'Footer',
         parent=styles['Normal'],
-        fontSize=8,
+        fontSize=7,
         textColor=colors.grey,
-        spaceBefore=20
+        spaceBefore=15
     )
-    elements.append(Spacer(1, 20))
+    elements.append(Spacer(1, 10))
     elements.append(Paragraph(
-        "Legenda: Vol. = Volume (U = Unico), Acquist. = Da Acquistare, Nuovo = Nuova Adozione",
+        "Legenda: Vol. = Volume (Unico = copre più anni), Acquist. = Da Acquistare, Nuovo = Nuova Adozione, Consigliato = Raccomandato dal MUR",
         footer_style
     ))
     elements.append(Paragraph(
