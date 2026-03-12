@@ -1716,12 +1716,39 @@ async def get_child_compatibility(user_id: str, child_id: str):
     classe_precedente = child_classe - 1 if child_classe > cycle_min else None
     classe_successiva = child_classe + 1 if child_classe < cycle_max else None
     
-    # Carica libri
+    # Carica libri annuali (non volumi unici)
     my_books = await db.books.find({
         "scuole_adottanti": child_codice_scuola,
         "anni_corso": child_classe,
         "is_volume_unico": {"$ne": True}
     }).to_list(100)
+    
+    # Carica VOLUMI UNICI che iniziano quest'anno (per chi è al primo anno del loro range)
+    # Es: Musica [1,2,3] → solo chi fa la 1ª deve comprarlo
+    # Es: Filosofia [3,4,5] → solo chi fa la 3ª deve comprarlo
+    volumi_unici_da_comprare = []
+    if child_classe == cycle_min:  # Primo anno del ciclo
+        # Trova tutti i volumi unici che includono questo anno come primo anno del loro range
+        all_volumi_unici = await db.books.find({
+            "scuole_adottanti": child_codice_scuola,
+            "anni_corso": child_classe,
+            "is_volume_unico": True
+        }).to_list(50)
+        
+        for vu in all_volumi_unici:
+            anni = vu.get("anni_corso", [])
+            if isinstance(anni, list) and len(anni) > 0:
+                # Il volume unico va comprato solo se questo è il primo anno del suo range
+                if min(anni) == child_classe:
+                    volumi_unici_da_comprare.append({
+                        "isbn": vu.get("isbn", ""),
+                        "titolo": vu.get("titolo", ""),
+                        "disciplina": vu.get("disciplina", ""),
+                        "editore": vu.get("editore", ""),
+                        "prezzo": vu.get("prezzo_copertina", 0),
+                        "anni_coperti": anni,
+                        "tipo": "volume_unico"
+                    })
     
     libri_prec = []
     if classe_precedente:
@@ -1820,6 +1847,39 @@ async def get_child_compatibility(user_id: str, child_id: str):
     num_usato = len(comprare_usato)
     num_nuovo = len(comprare_nuovo)
     risparmio = sum(l["risparmio"] for l in comprare_usato)
+    costo_nuovi = sum(l["prezzo"] for l in comprare_nuovo)
+    
+    # Aggiungi volumi unici alla lista dei libri da comprare
+    # Questi sono sempre "nuovi" a meno che qualcuno non li venda con "Vendi altro libro"
+    # Usa set per evitare duplicati basati su ISBN o disciplina
+    isbn_gia_aggiunti = set(l.get("isbn", "") for l in comprare_nuovo if l.get("isbn"))
+    discipline_vu_aggiunte = set()
+    
+    for vu in volumi_unici_da_comprare:
+        isbn = vu.get("isbn", "")
+        disciplina = vu.get("disciplina", "").strip().upper()
+        
+        # Salta se ISBN già presente
+        if isbn and isbn in isbn_gia_aggiunti:
+            continue
+        # Salta se disciplina già aggiunta (per volumi unici senza ISBN)
+        if disciplina and disciplina in discipline_vu_aggiunte:
+            continue
+            
+        isbn_gia_aggiunti.add(isbn)
+        discipline_vu_aggiunte.add(disciplina)
+        
+        comprare_nuovo.append({
+            "disciplina": disciplina,
+            "titolo": vu["titolo"][:50],
+            "prezzo": vu["prezzo"],
+            "motivo": f"Volume unico ({min(vu['anni_coperti'])}-{max(vu['anni_coperti'])})",
+            "isbn": isbn,
+            "is_volume_unico": True
+        })
+    
+    # Ricalcola totali con volumi unici
+    num_nuovo = len(comprare_nuovo)
     costo_nuovi = sum(l["prezzo"] for l in comprare_nuovo)
     
     return {
