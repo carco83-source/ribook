@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form, Query
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -899,16 +899,34 @@ async def search_book_by_isbn(isbn: str):
 # ============== BOOK LISTINGS ROUTES ==============
 
 @api_router.post("/listings")
-async def create_listing(listing_data: BookListingCreate, user_id: str):
+async def create_listing(listing_data: BookListingCreate, user_id: str = Query(...)):
     # Get user
     user = await db.users.find_one({"id": user_id})
     if not user:
         raise HTTPException(status_code=404, detail="Utente non trovato")
     
-    # Get book
-    book = await db.books.find_one({"id": listing_data.book_id})
+    # Get book - search by id or isbn
+    book = await db.books.find_one({
+        "$or": [
+            {"id": listing_data.book_id},
+            {"isbn": listing_data.book_id},
+            {"isbn": listing_data.book_isbn} if listing_data.book_isbn else {"isbn": ""}
+        ]
+    })
+    
+    # If book not found, create a minimal book record from the listing data
     if not book:
-        raise HTTPException(status_code=404, detail="Libro non trovato")
+        book = {
+            "id": listing_data.book_isbn or listing_data.book_id,
+            "isbn": listing_data.book_isbn or listing_data.book_id,
+            "titolo": listing_data.book_titolo or "Libro",
+            "autore": listing_data.book_autori or "",
+            "materia": listing_data.book_disciplina or "",
+            "disciplina": listing_data.book_disciplina or "",
+            "classe": "",
+            "prezzo_ministeriale": listing_data.prezzo_copertina or 0,
+            "prezzo_copertina": listing_data.prezzo_copertina or 0
+        }
     
     # Check if book is from user's class or requires Premium
     # Get active profile (could be main or child profile)
@@ -920,10 +938,10 @@ async def create_listing(listing_data: BookListingCreate, user_id: str):
                 user_tipo_scuola = profile["tipo_scuola"]
                 break
         else:
-            user_classe = user["classe"]
+            user_classe = user.get("classe", "")
             user_tipo_scuola = user.get("tipo_scuola", "")
     else:
-        user_classe = user["classe"]
+        user_classe = user.get("classe", "")
         user_tipo_scuola = user.get("tipo_scuola", "")
     
     book_classe = book.get("classe", "")
@@ -962,15 +980,16 @@ async def create_listing(listing_data: BookListingCreate, user_id: str):
     
     # Validate condition
     if condizione not in BOOK_CONDITIONS:
-        raise HTTPException(status_code=400, detail="Condizione non valida")
+        condizione = "buono"  # Default to buono if invalid
     
     # Calculate base price based on condition
-    prezzo_vendita = book["prezzo_ministeriale"] * BOOK_CONDITIONS[condizione]
+    base_price = book.get("prezzo_ministeriale") or book.get("prezzo_copertina") or listing_data.prezzo_copertina or 0
+    prezzo_vendita = base_price * BOOK_CONDITIONS.get(condizione, 0.5)
     
     # Calculate supplement price (10% of book price for all supplements)
     prezzo_fascicoli = 0.0
     if listing_data.fascicoli_totali > 0:
-        prezzo_totale_fascicoli = book["prezzo_ministeriale"] * 0.10
+        prezzo_totale_fascicoli = base_price * 0.10
         if listing_data.fascicoli_presenti > 0:
             prezzo_fascicoli = round((prezzo_totale_fascicoli / listing_data.fascicoli_totali) * listing_data.fascicoli_presenti, 2)
     
@@ -991,8 +1010,8 @@ async def create_listing(listing_data: BookListingCreate, user_id: str):
     
     listing = BookListing(
         seller_id=user_id,
-        seller_username=user["username"],
-        book_id=book["id"],
+        seller_username=user.get("username", "Utente"),
+        book_id=book.get("id") or book.get("isbn") or listing_data.book_id,
         book_titolo=listing_data.book_titolo or book.get("titolo", ""),
         book_autore=listing_data.book_autori or book.get("autore", ""),
         book_isbn=listing_data.book_isbn or book.get("isbn", ""),
