@@ -1,4 +1,5 @@
 from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form, Query
+from fastapi.responses import StreamingResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -13,6 +14,15 @@ import random
 import string
 import hashlib
 import base64
+import io
+
+# PDF generation
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import mm, cm
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -1923,6 +1933,188 @@ async def get_child_compatibility(user_id: str, child_id: str):
             "ciclo_info": f"{'Scuola Media' if child_tipo == 'primo_grado' else 'Superiore'} - {cycle_name.capitalize()}"
         }
     }
+
+
+@api_router.get("/profiles/{user_id}/children/{child_id}/books-pdf")
+async def generate_books_pdf(user_id: str, child_id: str):
+    """
+    Genera un PDF con la lista completa dei libri per una classe.
+    Include: ISBN, Titolo, Autore, Editore, Prezzo, Volume, Da acquistare, Nuova adozione
+    """
+    # Get user and child profile
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+    
+    profili_figli = user.get("profili_figli", [])
+    child_profile = next((p for p in profili_figli if p.get("id") == child_id), None)
+    
+    if not child_profile:
+        raise HTTPException(status_code=404, detail="Profilo figlio non trovato")
+    
+    child_nome = child_profile.get("nome_figlio", "Figlio")
+    child_scuola = child_profile.get("scuola", "")
+    child_classe = int(child_profile.get("classe", 1))
+    child_codice_scuola = child_profile.get("codice_scuola", "")
+    child_tipo = child_profile.get("tipo_scuola", "primo_grado")
+    
+    if not child_codice_scuola:
+        raise HTTPException(status_code=400, detail="Codice scuola non configurato")
+    
+    # Get all books for this class
+    books = await db.books.find({
+        "scuole_adottanti": child_codice_scuola,
+        "anni_corso": child_classe
+    }).to_list(200)
+    
+    # Create PDF
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=1.5*cm, bottomMargin=1.5*cm,
+                           leftMargin=1*cm, rightMargin=1*cm)
+    
+    elements = []
+    styles = getSampleStyleSheet()
+    
+    # Custom styles
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=18,
+        alignment=TA_CENTER,
+        spaceAfter=20,
+        textColor=colors.HexColor('#1a472a')
+    )
+    
+    subtitle_style = ParagraphStyle(
+        'CustomSubtitle',
+        parent=styles['Normal'],
+        fontSize=12,
+        alignment=TA_CENTER,
+        spaceAfter=30,
+        textColor=colors.grey
+    )
+    
+    # Title
+    classe_label = f"{child_classe}ª {'Media' if child_tipo == 'primo_grado' else 'Superiore'}"
+    elements.append(Paragraph(f"Lista Libri - {classe_label}", title_style))
+    elements.append(Paragraph(f"{child_nome} - {child_scuola}", subtitle_style))
+    elements.append(Paragraph(f"Anno Scolastico 2025/2026", subtitle_style))
+    
+    # Table header
+    table_data = [
+        ['Materia', 'Titolo', 'Autore', 'ISBN', 'Prezzo', 'Vol.', 'Acquist.', 'Nuovo']
+    ]
+    
+    # Add books to table
+    total_price = 0
+    for book in sorted(books, key=lambda x: x.get('disciplina', '')):
+        disciplina = book.get('disciplina', '')[:15]
+        titolo = book.get('titolo', '')[:35]
+        autori = book.get('autori', '')[:20] if book.get('autori') else '-'
+        isbn = book.get('isbn', '-')
+        prezzo = book.get('prezzo_copertina') or book.get('prezzo_ministeriale') or 0
+        
+        # Volume info
+        anni = book.get('anni_corso', [])
+        if book.get('is_volume_unico'):
+            if isinstance(anni, list) and len(anni) > 1:
+                vol = f"U ({min(anni)}-{max(anni)})"
+            else:
+                vol = "Unico"
+        else:
+            vol = str(child_classe)
+        
+        # Da acquistare
+        da_acquistare = "Sì" if book.get('da_acquistare', True) else "No"
+        
+        # Nuova adozione
+        nuova_adoz = "Sì" if book.get('nuova_adozione') else "No"
+        
+        table_data.append([
+            disciplina,
+            titolo,
+            autori,
+            isbn,
+            f"€{prezzo:.2f}" if prezzo else "-",
+            vol,
+            da_acquistare,
+            nuova_adoz
+        ])
+        
+        if prezzo and book.get('da_acquistare', True):
+            total_price += prezzo
+    
+    # Add total row
+    table_data.append(['', '', '', '', '', '', '', ''])
+    table_data.append(['', '', '', 'TOTALE:', f"€{total_price:.2f}", '', '', ''])
+    
+    # Create table
+    col_widths = [2.2*cm, 4.5*cm, 2.5*cm, 2.8*cm, 1.5*cm, 1.5*cm, 1.3*cm, 1.3*cm]
+    table = Table(table_data, colWidths=col_widths, repeatRows=1)
+    
+    table.setStyle(TableStyle([
+        # Header
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a472a')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 9),
+        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+        ('TOPPADDING', (0, 0), (-1, 0), 8),
+        
+        # Body
+        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 1), (-1, -1), 8),
+        ('ALIGN', (4, 1), (4, -1), 'RIGHT'),  # Prezzo
+        ('ALIGN', (5, 1), (-1, -1), 'CENTER'),  # Vol, Acquist, Nuovo
+        ('BOTTOMPADDING', (0, 1), (-1, -1), 5),
+        ('TOPPADDING', (0, 1), (-1, -1), 5),
+        
+        # Alternating row colors
+        ('ROWBACKGROUNDS', (0, 1), (-1, -3), [colors.white, colors.HexColor('#f8f9fa')]),
+        
+        # Total row
+        ('FONTNAME', (3, -1), (-1, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (3, -1), (-1, -1), 10),
+        ('BACKGROUND', (3, -1), (4, -1), colors.HexColor('#e8f5e9')),
+        
+        # Grid
+        ('GRID', (0, 0), (-1, -3), 0.5, colors.HexColor('#e0e0e0')),
+        ('BOX', (0, 0), (-1, -3), 1, colors.HexColor('#1a472a')),
+    ]))
+    
+    elements.append(table)
+    
+    # Footer note
+    footer_style = ParagraphStyle(
+        'Footer',
+        parent=styles['Normal'],
+        fontSize=8,
+        textColor=colors.grey,
+        spaceBefore=20
+    )
+    elements.append(Spacer(1, 20))
+    elements.append(Paragraph(
+        "Legenda: Vol. = Volume (U = Unico), Acquist. = Da Acquistare, Nuovo = Nuova Adozione",
+        footer_style
+    ))
+    elements.append(Paragraph(
+        f"Generato da ScambiaLibri - {datetime.now().strftime('%d/%m/%Y %H:%M')}",
+        footer_style
+    ))
+    
+    # Build PDF
+    doc.build(elements)
+    buffer.seek(0)
+    
+    # Generate filename
+    filename = f"lista_libri_{child_nome}_{classe_label.replace(' ', '_').replace('ª', '')}.pdf"
+    
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
 
 
 @api_router.get("/profiles/{user_id}/children/{child_id}/books-to-sell")

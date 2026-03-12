@@ -7,11 +7,15 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Platform,
+  Linking,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -23,6 +27,7 @@ export default function ProfileScreen() {
   const [stats, setStats] = useState<any>(null);
   const [childProfiles, setChildProfiles] = useState<any[]>([]);
   const [childrenCompatibility, setChildrenCompatibility] = useState<{[key: string]: any}>({});
+  const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
 
   useEffect(() => {
     loadUserData();
@@ -124,6 +129,44 @@ export default function ProfileScreen() {
         },
       },
     ]);
+  };
+
+  // Download PDF lista libri
+  const downloadPdf = async (childId: string, childName: string, childClasse: string) => {
+    setDownloadingPdf(childId);
+    try {
+      const userId = await AsyncStorage.getItem('user_id');
+      const pdfUrl = `${API_URL}/api/profiles/${userId}/children/${childId}/books-pdf`;
+      
+      if (Platform.OS === 'web') {
+        // On web, open PDF in new tab
+        window.open(pdfUrl, '_blank');
+      } else {
+        // On mobile, download and share
+        const filename = `lista_libri_${childName}_${childClasse}.pdf`;
+        const fileUri = FileSystem.documentDirectory + filename;
+        
+        const downloadResult = await FileSystem.downloadAsync(pdfUrl, fileUri);
+        
+        if (downloadResult.status === 200) {
+          if (await Sharing.isAvailableAsync()) {
+            await Sharing.shareAsync(downloadResult.uri, {
+              mimeType: 'application/pdf',
+              dialogTitle: 'Salva Lista Libri'
+            });
+          } else {
+            Alert.alert('PDF Scaricato', `File salvato: ${filename}`);
+          }
+        } else {
+          Alert.alert('Errore', 'Impossibile scaricare il PDF');
+        }
+      }
+    } catch (error) {
+      console.error('Error downloading PDF:', error);
+      Alert.alert('Errore', 'Impossibile generare il PDF');
+    } finally {
+      setDownloadingPdf(null);
+    }
   };
 
   if (loading) {
@@ -255,6 +298,22 @@ export default function ProfileScreen() {
                     </Text>
                   </View>
                 </View>
+                
+                {/* PDF Download Button */}
+                <TouchableOpacity
+                  style={styles.pdfDownloadButton}
+                  onPress={() => downloadPdf(child.id, child.nome_figlio, `${child.classe}${tipoLabel}`)}
+                  disabled={downloadingPdf === child.id}
+                >
+                  {downloadingPdf === child.id ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <>
+                      <Ionicons name="document-text" size={20} color="#fff" />
+                      <Text style={styles.pdfDownloadButtonText}>Scarica Lista Libri (PDF)</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
               </View>
             );
           })}
@@ -1113,6 +1172,22 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#666',
     marginLeft: 4,
+  },
+  // PDF Download Button
+  pdfDownloadButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1a472a',
+    margin: 16,
+    padding: 16,
+    borderRadius: 12,
+    gap: 10,
+  },
+  pdfDownloadButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
   // Summary Card Styles
   summaryCard: {
