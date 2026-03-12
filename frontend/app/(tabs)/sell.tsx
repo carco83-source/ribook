@@ -328,11 +328,6 @@ export default function SellScreen() {
   const createListing = async () => {
     if (!selectedBook || !userId) return;
 
-    if (listingPhotos.length === 0) {
-      Alert.alert('Foto richiesta', 'Aggiungi almeno una foto del libro');
-      return;
-    }
-
     if (selectedBookshops.length === 0) {
       Alert.alert('Punto di scambio richiesto', 'Seleziona almeno una cartolibreria');
       return;
@@ -758,17 +753,6 @@ export default function SellScreen() {
                 </Text>
               )}
 
-              {/* Notes */}
-              <Text style={styles.formLabel}>Note aggiuntive (opzionale)</Text>
-              <TextInput
-                style={styles.notesInput}
-                value={notes}
-                onChangeText={setNotes}
-                placeholder="Es: Alcune pagine sottolineate a matita..."
-                multiline
-                numberOfLines={3}
-              />
-
               {/* ========== SEZIONE STATO LIBRO ========== */}
               <View style={styles.conditionSectionHeader}>
                 <Ionicons name="clipboard" size={20} color="#1a472a" />
@@ -893,28 +877,39 @@ export default function SellScreen() {
                 {/* Pages Condition */}
                 <Text style={[styles.formLabel, isNewBook && styles.disabledText]}>Condizione Pagine</Text>
                 <View style={styles.optionsRow}>
-                  {['perfette', 'buone', 'ingiallite'].map((opt) => (
+                  {[{value: 'perfette', label: 'Ottime'}, {value: 'buone', label: 'Buone'}, {value: 'ingiallite', label: 'Ingiallite'}].map((opt) => (
                     <TouchableOpacity
-                      key={opt}
+                      key={opt.value}
                       style={[
                         styles.optionChip,
-                        !isNewBook && pagesCondition === opt && styles.optionChipActive,
+                        !isNewBook && pagesCondition === opt.value && styles.optionChipActive,
                         isNewBook && styles.optionChipDisabled
                       ]}
-                      onPress={() => !isNewBook && setPagesCondition(opt)}
+                      onPress={() => !isNewBook && setPagesCondition(opt.value)}
                       disabled={isNewBook}
                     >
                       <Text style={[
                         styles.optionChipText,
-                        !isNewBook && pagesCondition === opt && styles.optionChipTextActive,
+                        !isNewBook && pagesCondition === opt.value && styles.optionChipTextActive,
                         isNewBook && styles.disabledText
                       ]}>
-                        {opt.charAt(0).toUpperCase() + opt.slice(1)}
+                        {opt.label}
                       </Text>
                     </TouchableOpacity>
                   ))}
                 </View>
               </View>
+
+              {/* Notes - spostato dopo le condizioni */}
+              <Text style={styles.formLabel}>Note/Descrizione (opzionale)</Text>
+              <TextInput
+                style={styles.notesInput}
+                value={notes}
+                onChangeText={setNotes}
+                placeholder="Es: Alcune pagine sottolineate a matita..."
+                multiline
+                numberOfLines={3}
+              />
 
               {/* Condizione Calcolata Automaticamente */}
               <Text style={styles.formLabel}>Condizione Calcolata</Text>
