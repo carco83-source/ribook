@@ -357,7 +357,7 @@ export default function ProfileScreen() {
                     <View style={styles.totalBalanceRow}>
                       <View style={styles.totalBalanceContent}>
                         <Text style={styles.totalBalanceLabel}>TOTALE SPESA</Text>
-                        <Text style={[styles.totalBalanceAmount, { color: '#f44336' }]}>
+                        <Text style={[styles.totalBalanceAmount, { color: '#2196F3' }]}>
                           €{totaleSpesa.toFixed(0)}
                         </Text>
                       </View>
