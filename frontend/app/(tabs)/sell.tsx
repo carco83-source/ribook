@@ -104,6 +104,12 @@ export default function SellScreen() {
 
   // Multi-select bookshops
   const [selectedBookshops, setSelectedBookshops] = useState<string[]>([]);
+  
+  // ISBN Manual Search - "Vendi altro libro"
+  const [showISBNSearch, setShowISBNSearch] = useState(false);
+  const [isbnInput, setIsbnInput] = useState('');
+  const [searchingISBN, setSearchingISBN] = useState(false);
+  const [isbnError, setIsbnError] = useState('');
 
   // Bookshops data with addresses for Google Maps
   const bookshopsData = [
@@ -263,6 +269,7 @@ export default function SellScreen() {
   const selectBookToSell = (book: Book) => {
     setSelectedBook(book);
     setShowBookPicker(false);
+    setShowISBNSearch(false);
     
     // Reset form - condizione e prezzo saranno calcolati automaticamente
     setListingPhotos([]);
@@ -276,6 +283,50 @@ export default function SellScreen() {
     setNotes('');
     
     setShowListingForm(true);
+  };
+
+  // Search book by ISBN for "Vendi altro libro"
+  const searchBookByISBN = async () => {
+    if (!isbnInput.trim()) {
+      setIsbnError('Inserisci un ISBN');
+      return;
+    }
+    
+    const cleanISBN = isbnInput.replace(/[-\s]/g, '').trim();
+    if (cleanISBN.length !== 10 && cleanISBN.length !== 13) {
+      setIsbnError('ISBN non valido (deve essere 10 o 13 cifre)');
+      return;
+    }
+    
+    setSearchingISBN(true);
+    setIsbnError('');
+    
+    try {
+      const response = await axios.get(`${API_URL}/api/books/search/${cleanISBN}`);
+      const book = response.data;
+      
+      // Book found - proceed to sell form
+      const bookToSell: Book = {
+        id: book.id || cleanISBN,
+        isbn: book.isbn || cleanISBN,
+        titolo: book.titolo,
+        autori: book.autori,
+        disciplina: book.disciplina,
+        prezzo_copertina: book.prezzo_copertina || book.prezzo_ministeriale,
+        editore: book.editore,
+      };
+      
+      selectBookToSell(bookToSell);
+      setIsbnInput('');
+    } catch (error: any) {
+      if (error.response?.status === 404) {
+        setIsbnError('Libro non presente nelle scuole di Catanzaro');
+      } else {
+        setIsbnError('Errore nella ricerca. Riprova.');
+      }
+    } finally {
+      setSearchingISBN(false);
+    }
   };
 
   const pickImage = async () => {
@@ -582,6 +633,104 @@ export default function SellScreen() {
                 );
               })
             )}
+
+            {/* Divider and "Vendi altro libro" button */}
+            <View style={styles.dividerContainer}>
+              <View style={styles.divider} />
+              <Text style={styles.dividerText}>oppure</Text>
+              <View style={styles.divider} />
+            </View>
+
+            <TouchableOpacity
+              style={styles.otherBookButton}
+              onPress={() => {
+                setShowChildPicker(false);
+                setShowISBNSearch(true);
+                setIsbnInput('');
+                setIsbnError('');
+              }}
+            >
+              <View style={[styles.childOptionIcon, { backgroundColor: '#fff3e0' }]}>
+                <Ionicons name="barcode-outline" size={24} color="#FF9800" />
+              </View>
+              <View style={styles.childOptionInfo}>
+                <Text style={styles.childOptionName}>Vendi altro libro</Text>
+                <Text style={styles.childOptionSchool}>
+                  Inserisci ISBN manualmente
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#666" />
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* ISBN Search Modal - "Vendi altro libro" */}
+      <Modal
+        visible={showISBNSearch}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowISBNSearch(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowISBNSearch(false)}
+        >
+          <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Vendi altro libro</Text>
+              <TouchableOpacity onPress={() => setShowISBNSearch(false)}>
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.modalSubtitle}>
+              Inserisci il codice ISBN del libro che vuoi vendere
+            </Text>
+
+            <View style={styles.isbnInputContainer}>
+              <Ionicons name="barcode" size={24} color="#666" style={{ marginRight: 12 }} />
+              <TextInput
+                style={styles.isbnInput}
+                placeholder="Es: 9788808520234"
+                placeholderTextColor="#999"
+                value={isbnInput}
+                onChangeText={(text) => {
+                  setIsbnInput(text);
+                  setIsbnError('');
+                }}
+                keyboardType="numeric"
+                maxLength={17}
+                autoFocus
+              />
+            </View>
+
+            {isbnError ? (
+              <View style={styles.isbnErrorContainer}>
+                <Ionicons name="alert-circle" size={20} color="#f44336" />
+                <Text style={styles.isbnErrorText}>{isbnError}</Text>
+              </View>
+            ) : null}
+
+            <Text style={styles.isbnHint}>
+              Trovi l'ISBN sul retro del libro, sopra il codice a barre
+            </Text>
+
+            <TouchableOpacity
+              style={[styles.searchISBNButton, searchingISBN && styles.searchISBNButtonDisabled]}
+              onPress={searchBookByISBN}
+              disabled={searchingISBN}
+            >
+              {searchingISBN ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="search" size={20} color="#fff" />
+                  <Text style={styles.searchISBNButtonText}>Cerca libro</Text>
+                </>
+              )}
+            </TouchableOpacity>
           </View>
         </TouchableOpacity>
       </Modal>
@@ -1658,6 +1807,92 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   submitButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  // Divider for "oppure"
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 16,
+    marginTop: 24,
+  },
+  divider: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#e0e0e0',
+  },
+  dividerText: {
+    marginHorizontal: 16,
+    fontSize: 13,
+    color: '#999',
+  },
+  // "Vendi altro libro" button
+  otherBookButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#FF9800',
+    borderStyle: 'dashed',
+  },
+  // ISBN Search Modal styles
+  isbnInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  isbnInput: {
+    flex: 1,
+    fontSize: 18,
+    color: '#333',
+    paddingVertical: 14,
+    letterSpacing: 1,
+  },
+  isbnErrorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffebee',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 12,
+    gap: 8,
+  },
+  isbnErrorText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#f44336',
+    fontWeight: '500',
+  },
+  isbnHint: {
+    fontSize: 13,
+    color: '#999',
+    marginTop: 12,
+    textAlign: 'center',
+  },
+  searchISBNButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1a472a',
+    padding: 16,
+    borderRadius: 12,
+    marginTop: 24,
+    gap: 8,
+  },
+  searchISBNButtonDisabled: {
+    opacity: 0.7,
+  },
+  searchISBNButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
