@@ -147,10 +147,16 @@ export default function RegisterScreen() {
 
       console.log('Registration successful:', response.data);
       
-      // Navigate to success page with the username
+      // Navigate to success page with user data
       router.replace({
         pathname: '/(auth)/register-success',
-        params: { username: response.data.username }
+        params: { 
+          username: response.data.username,
+          userId: response.data.user_id,
+          scuola: scuolaNome,
+          classe: classe,
+          tipoScuola: tipoScuola
+        }
       });
       
     } catch (error: any) {
