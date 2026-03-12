@@ -301,7 +301,7 @@ export default function ProfileScreen() {
                   <>
                     {/* Three Column Layout - same style as child cards */}
                     <View style={styles.bookFlowContainer}>
-                      {/* VENDI - BLU */}
+                      {/* VENDI - BLU (GUADAGNO +) */}
                       <View style={styles.bookFlowColumn}>
                         <View style={[styles.bookFlowHeader, { backgroundColor: '#2196F3' }]}>
                           <Text style={styles.bookFlowHeaderClass}>VENDI</Text>
@@ -313,12 +313,12 @@ export default function ProfileScreen() {
                           </Text>
                           <Text style={styles.bookFlowLabel}>libri</Text>
                         </View>
-                        <Text style={[styles.bookFlowHint, { color: '#2196F3' }]}>
-                          {guadagnoVendite > 0 ? `- €${guadagnoVendite.toFixed(0)}` : '€0'}
+                        <Text style={[styles.bookFlowHint, { color: '#4CAF50', fontWeight: '600' }]}>
+                          {guadagnoVendite > 0 ? `+ €${guadagnoVendite.toFixed(0)}` : '€0'}
                         </Text>
                       </View>
 
-                      {/* NUOVI - NERO */}
+                      {/* NUOVI - NERO (SPESA -) */}
                       <View style={styles.bookFlowColumn}>
                         <View style={[styles.bookFlowHeader, { backgroundColor: '#1a472a' }]}>
                           <Text style={styles.bookFlowHeaderClass}>NUOVI</Text>
@@ -330,12 +330,12 @@ export default function ProfileScreen() {
                           </Text>
                           <Text style={styles.bookFlowLabel}>da comprare</Text>
                         </View>
-                        <Text style={[styles.bookFlowHint, { color: '#FF9800' }]}>
-                          + €{costoNuovi.toFixed(0)}
+                        <Text style={[styles.bookFlowHint, { color: '#f44336', fontWeight: '600' }]}>
+                          - €{costoNuovi.toFixed(0)}
                         </Text>
                       </View>
 
-                      {/* COMPRA USATI - VERDE */}
+                      {/* COMPRA USATI - VERDE (SPESA -) */}
                       <View style={styles.bookFlowColumn}>
                         <View style={[styles.bookFlowHeader, { backgroundColor: '#4CAF50' }]}>
                           <Text style={styles.bookFlowHeaderClass}>USATI</Text>
@@ -347,26 +347,20 @@ export default function ProfileScreen() {
                           </Text>
                           <Text style={styles.bookFlowLabel}>da comprare</Text>
                         </View>
-                        <Text style={[styles.bookFlowHint, { color: '#4CAF50' }]}>
-                          + €{costoUsati.toFixed(0)}
+                        <Text style={[styles.bookFlowHint, { color: '#f44336', fontWeight: '600' }]}>
+                          - €{costoUsati.toFixed(0)}
                         </Text>
                       </View>
                     </View>
 
-                    {/* TOTALE sotto le caselle */}
+                    {/* TOTALE SPESA sotto le caselle */}
                     <View style={styles.totalBalanceRow}>
                       <View style={styles.totalBalanceContent}>
-                        <Text style={styles.totalBalanceLabel}>BILANCIO STIMATO</Text>
-                        <Text style={[
-                          styles.totalBalanceAmount,
-                          { color: totaleSpesa > 0 ? '#f44336' : '#4CAF50' }
-                        ]}>
-                          {totaleSpesa > 0 ? '+' : ''}€{totaleSpesa.toFixed(0)}
+                        <Text style={styles.totalBalanceLabel}>TOTALE SPESA</Text>
+                        <Text style={[styles.totalBalanceAmount, { color: '#f44336' }]}>
+                          €{totaleSpesa.toFixed(0)}
                         </Text>
                       </View>
-                      <Text style={styles.totalBalanceHint}>
-                        (Usati + Nuovi - Vendite)
-                      </Text>
                     </View>
                   </>
                 );
