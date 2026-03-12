@@ -25,7 +25,7 @@ export default function WelcomeScreen() {
       <View style={styles.header}>
         <Ionicons name="book" size={80} color="#fff" />
         <Text style={styles.title}>ScambiaLibri</Text>
-        <Text style={styles.subtitle}>La piattaforma per lo scambio di libri scolastici usati</Text>
+        <Text style={styles.subtitle}>Acquisto libro usato assistito</Text>
       </View>
 
       <View style={styles.features}>
@@ -34,12 +34,12 @@ export default function WelcomeScreen() {
           <Text style={styles.featureText}>Trova i libri che cerchi</Text>
         </View>
         <View style={styles.featureItem}>
-          <Ionicons name="swap-horizontal" size={32} color="#1a472a" />
-          <Text style={styles.featureText}>Scambia con altri studenti</Text>
+          <Ionicons name="checkmark-done" size={32} color="#1a472a" />
+          <Text style={styles.featureText}>Ti selezioniamo i libri da vendere e da acquistare</Text>
         </View>
         <View style={styles.featureItem}>
-          <Ionicons name="wallet" size={32} color="#1a472a" />
-          <Text style={styles.featureText}>Risparmia fino al 70%</Text>
+          <Ionicons name="calculator" size={32} color="#1a472a" />
+          <Text style={styles.featureText}>Calcoliamo immediatamente il tuo risparmio</Text>
         </View>
       </View>
 

@@ -504,7 +504,7 @@ export default function ProfileScreen() {
       <View style={styles.footer}>
         <Text style={styles.footerText}>ScambiaLibri v1.0</Text>
         <Text style={styles.footerSubtext}>
-          La piattaforma per lo scambio di libri scolastici
+          Acquisto libro usato assistito
         </Text>
       </View>
     </ScrollView>
