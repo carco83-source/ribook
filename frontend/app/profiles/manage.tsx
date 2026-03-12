@@ -41,6 +41,7 @@ export default function ManageProfilesScreen() {
     nome_figlio: '',
     tipo_scuola: 'primo_grado',
     scuola: '',
+    codice_scuola: '',
     classe: '',
     sezione: '',
   });
@@ -83,6 +84,7 @@ export default function ManageProfilesScreen() {
         nome_figlio: '',
         tipo_scuola: 'primo_grado',
         scuola: '',
+        codice_scuola: '',
         classe: '',
         sezione: '',
       });
@@ -295,11 +297,18 @@ export default function ManageProfilesScreen() {
               <View style={styles.pickerContainer}>
                 <Picker
                   selectedValue={newProfile.scuola}
-                  onValueChange={(value) => setNewProfile({ ...newProfile, scuola: value })}
+                  onValueChange={(value) => {
+                    const scuolaSelezionata = getScuoleByTipo().find(s => s.nome === value);
+                    setNewProfile({ 
+                      ...newProfile, 
+                      scuola: value,
+                      codice_scuola: scuolaSelezionata?.codice || ''
+                    });
+                  }}
                 >
                   <Picker.Item label="Seleziona scuola..." value="" />
                   {getScuoleByTipo().map((scuola) => (
-                    <Picker.Item key={scuola.nome} label={scuola.nome} value={scuola.nome} />
+                    <Picker.Item key={scuola.codice} label={scuola.nome} value={scuola.nome} />
                   ))}
                 </Picker>
               </View>

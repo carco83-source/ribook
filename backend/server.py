@@ -478,6 +478,7 @@ async def upgrade_to_premium(user_id: str):
 class AddChildProfileRequest(BaseModel):
     nome_figlio: str
     scuola: str
+    codice_scuola: Optional[str] = None
     classe: str
     sezione: str
     tipo_scuola: str
@@ -493,6 +494,7 @@ async def add_child_profile(user_id: str, profile_data: AddChildProfileRequest):
         "id": str(uuid.uuid4()),
         "nome_figlio": profile_data.nome_figlio,
         "scuola": profile_data.scuola,
+        "codice_scuola": profile_data.codice_scuola or "",
         "classe": profile_data.classe,
         "sezione": profile_data.sezione,
         "tipo_scuola": profile_data.tipo_scuola
@@ -580,6 +582,7 @@ async def update_child_profile(user_id: str, profile_id: str, profile_data: AddC
             {"id": user_id},
             {"$set": {
                 "scuola": profile_data.scuola,
+                "codice_scuola": profile_data.codice_scuola or "",
                 "classe": profile_data.classe,
                 "sezione": profile_data.sezione,
                 "tipo_scuola": profile_data.tipo_scuola
@@ -596,6 +599,7 @@ async def update_child_profile(user_id: str, profile_id: str, profile_data: AddC
                 "id": profile_id,
                 "nome_figlio": profile_data.nome_figlio,
                 "scuola": profile_data.scuola,
+                "codice_scuola": profile_data.codice_scuola or "",
                 "classe": profile_data.classe,
                 "sezione": profile_data.sezione,
                 "tipo_scuola": profile_data.tipo_scuola
