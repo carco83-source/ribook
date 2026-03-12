@@ -13,12 +13,14 @@ import {
   TextInput,
   ScrollView,
   Switch,
+  Pressable,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import * as ImagePicker from 'expo-image-picker';
+import { BarCodeScanner } from 'expo-barcode-scanner';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -110,6 +112,11 @@ export default function SellScreen() {
   const [isbnInput, setIsbnInput] = useState('');
   const [searchingISBN, setSearchingISBN] = useState(false);
   const [isbnError, setIsbnError] = useState('');
+  
+  // Barcode Scanner
+  const [showScanner, setShowScanner] = useState(false);
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [scanned, setScanned] = useState(false);
 
   // Bookshops data with addresses for Google Maps
   const bookshopsData = [
@@ -309,6 +316,72 @@ export default function SellScreen() {
       const bookToSell: Book = {
         id: book.id || cleanISBN,
         isbn: book.isbn || cleanISBN,
+        titolo: book.titolo,
+        autori: book.autori,
+        disciplina: book.disciplina,
+        prezzo_copertina: book.prezzo_copertina || book.prezzo_ministeriale,
+        editore: book.editore,
+      };
+      
+      selectBookToSell(bookToSell);
+      setIsbnInput('');
+    } catch (error: any) {
+      if (error.response?.status === 404) {
+        setIsbnError('Libro non presente nelle scuole di Catanzaro');
+      } else {
+        setIsbnError('Errore nella ricerca. Riprova.');
+      }
+    } finally {
+      setSearchingISBN(false);
+    }
+  };
+
+  // Open barcode scanner
+  const openScanner = async () => {
+    const { status } = await BarCodeScanner.requestPermissionsAsync();
+    setHasPermission(status === 'granted');
+    
+    if (status === 'granted') {
+      setScanned(false);
+      setShowScanner(true);
+    } else {
+      Alert.alert(
+        'Permesso negato',
+        'Per scansionare il codice a barre serve il permesso della fotocamera'
+      );
+    }
+  };
+
+  // Handle barcode scanned
+  const handleBarCodeScanned = ({ type, data }: { type: string; data: string }) => {
+    if (scanned) return;
+    setScanned(true);
+    
+    // Clean the ISBN
+    const cleanISBN = data.replace(/[-\s]/g, '').trim();
+    
+    // Close scanner and set ISBN
+    setShowScanner(false);
+    setIsbnInput(cleanISBN);
+    
+    // Auto-search the book
+    searchBookByISBNValue(cleanISBN);
+  };
+
+  // Search book by ISBN value (for scanner)
+  const searchBookByISBNValue = async (isbn: string) => {
+    if (!isbn.trim()) return;
+    
+    setSearchingISBN(true);
+    setIsbnError('');
+    
+    try {
+      const response = await axios.get(`${API_URL}/api/books/search/${isbn}`);
+      const book = response.data;
+      
+      const bookToSell: Book = {
+        id: book.id || isbn,
+        isbn: book.isbn || isbn,
         titolo: book.titolo,
         autori: book.autori,
         disciplina: book.disciplina,
@@ -672,12 +745,12 @@ export default function SellScreen() {
         animationType="slide"
         onRequestClose={() => setShowISBNSearch(false)}
       >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowISBNSearch(false)}
-        >
-          <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
+        <View style={styles.modalOverlay}>
+          <Pressable 
+            style={styles.modalOverlayPress}
+            onPress={() => setShowISBNSearch(false)}
+          />
+          <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Vendi altro libro</Text>
               <TouchableOpacity onPress={() => setShowISBNSearch(false)}>
@@ -686,8 +759,30 @@ export default function SellScreen() {
             </View>
 
             <Text style={styles.modalSubtitle}>
-              Inserisci il codice ISBN del libro che vuoi vendere
+              Inserisci il codice ISBN o scansiona il codice a barre
             </Text>
+
+            {/* Scan Button */}
+            <TouchableOpacity
+              style={styles.scanBarcodeButton}
+              onPress={openScanner}
+            >
+              <View style={styles.scanBarcodeIcon}>
+                <Ionicons name="camera" size={28} color="#fff" />
+              </View>
+              <View style={styles.scanBarcodeInfo}>
+                <Text style={styles.scanBarcodeTitle}>Scansiona codice a barre</Text>
+                <Text style={styles.scanBarcodeSubtitle}>Usa la fotocamera per leggere l'ISBN</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#1a472a" />
+            </TouchableOpacity>
+
+            {/* Divider */}
+            <View style={styles.dividerContainer}>
+              <View style={styles.divider} />
+              <Text style={styles.dividerText}>oppure inserisci manualmente</Text>
+              <View style={styles.divider} />
+            </View>
 
             <View style={styles.isbnInputContainer}>
               <Ionicons name="barcode" size={24} color="#666" style={{ marginRight: 12 }} />
@@ -702,7 +797,6 @@ export default function SellScreen() {
                 }}
                 keyboardType="numeric"
                 maxLength={17}
-                autoFocus
               />
             </View>
 
@@ -712,10 +806,6 @@ export default function SellScreen() {
                 <Text style={styles.isbnErrorText}>{isbnError}</Text>
               </View>
             ) : null}
-
-            <Text style={styles.isbnHint}>
-              Trovi l'ISBN sul retro del libro, sopra il codice a barre
-            </Text>
 
             <TouchableOpacity
               style={[styles.searchISBNButton, searchingISBN && styles.searchISBNButtonDisabled]}
@@ -732,7 +822,42 @@ export default function SellScreen() {
               )}
             </TouchableOpacity>
           </View>
-        </TouchableOpacity>
+        </View>
+      </Modal>
+
+      {/* Barcode Scanner Modal */}
+      <Modal
+        visible={showScanner}
+        animationType="slide"
+        onRequestClose={() => setShowScanner(false)}
+      >
+        <View style={styles.scannerContainer}>
+          <View style={styles.scannerHeader}>
+            <TouchableOpacity 
+              style={styles.scannerCloseButton}
+              onPress={() => setShowScanner(false)}
+            >
+              <Ionicons name="close" size={28} color="#fff" />
+            </TouchableOpacity>
+            <Text style={styles.scannerTitle}>Inquadra il codice a barre</Text>
+          </View>
+          
+          <BarCodeScanner
+            onBarCodeScanned={scanned ? undefined : handleBarCodeScanned}
+            style={StyleSheet.absoluteFillObject}
+            barCodeTypes={[BarCodeScanner.Constants.BarCodeType.ean13, BarCodeScanner.Constants.BarCodeType.ean8]}
+          />
+          
+          <View style={styles.scannerOverlay}>
+            <View style={styles.scannerFrame} />
+          </View>
+          
+          <View style={styles.scannerFooter}>
+            <Text style={styles.scannerHint}>
+              Posiziona il codice a barre all'interno del riquadro
+            </Text>
+          </View>
+        </View>
       </Modal>
 
       {/* Book Picker Modal */}
@@ -1896,5 +2021,109 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  // Modal overlay with pressable background
+  modalOverlayPress: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  // Scan barcode button styles
+  scanBarcodeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#e8f5e9',
+    padding: 16,
+    borderRadius: 12,
+    marginTop: 16,
+    borderWidth: 2,
+    borderColor: '#4CAF50',
+  },
+  scanBarcodeIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#1a472a',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scanBarcodeInfo: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  scanBarcodeTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1a472a',
+  },
+  scanBarcodeSubtitle: {
+    fontSize: 13,
+    color: '#666',
+    marginTop: 2,
+  },
+  // Barcode Scanner Modal styles
+  scannerContainer: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
+  scannerHeader: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: 60,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    zIndex: 10,
+  },
+  scannerCloseButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scannerTitle: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#fff',
+    textAlign: 'center',
+    marginRight: 44,
+  },
+  scannerOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scannerFrame: {
+    width: 280,
+    height: 150,
+    borderWidth: 3,
+    borderColor: '#4CAF50',
+    borderRadius: 12,
+    backgroundColor: 'transparent',
+  },
+  scannerFooter: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingBottom: 60,
+    paddingTop: 20,
+    paddingHorizontal: 20,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+  },
+  scannerHint: {
+    fontSize: 16,
+    color: '#fff',
+    textAlign: 'center',
   },
 });
