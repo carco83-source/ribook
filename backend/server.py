@@ -520,6 +520,49 @@ async def add_child_profile(user_id: str, profile_data: AddChildProfileRequest):
     
     return {"message": "Profilo figlio aggiunto", "profile": new_profile}
 
+
+# ============== SCHOOLS ENDPOINTS ==============
+
+@api_router.get("/schools")
+async def get_schools(tipo: Optional[str] = None):
+    """Get all schools, optionally filtered by type (Media/Superiore)"""
+    query = {}
+    if tipo:
+        query["tipo"] = tipo
+    
+    schools = await db.schools.find(query).to_list(None)
+    
+    # Format response
+    result = []
+    for school in schools:
+        result.append({
+            "codice": school.get("codice"),
+            "nome": school.get("nome"),
+            "tipo": school.get("tipo"),
+            "comune": school.get("comune", "Catanzaro")
+        })
+    
+    return result
+
+@api_router.get("/schools/{codice}/sections")
+async def get_school_sections(codice: str, classe: Optional[int] = None):
+    """Get available sections for a school, optionally filtered by class"""
+    query = {"codice_scuola": codice}
+    if classe:
+        query["classe"] = classe
+    
+    # Get distinct sections from adozioni collection
+    pipeline = [
+        {"$match": query},
+        {"$group": {"_id": "$sezione"}},
+        {"$sort": {"_id": 1}}
+    ]
+    
+    sections = await db.adozioni.aggregate(pipeline).to_list(None)
+    return [s["_id"] for s in sections if s["_id"]]
+
+
+
 @api_router.get("/users/{user_id}/profiles")
 async def get_child_profiles(user_id: str):
     """Get all child profiles for a user"""
