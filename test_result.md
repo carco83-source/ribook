@@ -323,3 +323,29 @@ agent_communication:
     message: "Class Compatibility API testing completed successfully! All 17 test cases passed with 100% success rate. The API correctly handles edition comparison logic, publisher verification, and book flow calculations between classes. Tested user 58ac430d-da2a-4954-bb2f-feea6de1f30c (2nd grade at Casalinuovo) and confirmed all expected results: 5 vendibili to 1st grade, 2 non_vendibili (SCIENZE edition change, ITALIANO publisher difference), 5 usati available from 3rd grade, and 2 books to buy new (FRANCESE and MATEMATICA due to edition differences). Backend logic is working perfectly."
   - agent: "main"
     message: "Ho implementato il calcolo automatico della condizione e del prezzo nella pagina sell.tsx. Il sistema calcola automaticamente la condizione (Perfetto/Buono/Molto Usato) in base ai difetti selezionati (scritte, evidenziature, pieghe, condizione copertina, condizione pagine) e imposta il prezzo automaticamente (60%/50%/40% del prezzo di copertina). Ho anche corretto un bug nel backend (/api/auth/login) che causava un errore 500 quando l'utente non aveva i campi scuola/classe/sezione. Test da eseguire: 1) Login con carco83@gmail.com/password123, 2) Navigare su Vendi tab, 3) Cliccare 'Vendi Libro', 4) Selezionare George, 5) Selezionare un libro, 6) Verificare che la condizione e il prezzo vengono calcolati automaticamente in base ai difetti selezionati."
+  - agent: "main"
+    message: |
+      ## AGGIORNAMENTO DATABASE SCUOLE E LOGICA COMPATIBILITÀ (13/03/2026)
+      
+      ### 1. Database Scuole Aggiornato
+      - Scaricati automaticamente nomi e codici ministeriali dal sito AIE (consultazione.adozioniaie.it)
+      - Aggiornata collezione MongoDB `schools` con 20 scuole (8 medie + 12 superiori)
+      - Tutte le scuole ora hanno dati di adozione nella collezione `adozioni`
+      
+      ### 2. File Frontend schools.ts Corretto
+      - Aggiornato /app/frontend/src/constants/schools.ts con codici ministeriali corretti
+      - I codici ora corrispondono ai dati reali AIE
+      
+      ### 3. Nuovi Endpoint Backend
+      - GET /api/schools - Lista tutte le scuole (filtrabile per tipo)
+      - GET /api/schools/{codice}/sections - Lista sezioni disponibili per scuola
+      
+      ### 4. FIX CRITICO: Logica Compatibilità
+      - RISCRITTO l'endpoint /api/profiles/{user_id}/children/{child_id}/compatibility
+      - Ora usa SOLO la collezione `adozioni` invece della vecchia `books`
+      - Supporta correttamente le SEZIONI (es. classe 2B vs 2A)
+      - Testato con curl: restituisce dati corretti per tutti e 3 i profili
+      
+      ### Scuole disponibili:
+      MEDIE: I.C. Casalinuovo, Don Milani, Patari-Rodari, Vivaldi, Mater Domini, Galluppi, Sabatini, Maria Immacolata
+      SUPERIORI: Liceo Fermi, Galluppi, Siciliani, Artistico, Linguistico, ITIS Scalfaro, ITCG Grimaldi, Agrario, Chimirri, IPSIA, Sorace Maresca, IIS Petrucci

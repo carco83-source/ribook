@@ -1678,7 +1678,7 @@ async def get_class_compatibility(user_id: str):
 async def get_child_compatibility(user_id: str, child_id: str):
     """
     Calcola la compatibilità libri per un profilo figlio specifico.
-    Riutilizza la stessa logica dell'endpoint class-compatibility.
+    USA LA COLLEZIONE ADOZIONI con supporto sezioni.
     """
     import re
     
@@ -1697,6 +1697,7 @@ async def get_child_compatibility(user_id: str, child_id: str):
     child_classe = int(child_profile.get("classe", 1))
     child_tipo = child_profile.get("tipo_scuola", "primo_grado")
     child_codice_scuola = child_profile.get("codice_scuola", "")
+    child_sezione = child_profile.get("sezione", "A").upper()  # IMPORTANTE: ora usiamo la sezione!
     child_nome = child_profile.get("nome_figlio", "Figlio")
     child_scuola = child_profile.get("scuola", "")
     
@@ -1707,8 +1708,9 @@ async def get_child_compatibility(user_id: str, child_id: str):
             "child_classe": child_classe
         }
     
-    # Funzioni helper (stesse dell'altro endpoint)
+    # Funzioni helper per confronto libri
     def get_series_name(title: str) -> str:
+        """Estrae il nome base della serie dal titolo"""
         title = title.upper().strip()
         title = re.sub(r'\s*V\.?\s*\d+', '', title, flags=re.IGNORECASE)
         if '+' in title:
@@ -1727,11 +1729,13 @@ async def get_child_compatibility(user_id: str, child_id: str):
         return title
     
     def has_edition_marker(title: str) -> str:
+        """Estrae il marker di edizione dal titolo"""
         title = title.upper()
         match = re.search(r'(\d+ED\.?|EDIZIONE\s+\w+|ED\.\s*\w+)', title)
         return match.group(1) if match else ""
     
     def same_series(book1: dict, book2: dict) -> bool:
+        """Verifica se due libri sono della stessa serie/edizione"""
         if book1.get("editore", "").upper() != book2.get("editore", "").upper():
             return False
         t1 = book1.get("titolo", "").upper()
@@ -1755,8 +1759,9 @@ async def get_child_compatibility(user_id: str, child_id: str):
         similarity = len(common) / max(len(words1), len(words2))
         return similarity >= 0.7 and len(common) >= min(2, min_words)
     
-    # Gestione cicli
+    # Gestione cicli scolastici
     def get_cycle_info(classe: int, tipo_scuola: str):
+        """Restituisce (min_classe, max_classe, nome_ciclo)"""
         if tipo_scuola == "primo_grado":
             return (1, 3, "media")
         else:
@@ -1769,8 +1774,12 @@ async def get_child_compatibility(user_id: str, child_id: str):
     classe_precedente = child_classe - 1 if child_classe > cycle_min else None
     classe_successiva = child_classe + 1 if child_classe < cycle_max else None
     
-    # Helper function to get books from adozioni collection (with section)
-    async def get_books_for_class(codice_scuola, classe, sezione):
+    # ========================================
+    # NUOVA LOGICA: USA COLLEZIONE ADOZIONI
+    # ========================================
+    
+    async def get_books_from_adozioni(codice_scuola: str, classe: int, sezione: str) -> list:
+        """Recupera libri dalla collezione adozioni per una specifica combinazione"""
         adozione = await db.adozioni.find_one({
             "codice_scuola": codice_scuola,
             "classe": classe,
@@ -1778,67 +1787,55 @@ async def get_child_compatibility(user_id: str, child_id: str):
         })
         if adozione:
             return adozione.get('libri', [])
-        # Fallback to old books collection
-        return await db.books.find({
-            "scuole_adottanti": codice_scuola,
-            "anni_corso": classe
-        }).to_list(100)
+        return []
     
-    # Carica libri della MIA classe (con sezione)
-    all_my_books = await get_books_for_class(child_codice_scuola, child_classe, child_sezione)
+    # Carica libri della MIA classe/sezione
+    all_my_books = await get_books_from_adozioni(child_codice_scuola, child_classe, child_sezione)
+    
+    # Separa libri annuali da volumi unici
     my_books = [b for b in all_my_books if not b.get('is_volume_unico')]
+    my_volumi_unici = [b for b in all_my_books if b.get('is_volume_unico')]
     
-    # Carica VOLUMI UNICI
-    # MEDIE (primo_grado): tutti i volumi unici sono TRIENNALI (1-2-3), comprare solo in 1ª
-    # SUPERIORI: biennio (1-2) comprare in 1ª, triennio (3-4-5) comprare in 3ª
+    # Carica libri della classe PRECEDENTE (stessa sezione) - per calcolare cosa posso VENDERE
+    libri_prec = []
+    if classe_precedente:
+        libri_prec = await get_books_from_adozioni(child_codice_scuola, classe_precedente, child_sezione)
+        libri_prec = [b for b in libri_prec if not b.get('is_volume_unico')]
+    
+    # Carica libri della classe SUCCESSIVA (stessa sezione) - per calcolare cosa posso COMPRARE USATO
+    libri_succ = []
+    if classe_successiva:
+        libri_succ = await get_books_from_adozioni(child_codice_scuola, classe_successiva, child_sezione)
+        libri_succ = [b for b in libri_succ if not b.get('is_volume_unico')]
+    
+    # VOLUMI UNICI: da comprare solo al primo anno del ciclo
     volumi_unici_da_comprare = []
-    
-    # Determina se questo è il primo anno del ciclo appropriato
     deve_comprare_volumi_unici = False
+    
     if child_tipo == "primo_grado":
-        # Medie: volumi unici triennali, comprare solo in 1ª
+        # Medie: volumi unici triennali (1-2-3), comprare solo in 1ª
         deve_comprare_volumi_unici = (child_classe == 1)
+        anni_coperti = [1, 2, 3]
     else:
         # Superiori: biennio (1-2) o triennio (3-4-5)
         if child_classe <= 2:
-            deve_comprare_volumi_unici = (child_classe == 1)  # Primo anno biennio
+            deve_comprare_volumi_unici = (child_classe == 1)
+            anni_coperti = [1, 2]
         else:
-            deve_comprare_volumi_unici = (child_classe == 3)  # Primo anno triennio
+            deve_comprare_volumi_unici = (child_classe == 3)
+            anni_coperti = [3, 4, 5]
     
     if deve_comprare_volumi_unici:
-        # Trova tutti i volumi unici per questa classe
-        all_volumi_unici = await db.books.find({
-            "scuole_adottanti": child_codice_scuola,
-            "anni_corso": child_classe,
-            "is_volume_unico": True
-        }).to_list(50)
-        
-        for vu in all_volumi_unici:
+        for vu in my_volumi_unici:
             volumi_unici_da_comprare.append({
                 "isbn": vu.get("isbn", ""),
                 "titolo": vu.get("titolo", ""),
                 "disciplina": vu.get("disciplina", ""),
                 "editore": vu.get("editore", ""),
                 "prezzo": vu.get("prezzo_copertina", 0),
-                "anni_coperti": [1, 2, 3] if child_tipo == "primo_grado" else ([1, 2] if child_classe <= 2 else [3, 4, 5]),
+                "anni_coperti": anni_coperti,
                 "tipo": "volume_unico"
             })
-    
-    libri_prec = []
-    if classe_precedente:
-        libri_prec = await db.books.find({
-            "scuole_adottanti": child_codice_scuola,
-            "anni_corso": classe_precedente,
-            "is_volume_unico": {"$ne": True}
-        }).to_list(100)
-    
-    libri_succ = []
-    if classe_successiva:
-        libri_succ = await db.books.find({
-            "scuole_adottanti": child_codice_scuola,
-            "anni_corso": classe_successiva,
-            "is_volume_unico": {"$ne": True}
-        }).to_list(100)
     
     # Organizza per disciplina
     def books_by_discipline(books):
