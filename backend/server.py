@@ -2068,26 +2068,18 @@ async def generate_books_pdf(user_id: str, child_id: str):
         else:
             vol = str(child_classe)
         
-        # Da acquistare - logica corretta
-        # Il valore nel DB può essere None, True, False o non esistere
-        # Se è None o non esiste, assumiamo che sia da acquistare
-        da_acquistare_value = book.get('da_acquistare')
-        if da_acquistare_value is None:
-            # Campo non presente o None - calcola in base alla logica
-            # Per la 2ª e 3ª classe, i libri annuali già usati l'anno prima non vanno ricomprati
-            # TRANNE se è nuova adozione
-            if book.get('is_volume_unico'):
-                # Volume unico: da comprare solo al primo anno del range
-                anni = book.get('anni_corso', [])
-                if isinstance(anni, list) and len(anni) > 0:
-                    da_acquistare = "Sì" if child_classe == min(anni) else "No"
-                else:
-                    da_acquistare = "Sì"
+        # Da acquistare - sempre "Sì" per libri annuali (chi stampa è nuovo studente)
+        # Per volumi unici: "Sì" solo al primo anno del range
+        if book.get('is_volume_unico'):
+            # Volume unico: da comprare solo al primo anno del range
+            anni = book.get('anni_corso', [])
+            if isinstance(anni, list) and len(anni) > 0:
+                da_acquistare = "Sì" if child_classe == min(anni) else "No"
             else:
-                # Libro annuale: sempre da acquistare (cambia ogni anno)
                 da_acquistare = "Sì"
         else:
-            da_acquistare = "Sì" if da_acquistare_value else "No"
+            # Libro annuale: SEMPRE da acquistare (nuovo studente della classe)
+            da_acquistare = "Sì"
         
         # Nuova adozione
         nuova_adoz = "Sì" if book.get('nuova_adozione') else "No"
