@@ -1938,10 +1938,10 @@ async def get_child_compatibility(user_id: str, child_id: str):
 @api_router.get("/profiles/{user_id}/children/{child_id}/books-pdf")
 async def generate_books_pdf(user_id: str, child_id: str):
     """
-    Genera un PDF con la lista completa dei libri per una classe.
-    Include: ISBN, Titolo, Autore, Editore, Prezzo, Volume, Da acquistare, Nuova adozione
-    Formato: A4 Orizzontale (Landscape) con margini 1cm
+    Genera PDF formato ufficiale MUR - ELENCO DEI LIBRI DI TESTO ADOTTATI O CONSIGLIATI
     """
+    from reportlab.lib.pagesizes import A4, landscape
+    
     # Get user and child profile
     user = await db.users.find_one({"id": user_id})
     if not user:
@@ -1956,6 +1956,7 @@ async def generate_books_pdf(user_id: str, child_id: str):
     child_nome = child_profile.get("nome_figlio", "Figlio")
     child_scuola = child_profile.get("scuola", "")
     child_classe = int(child_profile.get("classe", 1))
+    child_sezione = child_profile.get("sezione", "A")
     child_codice_scuola = child_profile.get("codice_scuola", "")
     child_tipo = child_profile.get("tipo_scuola", "primo_grado")
     
@@ -1968,222 +1969,122 @@ async def generate_books_pdf(user_id: str, child_id: str):
         "anni_corso": child_classe
     }).to_list(200)
     
-    # Create PDF - LANDSCAPE A4 with 1cm margins
-    # A4 Landscape = 297mm x 210mm
-    from reportlab.lib.pagesizes import A4, landscape
-    
+    # Create PDF - LANDSCAPE A4
     buffer = io.BytesIO()
     page_width, page_height = landscape(A4)
     doc = SimpleDocTemplate(
         buffer, 
         pagesize=landscape(A4), 
-        topMargin=1*cm, 
-        bottomMargin=1*cm,
+        topMargin=0.8*cm, 
+        bottomMargin=0.8*cm,
         leftMargin=1*cm, 
         rightMargin=1*cm
     )
     
-    # Available width = 297mm - 2cm = 27.7cm
-    available_width = page_width - 2*cm
-    
     elements = []
     styles = getSampleStyleSheet()
     
-    # Custom styles for table cells (smaller font, allows wrapping)
-    cell_style = ParagraphStyle(
-        'CellStyle',
-        parent=styles['Normal'],
-        fontSize=8,
-        leading=10,
-        wordWrap='CJK'
-    )
+    # Styles
+    header_style = ParagraphStyle('Header', fontSize=9, leading=11)
+    cell_style = ParagraphStyle('Cell', fontSize=7, leading=9, wordWrap='CJK')
+    cell_bold = ParagraphStyle('CellBold', fontSize=7, leading=9, fontName='Helvetica-Bold', wordWrap='CJK')
     
-    cell_style_small = ParagraphStyle(
-        'CellStyleSmall',
-        parent=styles['Normal'],
-        fontSize=7,
-        leading=9,
-        wordWrap='CJK'
-    )
+    # Header
+    scuola_nome = child_scuola.split('-')[0].strip() if '-' in child_scuola else child_scuola
+    tipo_scuola_label = "SCUOLA SECONDARIA DI I GRADO" if child_tipo == "primo_grado" else "SCUOLA SECONDARIA DI II GRADO"
+    classe_label = f"{child_classe} {child_sezione}"
     
-    # Custom styles
-    title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Heading1'],
-        fontSize=16,
-        alignment=TA_CENTER,
-        spaceAfter=10,
-        textColor=colors.HexColor('#1a472a')
-    )
-    
-    subtitle_style = ParagraphStyle(
-        'CustomSubtitle',
-        parent=styles['Normal'],
-        fontSize=11,
-        alignment=TA_CENTER,
-        spaceAfter=20,
-        textColor=colors.grey
-    )
-    
-    # Title
-    classe_label = f"{child_classe}ª {'Media' if child_tipo == 'primo_grado' else 'Superiore'}"
-    elements.append(Paragraph(f"Lista Libri - {classe_label}", title_style))
-    elements.append(Paragraph(f"{child_nome} - {child_scuola} - Anno Scolastico 2025/2026", subtitle_style))
-    
-    # Table header with Paragraph for wrapping
-    table_data = [[
-        Paragraph('<b>Materia</b>', cell_style),
-        Paragraph('<b>Titolo</b>', cell_style),
-        Paragraph('<b>Autori</b>', cell_style),
-        Paragraph('<b>Editore</b>', cell_style),
-        Paragraph('<b>ISBN</b>', cell_style),
-        Paragraph('<b>Prezzo</b>', cell_style),
-        Paragraph('<b>Vol.</b>', cell_style),
-        Paragraph('<b>Acquist.</b>', cell_style),
-        Paragraph('<b>Nuovo</b>', cell_style),
-        Paragraph('<b>Consigliato</b>', cell_style),
+    header_data = [[
+        Paragraph(f"<b>{scuola_nome.upper()}</b><br/>88100 Catanzaro", header_style),
+        Paragraph(f"<b>{child_codice_scuola}</b>", ParagraphStyle('Code', fontSize=11, fontName='Helvetica-Bold', alignment=TA_CENTER)),
+        Paragraph(f"<b>ELENCO DEI LIBRI DI TESTO<br/>ADOTTATI O CONSIGLIATI</b><br/><br/>Tipo Scuola: {tipo_scuola_label}<br/>Classe: {classe_label}<br/>Anno Scolastico 2025-2026", 
+                 ParagraphStyle('RightHeader', fontSize=9, leading=11, alignment=TA_LEFT))
     ]]
     
-    # Column widths for landscape (total ~27.7cm = 277mm)
-    # Materia: 2.5cm, Titolo: 7cm, Autori: 3.5cm, Editore: 3cm, ISBN: 3cm, Prezzo: 1.5cm, Vol: 1.5cm, Acquist: 1.5cm, Nuovo: 1.5cm, Consigliato: 2.2cm
-    col_widths = [2.5*cm, 7*cm, 3.5*cm, 3*cm, 3*cm, 1.5*cm, 1.5*cm, 1.5*cm, 1.5*cm, 2.2*cm]
+    header_table = Table(header_data, colWidths=[7*cm, 5*cm, 9*cm])
+    header_table.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('ALIGN', (1, 0), (1, 0), 'CENTER'),
+        ('BOX', (1, 0), (1, 0), 1, colors.black),
+    ]))
+    elements.append(header_table)
+    elements.append(Spacer(1, 0.5*cm))
     
-    # Add books to table
-    total_price = 0
+    # Table header
+    table_data = [[
+        Paragraph('<b>Materia / Disciplina</b>', cell_bold),
+        Paragraph('<b>Codice Volume</b>', cell_bold),
+        Paragraph('<b>Autore</b>', cell_bold),
+        Paragraph('<b>Titolo / Sottotitolo</b>', cell_bold),
+        Paragraph('<b>Vol.</b>', cell_bold),
+        Paragraph('<b>Editore</b>', cell_bold),
+        Paragraph('<b>Prezzo</b>', cell_bold),
+        Paragraph('<b>Nuova<br/>Adoz.</b>', cell_bold),
+        Paragraph('<b>Da<br/>Acq.</b>', cell_bold),
+        Paragraph('<b>Cons.</b>', cell_bold),
+    ]]
+    
+    col_widths = [3.2*cm, 2.5*cm, 4*cm, 7*cm, 1*cm, 3*cm, 1.3*cm, 1.2*cm, 1.2*cm, 1.2*cm]
+    
+    # Add books
     for book in sorted(books, key=lambda x: x.get('disciplina', '')):
         disciplina = book.get('disciplina', '')
-        titolo = book.get('titolo', '')
+        isbn = book.get('isbn', '') or '-'
         autori = book.get('autori', '') or '-'
+        titolo = book.get('titolo', '')
         editore = book.get('editore', '') or '-'
-        isbn = book.get('isbn', '-') or '-'
         prezzo = book.get('prezzo_copertina') or book.get('prezzo_ministeriale') or 0
         
-        # Volume info
         anni = book.get('anni_corso', [])
+        vol = "U" if book.get('is_volume_unico') else str(child_classe)
+        nuova_adoz = "Si" if book.get('nuova_adozione') else "No"
+        
         if book.get('is_volume_unico'):
-            if isinstance(anni, list) and len(anni) > 1:
-                vol = f"Unico ({min(anni)}-{max(anni)})"
-            else:
-                vol = "Unico"
+            da_acq = "Si" if isinstance(anni, list) and len(anni) > 0 and child_classe == min(anni) else "No"
         else:
-            vol = str(child_classe)
+            da_acq = "Si"
         
-        # Da acquistare - sempre "Sì" per libri annuali (chi stampa è nuovo studente)
-        # Per volumi unici: "Sì" solo al primo anno del range
-        if book.get('is_volume_unico'):
-            # Volume unico: da comprare solo al primo anno del range
-            anni = book.get('anni_corso', [])
-            if isinstance(anni, list) and len(anni) > 0:
-                da_acquistare = "Sì" if child_classe == min(anni) else "No"
-            else:
-                da_acquistare = "Sì"
-        else:
-            # Libro annuale: SEMPRE da acquistare (nuovo studente della classe)
-            da_acquistare = "Sì"
-        
-        # Nuova adozione
-        nuova_adoz = "Sì" if book.get('nuova_adozione') else "No"
-        
-        # Consigliato (from MUR data)
-        consigliato = "Sì" if book.get('consigliato') else "No"
+        consigliato = "Ap" if book.get('consigliato') else "No"
         
         table_data.append([
-            Paragraph(disciplina, cell_style_small),
-            Paragraph(titolo, cell_style_small),
-            Paragraph(autori, cell_style_small),
-            Paragraph(editore, cell_style_small),
-            Paragraph(isbn, cell_style_small),
-            Paragraph(f"€{prezzo:.2f}" if prezzo else "-", cell_style),
-            Paragraph(vol, cell_style_small),
-            Paragraph(da_acquistare, cell_style),
+            Paragraph(disciplina, cell_style),
+            Paragraph(isbn, cell_style),
+            Paragraph(autori, cell_style),
+            Paragraph(titolo, cell_style),
+            Paragraph(vol, cell_style),
+            Paragraph(editore, cell_style),
+            Paragraph(f"€ {prezzo:.2f}" if prezzo else "-", cell_style),
             Paragraph(nuova_adoz, cell_style),
+            Paragraph(da_acq, cell_style),
             Paragraph(consigliato, cell_style),
         ])
-        
-        if prezzo and book.get('da_acquistare', True):
-            total_price += prezzo
     
-    # Add empty row and total row
-    empty_row = [Paragraph('', cell_style) for _ in range(10)]
-    table_data.append(empty_row)
-    
-    total_row = [
-        Paragraph('', cell_style),
-        Paragraph('', cell_style),
-        Paragraph('', cell_style),
-        Paragraph('', cell_style),
-        Paragraph('<b>TOTALE:</b>', cell_style),
-        Paragraph(f'<b>€{total_price:.2f}</b>', cell_style),
-        Paragraph('', cell_style),
-        Paragraph('', cell_style),
-        Paragraph('', cell_style),
-        Paragraph('', cell_style),
-    ]
-    table_data.append(total_row)
-    
-    # Create table
     table = Table(table_data, colWidths=col_widths, repeatRows=1)
-    
     table.setStyle(TableStyle([
-        # Header
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a472a')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-        ('TOPPADDING', (0, 0), (-1, 0), 8),
-        
-        # Body
-        ('ALIGN', (5, 1), (5, -1), 'RIGHT'),  # Prezzo
-        ('ALIGN', (6, 1), (-1, -1), 'CENTER'),  # Vol, Acquist, Nuovo, Consigliato
-        ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
-        ('TOPPADDING', (0, 1), (-1, -1), 4),
-        ('LEFTPADDING', (0, 0), (-1, -1), 4),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
-        
-        # Alternating row colors
-        ('ROWBACKGROUNDS', (0, 1), (-1, -3), [colors.white, colors.HexColor('#f8f9fa')]),
-        
-        # Total row
-        ('BACKGROUND', (4, -1), (5, -1), colors.HexColor('#e8f5e9')),
-        
-        # Grid
-        ('GRID', (0, 0), (-1, -3), 0.5, colors.HexColor('#d0d0d0')),
-        ('BOX', (0, 0), (-1, -3), 1, colors.HexColor('#1a472a')),
+        ('ALIGN', (4, 1), (4, -1), 'CENTER'),
+        ('ALIGN', (6, 1), (6, -1), 'RIGHT'),
+        ('ALIGN', (7, 1), (-1, -1), 'CENTER'),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('LEFTPADDING', (0, 0), (-1, -1), 3),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+        ('BOX', (0, 0), (-1, -1), 1, colors.black),
     ]))
-    
     elements.append(table)
     
-    # Footer note
-    footer_style = ParagraphStyle(
-        'Footer',
-        parent=styles['Normal'],
-        fontSize=7,
-        textColor=colors.grey,
-        spaceBefore=15
-    )
-    elements.append(Spacer(1, 10))
-    elements.append(Paragraph(
-        "Legenda: Vol. = Volume (Unico = copre più anni), Acquist. = Da Acquistare, Nuovo = Nuova Adozione, Consigliato = Raccomandato dal MUR",
-        footer_style
-    ))
-    elements.append(Paragraph(
-        f"Generato da ScambiaLibri - {datetime.now().strftime('%d/%m/%Y %H:%M')}",
-        footer_style
-    ))
+    # Footer
+    elements.append(Spacer(1, 0.3*cm))
+    footer_style = ParagraphStyle('Footer', fontSize=8)
+    elements.append(Paragraph(f"Data aggiornamento: {datetime.now().strftime('%Y')}                                                                    Generato da ScambiaLibri", footer_style))
     
-    # Build PDF
     doc.build(elements)
     buffer.seek(0)
     
-    # Generate filename
-    filename = f"lista_libri_{child_nome}_{classe_label.replace(' ', '_').replace('ª', '')}.pdf"
-    
-    return StreamingResponse(
-        buffer,
-        media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
-    )
+    filename = f"lista_libri_{child_nome}_{child_classe}{child_sezione}.pdf"
+    return StreamingResponse(buffer, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename={filename}"})
+
 
 
 @api_router.get("/profiles/{user_id}/children/{child_id}/books-to-sell")
