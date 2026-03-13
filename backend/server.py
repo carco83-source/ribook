@@ -1726,12 +1726,24 @@ async def get_child_compatibility(user_id: str, child_id: str):
     classe_precedente = child_classe - 1 if child_classe > cycle_min else None
     classe_successiva = child_classe + 1 if child_classe < cycle_max else None
     
-    # Carica libri annuali (non volumi unici)
-    my_books = await db.books.find({
-        "scuole_adottanti": child_codice_scuola,
-        "anni_corso": child_classe,
-        "is_volume_unico": {"$ne": True}
-    }).to_list(100)
+    # Helper function to get books from adozioni collection (with section)
+    async def get_books_for_class(codice_scuola, classe, sezione):
+        adozione = await db.adozioni.find_one({
+            "codice_scuola": codice_scuola,
+            "classe": classe,
+            "sezione": sezione.upper()
+        })
+        if adozione:
+            return adozione.get('libri', [])
+        # Fallback to old books collection
+        return await db.books.find({
+            "scuole_adottanti": codice_scuola,
+            "anni_corso": classe
+        }).to_list(100)
+    
+    # Carica libri della MIA classe (con sezione)
+    all_my_books = await get_books_for_class(child_codice_scuola, child_classe, child_sezione)
+    my_books = [b for b in all_my_books if not b.get('is_volume_unico')]
     
     # Carica VOLUMI UNICI
     # MEDIE (primo_grado): tutti i volumi unici sono TRIENNALI (1-2-3), comprare solo in 1ª
@@ -1972,11 +1984,22 @@ async def generate_books_pdf(user_id: str, child_id: str):
     if not child_codice_scuola:
         raise HTTPException(status_code=400, detail="Codice scuola non configurato")
     
-    # Get all books for this class
-    books = await db.books.find({
-        "scuole_adottanti": child_codice_scuola,
-        "anni_corso": child_classe
-    }).to_list(200)
+    # Get books from NEW adozioni collection (per sezione)
+    adozione = await db.adozioni.find_one({
+        "codice_scuola": child_codice_scuola,
+        "classe": child_classe,
+        "sezione": child_sezione.upper()
+    })
+    
+    books = adozione.get('libri', []) if adozione else []
+    
+    # Fallback to old books collection if no adozione found
+    if not books:
+        old_books = await db.books.find({
+            "scuole_adottanti": child_codice_scuola,
+            "anni_corso": child_classe
+        }).to_list(200)
+        books = old_books
     
     # Create PDF - LANDSCAPE A4
     buffer = io.BytesIO()
