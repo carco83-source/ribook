@@ -1733,12 +1733,25 @@ async def get_child_compatibility(user_id: str, child_id: str):
         "is_volume_unico": {"$ne": True}
     }).to_list(100)
     
-    # Carica VOLUMI UNICI che iniziano quest'anno (per chi è al primo anno del loro range)
-    # Es: Musica [1,2,3] → solo chi fa la 1ª deve comprarlo
-    # Es: Filosofia [3,4,5] → solo chi fa la 3ª deve comprarlo
+    # Carica VOLUMI UNICI
+    # MEDIE (primo_grado): tutti i volumi unici sono TRIENNALI (1-2-3), comprare solo in 1ª
+    # SUPERIORI: biennio (1-2) comprare in 1ª, triennio (3-4-5) comprare in 3ª
     volumi_unici_da_comprare = []
-    if child_classe == cycle_min:  # Primo anno del ciclo
-        # Trova tutti i volumi unici che includono questo anno come primo anno del loro range
+    
+    # Determina se questo è il primo anno del ciclo appropriato
+    deve_comprare_volumi_unici = False
+    if child_tipo == "primo_grado":
+        # Medie: volumi unici triennali, comprare solo in 1ª
+        deve_comprare_volumi_unici = (child_classe == 1)
+    else:
+        # Superiori: biennio (1-2) o triennio (3-4-5)
+        if child_classe <= 2:
+            deve_comprare_volumi_unici = (child_classe == 1)  # Primo anno biennio
+        else:
+            deve_comprare_volumi_unici = (child_classe == 3)  # Primo anno triennio
+    
+    if deve_comprare_volumi_unici:
+        # Trova tutti i volumi unici per questa classe
         all_volumi_unici = await db.books.find({
             "scuole_adottanti": child_codice_scuola,
             "anni_corso": child_classe,
@@ -1746,19 +1759,15 @@ async def get_child_compatibility(user_id: str, child_id: str):
         }).to_list(50)
         
         for vu in all_volumi_unici:
-            anni = vu.get("anni_corso", [])
-            if isinstance(anni, list) and len(anni) > 0:
-                # Il volume unico va comprato solo se questo è il primo anno del suo range
-                if min(anni) == child_classe:
-                    volumi_unici_da_comprare.append({
-                        "isbn": vu.get("isbn", ""),
-                        "titolo": vu.get("titolo", ""),
-                        "disciplina": vu.get("disciplina", ""),
-                        "editore": vu.get("editore", ""),
-                        "prezzo": vu.get("prezzo_copertina", 0),
-                        "anni_coperti": anni,
-                        "tipo": "volume_unico"
-                    })
+            volumi_unici_da_comprare.append({
+                "isbn": vu.get("isbn", ""),
+                "titolo": vu.get("titolo", ""),
+                "disciplina": vu.get("disciplina", ""),
+                "editore": vu.get("editore", ""),
+                "prezzo": vu.get("prezzo_copertina", 0),
+                "anni_coperti": [1, 2, 3] if child_tipo == "primo_grado" else ([1, 2] if child_classe <= 2 else [3, 4, 5]),
+                "tipo": "volume_unico"
+            })
     
     libri_prec = []
     if classe_precedente:
@@ -2039,9 +2048,22 @@ async def generate_books_pdf(user_id: str, child_id: str):
         vol = "U" if book.get('is_volume_unico') else str(child_classe)
         nuova_adoz = "Si" if book.get('nuova_adozione') else "No"
         
+        # Logica "Da Acquistare"
         if book.get('is_volume_unico'):
-            da_acq = "Si" if isinstance(anni, list) and len(anni) > 0 and child_classe == min(anni) else "No"
+            # MEDIE (primo_grado): volumi unici sono TRIENNALI (1-2-3)
+            # Solo chi fa la 1ª deve comprarli
+            if child_tipo == "primo_grado":
+                da_acq = "Si" if child_classe == 1 else "No"
+            else:
+                # SUPERIORI: dipende dal ciclo (biennio 1-2, triennio 3-4-5)
+                if child_classe <= 2:
+                    # Biennio: comprare solo in 1ª
+                    da_acq = "Si" if child_classe == 1 else "No"
+                else:
+                    # Triennio: comprare solo in 3ª
+                    da_acq = "Si" if child_classe == 3 else "No"
         else:
+            # Libro annuale: sempre da acquistare
             da_acq = "Si"
         
         consigliato = "Ap" if book.get('consigliato') else "No"
