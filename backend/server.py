@@ -2035,6 +2035,9 @@ async def generate_books_pdf(user_id: str, child_id: str):
     
     col_widths = [3.2*cm, 2.5*cm, 4*cm, 7*cm, 1*cm, 3*cm, 1.3*cm, 1.2*cm, 1.2*cm, 1.2*cm]
     
+    # Totale libri da acquistare
+    total_price = 0
+    
     # Add books
     for book in sorted(books, key=lambda x: x.get('disciplina', '')):
         disciplina = book.get('disciplina', '')
@@ -2080,6 +2083,24 @@ async def generate_books_pdf(user_id: str, child_id: str):
             Paragraph(da_acq, cell_style),
             Paragraph(consigliato, cell_style),
         ])
+        
+        # Somma al totale se da acquistare
+        if da_acq == "Si" and prezzo:
+            total_price += prezzo
+    
+    # Aggiungi riga TOTALE
+    table_data.append([
+        Paragraph('', cell_style),
+        Paragraph('', cell_style),
+        Paragraph('', cell_style),
+        Paragraph('', cell_style),
+        Paragraph('', cell_style),
+        Paragraph('<b>TOTALE:</b>', cell_bold),
+        Paragraph(f'<b>€ {total_price:.2f}</b>', cell_bold),
+        Paragraph('', cell_style),
+        Paragraph('', cell_style),
+        Paragraph('', cell_style),
+    ])
     
     table = Table(table_data, colWidths=col_widths, repeatRows=1)
     table.setStyle(TableStyle([
