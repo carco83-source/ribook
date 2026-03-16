@@ -516,56 +516,6 @@ export default function RadarScreen() {
           </TouchableOpacity>
         </View>
       )}
-
-      {/* Matches List */}
-      {matches.length > 0 && (
-        <View style={styles.matchesSection}>
-          <Text style={styles.sectionTitle}>Libri Disponibili</Text>
-          
-          {!isPremium && (
-            <View style={styles.premiumBanner}>
-              <Ionicons name="diamond" size={20} color="#f4a460" />
-              <Text style={styles.premiumBannerText}>
-                Diventa Premium per 0% commissioni!
-              </Text>
-            </View>
-          )}
-
-          {matches.map((match, index) => {
-            const compat = getCompatibilityLabel(match.compatibility_score);
-            return (
-              <TouchableOpacity
-                key={index}
-                style={styles.matchCard}
-                onPress={() => handleMatchPress(match)}
-              >
-                <View style={styles.matchHeader}>
-                  <View style={[styles.compatBadge, { backgroundColor: compat.color }]}>
-                    <Text style={styles.compatBadgeText}>{compat.text}</Text>
-                  </View>
-                  <Text style={styles.matchPrice}>
-                    €{match.listing.prezzo_vendita?.toFixed(2)}
-                  </Text>
-                </View>
-
-                <Text style={styles.matchTitle}>{match.listing.book_titolo}</Text>
-                <Text style={styles.matchAuthor}>{match.listing.book_autore}</Text>
-
-                <View style={styles.matchFooter}>
-                  <View style={styles.conditionBadge}>
-                    <Text style={styles.conditionText}>
-                      {getConditionLabel(match.listing.condizione)}
-                    </Text>
-                  </View>
-                  <Text style={styles.matchSeller}>
-                    da {match.listing.seller_username}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      )}
     </ScrollView>
   );
 }
