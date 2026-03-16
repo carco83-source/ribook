@@ -318,6 +318,25 @@ agent_communication:
   - agent: "main"
     message: "MVP created for ScambiaLibri app. Backend has all core endpoints implemented. Please test the matching system and transactions flow."
   - agent: "main"
+    message: |
+      ## FIX LOGICA LIBRI ACQUISTABILI (16/03/2026)
+      
+      ### Problema riportato dall'utente
+      La pagina "Libri Acquistabili" mostrava libri sbagliati per il profilo Cloe (1ª classe).
+      L'utente ha chiarito che la logica deve seguire il "flusso libri".
+      
+      ### Verifica effettuata
+      Testato endpoint /api/libri-acquistabili/58ac430d-da2a-4954-bb2f-feea6de1f30c con curl.
+      
+      ### Risultati CORRETTI:
+      - Cloe (classe 1): vede libri DI classe 2, venduti da studenti di classe 3 (Utente_Luca) ✅
+      - George (classe 2): vede libri DI classe 3, venduti da studenti di classe 4 (Utente_Paolo) ✅
+      - Simone (classe 5): fine ciclo, nessun libro disponibile ✅
+      
+      ### Conclusione
+      La logica backend è corretta e segue il flusso libri:
+      - Studente classe N → compra libri DI classe N+1 → da venditori di classe N+2
+  - agent: "main"
     message: "Ho corretto la logica di compatibilità libri nel backend. Ora l'API /api/radar/{user_id}/class-compatibility identifica correttamente quando l'edizione è cambiata confrontando TITOLO BASE + EDIZIONE + EDITORE. Test con user_id=58ac430d-da2a-4954-bb2f-feea6de1f30c. Risultato atteso: SCIENZE non vendibile (2ED. vs vecchia), ITALIANO non vendibile (editore diverso), FRANCESE da comprare nuovo (libro diverso), MATEMATICA da comprare nuovo (Algebra vs Aritmetica)."
   - agent: "testing"
     message: "Class Compatibility API testing completed successfully! All 17 test cases passed with 100% success rate. The API correctly handles edition comparison logic, publisher verification, and book flow calculations between classes. Tested user 58ac430d-da2a-4954-bb2f-feea6de1f30c (2nd grade at Casalinuovo) and confirmed all expected results: 5 vendibili to 1st grade, 2 non_vendibili (SCIENZE edition change, ITALIANO publisher difference), 5 usati available from 3rd grade, and 2 books to buy new (FRANCESE and MATEMATICA due to edition differences). Backend logic is working perfectly."
