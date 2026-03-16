@@ -65,6 +65,14 @@ export default function MyPurchasesScreen() {
     }, [])
   );
 
+  const handleGoBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)/transactions');
+    }
+  };
+
   const handleConfirmPickup = async (listingId: string, codice: string) => {
     Alert.prompt(
       'Conferma ritiro',
@@ -219,6 +227,11 @@ export default function MyPurchasesScreen() {
           title: 'I miei acquisti',
           headerStyle: { backgroundColor: '#1a472a' },
           headerTintColor: '#fff',
+          headerLeft: () => (
+            <TouchableOpacity onPress={handleGoBack} style={{ paddingHorizontal: 16 }}>
+              <Ionicons name="arrow-back" size={24} color="#fff" />
+            </TouchableOpacity>
+          ),
         }}
       />
 

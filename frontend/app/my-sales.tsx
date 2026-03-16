@@ -44,6 +44,14 @@ export default function MySalesScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
 
+  const handleGoBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)/transactions');
+    }
+  };
+
   const loadSales = async () => {
     try {
       const storedUserId = await AsyncStorage.getItem('user_id');
@@ -210,6 +218,11 @@ export default function MySalesScreen() {
           title: 'Le mie vendite',
           headerStyle: { backgroundColor: '#1a472a' },
           headerTintColor: '#fff',
+          headerLeft: () => (
+            <TouchableOpacity onPress={handleGoBack} style={{ paddingHorizontal: 16 }}>
+              <Ionicons name="arrow-back" size={24} color="#fff" />
+            </TouchableOpacity>
+          ),
         }}
       />
 

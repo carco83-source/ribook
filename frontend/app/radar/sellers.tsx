@@ -67,6 +67,15 @@ export default function RadarSellersScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [expandedSeller, setExpandedSeller] = useState<string | null>(null);
+  const [childName, setChildName] = useState<string>('');
+
+  const handleGoBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)');
+    }
+  };
 
   useEffect(() => {
     loadSellers();
@@ -78,6 +87,13 @@ export default function RadarSellersScreen() {
       setUserId(storedUserId);
       
       if (storedUserId) {
+        // Get user info to show child name
+        const userResponse = await axios.get(`${API_URL}/api/users/${storedUserId}`);
+        const profili = userResponse.data.profili_figli || [];
+        if (profili.length > 0) {
+          setChildName(profili[0].nome_figlio || '');
+        }
+        
         const params = filter ? `?filter_type=${filter}` : '';
         const response = await axios.get(`${API_URL}/api/radar/${storedUserId}/sellers${params}`);
         setSellers(response.data);
@@ -137,9 +153,14 @@ export default function RadarSellersScreen() {
     <View style={styles.container}>
       <Stack.Screen
         options={{
-          title: getFilterTitle(),
+          title: childName ? `Libri per ${childName}` : getFilterTitle(),
           headerStyle: { backgroundColor: '#1a472a' },
           headerTintColor: '#fff',
+          headerLeft: () => (
+            <TouchableOpacity onPress={handleGoBack} style={{ paddingHorizontal: 16 }}>
+              <Ionicons name="arrow-back" size={24} color="#fff" />
+            </TouchableOpacity>
+          ),
         }}
       />
 

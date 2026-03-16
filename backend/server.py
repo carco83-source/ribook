@@ -2577,20 +2577,32 @@ async def get_radar_sellers(user_id: str, filter_type: Optional[str] = None):
     if not user:
         raise HTTPException(status_code=404, detail="Utente non trovato")
     
-    # Get user's requests
+    # Get user's requests (use book_isbn)
     user_requests = await db.requests.find({"buyer_id": user_id, "stato": "cercando"}).to_list(50)
-    wanted_book_ids = [req["book_id"] for req in user_requests]
+    wanted_isbns = [req.get("book_isbn", req.get("book_id", "")) for req in user_requests]
+    wanted_isbns = [isbn for isbn in wanted_isbns if isbn]
     
-    if not wanted_book_ids:
+    if not wanted_isbns:
         return []
     
-    # Find all available listings for wanted books
+    # Get user's school info from child profiles
+    user_codice_scuola = None
+    user_classe = None
+    user_sezione = None
+    profili = user.get("profili_figli", [])
+    if profili:
+        first_child = profili[0]
+        user_codice_scuola = first_child.get("codice_scuola", "")
+        user_classe = str(first_child.get("classe", ""))
+        user_sezione = first_child.get("sezione", "")
+    
+    # Find all available listings for wanted books (use book_isbn and status: available)
     pipeline = [
         {
             "$match": {
-                "book_id": {"$in": wanted_book_ids},
+                "book_isbn": {"$in": wanted_isbns},
                 "seller_id": {"$ne": user_id},
-                "stato": "disponibile"
+                "status": "available"
             }
         },
         {
@@ -2601,20 +2613,21 @@ async def get_radar_sellers(user_id: str, filter_type: Optional[str] = None):
                 "as": "seller_info"
             }
         },
-        {"$unwind": "$seller_info"},
+        {"$unwind": {"path": "$seller_info", "preserveNullAndEmptyArrays": True}},
         {
             "$group": {
                 "_id": "$seller_id",
-                "seller_username": {"$first": "$seller_info.username"},
-                "seller_scuola": {"$first": "$seller_info.scuola"},
-                "seller_classe": {"$first": "$seller_info.classe"},
-                "seller_sezione": {"$first": "$seller_info.sezione"},
+                "seller_username": {"$first": "$seller_username"},
+                "codice_scuola": {"$first": "$codice_scuola"},
+                "classe": {"$first": "$classe"},
+                "sezione": {"$first": "$sezione"},
+                "scuola": {"$first": "$scuola"},
                 "books_count": {"$sum": 1},
                 "total_price": {"$sum": "$prezzo_vendita"},
                 "books": {
                     "$push": {
                         "listing_id": "$id",
-                        "book_id": "$book_id",
+                        "book_id": "$book_isbn",
                         "titolo": "$book_titolo",
                         "autore": "$book_autore",
                         "prezzo_vendita": "$prezzo_vendita",
@@ -2632,16 +2645,23 @@ async def get_radar_sellers(user_id: str, filter_type: Optional[str] = None):
     # Categorize and filter sellers
     result = []
     for seller in sellers:
-        category = "altri"
-        if (seller.get("seller_sezione") == user["sezione"] and 
-            seller.get("seller_classe") == user["classe"] and 
-            seller.get("seller_scuola") == user["scuola"]):
+        seller_codice = seller.get("codice_scuola", "")
+        seller_classe = str(seller.get("classe", ""))
+        seller_sezione = seller.get("sezione", "")
+        
+        # Categorize by codice_scuola instead of scuola name
+        is_same_school = seller_codice == user_codice_scuola
+        is_same_class = seller_classe == user_classe and is_same_school
+        is_same_section = seller_sezione == user_sezione and is_same_class
+        
+        if is_same_section:
             category = "stessa_sezione"
-        elif (seller.get("seller_classe") == user["classe"] and 
-              seller.get("seller_scuola") == user["scuola"]):
+        elif is_same_class:
             category = "stessa_classe"
-        elif seller.get("seller_scuola") == user["scuola"]:
+        elif is_same_school:
             category = "stessa_scuola"
+        else:
+            category = "altri"
         
         # Apply filter if provided
         if filter_type and filter_type != category:
@@ -2650,9 +2670,9 @@ async def get_radar_sellers(user_id: str, filter_type: Optional[str] = None):
         result.append({
             "seller_id": seller["_id"],
             "seller_username": seller["seller_username"],
-            "scuola": seller["seller_scuola"],
-            "classe": seller["seller_classe"],
-            "sezione": seller["seller_sezione"],
+            "scuola": seller.get("scuola", ""),
+            "classe": seller_classe,
+            "sezione": seller_sezione,
             "category": category,
             "books_count": seller["books_count"],
             "total_price": round(seller["total_price"], 2),
