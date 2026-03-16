@@ -1384,6 +1384,131 @@ async def get_radar_view(user_id: str):
     }
 
 
+
+@api_router.get("/libri-acquistabili/totale")
+async def get_total_available_books():
+    """Get total count of all available books on the platform"""
+    total = await db.listings.count_documents({"status": "available"})
+    return {"totale": total}
+
+@api_router.get("/libri-acquistabili/{user_id}")
+async def get_purchasable_books_for_user(user_id: str):
+    """
+    Get purchasable books summary for all children profiles of a user.
+    Returns total platform books + books per child profile.
+    """
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+    
+    # Total available on platform
+    total_platform = await db.listings.count_documents({"status": "available"})
+    
+    # Get books per child profile
+    profili = user.get("profili_figli", [])
+    children_data = []
+    
+    for child in profili:
+        codice_scuola = child.get("codice_scuola", "")
+        classe = int(child.get("classe", 1))
+        sezione = child.get("sezione", "A")
+        tipo = child.get("tipo_scuola", "primo_grado")
+        
+        if not codice_scuola:
+            children_data.append({
+                "child_id": child.get("id"),
+                "nome": child.get("nome_figlio", ""),
+                "libri_disponibili": 0,
+                "libri": []
+            })
+            continue
+        
+        # Determine next class (books they need to buy)
+        if tipo == "primo_grado":
+            cycle_max = 3
+        else:
+            cycle_max = 2 if classe <= 2 else 5
+        
+        classe_successiva = classe + 1 if classe < cycle_max else None
+        
+        # Get ISBNs of books child needs (from adozioni for next class)
+        needed_isbns = []
+        if classe_successiva:
+            adozione = await db.adozioni.find_one({
+                "codice_scuola": codice_scuola,
+                "classe": classe_successiva,
+                "sezione": sezione.upper()
+            })
+            if adozione and adozione.get("libri"):
+                needed_isbns = [b.get("isbn") for b in adozione["libri"] if b.get("isbn") and not b.get("is_volume_unico")]
+        
+        # Also get current class books (might want to buy used)
+        adozione_current = await db.adozioni.find_one({
+            "codice_scuola": codice_scuola,
+            "classe": classe,
+            "sezione": sezione.upper()
+        })
+        if adozione_current and adozione_current.get("libri"):
+            current_isbns = [b.get("isbn") for b in adozione_current["libri"] if b.get("isbn")]
+            needed_isbns.extend(current_isbns)
+        
+        needed_isbns = list(set(needed_isbns))  # Remove duplicates
+        
+        if not needed_isbns:
+            children_data.append({
+                "child_id": child.get("id"),
+                "nome": child.get("nome_figlio", ""),
+                "scuola": child.get("scuola", ""),
+                "classe": classe,
+                "sezione": sezione,
+                "libri_disponibili": 0,
+                "libri": []
+            })
+            continue
+        
+        # Find available listings matching these ISBNs
+        listings = await db.listings.find({
+            "book_isbn": {"$in": needed_isbns},
+            "seller_id": {"$ne": user_id},
+            "status": "available"
+        }).to_list(100)
+        
+        # Format listings
+        libri = []
+        for listing in listings:
+            libri.append({
+                "listing_id": listing.get("id"),
+                "isbn": listing.get("book_isbn"),
+                "titolo": listing.get("book_titolo", ""),
+                "autore": listing.get("book_autore", ""),
+                "editore": listing.get("book_editore", ""),
+                "disciplina": listing.get("book_disciplina", ""),
+                "prezzo_copertina": listing.get("prezzo_copertina", 0),
+                "prezzo_vendita": listing.get("prezzo_vendita", 0),
+                "condizione": listing.get("condizione", ""),
+                "condition_details": listing.get("condition_details", {}),
+                "venditore": listing.get("seller_username", ""),
+                "scuola_venditore": listing.get("scuola", ""),
+                "bookstores": listing.get("bookstores", [])
+            })
+        
+        children_data.append({
+            "child_id": child.get("id"),
+            "nome": child.get("nome_figlio", ""),
+            "scuola": child.get("scuola", ""),
+            "classe": classe,
+            "sezione": sezione,
+            "libri_disponibili": len(libri),
+            "libri": libri
+        })
+    
+    return {
+        "totale_piattaforma": total_platform,
+        "profili": children_data
+    }
+
+
+
 @api_router.get("/radar/{user_id}/class-compatibility")
 async def get_class_compatibility(user_id: str):
     """

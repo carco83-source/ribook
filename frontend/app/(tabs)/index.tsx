@@ -79,6 +79,10 @@ export default function RadarScreen() {
   const [childProfiles, setChildProfiles] = useState<any[]>([]);
   const [childrenCompatibility, setChildrenCompatibility] = useState<{[key: string]: any}>({});
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
+  
+  // New state for purchasable books
+  const [totalePiattaforma, setTotalePiattaforma] = useState(0);
+  const [libriPerProfilo, setLibriPerProfilo] = useState<{[key: string]: any}>({});
 
   useFocusEffect(
     useCallback(() => {
@@ -111,6 +115,21 @@ export default function RadarScreen() {
       const userResponse = await axios.get(`${API_URL}/api/users/${storedUserId}`);
       const profili = userResponse.data.profili_figli || [];
       setChildProfiles(profili);
+
+      // Load purchasable books data (NEW)
+      try {
+        const libriResponse = await axios.get(`${API_URL}/api/libri-acquistabili/${storedUserId}`);
+        setTotalePiattaforma(libriResponse.data.totale_piattaforma || 0);
+        
+        // Map profili data by child_id
+        const profiliMap: {[key: string]: any} = {};
+        for (const p of libriResponse.data.profili || []) {
+          profiliMap[p.child_id] = p;
+        }
+        setLibriPerProfilo(profiliMap);
+      } catch (e) {
+        console.log('Failed to load purchasable books');
+      }
 
       // Load compatibility for each child profile
       const compatibilityData: {[key: string]: any} = {};
@@ -219,75 +238,149 @@ export default function RadarScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Radar Summary */}
+      {/* Libri Acquistabili Section */}
       <View style={styles.radarCard}>
         <View style={styles.radarHeader}>
-          <Ionicons name="radio" size={32} color="#1a472a" />
-          <Text style={styles.radarTitle}>Il tuo Radar</Text>
+          <Ionicons name="cart" size={32} color="#1a472a" />
+          <Text style={styles.radarTitle}>Libri acquistabili</Text>
         </View>
 
-        {radarData && radarData.books_searching > 0 ? (
-          <>
-            <Text style={styles.radarSubtitle}>
-              Libri usati trovati
-            </Text>
-
-            <View style={styles.radarStats}>
-              <TouchableOpacity 
-                style={styles.statItem}
-                onPress={() => router.push('/radar/sellers')}
-              >
-                <Text style={styles.statNumber}>{radarData.total_matches}</Text>
-                <Text style={styles.statLabel}>Totale Match</Text>
-              </TouchableOpacity>
-              <View style={styles.statDivider} />
-              <TouchableOpacity 
-                style={styles.statItem}
-                onPress={() => router.push('/radar/sellers?filter=stessa_scuola')}
-              >
-                <Text style={[styles.statNumber, { color: '#4CAF50' }]}>
-                  {radarData.same_school}
+        {/* Two-column counters */}
+        <View style={styles.purchasableCounters}>
+          {/* Left - Total Platform */}
+          <View style={styles.counterBox}>
+            <Text style={styles.counterNumber}>{totalePiattaforma}</Text>
+            <Text style={styles.counterLabel}>Libri disponibili</Text>
+            <Text style={styles.counterSubLabel}>sulla piattaforma</Text>
+          </View>
+          
+          {/* Right - Selected Profile */}
+          <View style={[styles.counterBox, styles.counterBoxHighlight]}>
+            {selectedChildId && libriPerProfilo[selectedChildId] ? (
+              <>
+                <Text style={styles.counterName}>
+                  {libriPerProfilo[selectedChildId].nome}
                 </Text>
-                <Text style={styles.statLabel}>Stessa Scuola</Text>
-              </TouchableOpacity>
-              <View style={styles.statDivider} />
-              <TouchableOpacity 
-                style={styles.statItem}
-                onPress={() => router.push('/radar/sellers?filter=altri')}
-              >
-                <Text style={[styles.statNumber, { color: '#FF9800' }]}>
-                  {radarData.others}
+                <Text style={[styles.counterNumber, { color: '#4CAF50' }]}>
+                  {libriPerProfilo[selectedChildId].libri_disponibili}
                 </Text>
-                <Text style={styles.statLabel}>Altre Scuole</Text>
-              </TouchableOpacity>
-            </View>
+                <Text style={styles.counterLabel}>Libri disponibili</Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.counterName}>Seleziona profilo</Text>
+                <Text style={styles.counterNumber}>-</Text>
+              </>
+            )}
+          </View>
+        </View>
 
-            {/* View Sellers Button */}
-            <TouchableOpacity
-              style={styles.viewSellersButton}
-              onPress={() => router.push('/radar/sellers')}
-            >
-              <Ionicons name="people" size={20} color="#fff" />
-              <Text style={styles.viewSellersButtonText}>Vedi tutti i venditori</Text>
-              <Ionicons name="arrow-forward" size={16} color="#fff" />
-            </TouchableOpacity>
-          </>
-        ) : (
-          <View style={styles.emptyRadar}>
-            <Ionicons name="book-outline" size={48} color="#ccc" />
-            <Text style={styles.emptyText}>Nessuna ricerca attiva</Text>
-            <Text style={styles.emptySubtext}>
-              Vai su "Cerca" per aggiungere i libri che stai cercando
-            </Text>
-            <TouchableOpacity
-              style={styles.searchButton}
-              onPress={() => router.push('/(tabs)/search')}
-            >
-              <Text style={styles.searchButtonText}>Cerca Libri</Text>
-            </TouchableOpacity>
+        {/* Child Profile Selector */}
+        {childProfiles.length > 0 && (
+          <View style={styles.profileSelector}>
+            <Text style={styles.profileSelectorLabel}>Seleziona profilo:</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <View style={styles.childTabs}>
+                {childProfiles.map((child) => (
+                  <TouchableOpacity
+                    key={child.id}
+                    style={[
+                      styles.childTabSmall,
+                      selectedChildId === child.id && styles.childTabSmallActive
+                    ]}
+                    onPress={() => setSelectedChildId(child.id)}
+                  >
+                    <Text style={[
+                      styles.childTabTextSmall,
+                      selectedChildId === child.id && styles.childTabTextSmallActive
+                    ]}>
+                      {child.nome_figlio}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
           </View>
         )}
       </View>
+
+      {/* Books List for Selected Profile */}
+      {selectedChildId && libriPerProfilo[selectedChildId] && libriPerProfilo[selectedChildId].libri?.length > 0 && (
+        <View style={styles.booksListSection}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="book" size={24} color="#1a472a" />
+            <Text style={styles.sectionTitle}>
+              Libri per {libriPerProfilo[selectedChildId].nome}
+            </Text>
+          </View>
+          
+          {libriPerProfilo[selectedChildId].libri.map((libro: any) => (
+            <TouchableOpacity
+              key={libro.listing_id}
+              style={styles.bookCard}
+              onPress={() => router.push(`/listing/${libro.listing_id}`)}
+            >
+              <View style={styles.bookCardHeader}>
+                <Text style={styles.bookDiscipline}>{libro.disciplina}</Text>
+                <View style={[
+                  styles.conditionBadge,
+                  libro.condizione === 'come_nuovo' && { backgroundColor: '#4CAF50' },
+                  libro.condizione === 'buono' && { backgroundColor: '#8BC34A' },
+                  libro.condizione === 'molto_usato' && { backgroundColor: '#FF9800' },
+                ]}>
+                  <Text style={styles.conditionText}>
+                    {libro.condizione === 'come_nuovo' ? 'Come nuovo' :
+                     libro.condizione === 'buono' ? 'Buono' : 'Molto usato'}
+                  </Text>
+                </View>
+              </View>
+              
+              <Text style={styles.bookTitle} numberOfLines={2}>
+                {libro.titolo}
+              </Text>
+              
+              <Text style={styles.bookPublisher}>{libro.editore}</Text>
+              
+              <View style={styles.bookPriceRow}>
+                <View>
+                  <Text style={styles.bookPriceOld}>
+                    €{libro.prezzo_copertina?.toFixed(2)}
+                  </Text>
+                  <Text style={styles.bookPrice}>
+                    €{libro.prezzo_vendita?.toFixed(2)}
+                  </Text>
+                </View>
+                <View style={styles.bookSellerInfo}>
+                  <Ionicons name="person" size={14} color="#666" />
+                  <Text style={styles.bookSeller}>{libro.venditore}</Text>
+                </View>
+              </View>
+              
+              {libro.bookstores && libro.bookstores.length > 0 && (
+                <View style={styles.bookstoreInfo}>
+                  <Ionicons name="location" size={14} color="#1a472a" />
+                  <Text style={styles.bookstoreText}>
+                    Ritiro: {libro.bookstores.map((b: any) => b.nome).join(', ')}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
+      {/* Empty State */}
+      {selectedChildId && libriPerProfilo[selectedChildId] && libriPerProfilo[selectedChildId].libri?.length === 0 && (
+        <View style={styles.emptyBooksSection}>
+          <Ionicons name="book-outline" size={48} color="#ccc" />
+          <Text style={styles.emptyText}>
+            Nessun libro disponibile per {libriPerProfilo[selectedChildId].nome}
+          </Text>
+          <Text style={styles.emptySubtext}>
+            I libri appariranno qui quando altri utenti li metteranno in vendita
+          </Text>
+        </View>
+      )}
 
       {/* Book Flow Section - Per ogni figlio */}
       {childProfiles.length > 0 && (
@@ -1125,5 +1218,166 @@ const styles = StyleSheet.create({
   },
   childTabTextActive: {
     color: '#fff',
+  },
+  // New Purchasable Books Styles
+  purchasableCounters: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginTop: 16,
+    marginBottom: 16,
+  },
+  counterBox: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+  },
+  counterBoxHighlight: {
+    backgroundColor: '#e8f5e9',
+    borderWidth: 2,
+    borderColor: '#4CAF50',
+  },
+  counterNumber: {
+    fontSize: 48,
+    fontWeight: 'bold',
+    color: '#1a472a',
+  },
+  counterLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 4,
+  },
+  counterSubLabel: {
+    fontSize: 12,
+    color: '#999',
+  },
+  counterName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  profileSelector: {
+    marginTop: 8,
+  },
+  profileSelectorLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 8,
+  },
+  childTabSmall: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 16,
+    backgroundColor: '#e0e0e0',
+    marginRight: 8,
+  },
+  childTabSmallActive: {
+    backgroundColor: '#1a472a',
+  },
+  childTabTextSmall: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#666',
+  },
+  childTabTextSmallActive: {
+    color: '#fff',
+  },
+  booksListSection: {
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderRadius: 16,
+    padding: 16,
+  },
+  bookCard: {
+    backgroundColor: '#f9f9f9',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  bookCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  bookDiscipline: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1a472a',
+    textTransform: 'uppercase',
+  },
+  conditionBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: '#666',
+  },
+  conditionText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  bookTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  bookPublisher: {
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 12,
+  },
+  bookPriceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+  },
+  bookPriceOld: {
+    fontSize: 12,
+    color: '#999',
+    textDecorationLine: 'line-through',
+  },
+  bookPrice: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#4CAF50',
+  },
+  bookSellerInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  bookSeller: {
+    fontSize: 13,
+    color: '#666',
+  },
+  bookstoreInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+  },
+  bookstoreText: {
+    fontSize: 12,
+    color: '#1a472a',
+    flex: 1,
+  },
+  emptyBooksSection: {
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderRadius: 16,
+    padding: 32,
+    alignItems: 'center',
   },
 });
