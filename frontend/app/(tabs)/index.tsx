@@ -220,7 +220,7 @@ export default function RadarScreen() {
       {/* Header with Notifications */}
       <View style={styles.headerRow}>
         <View style={styles.headerLeft}>
-          <Ionicons name="radio" size={28} color="#1a472a" />
+          <Ionicons name="book" size={28} color="#1a472a" />
           <Text style={styles.headerTitle}>ScambiaLibri</Text>
         </View>
         <TouchableOpacity 
@@ -238,378 +238,282 @@ export default function RadarScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Libri Acquistabili Section */}
-      <View style={styles.radarCard}>
-        <View style={styles.radarHeader}>
-          <Ionicons name="cart" size={32} color="#1a472a" />
-          <Text style={styles.radarTitle}>Libri acquistabili</Text>
+      {/* Child Profile Selector - SUBITO DOPO HEADER */}
+      {childProfiles.length > 0 && (
+        <View style={styles.profileSelectorCard}>
+          <Text style={styles.profileSelectorLabel}>Seleziona profilo:</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View style={styles.childTabs}>
+              {childProfiles.map((child) => (
+                <TouchableOpacity
+                  key={child.id}
+                  style={[
+                    styles.childTab,
+                    selectedChildId === child.id && styles.childTabActive
+                  ]}
+                  onPress={() => setSelectedChildId(child.id)}
+                >
+                  <Text style={[
+                    styles.childTabText,
+                    selectedChildId === child.id && styles.childTabTextActive
+                  ]}>
+                    {child.nome_figlio}
+                  </Text>
+                  <Text style={[
+                    styles.childTabSubtext,
+                    selectedChildId === child.id && styles.childTabSubtextActive
+                  ]}>
+                    {child.classe}ª {child.tipo_scuola === 'primo_grado' ? 'media' : 'sup'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </ScrollView>
         </View>
+      )}
 
-        {/* Two-column counters */}
-        <View style={styles.purchasableCounters}>
-          {/* Left - Total Platform */}
-          <View style={styles.counterBox}>
-            <Text style={styles.counterNumber}>{totalePiattaforma}</Text>
-            <Text style={styles.counterLabel}>Libri disponibili</Text>
-            <Text style={styles.counterSubLabel}>sulla piattaforma</Text>
-          </View>
-          
-          {/* Right - Selected Profile */}
-          <View style={[styles.counterBox, styles.counterBoxHighlight]}>
-            {selectedChildId && libriPerProfilo[selectedChildId] ? (
-              <>
-                <Text style={styles.counterName}>
-                  {libriPerProfilo[selectedChildId].nome}
+      {/* Book Flow Section */}
+      {selectedChildId && childrenCompatibility[selectedChildId] && (() => {
+        const compatibility = childrenCompatibility[selectedChildId];
+        const child = childProfiles.find(c => c.id === selectedChildId);
+        const isMedia = child?.tipo_scuola === 'primo_grado';
+        const tipoLabel = isMedia ? 'MEDIA' : 'SUP';
+        
+        return (
+          <View style={styles.classCompatSection}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="swap-horizontal" size={24} color="#1a472a" />
+              <Text style={styles.sectionTitle}>Flusso Libri</Text>
+            </View>
+            
+            <Text style={styles.classCompatSubtitle}>
+              {child?.scuola} - {child?.classe}ª {tipoLabel}
+            </Text>
+
+            {/* Three Column Layout */}
+            <View style={styles.bookFlowThreeColumns}>
+              {/* LEFT - VENDI */}
+              <View style={styles.bookFlowColumnNew}>
+                <View style={[styles.bookFlowColumnHeader, { backgroundColor: '#2196F3' }]}>
+                  <Text style={styles.bookFlowColumnHeaderText}>
+                    {compatibility.vendere?.classe_destinazione 
+                      ? `${compatibility.vendere.classe_destinazione}ª ${tipoLabel}` 
+                      : 'N/A'}
+                  </Text>
+                </View>
+                <View style={styles.bookFlowColumnBody}>
+                  <Ionicons name="arrow-up-circle" size={28} color="#2196F3" />
+                  <Text style={styles.bookFlowColumnAction}>VENDI</Text>
+                  <Text style={styles.bookFlowColumnNumber}>
+                    {compatibility.vendere?.totale_vendibili || 0}
+                  </Text>
+                  <Text style={styles.bookFlowColumnLabel}>libri</Text>
+                </View>
+                {(compatibility.vendere?.totale_non_vendibili || 0) > 0 && (
+                  <Text style={[styles.bookFlowColumnHint, { color: '#f44336' }]}>
+                    {compatibility.vendere?.totale_non_vendibili} ed. cambiate
+                  </Text>
+                )}
+              </View>
+
+              {/* CENTER - TU */}
+              <View style={styles.bookFlowColumnNew}>
+                <View style={[styles.bookFlowColumnHeader, { backgroundColor: '#1a472a' }]}>
+                  <Text style={styles.bookFlowColumnHeaderText}>{child?.classe}ª {tipoLabel}</Text>
+                </View>
+                <View style={styles.bookFlowColumnBody}>
+                  <View style={styles.bookFlowYouBadge}>
+                    <Text style={styles.bookFlowYouText}>{child?.nome_figlio?.charAt(0) || '?'}</Text>
+                  </View>
+                  <Text style={[styles.bookFlowColumnAction, { color: '#FF9800' }]}>NUOVI</Text>
+                  <Text style={[styles.bookFlowColumnNumber, { color: '#FF9800' }]}>
+                    {compatibility.nuovi?.totale || 0}
+                  </Text>
+                  <Text style={styles.bookFlowColumnLabel}>da comprare</Text>
+                </View>
+                <Text style={styles.bookFlowColumnHint}>
+                  €{compatibility.nuovi?.costo_totale?.toFixed(0) || 0} stimati
                 </Text>
-                <Text style={[styles.counterNumber, { color: '#4CAF50' }]}>
-                  {libriPerProfilo[selectedChildId].libri_disponibili}
+              </View>
+
+              {/* RIGHT - COMPRA */}
+              <View style={styles.bookFlowColumnNew}>
+                <View style={[styles.bookFlowColumnHeader, { backgroundColor: '#4CAF50' }]}>
+                  <Text style={styles.bookFlowColumnHeaderText}>
+                    {compatibility.comprare?.classe_origine 
+                      ? `${compatibility.comprare.classe_origine}ª ${tipoLabel}` 
+                      : 'N/A'}
+                  </Text>
+                </View>
+                <View style={styles.bookFlowColumnBody}>
+                  <Ionicons name="cart" size={28} color="#4CAF50" />
+                  <Text style={[styles.bookFlowColumnAction, { color: '#4CAF50' }]}>COMPRA</Text>
+                  <Text style={[styles.bookFlowColumnNumber, { color: '#4CAF50' }]}>
+                    {compatibility.comprare?.totale_usati || 0}
+                  </Text>
+                  <Text style={styles.bookFlowColumnLabel}>usati</Text>
+                </View>
+                <Text style={styles.bookFlowColumnHint}>
+                  {compatibility.comprare?.risparmio_totale > 0 
+                    ? `Risparmio €${compatibility.comprare.risparmio_totale.toFixed(0)}`
+                    : 'Fine ciclo'}
                 </Text>
-                <Text style={styles.counterLabel}>Libri disponibili</Text>
-              </>
-            ) : (
-              <>
-                <Text style={styles.counterName}>Seleziona profilo</Text>
-                <Text style={styles.counterNumber}>-</Text>
-              </>
+              </View>
+            </View>
+
+            {/* Libri Vendibili */}
+            {compatibility.vendere?.libri_vendibili && compatibility.vendere.libri_vendibili.length > 0 && (
+              <View style={styles.classCard}>
+                <Text style={[styles.sampleBooksTitle, { color: '#2196F3' }]}>
+                  Libri che {child?.nome_figlio} può vendere alla {compatibility.vendere?.classe_destinazione}ª:
+                </Text>
+                {compatibility.vendere.libri_vendibili.map((book: any, idx: number) => (
+                  <View key={idx} style={styles.sampleBookItem}>
+                    <View style={styles.sampleBookInfo}>
+                      <Text style={styles.sampleBookTitle} numberOfLines={1}>
+                        {book.disciplina}
+                      </Text>
+                      <Text style={styles.sampleBookSeller} numberOfLines={1}>
+                        {book.titolo}
+                      </Text>
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={[styles.sampleBookPrice, { color: '#2196F3' }]}>
+                        €{book.prezzo_consigliato?.toFixed(2)}
+                      </Text>
+                      <Text style={{ fontSize: 10, color: '#4CAF50' }}>
+                        vendibile
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+                {/* Link per vendere */}
+                <TouchableOpacity
+                  style={[styles.viewSellersButton, { backgroundColor: '#2196F3', marginTop: 12 }]}
+                  onPress={() => router.push('/(tabs)/sell')}
+                >
+                  <Ionicons name="pricetag" size={18} color="#fff" />
+                  <Text style={styles.viewSellersButtonText}>Vendi questi libri</Text>
+                  <Ionicons name="arrow-forward" size={14} color="#fff" />
+                </TouchableOpacity>
+              </View>
             )}
-          </View>
-        </View>
 
-        {/* Child Profile Selector */}
-        {childProfiles.length > 0 && (
-          <View style={styles.profileSelector}>
-            <Text style={styles.profileSelectorLabel}>Seleziona profilo:</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View style={styles.childTabs}>
-                {childProfiles.map((child) => (
-                  <TouchableOpacity
-                    key={child.id}
+            {/* Libri NON Vendibili (edizione cambiata) */}
+            {compatibility.vendere?.libri_non_vendibili && compatibility.vendere.libri_non_vendibili.length > 0 && (
+              <View style={[styles.classCard, { borderLeftColor: '#f44336', borderLeftWidth: 3 }]}>
+                <Text style={[styles.sampleBooksTitle, { color: '#f44336' }]}>
+                  Libri NON vendibili (edizione cambiata):
+                </Text>
+                {compatibility.vendere.libri_non_vendibili.map((book: any, idx: number) => (
+                  <View key={idx} style={styles.sampleBookItem}>
+                    <View style={styles.sampleBookInfo}>
+                      <Text style={styles.sampleBookTitle} numberOfLines={1}>
+                        {book.disciplina}
+                      </Text>
+                      <Text style={[styles.sampleBookSeller, { color: '#f44336' }]} numberOfLines={1}>
+                        {book.status}
+                      </Text>
+                    </View>
+                    <Ionicons name="close-circle" size={20} color="#f44336" />
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {/* Libri Usati Disponibili - CON NUMERO COPIE E LINK */}
+            {compatibility.comprare?.libri_usati && compatibility.comprare.libri_usati.length > 0 && (
+              <View style={styles.classCard}>
+                <Text style={styles.sampleBooksTitle}>
+                  Libri usati da acquistare per {child?.nome_figlio}:
+                </Text>
+                {compatibility.comprare.libri_usati.map((book: any, idx: number) => (
+                  <TouchableOpacity 
+                    key={idx} 
                     style={[
-                      styles.childTabSmall,
-                      selectedChildId === child.id && styles.childTabSmallActive
+                      styles.sampleBookItem,
+                      book.copie_disponibili > 0 && styles.sampleBookItemClickable
                     ]}
-                    onPress={() => setSelectedChildId(child.id)}
+                    onPress={() => {
+                      if (book.copie_disponibili > 0 && book.isbn) {
+                        router.push(`/book-sellers/${book.isbn}`);
+                      }
+                    }}
+                    disabled={!book.copie_disponibili || book.copie_disponibili === 0}
                   >
-                    <Text style={[
-                      styles.childTabTextSmall,
-                      selectedChildId === child.id && styles.childTabTextSmallActive
-                    ]}>
-                      {child.nome_figlio}
-                    </Text>
+                    <View style={styles.sampleBookInfo}>
+                      <Text style={styles.sampleBookTitle} numberOfLines={1}>
+                        {book.disciplina}
+                      </Text>
+                      <Text style={styles.sampleBookSeller} numberOfLines={1}>
+                        {book.titolo}
+                      </Text>
+                    </View>
+                    <View style={{ alignItems: 'flex-end', flexDirection: 'row', gap: 8 }}>
+                      {/* Badge copie disponibili */}
+                      <View style={[
+                        styles.copieBadge,
+                        book.copie_disponibili > 0 ? styles.copieBadgeAvailable : styles.copieBadgeNone
+                      ]}>
+                        <Text style={[
+                          styles.copieBadgeText,
+                          book.copie_disponibili > 0 ? styles.copieBadgeTextAvailable : styles.copieBadgeTextNone
+                        ]}>
+                          {book.copie_disponibili || 0}
+                        </Text>
+                      </View>
+                      {book.copie_disponibili > 0 && (
+                        <Ionicons name="chevron-forward" size={20} color="#4CAF50" />
+                      )}
+                    </View>
                   </TouchableOpacity>
                 ))}
               </View>
-            </ScrollView>
-          </View>
-        )}
-      </View>
+            )}
 
-      {/* Books List for Selected Profile */}
-      {selectedChildId && libriPerProfilo[selectedChildId] && libriPerProfilo[selectedChildId].libri?.length > 0 && (
-        <View style={styles.booksListSection}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="book" size={24} color="#1a472a" />
-            <Text style={styles.sectionTitle}>
-              Libri per {libriPerProfilo[selectedChildId].nome}
-            </Text>
+            {/* Libri da Comprare Nuovi */}
+            {compatibility.nuovi?.libri && compatibility.nuovi.libri.length > 0 && (
+              <View style={styles.classCard}>
+                <Text style={[styles.sampleBooksTitle, { color: '#FF9800' }]}>
+                  Libri da comprare nuovi:
+                </Text>
+                {compatibility.nuovi.libri.map((book: any, idx: number) => (
+                  <View key={idx} style={styles.sampleBookItem}>
+                    <View style={styles.sampleBookInfo}>
+                      <Text style={styles.sampleBookTitle} numberOfLines={1}>
+                        {book.disciplina}
+                      </Text>
+                      <Text style={[styles.sampleBookSeller, { color: '#FF9800' }]} numberOfLines={1}>
+                        {book.motivo}
+                      </Text>
+                    </View>
+                    <Text style={[styles.sampleBookPrice, { color: '#FF9800' }]}>
+                      €{book.prezzo?.toFixed(2)}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
           </View>
-          
-          {libriPerProfilo[selectedChildId].libri.map((libro: any) => (
-            <TouchableOpacity
-              key={libro.listing_id}
-              style={styles.bookCard}
-              onPress={() => router.push(`/listing/${libro.listing_id}`)}
-            >
-              <View style={styles.bookCardHeader}>
-                <Text style={styles.bookDiscipline}>{libro.disciplina}</Text>
-                <View style={[
-                  styles.conditionBadge,
-                  libro.condizione === 'come_nuovo' && { backgroundColor: '#4CAF50' },
-                  libro.condizione === 'buono' && { backgroundColor: '#8BC34A' },
-                  libro.condizione === 'molto_usato' && { backgroundColor: '#FF9800' },
-                ]}>
-                  <Text style={styles.conditionText}>
-                    {libro.condizione === 'come_nuovo' ? 'Come nuovo' :
-                     libro.condizione === 'buono' ? 'Buono' : 'Molto usato'}
-                  </Text>
-                </View>
-              </View>
-              
-              <Text style={styles.bookTitle} numberOfLines={2}>
-                {libro.titolo}
-              </Text>
-              
-              <Text style={styles.bookPublisher}>{libro.editore}</Text>
-              
-              <View style={styles.bookPriceRow}>
-                <View>
-                  <Text style={styles.bookPriceOld}>
-                    €{libro.prezzo_copertina?.toFixed(2)}
-                  </Text>
-                  <Text style={styles.bookPrice}>
-                    €{libro.prezzo_vendita?.toFixed(2)}
-                  </Text>
-                </View>
-                <View style={styles.bookSellerInfo}>
-                  <Ionicons name="person" size={14} color="#666" />
-                  <Text style={styles.bookSeller}>{libro.venditore}</Text>
-                </View>
-              </View>
-              
-              {libro.bookstores && libro.bookstores.length > 0 && (
-                <View style={styles.bookstoreInfo}>
-                  <Ionicons name="location" size={14} color="#1a472a" />
-                  <Text style={styles.bookstoreText}>
-                    Ritiro: {libro.bookstores.map((b: any) => b.nome).join(', ')}
-                  </Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
+        );
+      })()}
 
-      {/* Empty State */}
-      {selectedChildId && libriPerProfilo[selectedChildId] && libriPerProfilo[selectedChildId].libri?.length === 0 && (
+      {/* Empty state if no profile selected */}
+      {childProfiles.length === 0 && (
         <View style={styles.emptyBooksSection}>
-          <Ionicons name="book-outline" size={48} color="#ccc" />
+          <Ionicons name="person-add-outline" size={48} color="#ccc" />
           <Text style={styles.emptyText}>
-            Nessun libro disponibile per {libriPerProfilo[selectedChildId].nome}
+            Nessun profilo figlio configurato
           </Text>
           <Text style={styles.emptySubtext}>
-            I libri appariranno qui quando altri utenti li metteranno in vendita
+            Vai al tuo profilo per aggiungere i tuoi figli
           </Text>
-        </View>
-      )}
-
-      {/* Book Flow Section - Per ogni figlio */}
-      {childProfiles.length > 0 && (
-        <View style={styles.classCompatSection}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="swap-horizontal" size={24} color="#1a472a" />
-            <Text style={styles.sectionTitle}>Flusso Libri</Text>
-          </View>
-          
-          {/* Child Profile Tabs */}
-          <View style={styles.childTabs}>
-            {childProfiles.map((child) => (
-              <TouchableOpacity
-                key={child.id}
-                style={[
-                  styles.childTab,
-                  selectedChildId === child.id && styles.childTabActive
-                ]}
-                onPress={() => setSelectedChildId(child.id)}
-              >
-                <Text style={[
-                  styles.childTabText,
-                  selectedChildId === child.id && styles.childTabTextActive
-                ]}>
-                  {child.nome_figlio}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {/* Selected Child Compatibility */}
-          {selectedChildId && childrenCompatibility[selectedChildId] && (() => {
-            const compatibility = childrenCompatibility[selectedChildId];
-            const child = childProfiles.find(c => c.id === selectedChildId);
-            const isMedia = child?.tipo_scuola === 'primo_grado';
-            const tipoLabel = isMedia ? 'MEDIA' : 'SUP';
-            
-            return (
-              <>
-                <Text style={styles.classCompatSubtitle}>
-                  {child?.scuola} - {child?.classe}ª {tipoLabel}
-                </Text>
-
-                {/* Three Column Layout */}
-                <View style={styles.bookFlowThreeColumns}>
-                  {/* LEFT - VENDI */}
-                  <View style={styles.bookFlowColumnNew}>
-                    <View style={[styles.bookFlowColumnHeader, { backgroundColor: '#2196F3' }]}>
-                      <Text style={styles.bookFlowColumnHeaderText}>
-                        {compatibility.vendere?.classe_destinazione 
-                          ? `${compatibility.vendere.classe_destinazione}ª ${tipoLabel}` 
-                          : 'N/A'}
-                      </Text>
-                    </View>
-                    <View style={styles.bookFlowColumnBody}>
-                      <Ionicons name="arrow-up-circle" size={28} color="#2196F3" />
-                      <Text style={styles.bookFlowColumnAction}>VENDI</Text>
-                      <Text style={styles.bookFlowColumnNumber}>
-                        {compatibility.vendere?.totale_vendibili || 0}
-                      </Text>
-                      <Text style={styles.bookFlowColumnLabel}>libri</Text>
-                    </View>
-                    {(compatibility.vendere?.totale_non_vendibili || 0) > 0 && (
-                      <Text style={[styles.bookFlowColumnHint, { color: '#f44336' }]}>
-                        {compatibility.vendere?.totale_non_vendibili} ed. cambiate
-                      </Text>
-                    )}
-                  </View>
-
-                  {/* CENTER - TU */}
-                  <View style={styles.bookFlowColumnNew}>
-                    <View style={[styles.bookFlowColumnHeader, { backgroundColor: '#1a472a' }]}>
-                      <Text style={styles.bookFlowColumnHeaderText}>{child?.classe}ª {tipoLabel}</Text>
-                    </View>
-                    <View style={styles.bookFlowColumnBody}>
-                      <View style={styles.bookFlowYouBadge}>
-                        <Text style={styles.bookFlowYouText}>{child?.nome_figlio?.charAt(0) || '?'}</Text>
-                      </View>
-                      <Text style={[styles.bookFlowColumnAction, { color: '#FF9800' }]}>NUOVI</Text>
-                      <Text style={[styles.bookFlowColumnNumber, { color: '#FF9800' }]}>
-                        {compatibility.nuovi?.totale || 0}
-                      </Text>
-                      <Text style={styles.bookFlowColumnLabel}>da comprare</Text>
-                    </View>
-                    <Text style={styles.bookFlowColumnHint}>
-                      €{compatibility.nuovi?.costo_totale?.toFixed(0) || 0} stimati
-                    </Text>
-                  </View>
-
-                  {/* RIGHT - COMPRA */}
-                  <View style={styles.bookFlowColumnNew}>
-                    <View style={[styles.bookFlowColumnHeader, { backgroundColor: '#4CAF50' }]}>
-                      <Text style={styles.bookFlowColumnHeaderText}>
-                        {compatibility.comprare?.classe_origine 
-                          ? `${compatibility.comprare.classe_origine}ª ${tipoLabel}` 
-                          : 'N/A'}
-                      </Text>
-                    </View>
-                    <View style={styles.bookFlowColumnBody}>
-                      <Ionicons name="cart" size={28} color="#4CAF50" />
-                      <Text style={[styles.bookFlowColumnAction, { color: '#4CAF50' }]}>COMPRA</Text>
-                      <Text style={[styles.bookFlowColumnNumber, { color: '#4CAF50' }]}>
-                        {compatibility.comprare?.totale_usati || 0}
-                      </Text>
-                      <Text style={styles.bookFlowColumnLabel}>usati</Text>
-                    </View>
-                    <Text style={styles.bookFlowColumnHint}>
-                      {compatibility.comprare?.risparmio_totale > 0 
-                        ? `Risparmio €${compatibility.comprare.risparmio_totale.toFixed(0)}`
-                        : 'Fine ciclo'}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Libri Vendibili */}
-                {compatibility.vendere?.libri_vendibili && compatibility.vendere.libri_vendibili.length > 0 && (
-                  <View style={styles.classCard}>
-                    <Text style={[styles.sampleBooksTitle, { color: '#2196F3' }]}>
-                      Libri che {child?.nome_figlio} può vendere alla {compatibility.vendere?.classe_destinazione}ª:
-                    </Text>
-                    {compatibility.vendere.libri_vendibili.map((book: any, idx: number) => (
-                      <View key={idx} style={styles.sampleBookItem}>
-                        <View style={styles.sampleBookInfo}>
-                          <Text style={styles.sampleBookTitle} numberOfLines={1}>
-                            {book.disciplina}
-                          </Text>
-                          <Text style={styles.sampleBookSeller} numberOfLines={1}>
-                            {book.titolo}
-                          </Text>
-                        </View>
-                        <View style={{ alignItems: 'flex-end' }}>
-                          <Text style={[styles.sampleBookPrice, { color: '#2196F3' }]}>
-                            €{book.prezzo_consigliato?.toFixed(2)}
-                          </Text>
-                          <Text style={{ fontSize: 10, color: '#4CAF50' }}>
-                            vendibile
-                          </Text>
-                        </View>
-                      </View>
-                    ))}
-                    {/* Link per vendere */}
-                    <TouchableOpacity
-                      style={[styles.viewSellersButton, { backgroundColor: '#2196F3', marginTop: 12 }]}
-                      onPress={() => router.push('/(tabs)/sell')}
-                    >
-                      <Ionicons name="pricetag" size={18} color="#fff" />
-                      <Text style={styles.viewSellersButtonText}>Vendi questi libri</Text>
-                      <Ionicons name="arrow-forward" size={14} color="#fff" />
-                    </TouchableOpacity>
-                  </View>
-                )}
-
-                {/* Libri NON Vendibili (edizione cambiata) */}
-                {compatibility.vendere?.libri_non_vendibili && compatibility.vendere.libri_non_vendibili.length > 0 && (
-                  <View style={[styles.classCard, { borderLeftColor: '#f44336', borderLeftWidth: 3 }]}>
-                    <Text style={[styles.sampleBooksTitle, { color: '#f44336' }]}>
-                      Libri NON vendibili (edizione cambiata):
-                    </Text>
-                    {compatibility.vendere.libri_non_vendibili.map((book: any, idx: number) => (
-                      <View key={idx} style={styles.sampleBookItem}>
-                        <View style={styles.sampleBookInfo}>
-                          <Text style={styles.sampleBookTitle} numberOfLines={1}>
-                            {book.disciplina}
-                          </Text>
-                          <Text style={[styles.sampleBookSeller, { color: '#f44336' }]} numberOfLines={1}>
-                            {book.status}
-                          </Text>
-                        </View>
-                        <Ionicons name="close-circle" size={20} color="#f44336" />
-                      </View>
-                    ))}
-                  </View>
-                )}
-
-                {/* Libri Usati Disponibili */}
-                {compatibility.comprare?.libri_usati && compatibility.comprare.libri_usati.length > 0 && (
-                  <View style={styles.classCard}>
-                    <Text style={styles.sampleBooksTitle}>
-                      Libri che {child?.nome_figlio} può comprare usato dalla {compatibility.comprare?.classe_origine}ª:
-                    </Text>
-                    {compatibility.comprare.libri_usati.map((book: any, idx: number) => (
-                      <View key={idx} style={styles.sampleBookItem}>
-                        <View style={styles.sampleBookInfo}>
-                          <Text style={styles.sampleBookTitle} numberOfLines={1}>
-                            {book.disciplina}
-                          </Text>
-                          <Text style={styles.sampleBookSeller} numberOfLines={1}>
-                            {book.titolo}
-                          </Text>
-                        </View>
-                        <View style={{ alignItems: 'flex-end' }}>
-                          <Text style={[styles.sampleBookPrice, { color: '#4CAF50' }]}>
-                            €{book.prezzo_usato?.toFixed(2)}
-                          </Text>
-                          <Text style={{ fontSize: 10, color: '#888', textDecorationLine: 'line-through' }}>
-                            €{book.prezzo_nuovo?.toFixed(2)}
-                          </Text>
-                        </View>
-                      </View>
-                    ))}
-                  </View>
-                )}
-
-                {/* Libri da Comprare Nuovi */}
-                {compatibility.nuovi?.libri && compatibility.nuovi.libri.length > 0 && (
-                  <View style={styles.classCard}>
-                    <Text style={[styles.sampleBooksTitle, { color: '#FF9800' }]}>
-                      Libri da comprare nuovi:
-                    </Text>
-                    {compatibility.nuovi.libri.map((book: any, idx: number) => (
-                      <View key={idx} style={styles.sampleBookItem}>
-                        <View style={styles.sampleBookInfo}>
-                          <Text style={styles.sampleBookTitle} numberOfLines={1}>
-                            {book.disciplina}
-                          </Text>
-                          <Text style={[styles.sampleBookSeller, { color: '#FF9800' }]} numberOfLines={1}>
-                            {book.motivo}
-                          </Text>
-                        </View>
-                        <Text style={[styles.sampleBookPrice, { color: '#FF9800' }]}>
-                          €{book.prezzo?.toFixed(2)}
-                        </Text>
-                      </View>
-                    ))}
-                  </View>
-                )}
-              </>
-            );
-          })()}
+          <TouchableOpacity
+            style={styles.viewSellersButton}
+            onPress={() => router.push('/(tabs)/profile')}
+          >
+            <Text style={styles.viewSellersButtonText}>Vai al Profilo</Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -1379,5 +1283,57 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 32,
     alignItems: 'center',
+  },
+  // Profile selector card
+  profileSelectorCard: {
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  // Badge copie disponibili
+  copieBadge: {
+    minWidth: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+  },
+  copieBadgeAvailable: {
+    backgroundColor: '#4CAF50',
+  },
+  copieBadgeNone: {
+    backgroundColor: '#e0e0e0',
+  },
+  copieBadgeText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  copieBadgeTextAvailable: {
+    color: '#fff',
+  },
+  copieBadgeTextNone: {
+    color: '#999',
+  },
+  sampleBookItemClickable: {
+    backgroundColor: '#f0fff0',
+    marginHorizontal: -8,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+  },
+  childTabSubtext: {
+    fontSize: 10,
+    color: '#888',
+    marginTop: 2,
+  },
+  childTabSubtextActive: {
+    color: '#fff',
   },
 });

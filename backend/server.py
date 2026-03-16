@@ -1120,6 +1120,49 @@ async def get_listing_by_id(listing_id: str):
     return listing
 
 
+@api_router.get("/listings/isbn/{isbn}")
+async def get_listings_by_isbn(isbn: str):
+    """Get all available listings for a specific ISBN"""
+    # Find listings for this ISBN
+    query = {
+        "book_isbn": isbn,
+        "status": "available"
+    }
+    
+    projection = {"foto_base64": 0}
+    listings = await db.listings.find(query, projection).sort("prezzo_vendita", 1).to_list(50)
+    
+    # Enrich with seller info
+    for listing in listings:
+        listing.pop('_id', None)
+        seller = await db.users.find_one({"id": listing.get("seller_id")})
+        if seller:
+            listing["seller_name"] = seller.get("nome", seller.get("username", "Utente"))
+            listing["seller_username"] = seller.get("username", "Utente")
+    
+    # Get book info from adozioni or books collection
+    book_info = None
+    adozione = await db.adozioni.find_one({"libri.isbn": isbn})
+    if adozione:
+        for libro in adozione.get("libri", []):
+            if libro.get("isbn") == isbn:
+                book_info = {
+                    "isbn": isbn,
+                    "titolo": libro.get("titolo", ""),
+                    "disciplina": libro.get("disciplina", ""),
+                    "editore": libro.get("editore", ""),
+                    "autori": libro.get("autori", ""),
+                    "prezzo_copertina": libro.get("prezzo_copertina", 0)
+                }
+                break
+    
+    return {
+        "isbn": isbn,
+        "book": book_info,
+        "listings": listings,
+        "total": len(listings)
+    }
+
 
 @api_router.get("/listings/book/{book_id}")
 async def get_listings_for_book(book_id: str, stato: str = "disponibile"):
@@ -2059,7 +2102,7 @@ async def get_child_compatibility(user_id: str, child_id: str):
     prec_books_disc = books_by_discipline(libri_prec)
     succ_books_disc = books_by_discipline(libri_succ)
     
-    # Calcola vendere
+    # Calcola vendere - con ISBN
     vendibili = []
     non_vendibili = []
     
@@ -2068,6 +2111,7 @@ async def get_child_compatibility(user_id: str, child_id: str):
             book_prec = prec_books_disc[disc]
             if same_series(my_book, book_prec):
                 vendibili.append({
+                    "isbn": my_book.get("isbn", ""),
                     "disciplina": disc,
                     "titolo": my_book["titolo"][:50],
                     "editore": my_book["editore"],
@@ -2082,7 +2126,7 @@ async def get_child_compatibility(user_id: str, child_id: str):
                     "status": "EDIZIONE CAMBIATA"
                 })
     
-    # Calcola comprare
+    # Calcola comprare - con conteggio copie disponibili
     comprare_usato = []
     comprare_nuovo = []
     
@@ -2090,14 +2134,25 @@ async def get_child_compatibility(user_id: str, child_id: str):
         if disc in succ_books_disc:
             book_succ = succ_books_disc[disc]
             if same_series(my_book, book_succ):
+                # Conta le copie disponibili per questo ISBN
+                isbn = my_book.get("isbn", "")
+                copie_disponibili = 0
+                if isbn:
+                    copie_disponibili = await db.listings.count_documents({
+                        "book_isbn": isbn,
+                        "status": "available"
+                    })
+                
                 comprare_usato.append({
+                    "isbn": isbn,
                     "disciplina": disc,
                     "titolo": my_book["titolo"][:50],
                     "editore": my_book["editore"],
                     "prezzo_nuovo": my_book["prezzo"],
                     "prezzo_usato": round(my_book["prezzo"] * 0.5, 2),
                     "risparmio": round(my_book["prezzo"] * 0.5, 2),
-                    "status": "USATO DISPONIBILE"
+                    "copie_disponibili": copie_disponibili,
+                    "status": "USATO DISPONIBILE" if copie_disponibili > 0 else "IN ATTESA"
                 })
             else:
                 comprare_nuovo.append({
