@@ -1409,12 +1409,13 @@ async def get_purchasable_books_for_user(user_id: str):
     """
     Get purchasable books for all children profiles of a user.
     
-    LOGICA CORRETTA:
-    - Uno studente di classe N compra libri DI classe N
-    - Venduti da studenti che ORA frequentano classe N+1
-    - (Loro l'anno scorso erano in N e usavano quei libri)
+    LOGICA CORRETTA (come Flusso Libri):
+    - Uno studente di classe N compra libri DI classe N+1 (per l'anno prossimo)
+    - Venduti da studenti che ORA frequentano classe N+2
+    - (Loro l'anno scorso erano in N+1 e usavano quei libri)
     
-    Esempio: George (2ª) vede libri DI 2ª venduti da studenti di 3ª
+    Esempio: Cloe (1ª) vede libri DI 2ª venduti da studenti di 3ª
+    Esempio: George (2ª) vede libri DI 3ª venduti da studenti di 4ª (se esistono)
     """
     user = await db.users.find_one({"id": user_id})
     if not user:
@@ -1449,28 +1450,41 @@ async def get_purchasable_books_for_user(user_id: str):
             # Superiori: biennio 1-2, triennio 3-4-5
             cycle_max = 2 if classe <= 2 else 5
         
-        # Can only buy if there's a class above that can sell
-        classe_venditore = classe + 1 if classe < cycle_max else None
+        # La classe dei libri che mi servono (classe successiva)
+        classe_libro_da_comprare = classe + 1 if classe < cycle_max else None
+        
+        # La classe del venditore (chi vende quei libri = classe_libro + 1)
+        classe_venditore = classe_libro_da_comprare + 1 if classe_libro_da_comprare and classe_libro_da_comprare < cycle_max else None
+        
+        if not classe_libro_da_comprare:
+            # Fine ciclo, non può comprare libri usati per l'anno prossimo
+            children_data.append({
+                "child_id": child.get("id"),
+                "nome": child.get("nome_figlio", ""),
+                "scuola": child.get("scuola", ""),
+                "classe": classe,
+                "sezione": sezione,
+                "libri_disponibili": 0,
+                "libri": [],
+                "note": "Fine ciclo - nessun libro usato disponibile"
+            })
+            continue
         
         # Find available listings where:
-        # 1. The book is FOR my class (classe = my class)
-        # 2. The seller is in the class above me (seller's class = my class + 1)
+        # 1. The book is FOR classe_libro_da_comprare (my next class)
+        # 2. The seller is in classe_venditore (class above that)
         # 3. Not my own listings
-        # 4. Same school (for now - could expand to other schools)
         
         query = {
             "status": "available",
             "seller_id": {"$ne": user_id},
-            "classe": classe,  # Libro DI classe N (la mia)
+            "classe": classe_libro_da_comprare,  # Libri DI classe N+1
         }
-        
-        # If we want to restrict to same school:
-        # query["codice_scuola"] = codice_scuola
         
         # Find listings matching criteria
         listings = await db.listings.find(query).to_list(100)
         
-        # Filter by seller's class (must be classe + 1)
+        # Filter by seller's class if we have a specific requirement
         libri = []
         for listing in listings:
             seller_id = listing.get("seller_id")
@@ -1484,12 +1498,18 @@ async def get_purchasable_books_for_user(user_id: str):
             if not seller_profili:
                 continue
             
-            # Check if seller is in class N+1
+            # Get seller's current class
             seller_classe = int(seller_profili[0].get("classe", 0))
             
-            # Seller must be in classe + 1 (the class above buyer)
-            if seller_classe != classe + 1:
-                continue
+            # If we need a specific seller class, filter
+            # Seller must be in classe_libro_da_comprare + 1 (the class above the book's class)
+            expected_seller_class = classe_libro_da_comprare + 1
+            
+            # For edge cases (end of cycle), accept any seller in higher class
+            if classe_venditore and seller_classe != expected_seller_class:
+                # Also accept if seller is exactly one class above the book
+                if seller_classe != classe_libro_da_comprare + 1:
+                    continue
             
             libri.append({
                 "listing_id": listing.get("id"),
@@ -1513,6 +1533,7 @@ async def get_purchasable_books_for_user(user_id: str):
             "nome": child.get("nome_figlio", ""),
             "scuola": child.get("scuola", ""),
             "classe": classe,
+            "classe_libri": classe_libro_da_comprare,  # La classe dei libri mostrati
             "sezione": sezione,
             "libri_disponibili": len(libri),
             "libri": libri
