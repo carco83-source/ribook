@@ -498,42 +498,13 @@ export default function ListingDetailScreen() {
           <Text style={styles.sellerText}>Venditore: {listing.seller_username}</Text>
         </View>
         
-        {/* Pre-set Questions for Seller */}
+        {/* Pre-set Questions for Seller - Coming Soon */}
         <View style={styles.questionsSection}>
-          <Text style={styles.questionsSectionTitle}>Hai domande per il venditore?</Text>
-          <Text style={styles.questionsSectionSubtitle}>Seleziona una domanda da inviare</Text>
-          
-          {[
-            { id: 'condizione', text: 'Puoi confermare le condizioni del libro?', icon: 'checkmark-circle-outline' },
-            { id: 'foto', text: 'Puoi inviare altre foto del libro?', icon: 'camera-outline' },
-            { id: 'fascicoli', text: 'I fascicoli/allegati sono presenti?', icon: 'document-text-outline' },
-            { id: 'disponibilita', text: 'Il libro è ancora disponibile?', icon: 'time-outline' },
-            { id: 'consegna', text: 'Quando puoi consegnarlo in cartolibreria?', icon: 'calendar-outline' },
-          ].map((question) => (
-            <TouchableOpacity
-              key={question.id}
-              style={styles.questionButton}
-              onPress={() => {
-                // Send pre-set message
-                axios.post(`${API_URL}/api/messages/send`, {
-                  sender_id: userId,
-                  receiver_id: listing.seller_id,
-                  listing_id: listing.id,
-                  message_type: 'question',
-                  question_id: question.id,
-                  text: question.text
-                }).then(() => {
-                  Alert.alert('Domanda inviata', 'Il venditore riceverà la tua domanda e ti risponderà al più presto.');
-                }).catch(() => {
-                  Alert.alert('Errore', 'Impossibile inviare la domanda');
-                });
-              }}
-            >
-              <Ionicons name={question.icon as any} size={20} color="#1a472a" />
-              <Text style={styles.questionButtonText}>{question.text}</Text>
-              <Ionicons name="send" size={16} color="#1a472a" />
-            </TouchableOpacity>
-          ))}
+          <View style={styles.questionsTitleRow}>
+            <Ionicons name="chatbubble-ellipses-outline" size={24} color="#1a472a" />
+            <Text style={styles.questionsSectionTitle}>Hai domande per il venditore?</Text>
+          </View>
+          <Text style={styles.comingSoonText}>Presto disponibile</Text>
         </View>
 
         {listing.note && (
@@ -1180,11 +1151,22 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 16,
   },
+  questionsTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   questionsSectionTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: '#333',
-    marginBottom: 4,
+  },
+  comingSoonText: {
+    fontSize: 13,
+    color: '#999',
+    fontStyle: 'italic',
+    marginTop: 8,
+    marginLeft: 34,
   },
   questionsSectionSubtitle: {
     fontSize: 13,

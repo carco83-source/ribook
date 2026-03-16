@@ -452,6 +452,15 @@ export default function SellScreen() {
   const createListing = async () => {
     if (!selectedBook || !userId) return;
 
+    // Validate minimum 3 photos
+    if (listingPhotos.length < 3) {
+      Alert.alert(
+        'Foto obbligatorie', 
+        'Devi caricare almeno 3 foto:\n\n1. Copertina frontale\n2. Copertina posteriore\n3. Pagina con più usura'
+      );
+      return;
+    }
+
     if (selectedBookshops.length === 0) {
       Alert.alert('Punto di scambio richiesto', 'Seleziona almeno una cartolibreria');
       return;
@@ -949,8 +958,35 @@ export default function SellScreen() {
                 </View>
               )}
 
-              {/* Photos Section */}
-              <Text style={styles.formLabel}>Foto del libro *</Text>
+              {/* Photos Section - 3 MANDATORY PHOTOS */}
+              <Text style={styles.formLabel}>Foto del libro (minimo 3 obbligatorie) *</Text>
+              <View style={styles.photoRequirements}>
+                <View style={[styles.photoReqItem, listingPhotos.length >= 1 && styles.photoReqItemDone]}>
+                  <Ionicons 
+                    name={listingPhotos.length >= 1 ? "checkmark-circle" : "ellipse-outline"} 
+                    size={18} 
+                    color={listingPhotos.length >= 1 ? "#4CAF50" : "#999"} 
+                  />
+                  <Text style={styles.photoReqText}>1. Copertina frontale</Text>
+                </View>
+                <View style={[styles.photoReqItem, listingPhotos.length >= 2 && styles.photoReqItemDone]}>
+                  <Ionicons 
+                    name={listingPhotos.length >= 2 ? "checkmark-circle" : "ellipse-outline"} 
+                    size={18} 
+                    color={listingPhotos.length >= 2 ? "#4CAF50" : "#999"} 
+                  />
+                  <Text style={styles.photoReqText}>2. Copertina posteriore (retro)</Text>
+                </View>
+                <View style={[styles.photoReqItem, listingPhotos.length >= 3 && styles.photoReqItemDone]}>
+                  <Ionicons 
+                    name={listingPhotos.length >= 3 ? "checkmark-circle" : "ellipse-outline"} 
+                    size={18} 
+                    color={listingPhotos.length >= 3 ? "#4CAF50" : "#999"} 
+                  />
+                  <Text style={styles.photoReqText}>3. Pagina con più usura (libro aperto)</Text>
+                </View>
+              </View>
+              
               <View style={styles.photosGrid}>
                 {listingPhotos.map((photo, index) => (
                   <View key={index} style={styles.photoItem}>
@@ -958,6 +994,11 @@ export default function SellScreen() {
                       source={{ uri: `data:image/jpeg;base64,${photo}` }}
                       style={styles.photoThumbnail}
                     />
+                    <View style={styles.photoLabel}>
+                      <Text style={styles.photoLabelText}>
+                        {index === 0 ? 'Fronte' : index === 1 ? 'Retro' : index === 2 ? 'Interna' : `Foto ${index + 1}`}
+                      </Text>
+                    </View>
                     <TouchableOpacity
                       style={styles.removePhotoBtn}
                       onPress={() => removePhoto(index)}
@@ -977,7 +1018,11 @@ export default function SellScreen() {
                   </View>
                 )}
               </View>
-              <Text style={styles.photoHint}>Aggiungi fino a 4 foto</Text>
+              {listingPhotos.length < 3 && (
+                <Text style={styles.photoWarning}>
+                  Devi caricare almeno 3 foto per continuare
+                </Text>
+              )}
 
               {/* Bookshop Selection - Multi-select */}
               <Text style={styles.formLabel}>Punti di scambio *</Text>
@@ -1574,6 +1619,49 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#999',
     marginTop: 6,
+  },
+  // Photo requirements
+  photoRequirements: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+  },
+  photoReqItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 4,
+  },
+  photoReqItemDone: {
+    opacity: 0.7,
+  },
+  photoReqText: {
+    fontSize: 13,
+    color: '#333',
+  },
+  photoLabel: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingVertical: 2,
+    borderBottomLeftRadius: 8,
+    borderBottomRightRadius: 8,
+  },
+  photoLabelText: {
+    fontSize: 9,
+    color: '#fff',
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  photoWarning: {
+    fontSize: 12,
+    color: '#f44336',
+    fontWeight: '500',
+    marginTop: 8,
+    textAlign: 'center',
   },
   // Traffic light
   trafficLightContainer: {
