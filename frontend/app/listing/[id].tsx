@@ -116,10 +116,21 @@ export default function ListingDetailScreen() {
       setUserId(storedUserId);
       setIsPremium(storedPremium === 'true');
 
-      // Load listing
-      const listingsResponse = await axios.get(`${API_URL}/api/listings`);
-      const foundListing = listingsResponse.data.find((l: Listing) => l.id === id);
-      setListing(foundListing);
+      // Load listing by ID directly (new endpoint)
+      try {
+        const listingResponse = await axios.get(`${API_URL}/api/listings/${id}`);
+        setListing(listingResponse.data);
+      } catch (err: any) {
+        // Fallback to old method if endpoint not found
+        if (err.response?.status === 404) {
+          console.log('Listing not found');
+          setListing(null);
+        } else {
+          const listingsResponse = await axios.get(`${API_URL}/api/listings`);
+          const foundListing = listingsResponse.data.find((l: Listing) => l.id === id);
+          setListing(foundListing);
+        }
+      }
 
       // Load bookstores
       const bookstoresResponse = await axios.get(`${API_URL}/api/bookstores`);

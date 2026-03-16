@@ -1094,7 +1094,8 @@ async def create_listing(listing_data: BookListingCreate, user_id: str = Query(.
 
 @api_router.get("/listings")
 async def get_listings(classe: Optional[str] = None, materia: Optional[str] = None, stato: str = "disponibile", limit: int = 50, skip: int = 0):
-    query = {"stato": stato}
+    # Support both 'stato' (old) and 'status' (new) fields
+    query = {"$or": [{"stato": stato}, {"status": "available" if stato == "disponibile" else stato}]}
     if classe:
         query["book_classe"] = classe
     if materia:
@@ -1107,6 +1108,18 @@ async def get_listings(classe: Optional[str] = None, materia: Optional[str] = No
     for listing in listings:
         listing.pop('_id', None)
     return listings
+
+@api_router.get("/listings/{listing_id}")
+async def get_listing_by_id(listing_id: str):
+    """Get a single listing by its ID"""
+    listing = await db.listings.find_one({"id": listing_id})
+    if not listing:
+        raise HTTPException(status_code=404, detail="Annuncio non trovato")
+    
+    listing.pop('_id', None)
+    return listing
+
+
 
 @api_router.get("/listings/book/{book_id}")
 async def get_listings_for_book(book_id: str, stato: str = "disponibile"):
