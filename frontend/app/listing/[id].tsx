@@ -242,75 +242,59 @@ export default function ListingDetailScreen() {
     }
   };
 
-  const handlePurchase = async () => {
+  const handleAddToCart = async () => {
     if (!selectedBookstore) {
-      Alert.alert('Errore', 'Seleziona una cartolibreria per il ritiro');
+      Alert.alert('Errore', 'Seleziona un punto di ritiro');
       return;
     }
 
-    // Check if bookstore is in seller's available list
-    const sellerBookstoreIds = listing?.bookstore_ids || [];
-    if (sellerBookstoreIds.length > 0 && !sellerBookstoreIds.includes(selectedBookstore.id)) {
-      Alert.alert('Errore', 'Questa cartolibreria non è disponibile per questo annuncio');
-      return;
+    setPurchasing(true);
+    try {
+      // Add to cart in AsyncStorage
+      const cartKey = `cart_${userId}`;
+      const existingCart = await AsyncStorage.getItem(cartKey);
+      const cart = existingCart ? JSON.parse(existingCart) : [];
+      
+      // Check if already in cart
+      const alreadyInCart = cart.find((item: any) => item.listing_id === listing?.id);
+      if (alreadyInCart) {
+        Alert.alert('Info', 'Questo libro è già nel carrello');
+        return;
+      }
+      
+      // Add to cart
+      cart.push({
+        listing_id: listing?.id,
+        book_titolo: listing?.book_titolo,
+        book_autore: listing?.book_autore,
+        prezzo_vendita: listing?.prezzo_vendita,
+        prezzo_copertina: listing?.prezzo_copertina,
+        condizione: listing?.condizione,
+        seller_id: listing?.seller_id,
+        seller_username: listing?.seller_username,
+        bookstore: selectedBookstore,
+        added_at: new Date().toISOString()
+      });
+      
+      await AsyncStorage.setItem(cartKey, JSON.stringify(cart));
+      
+      Alert.alert(
+        'Aggiunto al carrello!',
+        `"${listing?.book_titolo}" è stato aggiunto al carrello.\n\nRitiro: ${selectedBookstore.nome}`,
+        [
+          { text: 'Continua acquisti', onPress: () => router.back() },
+          { text: 'Vai al carrello', onPress: () => router.push('/cart') }
+        ]
+      );
+    } catch (error) {
+      console.error('Error adding to cart:', error);
+      Alert.alert('Errore', 'Impossibile aggiungere al carrello');
+    } finally {
+      setPurchasing(false);
     }
-
-    Alert.alert(
-      'Conferma acquisto',
-      `Stai per acquistare "${listing?.book_titolo}" per €${listing?.prezzo_vendita.toFixed(2)}${!isPremium ? ' (+ 15% commissione)' : ''}.\n\nRitiro presso: ${selectedBookstore.nome}`,
-      [
-        { text: 'Annulla', style: 'cancel' },
-        {
-          text: 'Conferma',
-          onPress: async () => {
-            setPurchasing(true);
-            try {
-              const response = await axios.post(`${API_URL}/api/purchase?buyer_id=${userId}`, {
-                listing_id: listing?.id,
-                bookstore_id: selectedBookstore.id,
-              });
-
-              Alert.alert(
-                'Acquisto completato!',
-                `Codice ritiro: ${response.data.codice_ritiro}\n\nIl venditore ha 5 giorni per consegnare il libro presso ${selectedBookstore.nome}.\n\nMostra questo codice quando ritiri il libro.`,
-                [
-                  {
-                    text: 'OK',
-                    onPress: () => router.push('/my-purchases'),
-                  },
-                ]
-              );
-            } catch (error: any) {
-              Alert.alert(
-                'Errore',
-                error.response?.data?.detail || 'Impossibile completare l\'acquisto'
-              );
-            } finally {
-              setPurchasing(false);
-            }
-          },
-        },
-      ]
-    );
   };
 
-  const sellerCard = listing ? (
-    <TouchableOpacity
-      style={styles.sellerCard}
-      onPress={() =>
-        router.push(
-          `/chat/${listing.id}?otherUserId=${listing.seller_id}&otherUsername=${listing.seller_username}&title=${encodeURIComponent(listing.book_titolo)}`
-        )
-      }
-    >
-      <Ionicons name="person-circle-outline" size={24} color="#1a472a" />
-      <Text style={styles.sellerText}>Venditore: {listing.seller_username}</Text>
-      <View style={styles.chatBadge}>
-        <Ionicons name="chatbubble" size={14} color="#fff" />
-        <Text style={styles.chatBadgeText}>Chat</Text>
-      </View>
-    </TouchableOpacity>
-  ) : null;
+  const { commission, total } = calculateCommission();
 
   if (loading) {
     return (
@@ -366,6 +350,7 @@ export default function ListingDetailScreen() {
 
       {/* Book Details */}
       <View style={styles.content}>
+        {/* Book Details */}
         <View style={styles.priceRow}>
           <Text style={styles.price}>€{listing.prezzo_vendita.toFixed(2)}</Text>
           <View style={styles.conditionBadge}>
@@ -373,22 +358,6 @@ export default function ListingDetailScreen() {
               {getConditionLabel(listing.condizione)}
             </Text>
           </View>
-        </View>
-
-        {/* Share Buttons */}
-        <View style={styles.shareRow}>
-          <TouchableOpacity style={styles.shareButton} onPress={handleShare}>
-            <Ionicons name="share-outline" size={20} color="#1a472a" />
-            <Text style={styles.shareButtonText}>Condividi</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.shareButton, styles.whatsappButton]} onPress={handleShareWhatsApp}>
-            <Ionicons name="logo-whatsapp" size={20} color="#25D366" />
-            <Text style={[styles.shareButtonText, { color: '#25D366' }]}>WhatsApp</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.shareButton, styles.reportButton]} onPress={() => setShowReportModal(true)}>
-            <Ionicons name="flag-outline" size={20} color="#f44336" />
-            <Text style={[styles.shareButtonText, { color: '#f44336' }]}>Segnala</Text>
-          </TouchableOpacity>
         </View>
 
         <Text style={styles.title}>{listing.book_titolo}</Text>
@@ -531,18 +500,43 @@ export default function ListingDetailScreen() {
           <Text style={styles.sellerText}>Venditore: {listing.seller_username}</Text>
         </View>
         
-        {/* Chat Button */}
-        <TouchableOpacity
-          style={styles.chatButton}
-          onPress={() =>
-            router.push(
-              `/chat/${listing.id}?otherUserId=${listing.seller_id}&otherUsername=${listing.seller_username}&title=${encodeURIComponent(listing.book_titolo)}`
-            )
-          }
-        >
-          <Ionicons name="chatbubble" size={20} color="#fff" />
-          <Text style={styles.chatButtonText}>Contatta venditore</Text>
-        </TouchableOpacity>
+        {/* Pre-set Questions for Seller */}
+        <View style={styles.questionsSection}>
+          <Text style={styles.questionsSectionTitle}>Hai domande per il venditore?</Text>
+          <Text style={styles.questionsSectionSubtitle}>Seleziona una domanda da inviare</Text>
+          
+          {[
+            { id: 'condizione', text: 'Puoi confermare le condizioni del libro?', icon: 'checkmark-circle-outline' },
+            { id: 'foto', text: 'Puoi inviare altre foto del libro?', icon: 'camera-outline' },
+            { id: 'fascicoli', text: 'I fascicoli/allegati sono presenti?', icon: 'document-text-outline' },
+            { id: 'disponibilita', text: 'Il libro è ancora disponibile?', icon: 'time-outline' },
+            { id: 'consegna', text: 'Quando puoi consegnarlo in cartolibreria?', icon: 'calendar-outline' },
+          ].map((question) => (
+            <TouchableOpacity
+              key={question.id}
+              style={styles.questionButton}
+              onPress={() => {
+                // Send pre-set message
+                axios.post(`${API_URL}/api/messages/send`, {
+                  sender_id: userId,
+                  receiver_id: listing.seller_id,
+                  listing_id: listing.id,
+                  message_type: 'question',
+                  question_id: question.id,
+                  text: question.text
+                }).then(() => {
+                  Alert.alert('Domanda inviata', 'Il venditore riceverà la tua domanda e ti risponderà al più presto.');
+                }).catch(() => {
+                  Alert.alert('Errore', 'Impossibile inviare la domanda');
+                });
+              }}
+            >
+              <Ionicons name={question.icon as any} size={20} color="#1a472a" />
+              <Text style={styles.questionButtonText}>{question.text}</Text>
+              <Ionicons name="send" size={16} color="#1a472a" />
+            </TouchableOpacity>
+          ))}
+        </View>
 
         {listing.note && (
           <View style={styles.noteCard}>
@@ -593,142 +587,65 @@ export default function ListingDetailScreen() {
           )}
         </View>
 
-        {/* Bookstore Selection */}
-        <Text style={styles.sectionTitle}>Seleziona cartolibreria per ritiro</Text>
-        
-        {bookstores.length === 0 ? (
-          <View style={styles.noBookstores}>
-            <Text style={styles.noBookstoresText}>
-              Nessuna cartolibreria disponibile nella tua zona
-            </Text>
-          </View>
-        ) : (
-          <View style={styles.bookstoresList}>
-            {bookstores.map((store) => (
+        {/* Bookstore Selection - ONLY seller's bookstores */}
+        {listing.bookstores && listing.bookstores.length > 0 ? (
+          <View style={styles.bookstoreSelectionCard}>
+            <Text style={styles.sectionTitle}>Seleziona punto di ritiro</Text>
+            <Text style={styles.sectionSubtitle}>Il venditore consegnerà il libro qui</Text>
+            
+            {listing.bookstores.map((store: any, index: number) => (
               <TouchableOpacity
-                key={store.id}
+                key={store.id || index}
                 style={[
                   styles.bookstoreItem,
                   selectedBookstore?.id === store.id && styles.bookstoreItemSelected,
                 ]}
                 onPress={() => setSelectedBookstore(store)}
               >
+                <Ionicons 
+                  name={selectedBookstore?.id === store.id ? "radio-button-on" : "radio-button-off"} 
+                  size={22} 
+                  color={selectedBookstore?.id === store.id ? "#1a472a" : "#666"} 
+                />
                 <View style={styles.bookstoreInfo}>
-                  <Text style={styles.bookstoreName}>{store.nome}</Text>
-                  <Text style={styles.bookstoreAddress}>{store.indirizzo}</Text>
-                  <Text style={styles.bookstoreCity}>{store.citta}</Text>
+                  <Text style={[
+                    styles.bookstoreName,
+                    selectedBookstore?.id === store.id && { color: '#1a472a', fontWeight: '600' }
+                  ]}>
+                    {store.nome}
+                  </Text>
                 </View>
-                {selectedBookstore?.id === store.id && (
-                  <Ionicons name="checkmark-circle" size={24} color="#1a472a" />
-                )}
               </TouchableOpacity>
             ))}
           </View>
+        ) : (
+          <View style={styles.noBookstores}>
+            <Ionicons name="alert-circle-outline" size={24} color="#f4a460" />
+            <Text style={styles.noBookstoresText}>
+              Nessun punto di ritiro disponibile per questo annuncio
+            </Text>
+          </View>
         )}
 
-        {/* Purchase Button */}
+        {/* Add to Cart Button */}
         <TouchableOpacity
           style={[
             styles.purchaseButton,
             (!selectedBookstore || purchasing) && styles.purchaseButtonDisabled,
           ]}
-          onPress={handlePurchase}
+          onPress={handleAddToCart}
           disabled={!selectedBookstore || purchasing}
         >
           {purchasing ? (
             <ActivityIndicator color="#fff" />
           ) : (
             <>
-              <Ionicons name="cart" size={24} color="#fff" />
-              <Text style={styles.purchaseButtonText}>Acquista</Text>
+              <Ionicons name="cart-outline" size={24} color="#fff" />
+              <Text style={styles.purchaseButtonText}>Aggiungi al carrello</Text>
             </>
           )}
         </TouchableOpacity>
       </View>
-
-      {/* Report Modal */}
-      <Modal
-        visible={showReportModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowReportModal(false)}
-      >
-        <View style={styles.reportModalOverlay}>
-          <View style={styles.reportModalContent}>
-            <View style={styles.reportModalHeader}>
-              <Text style={styles.reportModalTitle}>Segnala Annuncio</Text>
-              <TouchableOpacity onPress={() => setShowReportModal(false)}>
-                <Ionicons name="close" size={24} color="#333" />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.reportModalSubtitle}>
-              Perché vuoi segnalare questo annuncio?
-            </Text>
-
-            <View style={styles.reportReasons}>
-              {REPORT_REASONS.map((reason) => (
-                <TouchableOpacity
-                  key={reason.value}
-                  style={[
-                    styles.reportReasonOption,
-                    reportReason === reason.value && styles.reportReasonSelected
-                  ]}
-                  onPress={() => setReportReason(reason.value)}
-                >
-                  <Ionicons
-                    name={reportReason === reason.value ? "radio-button-on" : "radio-button-off"}
-                    size={20}
-                    color={reportReason === reason.value ? "#f44336" : "#666"}
-                  />
-                  <Text style={[
-                    styles.reportReasonText,
-                    reportReason === reason.value && styles.reportReasonTextSelected
-                  ]}>
-                    {reason.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <Text style={styles.reportDescLabel}>Descrizione (opzionale)</Text>
-            <TextInput
-              style={styles.reportDescInput}
-              value={reportDescription}
-              onChangeText={setReportDescription}
-              placeholder="Aggiungi dettagli sulla segnalazione..."
-              multiline
-              numberOfLines={3}
-            />
-
-            <View style={styles.reportModalButtons}>
-              <TouchableOpacity
-                style={styles.reportCancelButton}
-                onPress={() => setShowReportModal(false)}
-              >
-                <Text style={styles.reportCancelButtonText}>Annulla</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.reportSubmitButton,
-                  (!reportReason || sendingReport) && styles.reportSubmitButtonDisabled
-                ]}
-                onPress={handleReport}
-                disabled={!reportReason || sendingReport}
-              >
-                {sendingReport ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <>
-                    <Ionicons name="flag" size={18} color="#fff" />
-                    <Text style={styles.reportSubmitButtonText}>Invia Segnalazione</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </ScrollView>
   );
 }
@@ -1257,5 +1174,51 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#1a472a',
     fontWeight: '600',
+  },
+  // Questions Section
+  questionsSection: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+  },
+  questionsSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  questionsSectionSubtitle: {
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 16,
+  },
+  questionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    padding: 14,
+    borderRadius: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    gap: 12,
+  },
+  questionButtonText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#333',
+  },
+  // Bookstore Selection Card
+  bookstoreSelectionCard: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+  },
+  sectionSubtitle: {
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 12,
   },
 });
