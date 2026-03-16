@@ -1035,6 +1035,42 @@ async def create_listing(listing_data: BookListingCreate, user_id: str = Query(.
             if listing_data.fascicoli_presenti < listing_data.fascicoli_totali:
                 condizione = "molto_usato"
     
+    # CONVERT OLD FORMAT TO condition_details
+    # Frontend sends: has_writings, has_highlights, has_folds, cover_condition, pages_condition
+    elif listing_data.cover_condition or listing_data.has_writings or listing_data.has_highlights or listing_data.has_folds:
+        # Map old format to new condition_details structure
+        sottolineature = 0  # 0=Nessuna, 1=Poche, 2=Molte
+        if listing_data.has_writings:
+            sottolineature = 2 if listing_data.has_highlights else 1
+        elif listing_data.has_highlights:
+            sottolineature = 1
+        
+        copertina = 0  # 0=Integra, 1=Un po' rovinata, 2=Molto rovinata
+        if listing_data.cover_condition == 'usurata':
+            copertina = 2
+        elif listing_data.cover_condition == 'buona':
+            copertina = 1
+        
+        pagine = 0  # 0=Perfette, 1=Qualche piega, 2=Molte pieghe
+        if listing_data.pages_condition == 'ingiallite':
+            pagine = 2
+        elif listing_data.pages_condition == 'buone':
+            pagine = 1
+        
+        # Has folds affects pages condition
+        if listing_data.has_folds and pagine < 1:
+            pagine = 1
+        
+        esercizi = 0  # 0=Nessuno, 1=Alcuni, 2=Molti
+        # Assume no exercises unless specified otherwise
+        
+        condition_details = {
+            "sottolineature": sottolineature,
+            "copertina": copertina,
+            "pagine": pagine,
+            "esercizi": esercizi
+        }
+    
     # Validate condition
     if condizione not in BOOK_CONDITIONS:
         condizione = "buono"  # Default to buono if invalid
