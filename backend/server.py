@@ -1409,13 +1409,14 @@ async def get_purchasable_books_for_user(user_id: str):
     """
     Get purchasable books for all children profiles of a user.
     
-    LOGICA CORRETTA (come Flusso Libri):
-    - Uno studente di classe N compra libri DI classe N+1 (per l'anno prossimo)
-    - Venduti da studenti che ORA frequentano classe N+2
-    - (Loro l'anno scorso erano in N+1 e usavano quei libri)
+    LOGICA BASATA SU ISBN:
+    1. Trovo gli ISBN dei libri adottati nella PROSSIMA CLASSE del profilo (dalla collezione adozioni)
+    2. Cerco listings disponibili che hanno quegli ISBN
+    3. Mostro quei libri
     
-    Esempio: Cloe (1ª) vede libri DI 2ª venduti da studenti di 3ª
-    Esempio: George (2ª) vede libri DI 3ª venduti da studenti di 4ª (se esistono)
+    Esempio: Cloe (1ª, scuola CZMM86001P) 
+    → Cerco ISBN adottati in 2ª nella stessa scuola
+    → Cerco listings con quegli ISBN
     """
     user = await db.users.find_one({"id": user_id})
     if not user:
@@ -1439,7 +1440,8 @@ async def get_purchasable_books_for_user(user_id: str):
                 "child_id": child.get("id"),
                 "nome": child.get("nome_figlio", ""),
                 "libri_disponibili": 0,
-                "libri": []
+                "libri": [],
+                "note": "Codice scuola mancante"
             })
             continue
         
@@ -1450,13 +1452,10 @@ async def get_purchasable_books_for_user(user_id: str):
             # Superiori: biennio 1-2, triennio 3-4-5
             cycle_max = 2 if classe <= 2 else 5
         
-        # La classe dei libri che mi servono (classe successiva)
-        classe_libro_da_comprare = classe + 1 if classe < cycle_max else None
+        # La classe dei libri che mi servono (prossimo anno)
+        classe_prossimo_anno = classe + 1 if classe < cycle_max else None
         
-        # La classe del venditore (chi vende quei libri = classe_libro + 1)
-        classe_venditore = classe_libro_da_comprare + 1 if classe_libro_da_comprare and classe_libro_da_comprare < cycle_max else None
-        
-        if not classe_libro_da_comprare:
+        if not classe_prossimo_anno:
             # Fine ciclo, non può comprare libri usati per l'anno prossimo
             children_data.append({
                 "child_id": child.get("id"),
@@ -1470,72 +1469,88 @@ async def get_purchasable_books_for_user(user_id: str):
             })
             continue
         
-        # Find available listings where:
-        # 1. The book is FOR classe_libro_da_comprare (my next class)
-        # 2. The seller is in classe_venditore (class above that)
-        # 3. Not my own listings
+        # STEP 1: Trova gli ISBN dei libri adottati nella PROSSIMA CLASSE della STESSA SCUOLA
+        adozioni_prossimo_anno = await db.adozioni.find({
+            "codice_scuola": codice_scuola,
+            "classe": classe_prossimo_anno
+        }).to_list(None)
         
+        # Raccogli tutti gli ISBN dalla prossima classe
+        isbn_necessari = set()
+        libri_adottati_info = {}  # Per avere info sui libri adottati
+        
+        for adozione in adozioni_prossimo_anno:
+            for libro in adozione.get("libri", []):
+                isbn = libro.get("isbn", "")
+                if isbn:
+                    isbn_necessari.add(isbn)
+                    libri_adottati_info[isbn] = {
+                        "titolo": libro.get("titolo", ""),
+                        "disciplina": libro.get("disciplina", ""),
+                        "editore": libro.get("editore", ""),
+                        "prezzo_copertina": libro.get("prezzo_copertina", 0),
+                        "autori": libro.get("autori", ""),
+                        "is_volume_unico": libro.get("is_volume_unico", False)
+                    }
+        
+        if not isbn_necessari:
+            children_data.append({
+                "child_id": child.get("id"),
+                "nome": child.get("nome_figlio", ""),
+                "scuola": child.get("scuola", ""),
+                "classe": classe,
+                "classe_libri": classe_prossimo_anno,
+                "sezione": sezione,
+                "libri_disponibili": 0,
+                "libri": [],
+                "isbn_cercati": 0,
+                "note": f"Nessun libro trovato per classe {classe_prossimo_anno}"
+            })
+            continue
+        
+        # STEP 2: Cerca listings disponibili con quegli ISBN
         query = {
             "status": "available",
             "seller_id": {"$ne": user_id},
-            "classe": classe_libro_da_comprare,  # Libri DI classe N+1
+            "book_isbn": {"$in": list(isbn_necessari)}
         }
         
-        # Find listings matching criteria
         listings = await db.listings.find(query).to_list(100)
         
-        # Filter by seller's class if we have a specific requirement
+        # STEP 3: Costruisci la lista dei libri acquistabili
         libri = []
         for listing in listings:
-            seller_id = listing.get("seller_id")
-            
-            # Get seller's profile to check their class
-            seller = await db.users.find_one({"id": seller_id})
-            if not seller:
-                continue
-            
-            seller_profili = seller.get("profili_figli", [])
-            if not seller_profili:
-                continue
-            
-            # Get seller's current class
-            seller_classe = int(seller_profili[0].get("classe", 0))
-            
-            # If we need a specific seller class, filter
-            # Seller must be in classe_libro_da_comprare + 1 (the class above the book's class)
-            expected_seller_class = classe_libro_da_comprare + 1
-            
-            # For edge cases (end of cycle), accept any seller in higher class
-            if classe_venditore and seller_classe != expected_seller_class:
-                # Also accept if seller is exactly one class above the book
-                if seller_classe != classe_libro_da_comprare + 1:
-                    continue
+            isbn = listing.get("book_isbn", "")
+            adottato_info = libri_adottati_info.get(isbn, {})
             
             libri.append({
                 "listing_id": listing.get("id"),
-                "isbn": listing.get("book_isbn"),
-                "titolo": listing.get("book_titolo", ""),
-                "autore": listing.get("book_autore", ""),
-                "editore": listing.get("book_editore", ""),
-                "disciplina": listing.get("book_disciplina", ""),
-                "prezzo_copertina": listing.get("prezzo_copertina", 0),
+                "isbn": isbn,
+                "titolo": listing.get("book_titolo") or adottato_info.get("titolo", ""),
+                "autore": listing.get("book_autore") or adottato_info.get("autori", ""),
+                "editore": listing.get("book_editore") or adottato_info.get("editore", ""),
+                "disciplina": listing.get("book_disciplina") or adottato_info.get("disciplina", ""),
+                "prezzo_copertina": listing.get("prezzo_copertina") or adottato_info.get("prezzo_copertina", 0),
                 "prezzo_vendita": listing.get("prezzo_vendita", 0),
                 "condizione": listing.get("condizione", ""),
                 "condition_details": listing.get("condition_details", {}),
                 "venditore": listing.get("seller_username", ""),
-                "venditore_classe": seller_classe,
                 "scuola_venditore": listing.get("scuola", ""),
-                "bookstores": listing.get("bookstores", [])
+                "codice_scuola_venditore": listing.get("codice_scuola", ""),
+                "bookstores": listing.get("bookstores", []),
+                "is_volume_unico": adottato_info.get("is_volume_unico", False)
             })
         
         children_data.append({
             "child_id": child.get("id"),
             "nome": child.get("nome_figlio", ""),
             "scuola": child.get("scuola", ""),
+            "codice_scuola": codice_scuola,
             "classe": classe,
-            "classe_libri": classe_libro_da_comprare,  # La classe dei libri mostrati
+            "classe_libri": classe_prossimo_anno,
             "sezione": sezione,
             "libri_disponibili": len(libri),
+            "isbn_cercati": len(isbn_necessari),
             "libri": libri
         })
     
