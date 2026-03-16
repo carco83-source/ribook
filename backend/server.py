@@ -1220,16 +1220,17 @@ async def get_matches(user_id: str, limit: int = 50):
     if not user_requests:
         return {"matches": [], "total": 0}
     
-    # Get book IDs user is looking for
-    wanted_book_ids = [req["book_id"] for req in user_requests]
+    # Get book ISBNs user is looking for (use book_isbn field)
+    wanted_isbns = [req.get("book_isbn", req.get("book_id", "")) for req in user_requests]
+    wanted_isbns = [isbn for isbn in wanted_isbns if isbn]  # Filter empty
     
-    # Use aggregation with $lookup to avoid N+1 queries
+    # Find listings by ISBN
     pipeline = [
         {
             "$match": {
-                "book_id": {"$in": wanted_book_ids},
+                "book_isbn": {"$in": wanted_isbns},
                 "seller_id": {"$ne": user_id},
-                "stato": "disponibile"
+                "status": "available"
             }
         },
         {
@@ -1240,26 +1241,41 @@ async def get_matches(user_id: str, limit: int = 50):
                 "as": "seller_info"
             }
         },
-        {"$unwind": "$seller_info"},
-        {"$project": {"foto_base64": 0, "seller_info.password_hash": 0, "seller_info.email": 0, "seller_info.telefono": 0}},
+        {"$unwind": {"path": "$seller_info", "preserveNullAndEmptyArrays": True}},
         {"$limit": limit}
     ]
     
     listings = await db.listings.aggregate(pipeline).to_list(limit)
+    
+    # Get user's school info from child profiles
+    user_scuola = None
+    user_classe = None
+    user_sezione = None
+    profili = user.get("profili_figli", [])
+    if profili:
+        first_child = profili[0]
+        user_scuola = first_child.get("codice_scuola", "")
+        user_classe = first_child.get("classe", "")
+        user_sezione = first_child.get("sezione", "")
     
     matches = []
     for listing in listings:
         listing.pop('_id', None)
         seller = listing.pop('seller_info', {})
         
-        same_school = seller.get("scuola") == user["scuola"]
-        same_class = seller.get("classe") == user["classe"]
-        same_section = seller.get("sezione") == user["sezione"]
+        # Compare by codice_scuola instead of scuola name
+        seller_codice = listing.get("codice_scuola", "")
+        seller_classe = str(listing.get("classe", ""))
+        seller_sezione = listing.get("sezione", "")
+        
+        same_school = seller_codice == user_scuola
+        same_class = seller_classe == str(user_classe) and same_school
+        same_section = seller_sezione == user_sezione and same_class
         
         # Score: same section = 100, same class = 80, same school = 60, other = 40
-        if same_section and same_class and same_school:
+        if same_section:
             score = 100
-        elif same_class and same_school:
+        elif same_class:
             score = 80
         elif same_school:
             score = 60
@@ -1289,9 +1305,10 @@ async def get_radar_view(user_id: str):
     
     # Get user's requests
     user_requests = await db.requests.find({"buyer_id": user_id, "stato": "cercando"}).to_list(50)
-    wanted_book_ids = [req["book_id"] for req in user_requests]
+    wanted_isbns = [req.get("book_isbn", req.get("book_id", "")) for req in user_requests]
+    wanted_isbns = [isbn for isbn in wanted_isbns if isbn]
     
-    if not wanted_book_ids:
+    if not wanted_isbns:
         return {
             "total_matches": 0,
             "same_section": 0,
@@ -1301,29 +1318,32 @@ async def get_radar_view(user_id: str):
             "books_searching": 0
         }
     
-    # Use aggregation with $lookup to avoid N+1 queries
+    # Get user's school info from child profiles
+    user_codice_scuola = None
+    user_classe = None
+    user_sezione = None
+    profili = user.get("profili_figli", [])
+    if profili:
+        first_child = profili[0]
+        user_codice_scuola = first_child.get("codice_scuola", "")
+        user_classe = str(first_child.get("classe", ""))
+        user_sezione = first_child.get("sezione", "")
+    
+    # Find listings by ISBN
     pipeline = [
         {
             "$match": {
-                "book_id": {"$in": wanted_book_ids},
+                "book_isbn": {"$in": wanted_isbns},
                 "seller_id": {"$ne": user_id},
-                "stato": "disponibile"
+                "status": "available"
             }
         },
-        {
-            "$lookup": {
-                "from": "users",
-                "localField": "seller_id",
-                "foreignField": "id",
-                "as": "seller_info"
-            }
-        },
-        {"$unwind": "$seller_info"},
         {
             "$project": {
-                "seller_scuola": "$seller_info.scuola",
-                "seller_classe": "$seller_info.classe",
-                "seller_sezione": "$seller_info.sezione"
+                "codice_scuola": 1,
+                "classe": 1,
+                "sezione": 1,
+                "seller_id": 1
             }
         }
     ]
@@ -1337,14 +1357,19 @@ async def get_radar_view(user_id: str):
     others = 0
     
     for listing in listings:
-        if (listing.get("seller_sezione") == user["sezione"] and 
-            listing.get("seller_classe") == user["classe"] and 
-            listing.get("seller_scuola") == user["scuola"]):
+        listing_codice = listing.get("codice_scuola", "")
+        listing_classe = str(listing.get("classe", ""))
+        listing_sezione = listing.get("sezione", "")
+        
+        is_same_school = listing_codice == user_codice_scuola
+        is_same_class = listing_classe == user_classe and is_same_school
+        is_same_section = listing_sezione == user_sezione and is_same_class
+        
+        if is_same_section:
             same_section += 1
-        elif (listing.get("seller_classe") == user["classe"] and 
-              listing.get("seller_scuola") == user["scuola"]):
+        elif is_same_class:
             same_class += 1
-        elif listing.get("seller_scuola") == user["scuola"]:
+        elif is_same_school:
             same_school += 1
         else:
             others += 1
