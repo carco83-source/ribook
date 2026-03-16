@@ -14,7 +14,7 @@ import {
   Modal,
   TextInput,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
@@ -87,6 +87,14 @@ export default function ListingDetailScreen() {
   const [reportReason, setReportReason] = useState('');
   const [reportDescription, setReportDescription] = useState('');
   const [sendingReport, setSendingReport] = useState(false);
+
+  const handleGoBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)');
+    }
+  };
 
   const REPORT_REASONS = [
     { value: 'foto_inappropriata', label: 'Foto inappropriata o offensiva' },
@@ -320,6 +328,19 @@ export default function ListingDetailScreen() {
 
   return (
     <ScrollView style={styles.container}>
+      <Stack.Screen
+        options={{
+          title: 'Dettaglio Libro',
+          headerStyle: { backgroundColor: '#1a472a' },
+          headerTintColor: '#fff',
+          headerLeft: () => (
+            <TouchableOpacity onPress={handleGoBack} style={{ paddingHorizontal: 16 }}>
+              <Ionicons name="arrow-back" size={24} color="#fff" />
+            </TouchableOpacity>
+          ),
+        }}
+      />
+      
       {/* Book Image */}
       {listing.foto_base64 ? (
         <Image
