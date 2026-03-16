@@ -229,7 +229,7 @@ export default function RadarScreen() {
         {radarData && radarData.books_searching > 0 ? (
           <>
             <Text style={styles.radarSubtitle}>
-              Stai cercando {radarData.books_searching} libri
+              Libri usati trovati
             </Text>
 
             <View style={styles.radarStats}>
@@ -243,31 +243,9 @@ export default function RadarScreen() {
               <View style={styles.statDivider} />
               <TouchableOpacity 
                 style={styles.statItem}
-                onPress={() => router.push('/radar/sellers?filter=stessa_sezione')}
-              >
-                <Text style={[styles.statNumber, { color: '#4CAF50' }]}>
-                  {radarData.same_section}
-                </Text>
-                <Text style={styles.statLabel}>Stessa Sezione</Text>
-              </TouchableOpacity>
-              <View style={styles.statDivider} />
-              <TouchableOpacity 
-                style={styles.statItem}
-                onPress={() => router.push('/radar/sellers?filter=stessa_classe')}
-              >
-                <Text style={[styles.statNumber, { color: '#8BC34A' }]}>
-                  {radarData.same_class}
-                </Text>
-                <Text style={styles.statLabel}>Stessa Classe</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.radarStats}>
-              <TouchableOpacity 
-                style={styles.statItem}
                 onPress={() => router.push('/radar/sellers?filter=stessa_scuola')}
               >
-                <Text style={[styles.statNumber, { color: '#FFC107' }]}>
+                <Text style={[styles.statNumber, { color: '#4CAF50' }]}>
                   {radarData.same_school}
                 </Text>
                 <Text style={styles.statLabel}>Stessa Scuola</Text>
