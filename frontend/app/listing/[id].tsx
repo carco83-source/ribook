@@ -319,8 +319,6 @@ export default function ListingDetailScreen() {
     );
   }
 
-  const { commission, total } = calculateCommission();
-
   return (
     <ScrollView style={styles.container}>
       <Stack.Screen
