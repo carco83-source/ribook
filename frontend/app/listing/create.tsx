@@ -282,6 +282,14 @@ export default function CreateListingScreen() {
           title: 'Vendi un libro',
           headerStyle: { backgroundColor: '#1a472a' },
           headerTintColor: '#fff',
+          headerLeft: () => (
+            <TouchableOpacity 
+              onPress={() => router.canGoBack() ? router.back() : router.push('/(tabs)/sell')} 
+              style={{ marginLeft: 16, padding: 8 }}
+            >
+              <Ionicons name="arrow-back" size={24} color="#fff" />
+            </TouchableOpacity>
+          ),
         }} 
       />
       

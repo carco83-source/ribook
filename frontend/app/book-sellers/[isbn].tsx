@@ -104,6 +104,14 @@ export default function BookSellersScreen() {
             headerShown: true,
             headerStyle: { backgroundColor: '#1a472a' },
             headerTintColor: '#fff',
+            headerLeft: () => (
+              <TouchableOpacity 
+                onPress={() => router.canGoBack() ? router.back() : router.push('/(tabs)')} 
+                style={{ marginLeft: 16, padding: 8 }}
+              >
+                <Ionicons name="arrow-back" size={24} color="#fff" />
+              </TouchableOpacity>
+            ),
           }}
         />
         <ActivityIndicator size="large" color="#1a472a" />
@@ -120,6 +128,14 @@ export default function BookSellersScreen() {
           headerShown: true,
           headerStyle: { backgroundColor: '#1a472a' },
           headerTintColor: '#fff',
+          headerLeft: () => (
+            <TouchableOpacity 
+              onPress={() => router.canGoBack() ? router.back() : router.push('/(tabs)')} 
+              style={{ marginLeft: 16, padding: 8 }}
+            >
+              <Ionicons name="arrow-back" size={24} color="#fff" />
+            </TouchableOpacity>
+          ),
         }}
       />
 
