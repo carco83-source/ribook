@@ -2998,6 +2998,284 @@ def generate_pickup_code():
     """Generate a unique 6-character pickup code"""
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
 
+
+# ==================== SISTEMA CARRELLO CON CONFERMA VENDITORE ====================
+
+class CartItem(BaseModel):
+    id: str = ""
+    listing_id: str
+    buyer_id: str
+    seller_id: str
+    book_isbn: str
+    book_titolo: str
+    book_editore: str = ""
+    prezzo: float
+    bookstore_id: str
+    bookstore_nome: str
+    status: str = "pending"  # pending, confirmed, rejected, expired
+    created_at: str = ""
+    expires_at: str = ""  # 24 ore dalla creazione
+    seller_response_at: str = ""
+
+
+@api_router.post("/cart/add")
+async def add_to_cart(listing_id: str, bookstore_id: str, buyer_id: str):
+    """Aggiunge un libro al carrello e notifica il venditore"""
+    from datetime import timedelta
+    
+    # Get listing
+    listing = await db.listings.find_one({"id": listing_id, "status": "available"})
+    if not listing:
+        raise HTTPException(status_code=404, detail="Libro non disponibile")
+    
+    # Check if already in cart
+    existing = await db.cart_items.find_one({
+        "listing_id": listing_id,
+        "buyer_id": buyer_id,
+        "status": {"$in": ["pending", "confirmed"]}
+    })
+    if existing:
+        raise HTTPException(status_code=400, detail="Libro già nel carrello")
+    
+    # Get bookstore
+    bookstore = await db.bookstores.find_one({"id": bookstore_id})
+    if not bookstore:
+        raise HTTPException(status_code=404, detail="Cartolibreria non trovata")
+    
+    # Create cart item
+    now = datetime.utcnow()
+    expires_at = now + timedelta(hours=24)
+    
+    cart_item = {
+        "id": str(uuid.uuid4()),
+        "listing_id": listing_id,
+        "buyer_id": buyer_id,
+        "seller_id": listing["seller_id"],
+        "book_isbn": listing.get("book_isbn", ""),
+        "book_titolo": listing.get("book_titolo", ""),
+        "book_editore": listing.get("book_editore", ""),
+        "prezzo": listing.get("prezzo_vendita", 0),
+        "bookstore_id": bookstore_id,
+        "bookstore_nome": bookstore.get("nome", ""),
+        "status": "pending",
+        "created_at": now.isoformat(),
+        "expires_at": expires_at.isoformat(),
+    }
+    
+    await db.cart_items.insert_one(cart_item)
+    
+    # Update listing status to reserved
+    await db.listings.update_one(
+        {"id": listing_id},
+        {"$set": {"status": "reserved", "reserved_by": buyer_id, "reserved_at": now.isoformat()}}
+    )
+    
+    # Create notification for seller
+    buyer = await db.users.find_one({"id": buyer_id})
+    notification = {
+        "id": str(uuid.uuid4()),
+        "user_id": listing["seller_id"],
+        "type": "confirmation_request",
+        "title": "Richiesta di conferma",
+        "message": f"{buyer.get('username', 'Un utente')} vuole acquistare '{listing.get('book_titolo', 'un libro')}'",
+        "data": {
+            "cart_item_id": cart_item["id"],
+            "listing_id": listing_id,
+            "buyer_id": buyer_id
+        },
+        "read": False,
+        "created_at": now.isoformat()
+    }
+    await db.notifications.insert_one(notification)
+    
+    cart_item.pop('_id', None)
+    return {"message": "Libro aggiunto al carrello. In attesa di conferma del venditore.", "cart_item": cart_item}
+
+
+@api_router.get("/cart/{user_id}")
+async def get_cart(user_id: str):
+    """Ottiene il carrello dell'utente con lo stato di ogni libro"""
+    from datetime import timedelta
+    
+    now = datetime.utcnow()
+    
+    # Get all cart items for user
+    cart_items = await db.cart_items.find({
+        "buyer_id": user_id,
+        "status": {"$in": ["pending", "confirmed"]}
+    }).to_list(50)
+    
+    result = []
+    for item in cart_items:
+        item.pop('_id', None)
+        
+        # Check if expired (24 hours)
+        expires_at = datetime.fromisoformat(item.get("expires_at", now.isoformat()))
+        if item["status"] == "pending" and now > expires_at:
+            # Mark as expired
+            await db.cart_items.update_one(
+                {"id": item["id"]},
+                {"$set": {"status": "expired"}}
+            )
+            item["status"] = "expired"
+            # Restore listing to available
+            await db.listings.update_one(
+                {"id": item["listing_id"]},
+                {"$set": {"status": "available"}, "$unset": {"reserved_by": "", "reserved_at": ""}}
+            )
+        
+        # Get listing details
+        listing = await db.listings.find_one({"id": item["listing_id"]})
+        if listing:
+            item["condizione"] = listing.get("condizione", "")
+            item["condition_details"] = listing.get("condition_details", {})
+        
+        result.append(item)
+    
+    # Separate by status
+    confirmed = [i for i in result if i["status"] == "confirmed"]
+    pending = [i for i in result if i["status"] == "pending"]
+    expired = [i for i in result if i["status"] == "expired"]
+    
+    return {
+        "items": result,
+        "confirmed": confirmed,
+        "pending": pending,
+        "expired": expired,
+        "total_confirmed": len(confirmed),
+        "total_pending": len(pending),
+        "can_checkout": len(confirmed) > 0 and len(pending) == 0
+    }
+
+
+@api_router.post("/cart/{cart_item_id}/confirm")
+async def seller_confirm_cart_item(cart_item_id: str, seller_id: str):
+    """Il venditore conferma la disponibilità del libro"""
+    
+    cart_item = await db.cart_items.find_one({
+        "id": cart_item_id,
+        "seller_id": seller_id,
+        "status": "pending"
+    })
+    
+    if not cart_item:
+        raise HTTPException(status_code=404, detail="Richiesta non trovata")
+    
+    now = datetime.utcnow()
+    
+    # Update cart item
+    await db.cart_items.update_one(
+        {"id": cart_item_id},
+        {"$set": {"status": "confirmed", "seller_response_at": now.isoformat()}}
+    )
+    
+    # Notify buyer
+    notification = {
+        "id": str(uuid.uuid4()),
+        "user_id": cart_item["buyer_id"],
+        "type": "confirmation_accepted",
+        "title": "Libro confermato!",
+        "message": f"Il venditore ha confermato '{cart_item.get('book_titolo', 'il libro')}'. Puoi procedere al pagamento.",
+        "data": {"cart_item_id": cart_item_id, "listing_id": cart_item["listing_id"]},
+        "read": False,
+        "created_at": now.isoformat()
+    }
+    await db.notifications.insert_one(notification)
+    
+    return {"message": "Libro confermato", "status": "confirmed"}
+
+
+@api_router.post("/cart/{cart_item_id}/reject")
+async def seller_reject_cart_item(cart_item_id: str, seller_id: str):
+    """Il venditore rifiuta - libro non disponibile"""
+    
+    cart_item = await db.cart_items.find_one({
+        "id": cart_item_id,
+        "seller_id": seller_id,
+        "status": "pending"
+    })
+    
+    if not cart_item:
+        raise HTTPException(status_code=404, detail="Richiesta non trovata")
+    
+    now = datetime.utcnow()
+    
+    # Update cart item
+    await db.cart_items.update_one(
+        {"id": cart_item_id},
+        {"$set": {"status": "rejected", "seller_response_at": now.isoformat()}}
+    )
+    
+    # Mark listing as unavailable (sparisce dal radar)
+    await db.listings.update_one(
+        {"id": cart_item["listing_id"]},
+        {"$set": {"status": "unavailable"}}
+    )
+    
+    # Notify buyer
+    notification = {
+        "id": str(uuid.uuid4()),
+        "user_id": cart_item["buyer_id"],
+        "type": "confirmation_rejected",
+        "title": "Libro non disponibile",
+        "message": f"Il venditore ha indicato che '{cart_item.get('book_titolo', 'il libro')}' non è più disponibile.",
+        "data": {"cart_item_id": cart_item_id, "listing_id": cart_item["listing_id"]},
+        "read": False,
+        "created_at": now.isoformat()
+    }
+    await db.notifications.insert_one(notification)
+    
+    return {"message": "Libro rifiutato", "status": "rejected"}
+
+
+@api_router.delete("/cart/{cart_item_id}")
+async def remove_from_cart(cart_item_id: str, buyer_id: str):
+    """Rimuove un libro dal carrello"""
+    
+    cart_item = await db.cart_items.find_one({
+        "id": cart_item_id,
+        "buyer_id": buyer_id
+    })
+    
+    if not cart_item:
+        raise HTTPException(status_code=404, detail="Elemento non trovato nel carrello")
+    
+    # Delete cart item
+    await db.cart_items.delete_one({"id": cart_item_id})
+    
+    # Restore listing to available (only if it was reserved by this buyer)
+    await db.listings.update_one(
+        {"id": cart_item["listing_id"], "reserved_by": buyer_id},
+        {"$set": {"status": "available"}, "$unset": {"reserved_by": "", "reserved_at": ""}}
+    )
+    
+    return {"message": "Libro rimosso dal carrello"}
+
+
+@api_router.get("/seller/{seller_id}/pending-confirmations")
+async def get_pending_confirmations(seller_id: str):
+    """Ottiene le richieste di conferma in attesa per il venditore"""
+    
+    pending = await db.cart_items.find({
+        "seller_id": seller_id,
+        "status": "pending"
+    }).to_list(50)
+    
+    result = []
+    for item in pending:
+        item.pop('_id', None)
+        # Get buyer info
+        buyer = await db.users.find_one({"id": item["buyer_id"]})
+        if buyer:
+            item["buyer_username"] = buyer.get("username", "Utente")
+        result.append(item)
+    
+    return result
+
+
+# ==================== FINE SISTEMA CARRELLO ====================
+
+
 class PurchaseRequest(BaseModel):
     listing_id: str
     bookstore_id: str  # Which bookstore the buyer wants to pick up from

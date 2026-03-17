@@ -250,45 +250,23 @@ export default function ListingDetailScreen() {
 
     setPurchasing(true);
     try {
-      // Add to cart in AsyncStorage
-      const cartKey = `cart_${userId}`;
-      const existingCart = await AsyncStorage.getItem(cartKey);
-      const cart = existingCart ? JSON.parse(existingCart) : [];
-      
-      // Check if already in cart
-      const alreadyInCart = cart.find((item: any) => item.listing_id === listing?.id);
-      if (alreadyInCart) {
-        Alert.alert('Info', 'Questo libro è già nel carrello');
-        return;
-      }
-      
-      // Add to cart
-      cart.push({
-        listing_id: listing?.id,
-        book_titolo: listing?.book_titolo,
-        book_autore: listing?.book_autore,
-        prezzo_vendita: listing?.prezzo_vendita,
-        prezzo_copertina: listing?.prezzo_copertina,
-        condizione: listing?.condizione,
-        seller_id: listing?.seller_id,
-        seller_username: listing?.seller_username,
-        bookstore: selectedBookstore,
-        added_at: new Date().toISOString()
-      });
-      
-      await AsyncStorage.setItem(cartKey, JSON.stringify(cart));
+      // Add to cart via API (with seller confirmation)
+      const response = await axios.post(
+        `${API_URL}/api/cart/add?listing_id=${listing?.id}&bookstore_id=${selectedBookstore.id}&buyer_id=${userId}`
+      );
       
       Alert.alert(
-        'Aggiunto al carrello!',
-        `"${listing?.book_titolo}" è stato aggiunto al carrello.\n\nRitiro: ${selectedBookstore.nome}`,
+        'Prenotazione inviata!',
+        `"${listing?.book_titolo}" è stato prenotato.\n\nIl venditore ha 24 ore per confermare la disponibilità.\n\nRitiro: ${selectedBookstore.nome}`,
         [
           { text: 'Continua acquisti', onPress: () => router.back() },
           { text: 'Vai al carrello', onPress: () => router.push('/cart') }
         ]
       );
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error adding to cart:', error);
-      Alert.alert('Errore', 'Impossibile aggiungere al carrello');
+      const errorMsg = error.response?.data?.detail || 'Impossibile aggiungere al carrello';
+      Alert.alert('Errore', errorMsg);
     } finally {
       setPurchasing(false);
     }
@@ -498,35 +476,6 @@ export default function ListingDetailScreen() {
           <Text style={styles.sellerText}>Venditore: {listing.seller_username}</Text>
         </View>
         
-        {/* Contact Seller - Guided Chat */}
-        <View style={styles.questionsSection}>
-          <View style={styles.questionsTitleRow}>
-            <Ionicons name="chatbubble-ellipses-outline" size={24} color="#1a472a" />
-            <Text style={styles.questionsSectionTitle}>Contatta il venditore</Text>
-          </View>
-          <Text style={styles.questionsSubtitle}>
-            Usa la chat guidata per verificare disponibilità e organizzare lo scambio
-          </Text>
-          <TouchableOpacity
-            style={styles.contactSellerButton}
-            onPress={() => {
-              router.push({
-                pathname: '/chat/[listingId]',
-                params: {
-                  listingId: listing.id,
-                  otherUserId: listing.seller_id,
-                  otherUsername: listing.seller_username,
-                  title: listing.book_titolo,
-                  isSeller: 'false',
-                }
-              });
-            }}
-          >
-            <Ionicons name="chatbubbles" size={20} color="#fff" />
-            <Text style={styles.contactSellerButtonText}>Inizia Chat Guidata</Text>
-          </TouchableOpacity>
-        </View>
-
         {listing.note && (
           <View style={styles.noteCard}>
             <Text style={styles.noteTitle}>Note del venditore:</Text>
