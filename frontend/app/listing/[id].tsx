@@ -498,13 +498,33 @@ export default function ListingDetailScreen() {
           <Text style={styles.sellerText}>Venditore: {listing.seller_username}</Text>
         </View>
         
-        {/* Pre-set Questions for Seller - Coming Soon */}
+        {/* Contact Seller - Guided Chat */}
         <View style={styles.questionsSection}>
           <View style={styles.questionsTitleRow}>
             <Ionicons name="chatbubble-ellipses-outline" size={24} color="#1a472a" />
-            <Text style={styles.questionsSectionTitle}>Hai domande per il venditore?</Text>
+            <Text style={styles.questionsSectionTitle}>Contatta il venditore</Text>
           </View>
-          <Text style={styles.comingSoonText}>Presto disponibile</Text>
+          <Text style={styles.questionsSubtitle}>
+            Usa la chat guidata per verificare disponibilità e organizzare lo scambio
+          </Text>
+          <TouchableOpacity
+            style={styles.contactSellerButton}
+            onPress={() => {
+              router.push({
+                pathname: '/chat/[listingId]',
+                params: {
+                  listingId: listing.id,
+                  otherUserId: listing.seller_id,
+                  otherUsername: listing.seller_username,
+                  title: listing.book_titolo,
+                  isSeller: 'false',
+                }
+              });
+            }}
+          >
+            <Ionicons name="chatbubbles" size={20} color="#fff" />
+            <Text style={styles.contactSellerButtonText}>Inizia Chat Guidata</Text>
+          </TouchableOpacity>
         </View>
 
         {listing.note && (
@@ -1200,5 +1220,25 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#666',
     marginBottom: 12,
+  },
+  questionsSubtitle: {
+    fontSize: 13,
+    color: '#666',
+    marginTop: 8,
+    marginBottom: 12,
+  },
+  contactSellerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1a472a',
+    padding: 14,
+    borderRadius: 12,
+    gap: 10,
+  },
+  contactSellerButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
   },
 });
