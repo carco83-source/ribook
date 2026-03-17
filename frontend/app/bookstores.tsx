@@ -85,7 +85,16 @@ export default function BookstoresScreen() {
           headerStyle: { backgroundColor: '#1a472a' },
           headerTintColor: '#fff',
           headerLeft: () => (
-            <TouchableOpacity onPress={() => router.back()} style={{ marginLeft: 8 }}>
+            <TouchableOpacity 
+              onPress={() => {
+                if (router.canGoBack()) {
+                  router.back();
+                } else {
+                  router.push('/(tabs)/profile');
+                }
+              }} 
+              style={{ marginLeft: 16, padding: 8 }}
+            >
               <Ionicons name="arrow-back" size={24} color="#fff" />
             </TouchableOpacity>
           ),
