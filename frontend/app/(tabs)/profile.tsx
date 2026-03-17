@@ -192,13 +192,23 @@ export default function ProfileScreen() {
             <Text style={styles.premiumBadgeText}>Premium</Text>
           </View>
         )}
-        <TouchableOpacity 
-          style={styles.editProfileButton}
-          onPress={() => router.push('/profile/edit')}
-        >
-          <Ionicons name="pencil" size={16} color="#1a472a" />
-          <Text style={styles.editProfileButtonText}>Modifica Profilo</Text>
-        </TouchableOpacity>
+        {/* Buttons Row: Modifica Profilo + Esci */}
+        <View style={styles.headerButtonsRow}>
+          <TouchableOpacity 
+            style={styles.editProfileButton}
+            onPress={() => router.push('/profile/edit')}
+          >
+            <Ionicons name="pencil" size={16} color="#1a472a" />
+            <Text style={styles.editProfileButtonText}>Modifica Profilo</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.logoutHeaderButton}
+            onPress={handleLogout}
+          >
+            <Ionicons name="log-out-outline" size={16} color="#ff4444" />
+            <Text style={styles.logoutHeaderButtonText}>Esci</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Child Profiles with Book Flow */}
@@ -212,10 +222,11 @@ export default function ProfileScreen() {
             
             const isMedia = child.tipo_scuola === 'primo_grado';
             const tipoLabel = isMedia ? 'MEDIA' : 'SUP';
+            const tipoScuolaLabel = isMedia ? 'Scuola Media' : 'Scuola Superiore';
             
             return (
               <View key={child.id} style={styles.childBookFlowCard}>
-                {/* Child Header */}
+                {/* Child Header - Con tutti i dati */}
                 <View style={styles.childHeader}>
                   <View style={styles.childNameBadge}>
                     <Ionicons name="person" size={16} color="#fff" />
@@ -223,6 +234,9 @@ export default function ProfileScreen() {
                   </View>
                   <Text style={styles.childSchoolText} numberOfLines={1}>
                     {child.scuola}
+                  </Text>
+                  <Text style={styles.childDetailsText}>
+                    {child.classe}ª {child.sezione} - {tipoScuolaLabel}
                   </Text>
                 </View>
                 
@@ -426,82 +440,14 @@ export default function ProfileScreen() {
               })()}
             </View>
           )}
-        </View>
-      )}
 
-      {/* User Stats */}
-      {stats && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Le tue statistiche</Text>
-          <View style={styles.statsGrid}>
-            <View style={styles.statCard}>
-              <Text style={styles.statNumber}>{stats.total_sales}</Text>
-              <Text style={styles.statLabel}>Venduti</Text>
-            </View>
-            <View style={styles.statCard}>
-              <Text style={styles.statNumber}>{stats.total_purchases}</Text>
-              <Text style={styles.statLabel}>Acquistati</Text>
-            </View>
-            <View style={styles.statCard}>
-              <Text style={styles.statNumber}>{stats.active_listings}</Text>
-              <Text style={styles.statLabel}>In vendita</Text>
-            </View>
-            <View style={styles.statCard}>
-              <View style={styles.ratingContainer}>
-                <Ionicons name="star" size={18} color="#FFD700" />
-                <Text style={styles.statNumber}>
-                  {stats.rating > 0 ? stats.rating.toFixed(1) : '-'}
-                </Text>
-              </View>
-              <Text style={styles.statLabel}>
-                {stats.rating_count > 0 ? `${stats.rating_count} recensioni` : 'Nessuna recensione'}
-              </Text>
-            </View>
-          </View>
-        </View>
-      )}
-
-      {/* School Info - Children Only (Valerio è il genitore, non ha scuola) */}
-      {childProfiles.length > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Scuole dei figli</Text>
-          
-          {/* Child Profiles */}
-          {childProfiles.map((profile) => (
-            <View key={profile.id} style={styles.profileCard}>
-              <View style={styles.profileCardHeader}>
-                <View style={[styles.profileBadge, { backgroundColor: '#e8f5e9' }]}>
-                  <Text style={[styles.profileBadgeText, { color: '#4CAF50' }]}>
-                    {profile.nome_figlio}
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.infoRow}>
-                <Ionicons name="school-outline" size={20} color="#666" />
-                <Text style={styles.infoText}>{profile.scuola}</Text>
-              </View>
-              <View style={styles.infoRow}>
-                <Ionicons name="bookmark-outline" size={20} color="#666" />
-                <Text style={styles.infoText}>
-                  Classe {profile.classe} - Sezione {profile.sezione}
-                </Text>
-              </View>
-              <View style={styles.infoRow}>
-                <Ionicons name="school" size={20} color="#666" />
-                <Text style={styles.infoText}>
-                  {profile.tipo_scuola === 'primo_grado' ? 'Scuola Media' : 'Scuola Superiore'}
-                </Text>
-              </View>
-            </View>
-          ))}
-
-          {/* Add Child Profile Button */}
+          {/* Pulsante Aggiungi Profilo */}
           <TouchableOpacity 
-            style={styles.addChildButton}
+            style={styles.addProfileButton}
             onPress={() => router.push('/profiles/manage')}
           >
-            <Ionicons name="add-circle-outline" size={20} color="#1a472a" />
-            <Text style={styles.addChildButtonText}>Gestisci profili figli</Text>
+            <Ionicons name="add-circle" size={24} color="#1a472a" />
+            <Text style={styles.addProfileButtonText}>Aggiungi profilo figlio</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -510,11 +456,11 @@ export default function ProfileScreen() {
       {childProfiles.length === 0 && (
         <View style={styles.section}>
           <TouchableOpacity 
-            style={styles.addChildButton}
+            style={styles.addProfileButton}
             onPress={() => router.push('/profiles/manage')}
           >
-            <Ionicons name="add-circle-outline" size={20} color="#1a472a" />
-            <Text style={styles.addChildButtonText}>Aggiungi profilo figlio</Text>
+            <Ionicons name="add-circle" size={24} color="#1a472a" />
+            <Text style={styles.addProfileButtonText}>Aggiungi profilo figlio</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -661,14 +607,6 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Actions */}
-      <View style={styles.section}>
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Ionicons name="log-out-outline" size={20} color="#ff4444" />
-          <Text style={styles.logoutButtonText}>Esci</Text>
-        </TouchableOpacity>
-      </View>
-
       <View style={styles.footer}>
         <Text style={styles.footerText}>ScambiaLibri v1.0</Text>
         <Text style={styles.footerSubtext}>
@@ -694,6 +632,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 32,
     paddingHorizontal: 24,
+    position: 'relative',
+  },
+  headerLogoutButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   avatarContainer: {
     width: 96,
@@ -735,13 +685,57 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    marginTop: 12,
     gap: 6,
   },
   editProfileButtonText: {
     color: '#1a472a',
     fontWeight: '600',
     fontSize: 14,
+  },
+  headerButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 16,
+    gap: 12,
+  },
+  logoutHeaderButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255,100,100,0.5)',
+  },
+  logoutHeaderButtonText: {
+    color: '#ff6666',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  childDetailsText: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
+  },
+  addProfileButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#e8f5e9',
+    padding: 16,
+    borderRadius: 12,
+    marginTop: 16,
+    gap: 8,
+    borderWidth: 2,
+    borderColor: '#1a472a',
+    borderStyle: 'dashed',
+  },
+  addProfileButtonText: {
+    color: '#1a472a',
+    fontSize: 16,
+    fontWeight: '600',
   },
   section: {
     padding: 16,
