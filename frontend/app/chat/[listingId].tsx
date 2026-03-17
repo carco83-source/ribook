@@ -12,7 +12,7 @@ import {
   Platform,
   Image,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
@@ -196,6 +196,22 @@ export default function ChatScreen() {
       style={styles.container}
       keyboardVerticalOffset={90}
     >
+      <Stack.Screen
+        options={{
+          title: otherUsername ? decodeURIComponent(otherUsername as string) : 'Chat',
+          headerStyle: { backgroundColor: '#1a472a' },
+          headerTintColor: '#fff',
+          headerLeft: () => (
+            <TouchableOpacity 
+              onPress={() => router.canGoBack() ? router.back() : router.push('/(tabs)')} 
+              style={{ marginLeft: 16, padding: 8 }}
+            >
+              <Ionicons name="arrow-back" size={24} color="#fff" />
+            </TouchableOpacity>
+          ),
+        }}
+      />
+
       {/* Header Info */}
       <View style={styles.headerInfo}>
         <Ionicons name="book" size={16} color="#1a472a" />

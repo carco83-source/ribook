@@ -138,7 +138,7 @@ export default function AdminScreen() {
           
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => router.back()}
+            onPress={() => router.canGoBack() ? router.back() : router.push('/(tabs)')}
           >
             <Text style={styles.backButtonText}>Torna all'app</Text>
           </TouchableOpacity>
