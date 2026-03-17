@@ -16,6 +16,12 @@ import axios from 'axios';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
+interface CartData {
+  total_confirmed: number;
+  total_pending: number;
+  items: any[];
+}
+
 interface RadarData {
   total_matches: number;
   same_section: number;
@@ -83,6 +89,9 @@ export default function RadarScreen() {
   // New state for purchasable books
   const [totalePiattaforma, setTotalePiattaforma] = useState(0);
   const [libriPerProfilo, setLibriPerProfilo] = useState<{[key: string]: any}>({});
+  
+  // Cart state
+  const [cartData, setCartData] = useState<CartData | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -144,6 +153,14 @@ export default function RadarScreen() {
         }
       }
       setChildrenCompatibility(compatibilityData);
+      
+      // Load cart data
+      try {
+        const cartResponse = await axios.get(`${API_URL}/api/cart/${storedUserId}`);
+        setCartData(cartResponse.data);
+      } catch (e) {
+        console.log('Failed to load cart');
+      }
       
       // Select first child by default
       if (profili.length > 0 && !selectedChildId) {
@@ -217,25 +234,46 @@ export default function RadarScreen() {
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
     >
-      {/* Header with Notifications */}
+      {/* Header with Cart and Notifications */}
       <View style={styles.headerRow}>
         <View style={styles.headerLeft}>
           <Ionicons name="book" size={28} color="#1a472a" />
           <Text style={styles.headerTitle}>ScambiaLibri</Text>
         </View>
-        <TouchableOpacity 
-          style={styles.notificationButton}
-          onPress={() => router.push('/notifications')}
-        >
-          <Ionicons name="notifications" size={24} color="#1a472a" />
-          {radarData && radarData.total_matches > 0 && (
-            <View style={styles.notificationBadge}>
-              <Text style={styles.notificationBadgeText}>
-                {radarData.total_matches > 9 ? '9+' : radarData.total_matches}
-              </Text>
-            </View>
-          )}
-        </TouchableOpacity>
+        <View style={styles.headerRight}>
+          {/* Cart Button */}
+          <TouchableOpacity 
+            style={styles.headerButton}
+            onPress={() => router.push('/cart')}
+          >
+            <Ionicons name="cart" size={24} color="#1a472a" />
+            {cartData && (cartData.total_confirmed + cartData.total_pending) > 0 && (
+              <View style={[
+                styles.headerBadge,
+                cartData.total_confirmed > 0 ? styles.headerBadgeGreen : styles.headerBadgeOrange
+              ]}>
+                <Text style={styles.headerBadgeText}>
+                  {(cartData.total_confirmed + cartData.total_pending) > 9 ? '9+' : (cartData.total_confirmed + cartData.total_pending)}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+          
+          {/* Notifications Button */}
+          <TouchableOpacity 
+            style={styles.headerButton}
+            onPress={() => router.push('/notifications')}
+          >
+            <Ionicons name="notifications" size={24} color="#1a472a" />
+            {radarData && radarData.total_matches > 0 && (
+              <View style={styles.notificationBadge}>
+                <Text style={styles.notificationBadgeText}>
+                  {radarData.total_matches > 9 ? '9+' : radarData.total_matches}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Child Profile Selector - SUBITO DOPO HEADER */}
@@ -727,6 +765,36 @@ const styles = StyleSheet.create({
     fontSize: 26,
     fontWeight: 'bold',
     color: '#1a472a',
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  headerButton: {
+    position: 'relative',
+    padding: 8,
+  },
+  headerBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerBadgeGreen: {
+    backgroundColor: '#4CAF50',
+  },
+  headerBadgeOrange: {
+    backgroundColor: '#FF9800',
+  },
+  headerBadgeText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: 'bold',
   },
   notificationButton: {
     position: 'relative',
