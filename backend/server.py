@@ -2025,19 +2025,32 @@ async def get_child_compatibility(user_id: str, child_id: str):
     def get_series_name(title: str) -> str:
         """Estrae il nome base della serie dal titolo"""
         title = title.upper().strip()
+        # Rimuovi (LDM) e simili
+        title = re.sub(r'\s*\(LDM.*?\)', '', title, flags=re.IGNORECASE)
+        # Rimuovi V.1, V.2, etc
         title = re.sub(r'\s*V\.?\s*\d+', '', title, flags=re.IGNORECASE)
+        # Rimuovi parte dopo +
         if '+' in title:
             title = title.split('+')[0]
-        title = re.sub(r'\s*\(LDM.*?\)', '', title, flags=re.IGNORECASE)
+        # Rimuovi VOLUME/VOL. seguito da numero e tutto ciò che segue
         title = re.sub(r'\s*-?\s*(VOLUME|VOL\.?)\s*\d+.*', '', title, flags=re.IGNORECASE)
+        # Rimuovi CONF./CONFIGURAZIONE seguito da numero e tutto ciò che segue
+        title = re.sub(r'\s*-?\s*(CONF\.?|CONFIGURAZIONE)\s*\d+.*', '', title, flags=re.IGNORECASE)
+        # Rimuovi - seguito da numero e tutto ciò che segue
         title = re.sub(r'\s*-\s*\d+.*', '', title)
+        # Rimuovi "LE SCIENZE" seguito da numero
         title = re.sub(r'\s+(LE\s+SCIENZE)\s+\d+', r' \1', title)
+        # Rimuovi numero finale
         title = re.sub(r'\s+\d+\s*$', '', title)
+        # Rimuovi "CON TUTOR" e simili suffissi comuni
+        title = re.sub(r'\s+CON\s+TUTOR.*', '', title, flags=re.IGNORECASE)
+        # Filtra parole specifiche per anno
         words = title.split()
         if len(words) > 1:
             anno_specific = {'ARITMETICA', 'ALGEBRA', 'GEOMETRIA', 'ANTOLOGIA', 'LETTERATURA'}
             words = [w for w in words if w not in anno_specific]
         title = ' '.join(words).strip()
+        # Rimuovi trattino finale
         title = re.sub(r'\s*-\s*$', '', title).strip()
         return title
     
@@ -2211,7 +2224,7 @@ async def get_child_compatibility(user_id: str, child_id: str):
     
     # Calcola comprare - con conteggio copie disponibili
     comprare_usato = []
-    comprare_nuovo = []
+    comprare_nuovo = []  # Questi sono libri che al momento non hanno copie usate disponibili
     
     for disc, my_book in my_books_disc.items():
         if disc in succ_books_disc:
@@ -2238,18 +2251,52 @@ async def get_child_compatibility(user_id: str, child_id: str):
                     "status": "USATO DISPONIBILE" if copie_disponibili > 0 else "IN ATTESA"
                 })
             else:
+                # Edizione diversa - verifica se qualcuno vende comunque questo libro
+                isbn = my_book.get("isbn", "")
+                copie_disponibili = 0
+                if isbn:
+                    copie_disponibili = await db.listings.count_documents({
+                        "book_isbn": isbn,
+                        "status": "available"
+                    })
+                
+                # Verifica se è una nuova edizione 2025/2026
+                titolo_upper = my_book["titolo"].upper()
+                is_nuova_edizione = "2025" in titolo_upper or "2026" in titolo_upper or "NUOVA EDIZIONE" in titolo_upper
+                
                 comprare_nuovo.append({
+                    "isbn": isbn,
                     "disciplina": disc,
-                    "titolo": my_book["titolo"][:50],
+                    "titolo": my_book["titolo"],  # Titolo completo
+                    "editore": my_book["editore"],
                     "prezzo": my_book["prezzo"],
-                    "motivo": f"Edizione diversa dalla {classe_successiva}ª"
+                    "copie_usate_disponibili": copie_disponibili,
+                    "is_nuova_edizione": is_nuova_edizione,
+                    "motivo": "Nuova edizione 2025 - da comprare nuovo" if is_nuova_edizione else f"Edizione diversa dalla {classe_successiva}ª"
                 })
         else:
+            # Materia non presente nella classe successiva o fine ciclo
+            isbn = my_book.get("isbn", "")
+            copie_disponibili = 0
+            if isbn:
+                copie_disponibili = await db.listings.count_documents({
+                    "book_isbn": isbn,
+                    "status": "available"
+                })
+            
+            # Verifica se è una nuova edizione 2025/2026
+            titolo_upper = my_book["titolo"].upper()
+            is_nuova_edizione = "2025" in titolo_upper or "2026" in titolo_upper or "NUOVA EDIZIONE" in titolo_upper
+            
             comprare_nuovo.append({
+                "isbn": isbn,
                 "disciplina": disc,
-                "titolo": my_book["titolo"][:50],
+                "titolo": my_book["titolo"],  # Titolo completo
+                "editore": my_book["editore"],
                 "prezzo": my_book["prezzo"],
-                "motivo": f"Materia non in {classe_successiva}ª" if classe_successiva else "Fine ciclo"
+                "copie_usate_disponibili": copie_disponibili,
+                "is_nuova_edizione": is_nuova_edizione,
+                "motivo": "Nuova edizione 2025 - da comprare nuovo" if is_nuova_edizione else (f"Materia non in {classe_successiva}ª" if classe_successiva else "Fine ciclo - materia da usare quest'anno")
             })
     
     # Calcoli finali

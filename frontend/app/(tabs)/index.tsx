@@ -363,11 +363,11 @@ export default function RadarScreen() {
                   <View style={styles.bookFlowYouBadge}>
                     <Text style={styles.bookFlowYouText}>{child?.nome_figlio?.charAt(0) || '?'}</Text>
                   </View>
-                  <Text style={[styles.bookFlowColumnAction, { color: '#FF9800' }]}>NUOVI</Text>
+                  <Text style={[styles.bookFlowColumnAction, { color: '#FF9800', fontSize: 10 }]}>NON REPERITI</Text>
                   <Text style={[styles.bookFlowColumnNumber, { color: '#FF9800' }]}>
                     {compatibility.nuovi?.totale || 0}
                   </Text>
-                  <Text style={styles.bookFlowColumnLabel}>da comprare</Text>
+                  <Text style={[styles.bookFlowColumnLabel, { fontSize: 10 }]}>usati/nuovi</Text>
                 </View>
                 <Text style={styles.bookFlowColumnHint}>
                   €{compatibility.nuovi?.costo_totale?.toFixed(0) || 0} stimati
@@ -509,26 +509,56 @@ export default function RadarScreen() {
               </View>
             )}
 
-            {/* Libri da Comprare Nuovi */}
+            {/* Libri non reperiti usati o nuove edizioni */}
             {compatibility.nuovi?.libri && compatibility.nuovi.libri.length > 0 && (
               <View style={styles.classCard}>
                 <Text style={[styles.sampleBooksTitle, { color: '#FF9800' }]}>
-                  Libri da comprare nuovi:
+                  Libri non reperiti usati o nuove edizioni:
+                </Text>
+                <Text style={{ fontSize: 11, color: '#666', marginBottom: 12, fontStyle: 'italic' }}>
+                  Al momento da acquistare nuovi (oppure usati se disponibili)
                 </Text>
                 {compatibility.nuovi.libri.map((book: any, idx: number) => (
-                  <View key={idx} style={styles.sampleBookItem}>
+                  <TouchableOpacity 
+                    key={idx} 
+                    style={[
+                      styles.sampleBookItem,
+                      book.copie_usate_disponibili > 0 && styles.sampleBookItemClickable
+                    ]}
+                    onPress={() => {
+                      if (book.copie_usate_disponibili > 0 && book.isbn) {
+                        router.push(`/book-sellers/${book.isbn}`);
+                      }
+                    }}
+                    disabled={!book.copie_usate_disponibili || book.copie_usate_disponibili === 0}
+                  >
                     <View style={styles.sampleBookInfo}>
                       <Text style={styles.sampleBookTitle} numberOfLines={1}>
                         {book.disciplina}
                       </Text>
-                      <Text style={[styles.sampleBookSeller, { color: '#FF9800' }]} numberOfLines={1}>
-                        {book.motivo}
+                      <Text style={styles.sampleBookSeller} numberOfLines={2}>
+                        {book.titolo}
                       </Text>
+                      {book.is_nuova_edizione && (
+                        <Text style={{ fontSize: 10, color: '#f44336', fontWeight: 'bold' }}>
+                          ⚠️ NUOVA EDIZIONE 2025 - Solo nuovo
+                        </Text>
+                      )}
+                      {!book.is_nuova_edizione && book.copie_usate_disponibili > 0 && (
+                        <Text style={{ fontSize: 10, color: '#4CAF50', fontWeight: 'bold' }}>
+                          ✅ {book.copie_usate_disponibili} copie usate disponibili!
+                        </Text>
+                      )}
                     </View>
-                    <Text style={[styles.sampleBookPrice, { color: '#FF9800' }]}>
-                      €{book.prezzo?.toFixed(2)}
-                    </Text>
-                  </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={[styles.sampleBookPrice, { color: '#FF9800' }]}>
+                        €{book.prezzo?.toFixed(2)}
+                      </Text>
+                      {book.copie_usate_disponibili > 0 && !book.is_nuova_edizione && (
+                        <Ionicons name="chevron-forward" size={16} color="#4CAF50" />
+                      )}
+                    </View>
+                  </TouchableOpacity>
                 ))}
               </View>
             )}
