@@ -2231,8 +2231,16 @@ async def get_child_compatibility(user_id: str, child_id: str):
     my_books = []
     my_books_consigliati = []
     
+    # CASO SPECIALE: Prima Media (1ª classe primo grado)
+    # In 1ª media TUTTI i libri vanno acquistati, non ci sono "consigliati"
+    # perché non si hanno libri dall'anno precedente
+    is_prima_media = (child_tipo == "primo_grado" and child_classe == 1)
+    
     for libro in all_my_books:
-        if libro.get('is_volume_unico'):
+        if is_prima_media:
+            # In 1ª media: TUTTI i libri vanno nella lista obbligatori
+            my_books.append(libro)
+        elif libro.get('is_volume_unico'):
             # Volumi unici: vanno gestiti separatamente
             if libro.get('da_acquistare', True) == False or libro.get('consigliato', False) == True:
                 my_books_consigliati.append(libro)
@@ -2247,7 +2255,11 @@ async def get_child_compatibility(user_id: str, child_id: str):
             else:
                 my_books_consigliati.append(libro)
     
-    my_volumi_unici = [b for b in all_my_books if b.get('is_volume_unico') and b.get('da_acquistare', True) == True]
+    # In 1ª media non ci sono consigliati, tutti i volumi unici vanno acquistati
+    if is_prima_media:
+        my_volumi_unici = []  # Già inclusi in my_books
+    else:
+        my_volumi_unici = [b for b in all_my_books if b.get('is_volume_unico') and b.get('da_acquistare', True) == True]
     
     # Carica libri della classe PRECEDENTE (stessa sezione) - per calcolare cosa posso VENDERE
     libri_prec = []
@@ -2300,20 +2312,29 @@ async def get_child_compatibility(user_id: str, child_id: str):
                 "tipo": "volume_unico"
             })
     
-    # Organizza per disciplina
-    def books_by_discipline(books):
+    # Organizza per disciplina (NOTA: se ci sono più libri per la stessa disciplina, li unisce)
+    def books_by_discipline(books, merge_duplicates=True):
         result = {}
         for b in books:
             disc = b.get("disciplina", "").strip().upper()
-            if disc and disc not in result:
-                result[disc] = {
-                    "isbn": b.get("isbn", ""),
-                    "titolo": b.get("titolo", ""),
-                    "editore": b.get("editore", "").strip().upper(),
-                    "autori": b.get("autori", ""),
-                    "prezzo": b.get("prezzo_copertina", 0),
-                    "titolo_base": get_series_name(b.get("titolo", ""))
-                }
+            if disc:
+                if disc not in result:
+                    result[disc] = {
+                        "isbn": b.get("isbn", ""),
+                        "titolo": b.get("titolo", ""),
+                        "editore": b.get("editore", "").strip().upper(),
+                        "autori": b.get("autori", ""),
+                        "prezzo": b.get("prezzo_copertina", 0),
+                        "titolo_base": get_series_name(b.get("titolo", "")),
+                        "libri_multipli": [b]  # Lista per tenere traccia di tutti i libri
+                    }
+                elif merge_duplicates:
+                    # C'è già un libro per questa disciplina - somma il prezzo
+                    result[disc]["prezzo"] += b.get("prezzo_copertina", 0)
+                    result[disc]["libri_multipli"].append(b)
+                    # Aggiorna titolo se necessario
+                    if len(result[disc]["libri_multipli"]) > 1:
+                        result[disc]["titolo"] = result[disc]["titolo"][:30] + f" + altri {len(result[disc]['libri_multipli'])-1}"
         return result
     
     my_books_disc = books_by_discipline(my_books)
