@@ -2616,12 +2616,18 @@ async def get_child_compatibility(user_id: str, child_id: str):
     costo_obbligatori_usati = sum(l["prezzo_nuovo"] for l in comprare_usato)
     costo_totale_obbligatori = costo_obbligatori_nuovi + costo_obbligatori_usati
     
+    # Calcola anche il costo totale REALE (inclusi consigliati)
+    costo_consigliati = sum(l.get("prezzo", 0) for l in libri_consigliati)
+    costo_totale_tutti = costo_totale_obbligatori + costo_consigliati
+    
     # Confronto con tetto di spesa
     tetto_info = {
         "tetto_ministeriale": round(tetto_spesa, 2),
         "tetto_con_deroga_10": round(tetto_spesa * 1.10, 2),  # +10% deroga consentita
         "tetto_con_deroga_15": round(tetto_spesa * 1.15, 2),  # +15% deroga massima
         "costo_obbligatori": round(costo_totale_obbligatori, 2),
+        "costo_consigliati": round(costo_consigliati, 2),
+        "costo_totale_tutti": round(costo_totale_tutti, 2),  # Obbligatori + Consigliati
         "differenza": round(costo_totale_obbligatori - tetto_spesa, 2),
         "percentuale_sforamento": round((costo_totale_obbligatori / tetto_spesa * 100) - 100, 1) if tetto_spesa > 0 else 0,
         "entro_limite": costo_totale_obbligatori <= tetto_spesa,

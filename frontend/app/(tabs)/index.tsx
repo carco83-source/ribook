@@ -447,6 +447,11 @@ export default function RadarScreen() {
                       <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#1a472a' }}>
                         €{compatibility.tetto_spesa.costo_obbligatori?.toFixed(2)}
                       </Text>
+                      {(compatibility.tetto_spesa.costo_consigliati || 0) > 0 && (
+                        <Text style={{ fontSize: 10, color: '#9C27B0', marginTop: 4 }}>
+                          + €{compatibility.tetto_spesa.costo_consigliati?.toFixed(2)} consigliati = €{compatibility.tetto_spesa.costo_totale_tutti?.toFixed(2)} totale
+                        </Text>
+                      )}
                     </View>
                     <View style={{ alignItems: 'flex-end' }}>
                       {compatibility.tetto_spesa.entro_limite ? (
