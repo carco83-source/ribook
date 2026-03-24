@@ -35,6 +35,11 @@ export default function ManageProfilesScreen() {
   const [userId, setUserId] = useState<string | null>(null);
   const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
   
+  // Dynamic sections state
+  const [availableSections, setAvailableSections] = useState<string[]>([]);
+  const [sectionsByClass, setSectionsByClass] = useState<{[key: string]: string[]}>({});
+  const [loadingSections, setLoadingSections] = useState(false);
+  
   // Modal state
   const [modalVisible, setModalVisible] = useState(false);
   const [newProfile, setNewProfile] = useState({

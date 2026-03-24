@@ -545,21 +545,39 @@ async def get_schools(tipo: Optional[str] = None):
     return result
 
 @api_router.get("/schools/{codice}/sections")
-async def get_school_sections(codice: str, classe: Optional[int] = None):
-    """Get available sections for a school, optionally filtered by class"""
-    query = {"codice_scuola": codice}
+async def get_school_sections_by_code(codice: str, classe: Optional[int] = None):
+    """
+    Restituisce le sezioni disponibili per una scuola specifica.
+    Se viene specificata una classe, restituisce solo le sezioni per quella classe.
+    """
+    match_stage = {"codice_scuola": codice}
     if classe:
-        query["classe"] = classe
+        match_stage["classe"] = classe
     
-    # Get distinct sections from adozioni collection
     pipeline = [
-        {"$match": query},
-        {"$group": {"_id": "$sezione"}},
+        {"$match": match_stage},
+        {"$group": {
+            "_id": "$classe",
+            "sezioni": {"$addToSet": "$sezione"}
+        }},
         {"$sort": {"_id": 1}}
     ]
     
-    sections = await db.adozioni.aggregate(pipeline).to_list(None)
-    return [s["_id"] for s in sections if s["_id"]]
+    results = await db.adozioni.aggregate(pipeline).to_list(None)
+    
+    # Raccogli tutte le sezioni uniche ordinate
+    all_sections = set()
+    sections_by_class = {}
+    
+    for r in results:
+        sections_by_class[str(r["_id"])] = sorted(r["sezioni"])
+        all_sections.update(r["sezioni"])
+    
+    return {
+        "codice_scuola": codice,
+        "sezioni": sorted(list(all_sections)),
+        "sezioni_per_classe": sections_by_class
+    }
 
 
 
@@ -2060,7 +2078,9 @@ async def get_child_compatibility(user_id: str, child_id: str):
     # ========================================
     
     async def get_books_from_adozioni(codice_scuola: str, classe: int, sezione: str) -> list:
-        """Recupera libri dalla collezione adozioni per una specifica combinazione"""
+        """Recupera libri dalla collezione adozioni per una specifica combinazione.
+        Se la sezione non esiste, usa la prima sezione disponibile (fallback)."""
+        # Prima prova con la sezione esatta
         adozione = await db.adozioni.find_one({
             "codice_scuola": codice_scuola,
             "classe": classe,
@@ -2068,6 +2088,15 @@ async def get_child_compatibility(user_id: str, child_id: str):
         })
         if adozione:
             return adozione.get('libri', [])
+        
+        # FALLBACK: Se la sezione non esiste, usa qualsiasi sezione disponibile per quella classe
+        adozione_fallback = await db.adozioni.find_one({
+            "codice_scuola": codice_scuola,
+            "classe": classe
+        })
+        if adozione_fallback:
+            return adozione_fallback.get('libri', [])
+        
         return []
     
     # Carica libri della MIA classe/sezione
@@ -3495,6 +3524,7 @@ async def get_bookstores(citta: Optional[str] = None):
     
     bookstores = await db.bookstores.find(query).to_list(100)
     return [BookstorePublic(**b) for b in bookstores]
+
 
 @api_router.get("/bookstores/{bookstore_id}/transactions")
 async def get_bookstore_transactions(bookstore_id: str):
