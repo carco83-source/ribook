@@ -404,8 +404,8 @@ export default function RadarScreen() {
               </View>
             </View>
 
-            {/* Tetto di Spesa Ministeriale - Solo per George */}
-            {compatibility.tetto_spesa && child?.nome_figlio?.toLowerCase() === 'george' && (
+            {/* Tetto di Spesa Ministeriale - Per tutti i profili */}
+            {compatibility.tetto_spesa && compatibility.tetto_spesa.tetto_ministeriale > 0 && (
               <View style={[styles.classCard, { 
                 borderLeftWidth: 4, 
                 borderLeftColor: compatibility.tetto_spesa.entro_limite ? '#4CAF50' : 
@@ -441,8 +441,9 @@ export default function RadarScreen() {
                   marginTop: 8
                 }}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <View>
-                      <Text style={{ fontSize: 12, color: '#666' }}>Costo libri obbligatori:</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 11, color: '#666' }}>Costo libri obbligatori</Text>
+                      <Text style={{ fontSize: 10, color: '#999', fontStyle: 'italic' }}>se acquistati tutti nuovi:</Text>
                       <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#1a472a' }}>
                         €{compatibility.tetto_spesa.costo_obbligatori?.toFixed(2)}
                       </Text>
@@ -470,7 +471,7 @@ export default function RadarScreen() {
                             <Text style={{ color: '#f44336', fontWeight: 'bold', marginLeft: 4 }}>OLTRE LIMITE!</Text>
                           </View>
                           <Text style={{ fontSize: 10, color: '#f44336' }}>
-                            +{compatibility.tetto_spesa.percentuale_sforamento?.toFixed(1)}% ({compatibility.tetto_spesa.differenza?.toFixed(2)}€ in più)
+                            +{compatibility.tetto_spesa.percentuale_sforamento?.toFixed(1)}% (€{compatibility.tetto_spesa.differenza?.toFixed(2)} in più)
                           </Text>
                         </View>
                       )}

@@ -2509,46 +2509,104 @@ async def get_child_compatibility(user_id: str, child_id: str):
     # ========================================
     # TETTI DI SPESA (Art. 15, comma 3 D.L. 112/2008)
     # ========================================
-    # Tetti di spesa per libri di testo - Anno scolastico 2024/2025
+    # Tetti di spesa per libri di testo - Anno scolastico 2024/2025 e 2025/2026
     # Fonte: DM 58/2025 - Solo testi OBBLIGATORI (non consigliati)
+    # Per libri misti (cartacei+digitali): -10%; solo digitali: -20%
     
     TETTI_SPESA = {
-        "primo_grado": {  # Scuola Media
+        "primo_grado": {  # Scuola Media (Secondaria I grado)
             1: 299.00,
             2: 119.00,
             3: 134.00
         },
-        "secondo_grado": {  # Superiori - variano per indirizzo, uso valori medi liceo scientifico
-            # Liceo Scientifico
+        "secondo_grado": {  # Superiori (Secondaria II grado)
+            # Liceo Scientifico (ordinario, scienze applicate, sportivo)
             "liceo_scientifico": {1: 320.00, 2: 223.00, 3: 320.00, 4: 288.00, 5: 310.00},
             # Liceo Classico
-            "liceo_classico": {1: 335.00, 2: 245.00, 3: 320.00, 4: 280.00, 5: 305.00},
-            # Istituto Tecnico
-            "istituto_tecnico": {1: 310.00, 2: 220.00, 3: 310.00, 4: 280.00, 5: 290.00},
-            # Istituto Professionale
-            "istituto_professionale": {1: 295.00, 2: 210.00, 3: 295.00, 4: 265.00, 5: 280.00},
-            # Default (liceo scientifico)
-            "default": {1: 320.00, 2: 223.00, 3: 320.00, 4: 288.00, 5: 310.00}
+            "liceo_classico": {1: 335.00, 2: 245.00, 3: 338.00, 4: 280.00, 5: 305.00},
+            # Liceo Linguistico
+            "liceo_linguistico": {1: 330.00, 2: 235.00, 3: 330.00, 4: 280.00, 5: 300.00},
+            # Liceo delle Scienze Umane
+            "liceo_scienze_umane": {1: 310.00, 2: 220.00, 3: 310.00, 4: 270.00, 5: 290.00},
+            # Liceo Artistico
+            "liceo_artistico": {1: 295.00, 2: 210.00, 3: 295.00, 4: 260.00, 5: 280.00},
+            # Liceo Musicale e Coreutico
+            "liceo_musicale": {1: 285.00, 2: 200.00, 3: 285.00, 4: 250.00, 5: 270.00},
+            # Istituto Tecnico Economico (ex Ragioneria)
+            "istituto_tecnico_economico": {1: 310.00, 2: 220.00, 3: 310.00, 4: 265.00, 5: 285.00},
+            # Istituto Tecnico Tecnologico (Industriale, Informatico, Meccanico, Elettronico)
+            "istituto_tecnico_tecnologico": {1: 320.00, 2: 223.00, 3: 310.00, 4: 253.00, 5: 275.00},
+            # Istituto Tecnico Agrario
+            "istituto_tecnico_agrario": {1: 315.00, 2: 220.00, 3: 305.00, 4: 260.00, 5: 280.00},
+            # Istituto Professionale (generico)
+            "istituto_professionale": {1: 295.00, 2: 195.00, 3: 280.00, 4: 240.00, 5: 260.00},
+            # Istituto Professionale Alberghiero (IPSSAR)
+            "istituto_alberghiero": {1: 290.00, 2: 190.00, 3: 275.00, 4: 235.00, 5: 255.00},
+            # Istituto Professionale per i Servizi Commerciali
+            "istituto_servizi_commerciali": {1: 295.00, 2: 195.00, 3: 280.00, 4: 240.00, 5: 260.00},
+            # Istituto Professionale per l'Industria e l'Artigianato (IPSIA)
+            "ipsia": {1: 290.00, 2: 190.00, 3: 275.00, 4: 235.00, 5: 255.00},
+            # Default (usa valori medi)
+            "default": {1: 310.00, 2: 215.00, 3: 300.00, 4: 260.00, 5: 280.00}
         }
     }
     
     # Determina il tetto di spesa per questo profilo
     tetto_spesa = 0
     indirizzo_scuola = "default"
+    nome_indirizzo_display = "Scuola Media" if child_tipo == "primo_grado" else ""
     
     if child_tipo == "primo_grado":
         tetto_spesa = TETTI_SPESA["primo_grado"].get(child_classe, 0)
+        indirizzo_scuola = "scuola_media"
+        nome_indirizzo_display = "Scuola Media"
     else:
-        # Determina indirizzo scuola dal nome
-        nome_scuola_lower = child_scuola.lower() if child_scuola else ""
-        if "scientifico" in nome_scuola_lower or "fermi" in nome_scuola_lower:
+        # Determina indirizzo scuola dal nome e codice
+        nome_scuola_lower = (child_scuola or "").lower()
+        codice_lower = (child_codice_scuola or "").lower()
+        
+        # Licei
+        if "scientifico" in nome_scuola_lower or "fermi" in nome_scuola_lower or "siciliani" in nome_scuola_lower:
             indirizzo_scuola = "liceo_scientifico"
+            nome_indirizzo_display = "Liceo Scientifico"
         elif "classico" in nome_scuola_lower or "galluppi" in nome_scuola_lower:
             indirizzo_scuola = "liceo_classico"
-        elif "tecnico" in nome_scuola_lower or "itis" in nome_scuola_lower or "itc" in nome_scuola_lower:
-            indirizzo_scuola = "istituto_tecnico"
-        elif "professionale" in nome_scuola_lower or "ipsia" in nome_scuola_lower or "ipssar" in nome_scuola_lower:
+            nome_indirizzo_display = "Liceo Classico"
+        elif "linguistico" in nome_scuola_lower:
+            indirizzo_scuola = "liceo_linguistico"
+            nome_indirizzo_display = "Liceo Linguistico"
+        elif "scienze umane" in nome_scuola_lower or "pedagogico" in nome_scuola_lower:
+            indirizzo_scuola = "liceo_scienze_umane"
+            nome_indirizzo_display = "Liceo Scienze Umane"
+        elif "artistico" in nome_scuola_lower:
+            indirizzo_scuola = "liceo_artistico"
+            nome_indirizzo_display = "Liceo Artistico"
+        elif "musicale" in nome_scuola_lower or "coreutico" in nome_scuola_lower:
+            indirizzo_scuola = "liceo_musicale"
+            nome_indirizzo_display = "Liceo Musicale"
+        # Istituti Tecnici
+        elif "tecnico economico" in nome_scuola_lower or "ragioneria" in nome_scuola_lower or "itc" in nome_scuola_lower or "commerciale" in nome_scuola_lower:
+            indirizzo_scuola = "istituto_tecnico_economico"
+            nome_indirizzo_display = "Istituto Tecnico Economico"
+        elif "agrario" in nome_scuola_lower or "agricoltura" in nome_scuola_lower:
+            indirizzo_scuola = "istituto_tecnico_agrario"
+            nome_indirizzo_display = "Istituto Tecnico Agrario"
+        elif "tecnico" in nome_scuola_lower or "itis" in nome_scuola_lower or "industriale" in nome_scuola_lower or "informatico" in nome_scuola_lower or codice_lower.startswith("cztf") or codice_lower.startswith("cztl"):
+            indirizzo_scuola = "istituto_tecnico_tecnologico"
+            nome_indirizzo_display = "Istituto Tecnico Tecnologico"
+        # Istituti Professionali
+        elif "alberghiero" in nome_scuola_lower or "ipssar" in nome_scuola_lower or "enogastronomia" in nome_scuola_lower:
+            indirizzo_scuola = "istituto_alberghiero"
+            nome_indirizzo_display = "Istituto Alberghiero"
+        elif "ipsia" in nome_scuola_lower or "artigianato" in nome_scuola_lower:
+            indirizzo_scuola = "ipsia"
+            nome_indirizzo_display = "IPSIA"
+        elif "professionale" in nome_scuola_lower or codice_lower.startswith("czrc") or codice_lower.startswith("czrh"):
             indirizzo_scuola = "istituto_professionale"
+            nome_indirizzo_display = "Istituto Professionale"
+        else:
+            indirizzo_scuola = "default"
+            nome_indirizzo_display = "Scuola Superiore"
         
         tetto_spesa = TETTI_SPESA["secondo_grado"].get(indirizzo_scuola, TETTI_SPESA["secondo_grado"]["default"]).get(child_classe, 0)
     
@@ -2570,7 +2628,8 @@ async def get_child_compatibility(user_id: str, child_id: str):
         "entro_deroga_10": costo_totale_obbligatori <= (tetto_spesa * 1.10),
         "entro_deroga_15": costo_totale_obbligatori <= (tetto_spesa * 1.15),
         "riferimento_normativo": "Art. 15, comma 3 D.L. 112/2008 (conv. L. 133/2008)",
-        "indirizzo_scuola": indirizzo_scuola if child_tipo != "primo_grado" else "scuola_media"
+        "indirizzo_scuola": indirizzo_scuola,
+        "nome_indirizzo": nome_indirizzo_display
     }
     
     return {
