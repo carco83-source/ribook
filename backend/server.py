@@ -2178,19 +2178,92 @@ async def get_child_compatibility(user_id: str, child_id: str):
     # 2. Libri consigliati o da non acquistare (da_acquistare=False o consigliato=True) - inclusi volumi unici
     # 3. Volumi unici obbligatori
     
-    my_books = [b for b in all_my_books if not b.get('is_volume_unico') and b.get('da_acquistare', True) == True]
-    # I consigliati possono essere anche volumi unici!
-    my_books_consigliati = [b for b in all_my_books if b.get('da_acquistare', True) == False or b.get('consigliato', False) == True]
+    # Prima carica libri classe precedente per verificare continuità serie
+    all_libri_prec = []
+    if classe_precedente:
+        all_libri_prec = await get_books_from_adozioni(child_codice_scuola, classe_precedente, child_sezione)
+    
+    # Funzione per verificare se un libro "consigliato" è in realtà da acquistare
+    # perché è la continuazione di una serie dalla classe precedente
+    def is_continuation_from_previous(libro, libri_precedenti):
+        """
+        Un libro marcato come 'consigliato' o 'da non acquistare' è in realtà
+        DA ACQUISTARE se:
+        1. NON è un volume unico
+        2. Ha un volume > 1 (es. Vol. 2, Vol. 3)
+        3. Nella classe precedente c'era lo stesso libro con volume inferiore
+        """
+        if libro.get('is_volume_unico'):
+            return False
+        
+        volume = libro.get('volume', '')
+        # Verifica se è un volume annuale (2, 3, 4, 5, etc.)
+        try:
+            vol_num = int(volume) if volume else 0
+        except:
+            vol_num = 0
+        
+        if vol_num <= 1:
+            return False
+        
+        # Cerca se nella classe precedente c'era lo stesso libro con volume precedente
+        titolo_base = get_series_name(libro.get('titolo', ''))
+        editore = libro.get('editore', '').upper()
+        disciplina = libro.get('disciplina', '').upper()
+        
+        for libro_prec in libri_precedenti:
+            if libro_prec.get('is_volume_unico'):
+                continue
+            
+            titolo_prec_base = get_series_name(libro_prec.get('titolo', ''))
+            editore_prec = libro_prec.get('editore', '').upper()
+            disciplina_prec = libro_prec.get('disciplina', '').upper()
+            
+            # Stessa serie se stesso editore e disciplina con titolo simile
+            if editore == editore_prec and disciplina == disciplina_prec:
+                # Verifica similarità titolo
+                if titolo_base == titolo_prec_base or (len(titolo_base) > 3 and titolo_base in titolo_prec_base) or (len(titolo_prec_base) > 3 and titolo_prec_base in titolo_base):
+                    return True
+        
+        return False
+    
+    # Separa i libri
+    my_books = []
+    my_books_consigliati = []
+    
+    for libro in all_my_books:
+        if libro.get('is_volume_unico'):
+            # Volumi unici: vanno gestiti separatamente
+            if libro.get('da_acquistare', True) == False or libro.get('consigliato', False) == True:
+                my_books_consigliati.append(libro)
+            # Altrimenti vanno nei volumi unici obbligatori (gestiti sotto)
+        else:
+            # Libri NON volumi unici
+            if libro.get('da_acquistare', True) == True:
+                my_books.append(libro)
+            elif is_continuation_from_previous(libro, all_libri_prec):
+                # È marcato come consigliato MA è continuazione di una serie → DA ACQUISTARE
+                my_books.append(libro)
+            else:
+                my_books_consigliati.append(libro)
+    
     my_volumi_unici = [b for b in all_my_books if b.get('is_volume_unico') and b.get('da_acquistare', True) == True]
     
     # Carica libri della classe PRECEDENTE (stessa sezione) - per calcolare cosa posso VENDERE
     libri_prec = []
     libri_prec_consigliati = []
     if classe_precedente:
-        all_libri_prec = await get_books_from_adozioni(child_codice_scuola, classe_precedente, child_sezione)
-        libri_prec = [b for b in all_libri_prec if not b.get('is_volume_unico') and b.get('da_acquistare', True) == True]
-        # I consigliati possono essere anche volumi unici
-        libri_prec_consigliati = [b for b in all_libri_prec if b.get('da_acquistare', True) == False or b.get('consigliato', False) == True]
+        for libro in all_libri_prec:
+            if libro.get('is_volume_unico'):
+                if libro.get('da_acquistare', True) == False or libro.get('consigliato', False) == True:
+                    libri_prec_consigliati.append(libro)
+            else:
+                if libro.get('da_acquistare', True) == True:
+                    libri_prec.append(libro)
+                else:
+                    # Verifica se era continuazione (per poterlo vendere)
+                    # Carica libri di 2 classi prima se possibile
+                    libri_prec_consigliati.append(libro)
     
     # Carica libri della classe SUCCESSIVA (stessa sezione) - per calcolare cosa posso COMPRARE USATO
     libri_succ = []

@@ -531,11 +531,11 @@ export default function RadarScreen() {
                       book.copie_usate_disponibili > 0 && styles.sampleBookItemClickable
                     ]}
                     onPress={() => {
+                      // SEMPRE cliccabile se ci sono copie usate
                       if (book.copie_usate_disponibili > 0 && book.isbn) {
                         router.push(`/book-sellers/${book.isbn}`);
                       }
                     }}
-                    disabled={!book.copie_usate_disponibili || book.copie_usate_disponibili === 0}
                   >
                     <View style={styles.sampleBookInfo}>
                       <Text style={styles.sampleBookTitle} numberOfLines={1}>
@@ -549,9 +549,13 @@ export default function RadarScreen() {
                           ⚠️ NUOVA EDIZIONE 2025 - Solo nuovo
                         </Text>
                       )}
-                      {!book.is_nuova_edizione && book.copie_usate_disponibili > 0 && (
+                      {!book.is_nuova_edizione && book.copie_usate_disponibili > 0 ? (
                         <Text style={{ fontSize: 10, color: '#4CAF50', fontWeight: 'bold' }}>
-                          ✅ {book.copie_usate_disponibili} copie usate disponibili!
+                          ✅ {book.copie_usate_disponibili} copie usate disponibili - Tocca per acquistare
+                        </Text>
+                      ) : !book.is_nuova_edizione && (
+                        <Text style={{ fontSize: 10, color: '#999' }}>
+                          Nessuna copia usata al momento
                         </Text>
                       )}
                     </View>
@@ -585,11 +589,11 @@ export default function RadarScreen() {
                       book.copie_usate_disponibili > 0 && styles.sampleBookItemClickable
                     ]}
                     onPress={() => {
+                      // SEMPRE cliccabile se ci sono copie usate - anche per chi l'ha perso/rovinato
                       if (book.copie_usate_disponibili > 0 && book.isbn) {
                         router.push(`/book-sellers/${book.isbn}`);
                       }
                     }}
-                    disabled={!book.copie_usate_disponibili || book.copie_usate_disponibili === 0}
                   >
                     <View style={styles.sampleBookInfo}>
                       <Text style={styles.sampleBookTitle} numberOfLines={1}>
@@ -598,9 +602,13 @@ export default function RadarScreen() {
                       <Text style={styles.sampleBookSeller} numberOfLines={2}>
                         {book.titolo}
                       </Text>
-                      {book.copie_usate_disponibili > 0 && (
+                      {book.copie_usate_disponibili > 0 ? (
                         <Text style={{ fontSize: 10, color: '#4CAF50', fontWeight: 'bold' }}>
-                          ✅ {book.copie_usate_disponibili} copie usate disponibili!
+                          ✅ {book.copie_usate_disponibili} copie usate disponibili - Tocca per acquistare
+                        </Text>
+                      ) : (
+                        <Text style={{ fontSize: 10, color: '#999' }}>
+                          Nessuna copia usata al momento
                         </Text>
                       )}
                     </View>
