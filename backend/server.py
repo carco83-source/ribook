@@ -2182,26 +2182,30 @@ async def get_child_compatibility(user_id: str, child_id: str):
     succ_books_disc = books_by_discipline(libri_succ)
     
     # Calcola vendere - con ISBN
+    # LOGICA CORRETTA: i libri VENDIBILI sono quelli della CLASSE PRECEDENTE (che lo studente ha già usato)
+    # Confrontiamo con la classe attuale per verificare compatibilità serie/edizione
     vendibili = []
     non_vendibili = []
     
-    for disc, my_book in my_books_disc.items():
-        if disc in prec_books_disc:
-            book_prec = prec_books_disc[disc]
-            if same_series(my_book, book_prec):
+    for disc, book_prec in prec_books_disc.items():  # Itera sui libri della classe PRECEDENTE
+        if disc in my_books_disc:
+            my_book = my_books_disc[disc]  # Libro della classe attuale (per confronto)
+            if same_series(book_prec, my_book):
+                # Il libro della classe precedente è vendibile alla classe successiva
                 vendibili.append({
-                    "isbn": my_book.get("isbn", ""),
+                    "isbn": book_prec.get("isbn", ""),
                     "disciplina": disc,
-                    "titolo": my_book["titolo"][:50],
-                    "editore": my_book["editore"],
-                    "prezzo_consigliato": round(my_book["prezzo"] * 0.5, 2),
+                    "titolo": book_prec["titolo"][:50],  # Titolo del libro della classe PRECEDENTE
+                    "editore": book_prec["editore"],
+                    "prezzo_consigliato": round(book_prec["prezzo"] * 0.5, 2),
                     "status": "VENDIBILE"
                 })
             else:
+                # Edizione cambiata - il libro della classe precedente non è più compatibile
                 non_vendibili.append({
                     "disciplina": disc,
-                    "titolo_vecchio": my_book["titolo"][:40],
-                    "titolo_nuovo": book_prec["titolo"][:40],
+                    "titolo_vecchio": book_prec["titolo"][:40],  # Libro che avevi (classe precedente)
+                    "titolo_nuovo": my_book["titolo"][:40],  # Libro nuovo adottato (classe attuale)
                     "status": "EDIZIONE CAMBIATA"
                 })
     
