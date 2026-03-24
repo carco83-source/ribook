@@ -30,6 +30,18 @@ interface Sale {
   buyer_username?: string;
 }
 
+interface PendingConfirmation {
+  id: string;
+  listing_id: string;
+  buyer_id: string;
+  buyer_username: string;
+  book_title: string;
+  book_isbn: string;
+  price: number;
+  created_at: string;
+  status: string;
+}
+
 const STATO_CONFIG: Record<string, { label: string; color: string; icon: string }> = {
   disponibile: { label: 'In vendita', color: '#4CAF50', icon: 'pricetag' },
   venduto: { label: 'Venduto - Da consegnare', color: '#FF9800', icon: 'time' },
@@ -40,9 +52,11 @@ const STATO_CONFIG: Record<string, { label: string; color: string; icon: string 
 export default function MySalesScreen() {
   const router = useRouter();
   const [sales, setSales] = useState<Sale[]>([]);
+  const [pendingConfirmations, setPendingConfirmations] = useState<PendingConfirmation[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  const [processingId, setProcessingId] = useState<string | null>(null);
 
   const handleGoBack = () => {
     if (router.canGoBack()) {
@@ -58,8 +72,18 @@ export default function MySalesScreen() {
       setUserId(storedUserId);
       
       if (storedUserId) {
-        const response = await axios.get(`${API_URL}/api/user/${storedUserId}/sales`);
-        setSales(response.data);
+        // Carica vendite
+        const salesResponse = await axios.get(`${API_URL}/api/user/${storedUserId}/sales`);
+        setSales(salesResponse.data);
+        
+        // Carica richieste di conferma pendenti
+        try {
+          const pendingResponse = await axios.get(`${API_URL}/api/seller/${storedUserId}/pending-confirmations`);
+          setPendingConfirmations(pendingResponse.data);
+        } catch (error) {
+          console.log('No pending confirmations or error:', error);
+          setPendingConfirmations([]);
+        }
       }
     } catch (error) {
       console.error('Error loading sales:', error);
@@ -67,6 +91,57 @@ export default function MySalesScreen() {
       setLoading(false);
       setRefreshing(false);
     }
+  };
+
+  const handleConfirmRequest = async (cartItemId: string) => {
+    Alert.alert(
+      'Conferma disponibilità',
+      'Confermi che il libro è disponibile per la vendita?',
+      [
+        { text: 'Annulla', style: 'cancel' },
+        {
+          text: 'Conferma',
+          onPress: async () => {
+            setProcessingId(cartItemId);
+            try {
+              await axios.post(`${API_URL}/api/cart/${cartItemId}/confirm`);
+              Alert.alert('Successo', 'Richiesta confermata! L\'acquirente può ora procedere al pagamento.');
+              loadSales(); // Ricarica i dati
+            } catch (error: any) {
+              Alert.alert('Errore', error.response?.data?.detail || 'Errore durante la conferma');
+            } finally {
+              setProcessingId(null);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleRejectRequest = async (cartItemId: string) => {
+    Alert.alert(
+      'Rifiuta richiesta',
+      'Sei sicuro di voler rifiutare questa richiesta? Il libro tornerà disponibile per altri acquirenti.',
+      [
+        { text: 'Annulla', style: 'cancel' },
+        {
+          text: 'Rifiuta',
+          style: 'destructive',
+          onPress: async () => {
+            setProcessingId(cartItemId);
+            try {
+              await axios.post(`${API_URL}/api/cart/${cartItemId}/reject`);
+              Alert.alert('Richiesta rifiutata', 'Il libro è di nuovo disponibile per altri acquirenti.');
+              loadSales(); // Ricarica i dati
+            } catch (error: any) {
+              Alert.alert('Errore', error.response?.data?.detail || 'Errore durante il rifiuto');
+            } finally {
+              setProcessingId(null);
+            }
+          },
+        },
+      ]
+    );
   };
 
   useFocusEffect(
@@ -235,6 +310,71 @@ export default function MySalesScreen() {
           }} />
         }
       >
+        {/* Richieste di conferma pendenti */}
+        {pendingConfirmations.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.pendingHeader}>
+              <Ionicons name="notifications" size={20} color="#f44336" />
+              <Text style={[styles.sectionTitle, { color: '#f44336', marginLeft: 8 }]}>
+                Richieste in attesa ({pendingConfirmations.length})
+              </Text>
+            </View>
+            <Text style={styles.pendingSubtitle}>
+              Conferma la disponibilità dei tuoi libri entro 24 ore
+            </Text>
+            {pendingConfirmations.map((item) => (
+              <View key={item.id} style={styles.pendingCard}>
+                <View style={styles.pendingCardHeader}>
+                  <Ionicons name="cart" size={20} color="#f44336" />
+                  <Text style={styles.pendingBuyerText}>
+                    {item.buyer_username} vuole acquistare
+                  </Text>
+                </View>
+                <Text style={styles.pendingBookTitle} numberOfLines={2}>
+                  {item.book_title}
+                </Text>
+                <Text style={styles.pendingIsbn}>ISBN: {item.book_isbn}</Text>
+                <View style={styles.pendingPriceRow}>
+                  <Text style={styles.pendingPrice}>€{item.price?.toFixed(2)}</Text>
+                  <Text style={styles.pendingDate}>
+                    Richiesta: {new Date(item.created_at).toLocaleDateString('it-IT')}
+                  </Text>
+                </View>
+                <View style={styles.pendingActions}>
+                  <TouchableOpacity
+                    style={[styles.pendingButton, styles.rejectButton]}
+                    onPress={() => handleRejectRequest(item.id)}
+                    disabled={processingId === item.id}
+                  >
+                    {processingId === item.id ? (
+                      <ActivityIndicator size="small" color="#f44336" />
+                    ) : (
+                      <>
+                        <Ionicons name="close-circle" size={18} color="#f44336" />
+                        <Text style={styles.rejectButtonText}>Rifiuta</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.pendingButton, styles.confirmButton]}
+                    onPress={() => handleConfirmRequest(item.id)}
+                    disabled={processingId === item.id}
+                  >
+                    {processingId === item.id ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <>
+                        <Ionicons name="checkmark-circle" size={18} color="#fff" />
+                        <Text style={styles.confirmButtonText}>Conferma</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
         {/* Pending deliveries */}
         {pendingSales.length > 0 && (
           <View style={styles.section}>
@@ -481,6 +621,99 @@ const styles = StyleSheet.create({
   sellButtonText: {
     color: '#fff',
     fontSize: 16,
+    fontWeight: '600',
+  },
+  // Stili per richieste pendenti
+  pendingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  pendingSubtitle: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 12,
+    fontStyle: 'italic',
+  },
+  pendingCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: '#ffcdd2',
+    shadowColor: '#f44336',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  pendingCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    gap: 8,
+  },
+  pendingBuyerText: {
+    fontSize: 14,
+    color: '#f44336',
+    fontWeight: '600',
+  },
+  pendingBookTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 4,
+  },
+  pendingIsbn: {
+    fontSize: 12,
+    color: '#999',
+    marginBottom: 8,
+  },
+  pendingPriceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  pendingPrice: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1a472a',
+  },
+  pendingDate: {
+    fontSize: 12,
+    color: '#666',
+  },
+  pendingActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  pendingButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderRadius: 8,
+    gap: 6,
+  },
+  confirmButton: {
+    backgroundColor: '#4CAF50',
+  },
+  confirmButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  rejectButton: {
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: '#f44336',
+  },
+  rejectButtonText: {
+    color: '#f44336',
+    fontSize: 14,
     fontWeight: '600',
   },
 });
