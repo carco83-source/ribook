@@ -500,13 +500,19 @@ async def add_child_profile(user_id: str, profile_data: AddChildProfileRequest):
     if not user:
         raise HTTPException(status_code=404, detail="Utente non trovato")
     
+    # IMPORTANTE: Salva la classe come intero per compatibilità con la collezione adozioni
+    try:
+        classe_int = int(profile_data.classe)
+    except (ValueError, TypeError):
+        classe_int = 1
+    
     new_profile = {
         "id": str(uuid.uuid4()),
         "nome_figlio": profile_data.nome_figlio,
         "scuola": profile_data.scuola,
         "codice_scuola": profile_data.codice_scuola or "",
-        "classe": profile_data.classe,
-        "sezione": profile_data.sezione,
+        "classe": classe_int,  # Salvato come intero
+        "sezione": profile_data.sezione.upper(),  # Sezione sempre maiuscola
         "tipo_scuola": profile_data.tipo_scuola
     }
     
@@ -588,14 +594,15 @@ async def get_child_profiles(user_id: str):
     if not user:
         raise HTTPException(status_code=404, detail="Utente non trovato")
     
-    # Include the main profile as the first one
+    # Include the main profile as the first one (with fallbacks for missing fields)
     main_profile = {
         "id": "main",
         "nome_figlio": "Profilo principale",
-        "scuola": user["scuola"],
-        "classe": user["classe"],
-        "sezione": user["sezione"],
-        "tipo_scuola": user.get("tipo_scuola", "")
+        "scuola": user.get("scuola", ""),
+        "classe": user.get("classe", ""),
+        "sezione": user.get("sezione", ""),
+        "tipo_scuola": user.get("tipo_scuola", ""),
+        "codice_scuola": user.get("codice_scuola", "")
     }
     
     profiles = [main_profile] + user.get("profili_figli", [])
@@ -664,6 +671,13 @@ async def update_child_profile(user_id: str, profile_id: str, profile_data: AddC
     # Update child profile
     profili = user.get("profili_figli", [])
     updated = False
+    
+    # Converti classe in intero per compatibilità con collezione adozioni
+    try:
+        classe_int = int(profile_data.classe)
+    except (ValueError, TypeError):
+        classe_int = 1
+    
     for i, p in enumerate(profili):
         if p["id"] == profile_id:
             profili[i] = {
@@ -671,8 +685,8 @@ async def update_child_profile(user_id: str, profile_id: str, profile_data: AddC
                 "nome_figlio": profile_data.nome_figlio,
                 "scuola": profile_data.scuola,
                 "codice_scuola": profile_data.codice_scuola or "",
-                "classe": profile_data.classe,
-                "sezione": profile_data.sezione,
+                "classe": classe_int,  # Salvato come intero
+                "sezione": profile_data.sezione.upper(),  # Sezione sempre maiuscola
                 "tipo_scuola": profile_data.tipo_scuola
             }
             updated = True

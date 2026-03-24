@@ -310,13 +310,34 @@ export default function ManageProfilesScreen() {
               <View style={styles.pickerContainer}>
                 <Picker
                   selectedValue={newProfile.scuola}
-                  onValueChange={(value) => {
+                  onValueChange={async (value) => {
                     const scuolaSelezionata = getScuoleByTipo().find(s => s.nome === value);
+                    const codice = scuolaSelezionata?.codice || '';
                     setNewProfile({ 
                       ...newProfile, 
                       scuola: value,
-                      codice_scuola: scuolaSelezionata?.codice || ''
+                      codice_scuola: codice,
+                      classe: '',
+                      sezione: ''
                     });
+                    
+                    // Carica sezioni dinamicamente
+                    if (codice) {
+                      setLoadingSections(true);
+                      try {
+                        const response = await axios.get(`${API_URL}/api/schools/${codice}/sections`);
+                        setSectionsByClass(response.data.sezioni_per_classe || {});
+                        setAvailableSections([]);
+                      } catch (error) {
+                        console.error('Error loading sections:', error);
+                        setSectionsByClass({});
+                      } finally {
+                        setLoadingSections(false);
+                      }
+                    } else {
+                      setSectionsByClass({});
+                      setAvailableSections([]);
+                    }
                   }}
                 >
                   <Picker.Item label="Seleziona scuola..." value="" />
@@ -331,7 +352,13 @@ export default function ManageProfilesScreen() {
               <View style={styles.pickerContainer}>
                 <Picker
                   selectedValue={newProfile.classe}
-                  onValueChange={(value) => setNewProfile({ ...newProfile, classe: value })}
+                  onValueChange={(value) => {
+                    setNewProfile({ ...newProfile, classe: value, sezione: '' });
+                    // Aggiorna sezioni disponibili per questa classe
+                    const sezioniPerClasse = sectionsByClass[value] || [];
+                    setAvailableSections(sezioniPerClasse);
+                  }}
+                  enabled={!!newProfile.codice_scuola}
                 >
                   <Picker.Item label="Seleziona classe..." value="" />
                   {getClassi().map((c) => (
@@ -340,15 +367,27 @@ export default function ManageProfilesScreen() {
                 </Picker>
               </View>
 
-              {/* Sezione */}
-              <Text style={styles.inputLabel}>Sezione</Text>
+              {/* Sezione - Dinamico */}
+              <Text style={styles.inputLabel}>
+                Sezione {loadingSections && '(caricamento...)'}
+              </Text>
               <View style={styles.pickerContainer}>
                 <Picker
                   selectedValue={newProfile.sezione}
                   onValueChange={(value) => setNewProfile({ ...newProfile, sezione: value })}
+                  enabled={!loadingSections && availableSections.length > 0}
                 >
-                  <Picker.Item label="Seleziona sezione..." value="" />
-                  {['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'].map((s) => (
+                  <Picker.Item 
+                    label={
+                      loadingSections 
+                        ? "Caricamento..." 
+                        : availableSections.length === 0 
+                          ? (newProfile.classe ? "Nessuna sezione disponibile" : "Seleziona prima la classe")
+                          : "Seleziona sezione..."
+                    } 
+                    value="" 
+                  />
+                  {availableSections.map((s) => (
                     <Picker.Item key={s} label={s} value={s} />
                   ))}
                 </Picker>
