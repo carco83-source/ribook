@@ -2240,15 +2240,15 @@ async def get_child_compatibility(user_id: str, child_id: str):
         if is_prima_media:
             # In 1ª media: TUTTI i libri vanno nella lista obbligatori
             my_books.append(libro)
-        elif libro.get('is_volume_unico'):
-            # Volumi unici: vanno gestiti separatamente
-            if libro.get('da_acquistare', True) == False or libro.get('consigliato', False) == True:
-                my_books_consigliati.append(libro)
-            # Altrimenti vanno nei volumi unici obbligatori (gestiti sotto)
         else:
-            # Libri NON volumi unici
+            # Per tutte le altre classi:
+            # I libri obbligatori (da_acquistare=True) vanno sempre in my_books
+            # I volumi unici obbligatori vanno comunque conteggiati nel costo totale
             if libro.get('da_acquistare', True) == True:
                 my_books.append(libro)
+            elif libro.get('is_volume_unico'):
+                # Volume unico consigliato - va nei consigliati
+                my_books_consigliati.append(libro)
             elif is_continuation_from_previous(libro, all_libri_prec):
                 # È marcato come consigliato MA è continuazione di una serie → DA ACQUISTARE
                 my_books.append(libro)
@@ -2259,7 +2259,8 @@ async def get_child_compatibility(user_id: str, child_id: str):
     if is_prima_media:
         my_volumi_unici = []  # Già inclusi in my_books
     else:
-        my_volumi_unici = [b for b in all_my_books if b.get('is_volume_unico') and b.get('da_acquistare', True) == True]
+        # Volumi unici obbligatori - già inclusi in my_books
+        my_volumi_unici = []
     
     # Carica libri della classe PRECEDENTE (stessa sezione) - per calcolare cosa posso VENDERE
     libri_prec = []
