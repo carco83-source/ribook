@@ -372,6 +372,11 @@ export default function RadarScreen() {
                 <Text style={styles.bookFlowColumnHint}>
                   €{compatibility.nuovi?.costo_totale?.toFixed(0) || 0} stimati
                 </Text>
+                {(compatibility.consigliati?.totale_da_comprare || 0) > 0 && (
+                  <Text style={[styles.bookFlowColumnHint, { color: '#9C27B0', marginTop: 4, fontSize: 10 }]}>
+                    +{compatibility.consigliati?.totale_da_comprare} consigliati
+                  </Text>
+                )}
               </View>
 
               {/* RIGHT - COMPRA */}
@@ -555,6 +560,55 @@ export default function RadarScreen() {
                         €{book.prezzo?.toFixed(2)}
                       </Text>
                       {book.copie_usate_disponibili > 0 && !book.is_nuova_edizione && (
+                        <Ionicons name="chevron-forward" size={16} color="#4CAF50" />
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            {/* Testi Consigliati o Da Non Acquistare */}
+            {compatibility.consigliati?.libri_da_comprare && compatibility.consigliati.libri_da_comprare.length > 0 && (
+              <View style={styles.classCard}>
+                <Text style={[styles.sampleBooksTitle, { color: '#9C27B0' }]}>
+                  Testi consigliati o da non acquistare:
+                </Text>
+                <Text style={{ fontSize: 11, color: '#666', marginBottom: 12, fontStyle: 'italic' }}>
+                  Questi libri sono indicati come "consigliati" dal MIUR ma spesso servono
+                </Text>
+                {compatibility.consigliati.libri_da_comprare.map((book: any, idx: number) => (
+                  <TouchableOpacity 
+                    key={idx} 
+                    style={[
+                      styles.sampleBookItem,
+                      book.copie_usate_disponibili > 0 && styles.sampleBookItemClickable
+                    ]}
+                    onPress={() => {
+                      if (book.copie_usate_disponibili > 0 && book.isbn) {
+                        router.push(`/book-sellers/${book.isbn}`);
+                      }
+                    }}
+                    disabled={!book.copie_usate_disponibili || book.copie_usate_disponibili === 0}
+                  >
+                    <View style={styles.sampleBookInfo}>
+                      <Text style={styles.sampleBookTitle} numberOfLines={1}>
+                        {book.disciplina}
+                      </Text>
+                      <Text style={styles.sampleBookSeller} numberOfLines={2}>
+                        {book.titolo}
+                      </Text>
+                      {book.copie_usate_disponibili > 0 && (
+                        <Text style={{ fontSize: 10, color: '#4CAF50', fontWeight: 'bold' }}>
+                          ✅ {book.copie_usate_disponibili} copie usate disponibili!
+                        </Text>
+                      )}
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={[styles.sampleBookPrice, { color: '#9C27B0' }]}>
+                        €{book.prezzo?.toFixed(2)}
+                      </Text>
+                      {book.copie_usate_disponibili > 0 && (
                         <Ionicons name="chevron-forward" size={16} color="#4CAF50" />
                       )}
                     </View>

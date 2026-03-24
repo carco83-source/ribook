@@ -2173,21 +2173,30 @@ async def get_child_compatibility(user_id: str, child_id: str):
     # Carica libri della MIA classe/sezione
     all_my_books = await get_books_from_adozioni(child_codice_scuola, child_classe, child_sezione)
     
-    # Separa libri annuali da volumi unici
-    my_books = [b for b in all_my_books if not b.get('is_volume_unico')]
-    my_volumi_unici = [b for b in all_my_books if b.get('is_volume_unico')]
+    # Separa libri in categorie:
+    # 1. Libri da acquistare obbligatori (da_acquistare=True) - NON volumi unici
+    # 2. Libri consigliati o da non acquistare (da_acquistare=False o consigliato=True) - inclusi volumi unici
+    # 3. Volumi unici obbligatori
+    
+    my_books = [b for b in all_my_books if not b.get('is_volume_unico') and b.get('da_acquistare', True) == True]
+    # I consigliati possono essere anche volumi unici!
+    my_books_consigliati = [b for b in all_my_books if b.get('da_acquistare', True) == False or b.get('consigliato', False) == True]
+    my_volumi_unici = [b for b in all_my_books if b.get('is_volume_unico') and b.get('da_acquistare', True) == True]
     
     # Carica libri della classe PRECEDENTE (stessa sezione) - per calcolare cosa posso VENDERE
     libri_prec = []
+    libri_prec_consigliati = []
     if classe_precedente:
-        libri_prec = await get_books_from_adozioni(child_codice_scuola, classe_precedente, child_sezione)
-        libri_prec = [b for b in libri_prec if not b.get('is_volume_unico')]
+        all_libri_prec = await get_books_from_adozioni(child_codice_scuola, classe_precedente, child_sezione)
+        libri_prec = [b for b in all_libri_prec if not b.get('is_volume_unico') and b.get('da_acquistare', True) == True]
+        # I consigliati possono essere anche volumi unici
+        libri_prec_consigliati = [b for b in all_libri_prec if b.get('da_acquistare', True) == False or b.get('consigliato', False) == True]
     
     # Carica libri della classe SUCCESSIVA (stessa sezione) - per calcolare cosa posso COMPRARE USATO
     libri_succ = []
     if classe_successiva:
-        libri_succ = await get_books_from_adozioni(child_codice_scuola, classe_successiva, child_sezione)
-        libri_succ = [b for b in libri_succ if not b.get('is_volume_unico')]
+        all_libri_succ = await get_books_from_adozioni(child_codice_scuola, classe_successiva, child_sezione)
+        libri_succ = [b for b in all_libri_succ if not b.get('is_volume_unico')]
     
     # VOLUMI UNICI: da comprare solo al primo anno del ciclo
     volumi_unici_da_comprare = []
@@ -2351,6 +2360,46 @@ async def get_child_compatibility(user_id: str, child_id: str):
     risparmio = sum(l["risparmio"] for l in comprare_usato)
     costo_nuovi = sum(l["prezzo"] for l in comprare_nuovo)
     
+    # ========================================
+    # LIBRI CONSIGLIATI / DA NON ACQUISTARE
+    # ========================================
+    # Questi libri sono marcati come "da_acquistare=False" o "consigliato=True"
+    # ma in pratica spesso servono. Li mostriamo separatamente.
+    
+    libri_consigliati = []
+    libri_consigliati_vendibili = []  # Dalla classe precedente
+    
+    # Libri consigliati della MIA classe (potrei doverli comprare)
+    for libro in my_books_consigliati:
+        isbn = libro.get("isbn", "")
+        copie_disponibili = 0
+        if isbn:
+            copie_disponibili = await db.listings.count_documents({
+                "book_isbn": isbn,
+                "status": "available"
+            })
+        
+        libri_consigliati.append({
+            "isbn": isbn,
+            "disciplina": libro.get("disciplina", ""),
+            "titolo": libro.get("titolo", ""),
+            "editore": libro.get("editore", ""),
+            "prezzo": libro.get("prezzo_copertina", libro.get("prezzo", 0)),
+            "copie_usate_disponibili": copie_disponibili,
+            "tipo": "consigliato" if libro.get("consigliato") else "da_non_acquistare"
+        })
+    
+    # Libri consigliati della classe PRECEDENTE (potrei venderli)
+    for libro in libri_prec_consigliati:
+        libri_consigliati_vendibili.append({
+            "isbn": libro.get("isbn", ""),
+            "disciplina": libro.get("disciplina", ""),
+            "titolo": libro.get("titolo", "")[:50],
+            "editore": libro.get("editore", ""),
+            "prezzo_consigliato": round(libro.get("prezzo_copertina", libro.get("prezzo", 0)) * 0.5, 2),
+            "tipo": "consigliato" if libro.get("consigliato") else "da_non_acquistare"
+        })
+    
     # Aggiungi volumi unici alla lista dei libri da comprare
     # Questi sono sempre "nuovi" a meno che qualcuno non li venda con "Vendi altro libro"
     # Usa set per evitare duplicati basati su ISBN o disciplina
@@ -2414,14 +2463,26 @@ async def get_child_compatibility(user_id: str, child_id: str):
             "libri": comprare_nuovo
         },
         
+        # NUOVA SEZIONE: Libri consigliati o da non acquistare
+        "consigliati": {
+            "totale_da_comprare": len(libri_consigliati),
+            "totale_da_vendere": len(libri_consigliati_vendibili),
+            "costo_totale": round(sum(l.get("prezzo", 0) for l in libri_consigliati), 2),
+            "libri_da_comprare": libri_consigliati,
+            "libri_da_vendere": libri_consigliati_vendibili,
+            "nota": "Questi libri sono indicati come 'consigliati' o 'da non acquistare' dal MIUR, ma in pratica spesso servono."
+        },
+        
         "summary": {
             "totale_miei_libri": len(my_books_disc),
             "vendibili": num_vendibili,
             "non_vendibili": num_non_vendibili,
             "usati": num_usato,
             "nuovi": num_nuovo,
+            "consigliati": len(libri_consigliati),
             "risparmio_stimato": round(risparmio, 2),
             "costo_nuovi": round(costo_nuovi, 2),
+            "costo_consigliati": round(sum(l.get("prezzo", 0) for l in libri_consigliati), 2),
             "ciclo_info": f"{'Scuola Media' if child_tipo == 'primo_grado' else 'Superiore'} - {cycle_name.capitalize()}"
         }
     }
