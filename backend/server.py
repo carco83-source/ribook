@@ -506,13 +506,35 @@ async def add_child_profile(user_id: str, profile_data: AddChildProfileRequest):
     except (ValueError, TypeError):
         classe_int = 1
     
+    # Normalizza sezione in maiuscolo
+    sezione_upper = profile_data.sezione.upper() if profile_data.sezione else ""
+    
+    # Valida che la sezione esista per questa scuola/classe
+    if profile_data.codice_scuola and sezione_upper:
+        adozione = await db.adozioni.find_one({
+            "codice_scuola": profile_data.codice_scuola,
+            "classe": classe_int,
+            "sezione": sezione_upper
+        })
+        
+        if not adozione:
+            # Cerca la prima sezione disponibile come fallback
+            sezioni_disp = await db.adozioni.find({
+                "codice_scuola": profile_data.codice_scuola,
+                "classe": classe_int
+            }).to_list(100)
+            
+            if sezioni_disp:
+                sezione_upper = sorted([s.get("sezione") for s in sezioni_disp])[0]
+                print(f"Sezione {profile_data.sezione} non trovata, uso fallback: {sezione_upper}")
+    
     new_profile = {
         "id": str(uuid.uuid4()),
         "nome_figlio": profile_data.nome_figlio,
         "scuola": profile_data.scuola,
         "codice_scuola": profile_data.codice_scuola or "",
         "classe": classe_int,  # Salvato come intero
-        "sezione": profile_data.sezione.upper(),  # Sezione sempre maiuscola
+        "sezione": sezione_upper,  # Sezione validata e maiuscola
         "tipo_scuola": profile_data.tipo_scuola
     }
     
@@ -678,6 +700,28 @@ async def update_child_profile(user_id: str, profile_id: str, profile_data: AddC
     except (ValueError, TypeError):
         classe_int = 1
     
+    # Normalizza sezione in maiuscolo
+    sezione_upper = profile_data.sezione.upper() if profile_data.sezione else ""
+    
+    # Valida che la sezione esista per questa scuola/classe
+    if profile_data.codice_scuola and sezione_upper:
+        adozione = await db.adozioni.find_one({
+            "codice_scuola": profile_data.codice_scuola,
+            "classe": classe_int,
+            "sezione": sezione_upper
+        })
+        
+        if not adozione:
+            # Cerca la prima sezione disponibile come fallback
+            sezioni_disp = await db.adozioni.find({
+                "codice_scuola": profile_data.codice_scuola,
+                "classe": classe_int
+            }).to_list(100)
+            
+            if sezioni_disp:
+                sezione_upper = sorted([s.get("sezione") for s in sezioni_disp])[0]
+                print(f"Update profilo: Sezione {profile_data.sezione} non trovata, uso fallback: {sezione_upper}")
+    
     for i, p in enumerate(profili):
         if p["id"] == profile_id:
             profili[i] = {
@@ -686,7 +730,7 @@ async def update_child_profile(user_id: str, profile_id: str, profile_data: AddC
                 "scuola": profile_data.scuola,
                 "codice_scuola": profile_data.codice_scuola or "",
                 "classe": classe_int,  # Salvato come intero
-                "sezione": profile_data.sezione.upper(),  # Sezione sempre maiuscola
+                "sezione": sezione_upper,  # Sezione validata e maiuscola
                 "tipo_scuola": profile_data.tipo_scuola
             }
             updated = True
