@@ -2506,6 +2506,73 @@ async def get_child_compatibility(user_id: str, child_id: str):
     num_nuovo = len(comprare_nuovo)
     costo_nuovi = sum(l["prezzo"] for l in comprare_nuovo)
     
+    # ========================================
+    # TETTI DI SPESA (Art. 15, comma 3 D.L. 112/2008)
+    # ========================================
+    # Tetti di spesa per libri di testo - Anno scolastico 2024/2025
+    # Fonte: DM 58/2025 - Solo testi OBBLIGATORI (non consigliati)
+    
+    TETTI_SPESA = {
+        "primo_grado": {  # Scuola Media
+            1: 299.00,
+            2: 119.00,
+            3: 134.00
+        },
+        "secondo_grado": {  # Superiori - variano per indirizzo, uso valori medi liceo scientifico
+            # Liceo Scientifico
+            "liceo_scientifico": {1: 320.00, 2: 223.00, 3: 320.00, 4: 288.00, 5: 310.00},
+            # Liceo Classico
+            "liceo_classico": {1: 335.00, 2: 245.00, 3: 320.00, 4: 280.00, 5: 305.00},
+            # Istituto Tecnico
+            "istituto_tecnico": {1: 310.00, 2: 220.00, 3: 310.00, 4: 280.00, 5: 290.00},
+            # Istituto Professionale
+            "istituto_professionale": {1: 295.00, 2: 210.00, 3: 295.00, 4: 265.00, 5: 280.00},
+            # Default (liceo scientifico)
+            "default": {1: 320.00, 2: 223.00, 3: 320.00, 4: 288.00, 5: 310.00}
+        }
+    }
+    
+    # Determina il tetto di spesa per questo profilo
+    tetto_spesa = 0
+    indirizzo_scuola = "default"
+    
+    if child_tipo == "primo_grado":
+        tetto_spesa = TETTI_SPESA["primo_grado"].get(child_classe, 0)
+    else:
+        # Determina indirizzo scuola dal nome
+        nome_scuola_lower = child_scuola.lower() if child_scuola else ""
+        if "scientifico" in nome_scuola_lower or "fermi" in nome_scuola_lower:
+            indirizzo_scuola = "liceo_scientifico"
+        elif "classico" in nome_scuola_lower or "galluppi" in nome_scuola_lower:
+            indirizzo_scuola = "liceo_classico"
+        elif "tecnico" in nome_scuola_lower or "itis" in nome_scuola_lower or "itc" in nome_scuola_lower:
+            indirizzo_scuola = "istituto_tecnico"
+        elif "professionale" in nome_scuola_lower or "ipsia" in nome_scuola_lower or "ipssar" in nome_scuola_lower:
+            indirizzo_scuola = "istituto_professionale"
+        
+        tetto_spesa = TETTI_SPESA["secondo_grado"].get(indirizzo_scuola, TETTI_SPESA["secondo_grado"]["default"]).get(child_classe, 0)
+    
+    # Calcola totale libri obbligatori (esclusi consigliati)
+    # Il tetto di spesa si applica SOLO ai libri obbligatori, non ai consigliati
+    costo_obbligatori_nuovi = sum(l["prezzo"] for l in comprare_nuovo)
+    costo_obbligatori_usati = sum(l["prezzo_nuovo"] for l in comprare_usato)
+    costo_totale_obbligatori = costo_obbligatori_nuovi + costo_obbligatori_usati
+    
+    # Confronto con tetto di spesa
+    tetto_info = {
+        "tetto_ministeriale": round(tetto_spesa, 2),
+        "tetto_con_deroga_10": round(tetto_spesa * 1.10, 2),  # +10% deroga consentita
+        "tetto_con_deroga_15": round(tetto_spesa * 1.15, 2),  # +15% deroga massima
+        "costo_obbligatori": round(costo_totale_obbligatori, 2),
+        "differenza": round(costo_totale_obbligatori - tetto_spesa, 2),
+        "percentuale_sforamento": round((costo_totale_obbligatori / tetto_spesa * 100) - 100, 1) if tetto_spesa > 0 else 0,
+        "entro_limite": costo_totale_obbligatori <= tetto_spesa,
+        "entro_deroga_10": costo_totale_obbligatori <= (tetto_spesa * 1.10),
+        "entro_deroga_15": costo_totale_obbligatori <= (tetto_spesa * 1.15),
+        "riferimento_normativo": "Art. 15, comma 3 D.L. 112/2008 (conv. L. 133/2008)",
+        "indirizzo_scuola": indirizzo_scuola if child_tipo != "primo_grado" else "scuola_media"
+    }
+    
     return {
         "child_id": child_id,
         "child_name": child_nome,
@@ -2545,6 +2612,9 @@ async def get_child_compatibility(user_id: str, child_id: str):
             "libri_da_vendere": libri_consigliati_vendibili,
             "nota": "Questi libri sono indicati come 'consigliati' o 'da non acquistare' dal MIUR, ma in pratica spesso servono."
         },
+        
+        # NUOVA SEZIONE: Tetto di spesa ministeriale
+        "tetto_spesa": tetto_info,
         
         "summary": {
             "totale_miei_libri": len(my_books_disc),

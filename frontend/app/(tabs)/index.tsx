@@ -404,6 +404,82 @@ export default function RadarScreen() {
               </View>
             </View>
 
+            {/* Tetto di Spesa Ministeriale - Solo per George */}
+            {compatibility.tetto_spesa && child?.nome_figlio?.toLowerCase() === 'george' && (
+              <View style={[styles.classCard, { 
+                borderLeftWidth: 4, 
+                borderLeftColor: compatibility.tetto_spesa.entro_limite ? '#4CAF50' : 
+                                 compatibility.tetto_spesa.entro_deroga_15 ? '#FF9800' : '#f44336'
+              }]}>
+                <Text style={[styles.sampleBooksTitle, { color: '#1a472a' }]}>
+                  📊 Tetto di Spesa Ministeriale
+                </Text>
+                <Text style={{ fontSize: 10, color: '#666', marginBottom: 8 }}>
+                  {compatibility.tetto_spesa.riferimento_normativo}
+                </Text>
+                
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <View>
+                    <Text style={{ fontSize: 12, color: '#666' }}>Tetto base:</Text>
+                    <Text style={{ fontSize: 16, fontWeight: 'bold' }}>€{compatibility.tetto_spesa.tetto_ministeriale?.toFixed(2)}</Text>
+                  </View>
+                  <View>
+                    <Text style={{ fontSize: 12, color: '#666' }}>Con deroga +10%:</Text>
+                    <Text style={{ fontSize: 16 }}>€{compatibility.tetto_spesa.tetto_con_deroga_10?.toFixed(2)}</Text>
+                  </View>
+                  <View>
+                    <Text style={{ fontSize: 12, color: '#666' }}>Max +15%:</Text>
+                    <Text style={{ fontSize: 16 }}>€{compatibility.tetto_spesa.tetto_con_deroga_15?.toFixed(2)}</Text>
+                  </View>
+                </View>
+                
+                <View style={{ 
+                  backgroundColor: compatibility.tetto_spesa.entro_limite ? '#E8F5E9' : 
+                                   compatibility.tetto_spesa.entro_deroga_15 ? '#FFF3E0' : '#FFEBEE',
+                  padding: 12,
+                  borderRadius: 8,
+                  marginTop: 8
+                }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <View>
+                      <Text style={{ fontSize: 12, color: '#666' }}>Costo libri obbligatori:</Text>
+                      <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#1a472a' }}>
+                        €{compatibility.tetto_spesa.costo_obbligatori?.toFixed(2)}
+                      </Text>
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      {compatibility.tetto_spesa.entro_limite ? (
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                          <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
+                          <Text style={{ color: '#4CAF50', fontWeight: 'bold', marginLeft: 4 }}>ENTRO LIMITE</Text>
+                        </View>
+                      ) : compatibility.tetto_spesa.entro_deroga_15 ? (
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <Ionicons name="warning" size={24} color="#FF9800" />
+                            <Text style={{ color: '#FF9800', fontWeight: 'bold', marginLeft: 4 }}>SFORA</Text>
+                          </View>
+                          <Text style={{ fontSize: 10, color: '#FF9800' }}>
+                            +{compatibility.tetto_spesa.percentuale_sforamento?.toFixed(1)}% (entro deroga)
+                          </Text>
+                        </View>
+                      ) : (
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <Ionicons name="alert-circle" size={24} color="#f44336" />
+                            <Text style={{ color: '#f44336', fontWeight: 'bold', marginLeft: 4 }}>OLTRE LIMITE!</Text>
+                          </View>
+                          <Text style={{ fontSize: 10, color: '#f44336' }}>
+                            +{compatibility.tetto_spesa.percentuale_sforamento?.toFixed(1)}% ({compatibility.tetto_spesa.differenza?.toFixed(2)}€ in più)
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                </View>
+              </View>
+            )}
+
             {/* Libri Vendibili */}
             {compatibility.vendere?.libri_vendibili && compatibility.vendere.libri_vendibili.length > 0 && (
               <View style={styles.classCard}>
