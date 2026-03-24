@@ -578,9 +578,6 @@ export default function RadarScreen() {
                 <Text style={[styles.sampleBooksTitle, { color: '#9C27B0' }]}>
                   Testi consigliati o da non acquistare:
                 </Text>
-                <Text style={{ fontSize: 11, color: '#666', marginBottom: 12, fontStyle: 'italic' }}>
-                  Questi libri sono indicati come "consigliati" dal MIUR ma spesso servono
-                </Text>
                 {compatibility.consigliati.libri_da_comprare.map((book: any, idx: number) => (
                   <TouchableOpacity 
                     key={idx} 
