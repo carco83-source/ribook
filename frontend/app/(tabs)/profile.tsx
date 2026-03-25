@@ -19,6 +19,28 @@ import * as Sharing from 'expo-sharing';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
+// Cross-platform confirm dialog
+const showConfirm = (title: string, message: string, onConfirm: () => void, destructive = false) => {
+  if (Platform.OS === 'web') {
+    if (window.confirm(`${title}\n\n${message}`)) {
+      onConfirm();
+    }
+  } else {
+    Alert.alert(title, message, [
+      { text: 'Annulla', style: 'cancel' },
+      { text: destructive ? 'Elimina' : 'Conferma', style: destructive ? 'destructive' : 'default', onPress: onConfirm },
+    ]);
+  }
+};
+
+const showAlert = (title: string, message: string) => {
+  if (Platform.OS === 'web') {
+    window.alert(`${title}\n\n${message}`);
+  } else {
+    Alert.alert(title, message);
+  }
+};
+
 export default function ProfileScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -83,52 +105,44 @@ export default function ProfileScreen() {
   };
 
   const handleUpgradePremium = async () => {
-    Alert.alert(
+    showConfirm(
       'Upgrade a Premium',
       'Diventa Premium per €5,99/anno e risparmia sulle commissioni!\n\n• 0% commissioni sulle vendite\n• Risparmia il 15% su ogni transazione\n• Supporto prioritario',
-      [
-        { text: 'Annulla', style: 'cancel' },
-        {
-          text: 'Acquista',
-          onPress: async () => {
-            setUpgrading(true);
-            try {
-              const userId = await AsyncStorage.getItem('user_id');
-              await axios.post(`${API_URL}/api/users/${userId}/upgrade-premium`);
-              await AsyncStorage.setItem('is_premium', 'true');
-              setUserData({ ...userData, isPremium: true });
-              Alert.alert(
-                'Upgrade completato!',
-                'Ora sei un utente Premium. Goditi lo 0% di commissioni!'
-              );
-            } catch (error) {
-              Alert.alert('Errore', 'Impossibile completare l\'upgrade');
-            } finally {
-              setUpgrading(false);
-            }
-          },
-        },
-      ]
+      async () => {
+        setUpgrading(true);
+        try {
+          const userId = await AsyncStorage.getItem('user_id');
+          await axios.post(`${API_URL}/api/users/${userId}/upgrade-premium`);
+          await AsyncStorage.setItem('is_premium', 'true');
+          setUserData({ ...userData, isPremium: true });
+          showAlert(
+            'Upgrade completato!',
+            'Ora sei un utente Premium. Goditi lo 0% di commissioni!'
+          );
+        } catch (error) {
+          showAlert('Errore', 'Impossibile completare l\'upgrade');
+        } finally {
+          setUpgrading(false);
+        }
+      }
     );
   };
 
   const handleLogout = async () => {
-    Alert.alert('Esci', 'Sei sicuro di voler uscire?', [
-      { text: 'Annulla', style: 'cancel' },
-      {
-        text: 'Esci',
-        style: 'destructive',
-        onPress: async () => {
-          await AsyncStorage.multiRemove([
-            'user_id',
-            'username',
-            'user_nome',
-            'is_premium',
-          ]);
-          router.replace('/');
-        },
+    showConfirm(
+      'Esci',
+      'Sei sicuro di voler uscire?',
+      async () => {
+        await AsyncStorage.multiRemove([
+          'user_id',
+          'username',
+          'user_nome',
+          'is_premium',
+        ]);
+        router.replace('/');
       },
-    ]);
+      true
+    );
   };
 
   // Download PDF lista libri
@@ -155,15 +169,15 @@ export default function ProfileScreen() {
               dialogTitle: 'Salva Lista Libri'
             });
           } else {
-            Alert.alert('PDF Scaricato', `File salvato: ${filename}`);
+            showAlert('PDF Scaricato', `File salvato: ${filename}`);
           }
         } else {
-          Alert.alert('Errore', 'Impossibile scaricare il PDF');
+          showAlert('Errore', 'Impossibile scaricare il PDF');
         }
       }
     } catch (error) {
       console.error('Error downloading PDF:', error);
-      Alert.alert('Errore', 'Impossibile generare il PDF');
+      showAlert('Errore', 'Impossibile generare il PDF');
     } finally {
       setDownloadingPdf(null);
     }
@@ -171,29 +185,23 @@ export default function ProfileScreen() {
 
   // Elimina profilo figlio
   const handleDeleteProfile = async (childId: string, childName: string) => {
-    Alert.alert(
+    showConfirm(
       'Elimina Profilo',
       `Sei sicuro di voler eliminare il profilo di ${childName}?\n\nQuesta azione non può essere annullata.`,
-      [
-        { text: 'Annulla', style: 'cancel' },
-        {
-          text: 'Elimina',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const userId = await AsyncStorage.getItem('user_id');
-              await axios.delete(`${API_URL}/api/users/${userId}/profiles/${childId}`);
-              
-              // Ricarica i dati
-              loadUserData();
-              Alert.alert('Successo', `Profilo di ${childName} eliminato`);
-            } catch (error: any) {
-              console.error('Error deleting profile:', error);
-              Alert.alert('Errore', error.response?.data?.detail || 'Impossibile eliminare il profilo');
-            }
-          },
-        },
-      ]
+      async () => {
+        try {
+          const userId = await AsyncStorage.getItem('user_id');
+          await axios.delete(`${API_URL}/api/users/${userId}/profiles/${childId}`);
+          
+          // Ricarica i dati
+          loadUserData();
+          showAlert('Successo', `Profilo di ${childName} eliminato`);
+        } catch (error: any) {
+          console.error('Error deleting profile:', error);
+          showAlert('Errore', error.response?.data?.detail || 'Impossibile eliminare il profilo');
+        }
+      },
+      true
     );
   };
 

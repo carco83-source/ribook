@@ -8,11 +8,34 @@ import {
   ActivityIndicator,
   RefreshControl,
   Alert,
+  Platform,
 } from 'react-native';
 import { useRouter, Stack, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+
+// Cross-platform confirm dialog
+const showConfirm = (title: string, message: string, onConfirm: () => void, destructive = false) => {
+  if (Platform.OS === 'web') {
+    if (window.confirm(`${title}\n\n${message}`)) {
+      onConfirm();
+    }
+  } else {
+    Alert.alert(title, message, [
+      { text: 'Annulla', style: 'cancel' },
+      { text: destructive ? 'Elimina' : 'Conferma', style: destructive ? 'destructive' : 'default', onPress: onConfirm },
+    ]);
+  }
+};
+
+const showAlert = (title: string, message: string) => {
+  if (Platform.OS === 'web') {
+    window.alert(`${title}\n\n${message}`);
+  } else {
+    Alert.alert(title, message);
+  }
+};
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -95,53 +118,41 @@ export default function MySalesScreen() {
   };
 
   const handleConfirmRequest = async (cartItemId: string) => {
-    Alert.alert(
+    showConfirm(
       'Conferma disponibilità',
       'Confermi che il libro è disponibile per la vendita?',
-      [
-        { text: 'Annulla', style: 'cancel' },
-        {
-          text: 'Conferma',
-          onPress: async () => {
-            setProcessingId(cartItemId);
-            try {
-              await axios.post(`${API_URL}/api/cart/${cartItemId}/confirm`);
-              Alert.alert('Successo', 'Richiesta confermata! L\'acquirente può ora procedere al pagamento.');
-              loadSales(); // Ricarica i dati
-            } catch (error: any) {
-              Alert.alert('Errore', error.response?.data?.detail || 'Errore durante la conferma');
-            } finally {
-              setProcessingId(null);
-            }
-          },
-        },
-      ]
+      async () => {
+        setProcessingId(cartItemId);
+        try {
+          await axios.post(`${API_URL}/api/cart/${cartItemId}/confirm`);
+          showAlert('Successo', 'Richiesta confermata! L\'acquirente può ora procedere al pagamento.');
+          loadSales();
+        } catch (error: any) {
+          showAlert('Errore', error.response?.data?.detail || 'Errore durante la conferma');
+        } finally {
+          setProcessingId(null);
+        }
+      }
     );
   };
 
   const handleRejectRequest = async (cartItemId: string) => {
-    Alert.alert(
+    showConfirm(
       'Rifiuta richiesta',
       'Sei sicuro di voler rifiutare questa richiesta? Il libro tornerà disponibile per altri acquirenti.',
-      [
-        { text: 'Annulla', style: 'cancel' },
-        {
-          text: 'Rifiuta',
-          style: 'destructive',
-          onPress: async () => {
-            setProcessingId(cartItemId);
-            try {
-              await axios.post(`${API_URL}/api/cart/${cartItemId}/reject`);
-              Alert.alert('Richiesta rifiutata', 'Il libro è di nuovo disponibile per altri acquirenti.');
-              loadSales(); // Ricarica i dati
-            } catch (error: any) {
-              Alert.alert('Errore', error.response?.data?.detail || 'Errore durante il rifiuto');
-            } finally {
-              setProcessingId(null);
-            }
-          },
-        },
-      ]
+      async () => {
+        setProcessingId(cartItemId);
+        try {
+          await axios.post(`${API_URL}/api/cart/${cartItemId}/reject`);
+          showAlert('Richiesta rifiutata', 'Il libro è di nuovo disponibile per altri acquirenti.');
+          loadSales();
+        } catch (error: any) {
+          showAlert('Errore', error.response?.data?.detail || 'Errore durante il rifiuto');
+        } finally {
+          setProcessingId(null);
+        }
+      },
+      true
     );
   };
 
@@ -152,52 +163,40 @@ export default function MySalesScreen() {
   );
 
   const handleDeleteListing = async (listingId: string, bookTitle: string) => {
-    Alert.alert(
+    showConfirm(
       'Elimina annuncio',
       `Sei sicuro di voler eliminare l'annuncio per "${bookTitle}"?`,
-      [
-        { text: 'Annulla', style: 'cancel' },
-        {
-          text: 'Elimina',
-          style: 'destructive',
-          onPress: async () => {
-            setProcessingId(listingId);
-            try {
-              await axios.delete(`${API_URL}/api/listings/${listingId}?user_id=${userId}`);
-              Alert.alert('Fatto!', 'Annuncio eliminato con successo');
-              loadSales();
-            } catch (error: any) {
-              Alert.alert('Errore', error.response?.data?.detail || 'Errore durante l\'eliminazione');
-            } finally {
-              setProcessingId(null);
-            }
-          },
-        },
-      ]
+      async () => {
+        setProcessingId(listingId);
+        try {
+          await axios.delete(`${API_URL}/api/listings/${listingId}?user_id=${userId}`);
+          showAlert('Fatto!', 'Annuncio eliminato con successo');
+          loadSales();
+        } catch (error: any) {
+          showAlert('Errore', error.response?.data?.detail || 'Errore durante l\'eliminazione');
+        } finally {
+          setProcessingId(null);
+        }
+      },
+      true
     );
   };
 
   const handleMarkDelivered = async (listingId: string) => {
-    Alert.alert(
+    showConfirm(
       'Conferma consegna',
       'Hai consegnato il libro alla cartolibreria?',
-      [
-        { text: 'Annulla', style: 'cancel' },
-        {
-          text: 'Sì, confermo',
-          onPress: async () => {
-            try {
-              await axios.post(
-                `${API_URL}/api/listings/${listingId}/mark-delivered?seller_id=${userId}`
-              );
-              Alert.alert('Fatto!', 'Libro segnato come consegnato');
-              loadSales();
-            } catch (error: any) {
-              Alert.alert('Errore', error.response?.data?.detail || 'Errore durante l\'operazione');
-            }
-          },
-        },
-      ]
+      async () => {
+        try {
+          await axios.post(
+            `${API_URL}/api/listings/${listingId}/mark-delivered?seller_id=${userId}`
+          );
+          showAlert('Fatto!', 'Libro segnato come consegnato');
+          loadSales();
+        } catch (error: any) {
+          showAlert('Errore', error.response?.data?.detail || 'Errore durante l\'operazione');
+        }
+      }
     );
   };
 
