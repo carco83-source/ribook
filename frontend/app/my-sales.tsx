@@ -44,6 +44,7 @@ interface PendingConfirmation {
 
 const STATO_CONFIG: Record<string, { label: string; color: string; icon: string }> = {
   disponibile: { label: 'In vendita', color: '#4CAF50', icon: 'pricetag' },
+  prenotato: { label: 'Prenotato', color: '#FF9800', icon: 'bookmark' },
   venduto: { label: 'Venduto - Da consegnare', color: '#FF9800', icon: 'time' },
   consegnato: { label: 'Consegnato', color: '#2196F3', icon: 'checkmark-circle' },
   ritirato: { label: 'Completato', color: '#9C27B0', icon: 'trophy' },
@@ -149,6 +150,32 @@ export default function MySalesScreen() {
       loadSales();
     }, [])
   );
+
+  const handleDeleteListing = async (listingId: string, bookTitle: string) => {
+    Alert.alert(
+      'Elimina annuncio',
+      `Sei sicuro di voler eliminare l'annuncio per "${bookTitle}"?`,
+      [
+        { text: 'Annulla', style: 'cancel' },
+        {
+          text: 'Elimina',
+          style: 'destructive',
+          onPress: async () => {
+            setProcessingId(listingId);
+            try {
+              await axios.delete(`${API_URL}/api/listings/${listingId}?user_id=${userId}`);
+              Alert.alert('Fatto!', 'Annuncio eliminato con successo');
+              loadSales();
+            } catch (error: any) {
+              Alert.alert('Errore', error.response?.data?.detail || 'Errore durante l\'eliminazione');
+            } finally {
+              setProcessingId(null);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const handleMarkDelivered = async (listingId: string) => {
     Alert.alert(
@@ -268,6 +295,24 @@ export default function MySalesScreen() {
             <Ionicons name="person" size={14} color="#999" />
             <Text style={styles.buyerText}>Acquirente: {sale.buyer_username}</Text>
           </View>
+        )}
+
+        {/* Delete button for available listings */}
+        {sale.stato === 'disponibile' && (
+          <TouchableOpacity
+            style={styles.deleteButton}
+            onPress={() => handleDeleteListing(sale.id, sale.book_titolo)}
+            disabled={processingId === sale.id}
+          >
+            {processingId === sale.id ? (
+              <ActivityIndicator size="small" color="#f44336" />
+            ) : (
+              <>
+                <Ionicons name="trash-outline" size={18} color="#f44336" />
+                <Text style={styles.deleteButtonText}>Elimina annuncio</Text>
+              </>
+            )}
+          </TouchableOpacity>
         )}
       </View>
     );
@@ -712,6 +757,23 @@ const styles = StyleSheet.create({
     borderColor: '#f44336',
   },
   rejectButtonText: {
+    color: '#f44336',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  deleteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#f44336',
+    padding: 10,
+    borderRadius: 8,
+    gap: 6,
+    marginTop: 12,
+  },
+  deleteButtonText: {
     color: '#f44336',
     fontSize: 14,
     fontWeight: '600',
