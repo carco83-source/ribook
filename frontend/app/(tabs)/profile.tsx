@@ -169,6 +169,34 @@ export default function ProfileScreen() {
     }
   };
 
+  // Elimina profilo figlio
+  const handleDeleteProfile = async (childId: string, childName: string) => {
+    Alert.alert(
+      'Elimina Profilo',
+      `Sei sicuro di voler eliminare il profilo di ${childName}?\n\nQuesta azione non può essere annullata.`,
+      [
+        { text: 'Annulla', style: 'cancel' },
+        {
+          text: 'Elimina',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const userId = await AsyncStorage.getItem('user_id');
+              await axios.delete(`${API_URL}/api/users/${userId}/profiles/${childId}`);
+              
+              // Ricarica i dati
+              loadUserData();
+              Alert.alert('Successo', `Profilo di ${childName} eliminato`);
+            } catch (error: any) {
+              console.error('Error deleting profile:', error);
+              Alert.alert('Errore', error.response?.data?.detail || 'Impossibile eliminare il profilo');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -327,6 +355,15 @@ export default function ProfileScreen() {
                       <Text style={styles.pdfDownloadButtonText}>Scarica Lista Libri (PDF)</Text>
                     </>
                   )}
+                </TouchableOpacity>
+                
+                {/* Delete Profile Button */}
+                <TouchableOpacity
+                  style={styles.deleteProfileButton}
+                  onPress={() => handleDeleteProfile(child.id, child.nome_figlio)}
+                >
+                  <Ionicons name="trash-outline" size={18} color="#f44336" />
+                  <Text style={styles.deleteProfileButtonText}>Elimina Profilo</Text>
                 </TouchableOpacity>
               </View>
             );
