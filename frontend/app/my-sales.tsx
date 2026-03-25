@@ -9,35 +9,119 @@ import {
   RefreshControl,
   Alert,
   Platform,
+  Modal,
 } from 'react-native';
 import { useRouter, Stack, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 
-// Cross-platform confirm dialog
-const showConfirm = (title: string, message: string, onConfirm: () => void, destructive = false) => {
-  if (Platform.OS === 'web') {
-    if (window.confirm(`${title}\n\n${message}`)) {
-      onConfirm();
-    }
-  } else {
-    Alert.alert(title, message, [
-      { text: 'Annulla', style: 'cancel' },
-      { text: destructive ? 'Elimina' : 'Conferma', style: destructive ? 'destructive' : 'default', onPress: onConfirm },
-    ]);
-  }
-};
-
-const showAlert = (title: string, message: string) => {
-  if (Platform.OS === 'web') {
-    window.alert(`${title}\n\n${message}`);
-  } else {
-    Alert.alert(title, message);
-  }
-};
-
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+
+// Confirm Modal Component
+interface ConfirmModalProps {
+  visible: boolean;
+  title: string;
+  message: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+  confirmText?: string;
+  destructive?: boolean;
+}
+
+const ConfirmModal: React.FC<ConfirmModalProps> = ({
+  visible,
+  title,
+  message,
+  onConfirm,
+  onCancel,
+  confirmText = 'Conferma',
+  destructive = false,
+}) => (
+  <Modal visible={visible} transparent animationType="fade">
+    <View style={modalStyles.overlay}>
+      <View style={modalStyles.container}>
+        <Text style={modalStyles.title}>{title}</Text>
+        <Text style={modalStyles.message}>{message}</Text>
+        <View style={modalStyles.buttons}>
+          <TouchableOpacity style={modalStyles.cancelButton} onPress={onCancel}>
+            <Text style={modalStyles.cancelText}>Annulla</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[modalStyles.confirmButton, destructive && modalStyles.destructiveButton]}
+            onPress={onConfirm}
+          >
+            <Text style={[modalStyles.confirmText, destructive && modalStyles.destructiveText]}>
+              {confirmText}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+  </Modal>
+);
+
+const modalStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  container: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    width: '85%',
+    maxWidth: 400,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 12,
+  },
+  message: {
+    fontSize: 15,
+    color: '#666',
+    marginBottom: 24,
+    lineHeight: 22,
+  },
+  buttons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  cancelButton: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 8,
+    backgroundColor: '#f0f0f0',
+    alignItems: 'center',
+  },
+  cancelText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#666',
+  },
+  confirmButton: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 8,
+    backgroundColor: '#4CAF50',
+    alignItems: 'center',
+  },
+  confirmText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  destructiveButton: {
+    backgroundColor: '#f44336',
+  },
+  destructiveText: {
+    color: '#fff',
+  },
+});
 
 interface Sale {
   id: string;
@@ -81,6 +165,31 @@ export default function MySalesScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [processingId, setProcessingId] = useState<string | null>(null);
+  
+  // Modal state
+  const [confirmModal, setConfirmModal] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    confirmText: string;
+    destructive: boolean;
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+    confirmText: 'Conferma',
+    destructive: false,
+  });
+
+  const showModal = (title: string, message: string, onConfirm: () => void, confirmText = 'Conferma', destructive = false) => {
+    setConfirmModal({ visible: true, title, message, onConfirm, confirmText, destructive });
+  };
+
+  const hideModal = () => {
+    setConfirmModal(prev => ({ ...prev, visible: false }));
+  };
 
   const handleGoBack = () => {
     if (router.canGoBack()) {
@@ -118,40 +227,44 @@ export default function MySalesScreen() {
   };
 
   const handleConfirmRequest = async (cartItemId: string) => {
-    showConfirm(
+    showModal(
       'Conferma disponibilità',
       'Confermi che il libro è disponibile per la vendita?',
       async () => {
+        hideModal();
         setProcessingId(cartItemId);
         try {
           await axios.post(`${API_URL}/api/cart/${cartItemId}/confirm`);
-          showAlert('Successo', 'Richiesta confermata! L\'acquirente può ora procedere al pagamento.');
+          showModal('Successo', 'Richiesta confermata! L\'acquirente può ora procedere al pagamento.', hideModal);
           loadSales();
         } catch (error: any) {
-          showAlert('Errore', error.response?.data?.detail || 'Errore durante la conferma');
-        } finally {
-          setProcessingId(null);
-        }
-      }
-    );
-  };
-
-  const handleRejectRequest = async (cartItemId: string) => {
-    showConfirm(
-      'Rifiuta richiesta',
-      'Sei sicuro di voler rifiutare questa richiesta? Il libro tornerà disponibile per altri acquirenti.',
-      async () => {
-        setProcessingId(cartItemId);
-        try {
-          await axios.post(`${API_URL}/api/cart/${cartItemId}/reject`);
-          showAlert('Richiesta rifiutata', 'Il libro è di nuovo disponibile per altri acquirenti.');
-          loadSales();
-        } catch (error: any) {
-          showAlert('Errore', error.response?.data?.detail || 'Errore durante il rifiuto');
+          showModal('Errore', error.response?.data?.detail || 'Errore durante la conferma', hideModal);
         } finally {
           setProcessingId(null);
         }
       },
+      'Conferma'
+    );
+  };
+
+  const handleRejectRequest = async (cartItemId: string) => {
+    showModal(
+      'Rifiuta richiesta',
+      'Sei sicuro di voler rifiutare questa richiesta? Il libro tornerà disponibile per altri acquirenti.',
+      async () => {
+        hideModal();
+        setProcessingId(cartItemId);
+        try {
+          await axios.post(`${API_URL}/api/cart/${cartItemId}/reject`);
+          showModal('Richiesta rifiutata', 'Il libro è di nuovo disponibile per altri acquirenti.', hideModal);
+          loadSales();
+        } catch (error: any) {
+          showModal('Errore', error.response?.data?.detail || 'Errore durante il rifiuto', hideModal);
+        } finally {
+          setProcessingId(null);
+        }
+      },
+      'Rifiuta',
       true
     );
   };
@@ -163,40 +276,44 @@ export default function MySalesScreen() {
   );
 
   const handleDeleteListing = async (listingId: string, bookTitle: string) => {
-    showConfirm(
+    showModal(
       'Elimina annuncio',
       `Sei sicuro di voler eliminare l'annuncio per "${bookTitle}"?`,
       async () => {
+        hideModal();
         setProcessingId(listingId);
         try {
           await axios.delete(`${API_URL}/api/listings/${listingId}?user_id=${userId}`);
-          showAlert('Fatto!', 'Annuncio eliminato con successo');
+          showModal('Fatto!', 'Annuncio eliminato con successo', hideModal);
           loadSales();
         } catch (error: any) {
-          showAlert('Errore', error.response?.data?.detail || 'Errore durante l\'eliminazione');
+          showModal('Errore', error.response?.data?.detail || 'Errore durante l\'eliminazione', hideModal);
         } finally {
           setProcessingId(null);
         }
       },
+      'Elimina',
       true
     );
   };
 
   const handleMarkDelivered = async (listingId: string) => {
-    showConfirm(
+    showModal(
       'Conferma consegna',
       'Hai consegnato il libro alla cartolibreria?',
       async () => {
+        hideModal();
         try {
           await axios.post(
             `${API_URL}/api/listings/${listingId}/mark-delivered?seller_id=${userId}`
           );
-          showAlert('Fatto!', 'Libro segnato come consegnato');
+          showModal('Fatto!', 'Libro segnato come consegnato', hideModal);
           loadSales();
         } catch (error: any) {
-          showAlert('Errore', error.response?.data?.detail || 'Errore durante l\'operazione');
+          showModal('Errore', error.response?.data?.detail || 'Errore durante l\'operazione', hideModal);
         }
-      }
+      },
+      'Sì, confermo'
     );
   };
 
@@ -472,6 +589,17 @@ export default function MySalesScreen() {
           </View>
         )}
       </ScrollView>
+      
+      {/* Confirm Modal */}
+      <ConfirmModal
+        visible={confirmModal.visible}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={hideModal}
+        confirmText={confirmModal.confirmText}
+        destructive={confirmModal.destructive}
+      />
     </View>
   );
 }
