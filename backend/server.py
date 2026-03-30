@@ -407,6 +407,41 @@ async def login_user(credentials: UserLogin):
         "profili_figli": user.get("profili_figli", [])
     }
 
+# ============== PASSWORD RECOVERY ==============
+
+class VerifyEmailRequest(BaseModel):
+    email: str
+
+class ResetPasswordRequest(BaseModel):
+    user_id: str
+    new_password: str
+
+@api_router.post("/auth/verify-email")
+async def verify_email(data: VerifyEmailRequest):
+    """Verifica se l'email esiste nel sistema"""
+    user = await db.users.find_one({"email": data.email.lower()})
+    if user:
+        return {"exists": True, "user_id": user["id"]}
+    return {"exists": False}
+
+@api_router.post("/auth/reset-password")
+async def reset_password(data: ResetPasswordRequest):
+    """Reimposta la password dell'utente"""
+    user = await db.users.find_one({"id": data.user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+    
+    if len(data.new_password) < 6:
+        raise HTTPException(status_code=400, detail="La password deve essere di almeno 6 caratteri")
+    
+    # Aggiorna la password
+    await db.users.update_one(
+        {"id": data.user_id},
+        {"$set": {"password_hash": hash_password(data.new_password)}}
+    )
+    
+    return {"message": "Password reimpostata con successo"}
+
 @api_router.get("/users/{user_id}")
 async def get_user(user_id: str):
     user = await db.users.find_one({"id": user_id})
