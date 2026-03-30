@@ -147,17 +147,14 @@ export default function RegisterScreen() {
 
       console.log('Registration successful:', response.data);
       
-      // Navigate to success page with user data
-      router.replace({
-        pathname: '/(auth)/register-success',
-        params: { 
-          username: response.data.username,
-          userId: response.data.user_id,
-          scuola: scuolaNome,
-          classe: classe,
-          tipoScuola: tipoScuola
-        }
-      });
+      // Login automatico dopo la registrazione
+      await AsyncStorage.setItem('user_id', response.data.user_id);
+      await AsyncStorage.setItem('username', response.data.username);
+      await AsyncStorage.setItem('user_nome', nome);
+      await AsyncStorage.setItem('is_premium', 'false');
+      
+      // Vai direttamente alla home
+      router.replace('/(tabs)');
       
     } catch (error: any) {
       console.error('Registration error:', error);
