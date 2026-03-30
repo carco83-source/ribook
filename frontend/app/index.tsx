@@ -24,7 +24,7 @@ export default function WelcomeScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <Ionicons name="book" size={80} color="#fff" />
-        <Text style={styles.title}>ScambiaLibri</Text>
+        <Text style={styles.title}>RiLiBro</Text>
         <Text style={styles.subtitle}>Acquisto libro usato assistito</Text>
       </View>
 

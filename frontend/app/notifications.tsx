@@ -115,7 +115,7 @@ export default function NotificationsScreen() {
         notifications.push({
           id: '0',
           type: 'system',
-          title: 'Benvenuto su ScambiaLibri!',
+          title: 'Benvenuto su RiLiBro!',
           message: 'Inizia cercando i libri che ti servono o metti in vendita quelli che non usi più',
           read: true,
           created_at: new Date().toISOString(),

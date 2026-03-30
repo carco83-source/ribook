@@ -153,7 +153,7 @@ export default function AdminScreen() {
       <View style={styles.header}>
         <View>
           <Text style={styles.headerTitle}>Pannello Admin</Text>
-          <Text style={styles.headerSubtitle}>ScambiaLibri</Text>
+          <Text style={styles.headerSubtitle}>RiLiBro</Text>
         </View>
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <Ionicons name="log-out-outline" size={24} color="#fff" />

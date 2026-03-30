@@ -653,7 +653,7 @@ export default function ProfileScreen() {
       </View>
 
       <View style={styles.footer}>
-        <Text style={styles.footerText}>ScambiaLibri v1.0</Text>
+        <Text style={styles.footerText}>RiLiBro v1.0</Text>
         <Text style={styles.footerSubtext}>
           Acquisto libro usato assistito
         </Text>

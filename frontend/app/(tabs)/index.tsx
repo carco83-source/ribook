@@ -238,7 +238,7 @@ export default function RadarScreen() {
       <View style={styles.headerRow}>
         <View style={styles.headerLeft}>
           <Ionicons name="book" size={28} color="#1a472a" />
-          <Text style={styles.headerTitle}>ScambiaLibri</Text>
+          <Text style={styles.headerTitle}>RiLiBro</Text>
         </View>
         <View style={styles.headerRight}>
           {/* Cart Button */}

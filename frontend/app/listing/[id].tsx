@@ -169,12 +169,12 @@ export default function ListingDetailScreen() {
       `✍️ ${listing.book_autore}\n` +
       `💰 Prezzo: €${listing.prezzo_vendita.toFixed(2)}\n` +
       `📖 Condizione: ${getConditionLabel(listing.condizione)}\n\n` +
-      `Trovato su ScambiaLibri - L'app per scambiare libri scolastici usati a Catanzaro!`;
+      `Trovato su RiLiBro - L'app per scambiare libri scolastici usati a Catanzaro!`;
 
     try {
       await Share.share({
         message,
-        title: `${listing.book_titolo} in vendita su ScambiaLibri`,
+        title: `${listing.book_titolo} in vendita su RiLiBro`,
       });
     } catch (error) {
       console.error('Error sharing:', error);
@@ -188,7 +188,7 @@ export default function ListingDetailScreen() {
       `✍️ ${listing.book_autore}\n` +
       `💰 Prezzo: €${listing.prezzo_vendita.toFixed(2)}\n` +
       `📖 Condizione: ${getConditionLabel(listing.condizione)}\n\n` +
-      `Trovato su ScambiaLibri!`;
+      `Trovato su RiLiBro!`;
 
     const url = `whatsapp://send?text=${encodeURIComponent(message)}`;
     
