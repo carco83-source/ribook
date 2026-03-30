@@ -495,11 +495,11 @@ export default function RadarScreen() {
                 {compatibility.vendere.libri_vendibili.map((book: any, idx: number) => (
                   <View key={idx} style={styles.sampleBookItem}>
                     <View style={styles.sampleBookInfo}>
-                      <Text style={styles.sampleBookTitle} numberOfLines={1}>
-                        {book.disciplina}
-                      </Text>
-                      <Text style={styles.sampleBookSeller} numberOfLines={1}>
+                      <Text style={styles.sampleBookTitle} numberOfLines={2}>
                         {book.titolo}
+                      </Text>
+                      <Text style={styles.sampleBookSubject} numberOfLines={1}>
+                        {book.disciplina}
                       </Text>
                     </View>
                     <View style={{ alignItems: 'flex-end' }}>
@@ -533,7 +533,10 @@ export default function RadarScreen() {
                 {compatibility.vendere.libri_non_vendibili.map((book: any, idx: number) => (
                   <View key={idx} style={styles.sampleBookItem}>
                     <View style={styles.sampleBookInfo}>
-                      <Text style={styles.sampleBookTitle} numberOfLines={1}>
+                      <Text style={styles.sampleBookTitle} numberOfLines={2}>
+                        {book.titolo || book.disciplina}
+                      </Text>
+                      <Text style={styles.sampleBookSubject} numberOfLines={1}>
                         {book.disciplina}
                       </Text>
                       <Text style={[styles.sampleBookSeller, { color: '#f44336' }]} numberOfLines={1}>
@@ -567,11 +570,11 @@ export default function RadarScreen() {
                     disabled={!book.copie_disponibili || book.copie_disponibili === 0}
                   >
                     <View style={styles.sampleBookInfo}>
-                      <Text style={styles.sampleBookTitle} numberOfLines={1}>
-                        {book.disciplina}
-                      </Text>
-                      <Text style={styles.sampleBookSeller} numberOfLines={1}>
+                      <Text style={styles.sampleBookTitle} numberOfLines={2}>
                         {book.titolo}
+                      </Text>
+                      <Text style={styles.sampleBookSubject} numberOfLines={1}>
+                        {book.disciplina}
                       </Text>
                     </View>
                     <View style={{ alignItems: 'flex-end', flexDirection: 'row', gap: 8 }}>
@@ -620,11 +623,11 @@ export default function RadarScreen() {
                     }}
                   >
                     <View style={styles.sampleBookInfo}>
-                      <Text style={styles.sampleBookTitle} numberOfLines={1}>
-                        {book.disciplina}
-                      </Text>
-                      <Text style={styles.sampleBookSeller} numberOfLines={2}>
+                      <Text style={styles.sampleBookTitle} numberOfLines={2}>
                         {book.titolo}
+                      </Text>
+                      <Text style={styles.sampleBookSubject} numberOfLines={1}>
+                        {book.disciplina}
                       </Text>
                       {book.is_nuova_edizione && (
                         <Text style={{ fontSize: 10, color: '#f44336', fontWeight: 'bold' }}>
@@ -675,11 +678,11 @@ export default function RadarScreen() {
                     }}
                   >
                     <View style={styles.sampleBookInfo}>
-                      <Text style={styles.sampleBookTitle} numberOfLines={1}>
-                        {book.disciplina}
-                      </Text>
-                      <Text style={styles.sampleBookSeller} numberOfLines={2}>
+                      <Text style={styles.sampleBookTitle} numberOfLines={2}>
                         {book.titolo}
+                      </Text>
+                      <Text style={styles.sampleBookSubject} numberOfLines={1}>
+                        {book.disciplina}
                       </Text>
                       {book.copie_usate_disponibili > 0 ? (
                         <Text style={{ fontSize: 10, color: '#4CAF50', fontWeight: 'bold' }}>
@@ -1147,9 +1150,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   sampleBookTitle: {
-    fontSize: 13,
-    fontWeight: '500',
+    fontSize: 14,
+    fontWeight: '600',
     color: '#333',
+  },
+  sampleBookSubject: {
+    fontSize: 11,
+    color: '#666',
+    marginTop: 2,
   },
   sampleBookSeller: {
     fontSize: 11,
