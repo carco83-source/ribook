@@ -275,22 +275,26 @@ export default function MySalesScreen() {
     }, [])
   );
 
-  const handleDeleteListing = async (listingId: string, bookTitle: string) => {
+  const handleDeleteListing = (listingId: string, bookTitle: string) => {
     showModal(
       'Elimina annuncio',
       `Sei sicuro di voler eliminare l'annuncio per "${bookTitle}"?`,
-      async () => {
+      () => {
         hideModal();
         setProcessingId(listingId);
-        try {
-          await axios.delete(`${API_URL}/api/listings/${listingId}?user_id=${userId}`);
-          showModal('Fatto!', 'Annuncio eliminato con successo', hideModal);
-          loadSales();
-        } catch (error: any) {
-          showModal('Errore', error.response?.data?.detail || 'Errore durante l\'eliminazione', hideModal);
-        } finally {
-          setProcessingId(null);
-        }
+        axios.delete(`${API_URL}/api/listings/${listingId}?user_id=${userId}`)
+          .then(() => {
+            showModal('Fatto!', 'Annuncio eliminato con successo', () => {
+              hideModal();
+              loadSales();
+            });
+          })
+          .catch((error: any) => {
+            showModal('Errore', error.response?.data?.detail || 'Errore durante l\'eliminazione', hideModal);
+          })
+          .finally(() => {
+            setProcessingId(null);
+          });
       },
       'Elimina',
       true
