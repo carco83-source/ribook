@@ -452,11 +452,11 @@ export default function SellScreen() {
   const createListing = async () => {
     if (!selectedBook || !userId) return;
 
-    // Validate minimum 3 photos
-    if (listingPhotos.length < 3) {
+    // Validate minimum 2 photos
+    if (listingPhotos.length < 2) {
       Alert.alert(
         'Foto obbligatorie', 
-        'Devi caricare almeno 3 foto:\n\n1. Copertina frontale\n2. Copertina posteriore\n3. Pagina con più usura'
+        'Devi caricare almeno 2 foto:\n\n1. Copertina aperta (fronte + retro insieme)\n2. Pagina con più usura'
       );
       return;
     }
@@ -960,8 +960,8 @@ export default function SellScreen() {
                 </View>
               )}
 
-              {/* Photos Section - 3 MANDATORY PHOTOS */}
-              <Text style={styles.formLabel}>Foto del libro (minimo 3 obbligatorie) *</Text>
+              {/* Photos Section - 2 MANDATORY PHOTOS */}
+              <Text style={styles.formLabel}>Foto del libro (2 obbligatorie) *</Text>
               <View style={styles.photoRequirements}>
                 <View style={[styles.photoReqItem, listingPhotos.length >= 1 && styles.photoReqItemDone]}>
                   <Ionicons 
@@ -969,7 +969,7 @@ export default function SellScreen() {
                     size={18} 
                     color={listingPhotos.length >= 1 ? "#4CAF50" : "#999"} 
                   />
-                  <Text style={styles.photoReqText}>1. Copertina frontale</Text>
+                  <Text style={styles.photoReqText}>1. Copertina aperta (fronte + retro insieme)</Text>
                 </View>
                 <View style={[styles.photoReqItem, listingPhotos.length >= 2 && styles.photoReqItemDone]}>
                   <Ionicons 
@@ -977,15 +977,7 @@ export default function SellScreen() {
                     size={18} 
                     color={listingPhotos.length >= 2 ? "#4CAF50" : "#999"} 
                   />
-                  <Text style={styles.photoReqText}>2. Copertina posteriore (retro)</Text>
-                </View>
-                <View style={[styles.photoReqItem, listingPhotos.length >= 3 && styles.photoReqItemDone]}>
-                  <Ionicons 
-                    name={listingPhotos.length >= 3 ? "checkmark-circle" : "ellipse-outline"} 
-                    size={18} 
-                    color={listingPhotos.length >= 3 ? "#4CAF50" : "#999"} 
-                  />
-                  <Text style={styles.photoReqText}>3. Pagina con più usura (libro aperto)</Text>
+                  <Text style={styles.photoReqText}>2. Pagina con più usura (la peggiore)</Text>
                 </View>
               </View>
               
@@ -998,7 +990,7 @@ export default function SellScreen() {
                     />
                     <View style={styles.photoLabel}>
                       <Text style={styles.photoLabelText}>
-                        {index === 0 ? 'Fronte' : index === 1 ? 'Retro' : index === 2 ? 'Interna' : `Foto ${index + 1}`}
+                        {index === 0 ? 'Copertine' : index === 1 ? 'Pagina peggiore' : `Foto ${index + 1}`}
                       </Text>
                     </View>
                     <TouchableOpacity
@@ -1009,20 +1001,22 @@ export default function SellScreen() {
                     </TouchableOpacity>
                   </View>
                 ))}
-                {listingPhotos.length < 4 && (
+                {listingPhotos.length < 2 && (
                   <View style={styles.addPhotoButtons}>
                     <TouchableOpacity style={styles.addPhotoBtn} onPress={takePhoto}>
                       <Ionicons name="camera" size={24} color="#1a472a" />
+                      <Text style={styles.addPhotoBtnText}>Scatta</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.addPhotoBtn} onPress={pickImage}>
                       <Ionicons name="images" size={24} color="#1a472a" />
+                      <Text style={styles.addPhotoBtnText}>Galleria</Text>
                     </TouchableOpacity>
                   </View>
                 )}
               </View>
-              {listingPhotos.length < 3 && (
+              {listingPhotos.length < 2 && (
                 <Text style={styles.photoWarning}>
-                  Devi caricare almeno 3 foto per continuare
+                  Devi caricare almeno 2 foto per continuare
                 </Text>
               )}
 
@@ -1616,6 +1610,11 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#ddd',
     borderStyle: 'dashed',
+  },
+  addPhotoBtnText: {
+    fontSize: 10,
+    color: '#1a472a',
+    marginTop: 4,
   },
   photoHint: {
     fontSize: 11,
