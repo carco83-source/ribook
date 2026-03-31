@@ -1001,7 +1001,10 @@ export default function SellScreen() {
               {/* Book Info */}
               {selectedBook && (
                 <View style={styles.selectedBookInfo}>
-                  <Text style={styles.selectedBookTitle}>{selectedBook.titolo}</Text>
+                  <View style={styles.selectedBookHeader}>
+                    <Text style={styles.selectedBookTitle}>{selectedBook.titolo}</Text>
+                    <Text style={styles.selectedBookPrice}>€{selectedBook.prezzo_copertina?.toFixed(2) || '0.00'}</Text>
+                  </View>
                   <Text style={styles.selectedBookAuthor}>
                     {selectedBook.disciplina}
                   </Text>
@@ -1663,11 +1666,27 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 20,
   },
+  selectedBookHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 4,
+  },
   selectedBookTitle: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#1a472a',
-    marginBottom: 4,
+    flex: 1,
+    marginRight: 10,
+  },
+  selectedBookPrice: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#2196F3',
+    backgroundColor: '#e3f2fd',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
   selectedBookAuthor: {
     fontSize: 13,
