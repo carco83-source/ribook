@@ -389,11 +389,12 @@ export default function SearchScreen() {
         animationType="slide"
         onRequestClose={() => setShowChildPicker(false)}
       >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowChildPicker(false)}
-        >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={{ flex: 1 }}
+            activeOpacity={1}
+            onPress={() => setShowChildPicker(false)}
+          />
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Seleziona Profilo</Text>
@@ -406,7 +407,11 @@ export default function SearchScreen() {
               Per chi vuoi cercare i libri da comprare?
             </Text>
 
-            <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={true}>
+            <ScrollView 
+              style={{ maxHeight: 300 }} 
+              showsVerticalScrollIndicator={true}
+              nestedScrollEnabled={true}
+            >
               {childProfiles.length === 0 ? (
                 <View style={styles.noChildrenContainer}>
                   <Ionicons name="person-add-outline" size={48} color="#ccc" />
@@ -462,7 +467,7 @@ export default function SearchScreen() {
               )}
             </ScrollView>
           </View>
-        </TouchableOpacity>
+        </View>
       </Modal>
 
       {/* Listings Modal */}
