@@ -1195,7 +1195,7 @@ export default function SellScreen() {
                 <View style={styles.sliderContainer}>
                   <View style={styles.sliderHeader}>
                     <Ionicons name="book" size={18} color={isNewBook ? "#ccc" : "#666"} />
-                    <Text style={[styles.sliderLabel, isNewBook && styles.disabledText]}>Copertina</Text>
+                    <Text style={[styles.sliderLabel, isNewBook && styles.disabledText]}>Condizioni copertina</Text>
                     <Text style={[styles.sliderValue, { color: `rgb(${Math.round(coverCondition * 2.55)}, ${Math.round(255 - coverCondition * 2.55)}, 0)` }]}>
                       {coverCondition}%
                     </Text>
