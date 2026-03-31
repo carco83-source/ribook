@@ -1212,11 +1212,17 @@ async def create_listing(listing_data: BookListingCreate, user_id: str = Query(.
     # Use frontend-provided price if available, otherwise calculate
     final_price = listing_data.prezzo_vendita if listing_data.prezzo_vendita else round(prezzo_vendita, 2)
     
+    # Build full title with volume if available
+    titolo_completo = listing_data.book_titolo or book.get("titolo", "")
+    volume = book.get("volume", "")
+    if volume and volume not in titolo_completo:
+        titolo_completo = f"{titolo_completo} - Vol. {volume}"
+    
     listing = BookListing(
         seller_id=user_id,
         seller_username=user.get("username", "Utente"),
         book_id=book.get("id") or book.get("isbn") or listing_data.book_id,
-        book_titolo=listing_data.book_titolo or book.get("titolo", ""),
+        book_titolo=titolo_completo,
         book_autore=listing_data.book_autori or book.get("autore", ""),
         book_isbn=listing_data.book_isbn or book.get("isbn", ""),
         book_materia=listing_data.book_disciplina or book.get("materia", book.get("disciplina", "")),
