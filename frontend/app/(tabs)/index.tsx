@@ -661,7 +661,7 @@ export default function RadarScreen() {
             {compatibility.consigliati?.libri_da_comprare && compatibility.consigliati.libri_da_comprare.length > 0 && (
               <View style={styles.classCard}>
                 <Text style={[styles.sampleBooksTitle, { color: '#9C27B0' }]}>
-                  Testi consigliati o da non acquistare:
+                  Testi unici già in possesso o consigliati:
                 </Text>
                 {compatibility.consigliati.libri_da_comprare.map((book: any, idx: number) => (
                   <TouchableOpacity 
