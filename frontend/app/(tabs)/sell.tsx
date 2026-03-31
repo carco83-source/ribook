@@ -12,7 +12,6 @@ import {
   Modal,
   TextInput,
   ScrollView,
-  Switch,
   Pressable,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -21,6 +20,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import * as ImagePicker from 'expo-image-picker';
 import { BarCodeScanner } from 'expo-barcode-scanner';
+import Slider from '@react-native-community/slider';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -92,17 +92,19 @@ export default function SellScreen() {
   
   // Form fields
   const [listingPhotos, setListingPhotos] = useState<string[]>([]);
-  const [hasWritings, setHasWritings] = useState(false);
-  const [hasHighlights, setHasHighlights] = useState(false);
-  const [hasFolds, setHasFolds] = useState(false);
-  const [coverCondition, setCoverCondition] = useState('perfetta');
-  const [pagesCondition, setPagesCondition] = useState('perfette');
+  const [hasWritings, setHasWritings] = useState(0); // Slider 0-100
+  const [hasHighlights, setHasHighlights] = useState(0); // Slider 0-100
+  const [hasFolds, setHasFolds] = useState(0); // Slider 0-100
+  const [coverCondition, setCoverCondition] = useState(0); // Slider 0-100
   const [selectedBookshop, setSelectedBookshop] = useState('');
   const [notes, setNotes] = useState('');
   const [creatingListing, setCreatingListing] = useState(false);
 
   // Libro Nuovo flag
   const [isNewBook, setIsNewBook] = useState(false);
+  
+  // Prezzo selezionato dalla forbice
+  const [selectedPriceOption, setSelectedPriceOption] = useState<number | null>(null);
 
   // Multi-select bookshops
   const [selectedBookshops, setSelectedBookshops] = useState<string[]>([]);
@@ -150,50 +152,86 @@ export default function SellScreen() {
     },
   ];
 
-  // Calcolo automatico condizione e prezzo
-  const calculateCondition = () => {
+  // Calcolo automatico condizione basato su slider (media pesata)
+  const calculateCondition = (): { condition: string; score: number } => {
     // Se il libro è NUOVO, restituisci direttamente 'nuovo'
     if (isNewBook) {
-      return 'nuovo';
+      return { condition: 'nuovo', score: 0 };
     }
     
-    // Sistema a punti: si parte da 100 e si sottraggono punti per ogni difetto
-    let score = 100;
+    // Media pesata dei difetti (0 = perfetto, 100 = molto rovinato)
+    const avgDefects = (
+      hasWritings * 0.30 +      // Scritte peso 30%
+      hasHighlights * 0.25 +    // Evidenziature peso 25%
+      hasFolds * 0.20 +         // Pieghe peso 20%
+      coverCondition * 0.25     // Copertina peso 25%
+    );
     
-    // Difetti
-    if (hasWritings) score -= 20;      // Scritte a penna/matita
-    if (hasHighlights) score -= 15;    // Evidenziature
-    if (hasFolds) score -= 10;         // Pieghe/Orecchie
-    
-    // Condizione copertina
-    if (coverCondition === 'buona') score -= 10;
-    if (coverCondition === 'usurata') score -= 25;
-    
-    // Condizione pagine
-    if (pagesCondition === 'buone') score -= 10;
-    if (pagesCondition === 'ingiallite') score -= 20;
-    
-    // Determina condizione finale
-    if (score >= 80) return 'perfetto';
-    if (score >= 50) return 'buono';
-    return 'molto_usato';
+    // Determina condizione finale basata sulla media
+    if (avgDefects <= 25) return { condition: 'ottimo', score: avgDefects };
+    if (avgDefects <= 55) return { condition: 'buono', score: avgDefects };
+    return { condition: 'accettabile', score: avgDefects };
   };
 
-  const getConditionPercentage = (condition: string) => {
+  // Calcola forbice di prezzi basata sulla condizione
+  const calculatePriceRange = () => {
+    const prezzoCopertina = selectedBook?.prezzo_copertina || 0;
+    const { condition } = calculateCondition();
+    
+    if (isNewBook) {
+      // Libro nuovo: 85-100% del prezzo
+      return {
+        condition: 'nuovo',
+        prices: [
+          { label: 'Prezzo massimo', percentage: 1.00, price: Math.round(prezzoCopertina * 100) / 100 },
+          { label: 'Prezzo consigliato', percentage: 0.90, price: Math.round(prezzoCopertina * 0.90 * 100) / 100 },
+          { label: 'Vendita rapida', percentage: 0.85, price: Math.round(prezzoCopertina * 0.85 * 100) / 100 },
+        ]
+      };
+    }
+    
+    let percentages: { label: string; percentage: number }[];
+    
     switch (condition) {
-      case 'nuovo': return 0.85;      // 85% (solo 15% di sconto)
-      case 'perfetto': return 0.60;   // 60%
-      case 'buono': return 0.50;      // 50%
-      case 'molto_usato': return 0.40; // 40%
-      default: return 0.50;
+      case 'ottimo':
+        // Ottimo: 65-50%
+        percentages = [
+          { label: 'Prezzo alto', percentage: 0.65 },
+          { label: 'Prezzo consigliato', percentage: 0.55 },
+          { label: 'Vendita rapida', percentage: 0.50 },
+        ];
+        break;
+      case 'buono':
+        // Buono: 55-40%
+        percentages = [
+          { label: 'Prezzo alto', percentage: 0.55 },
+          { label: 'Prezzo consigliato', percentage: 0.45 },
+          { label: 'Vendita rapida', percentage: 0.40 },
+        ];
+        break;
+      default:
+        // Accettabile: 45-30%
+        percentages = [
+          { label: 'Prezzo alto', percentage: 0.45 },
+          { label: 'Prezzo consigliato', percentage: 0.35 },
+          { label: 'Vendita rapida', percentage: 0.30 },
+        ];
     }
+    
+    return {
+      condition,
+      prices: percentages.map(p => ({
+        ...p,
+        price: Math.round(prezzoCopertina * p.percentage * 100) / 100
+      }))
+    };
   };
 
-  const calculatedCondition = calculateCondition();
-  const conditionPercentage = getConditionPercentage(calculatedCondition);
-  const calculatedPrice = selectedBook 
-    ? ((selectedBook.prezzo_copertina || 0) * conditionPercentage).toFixed(2)
-    : '0.00';
+  const conditionResult = calculateCondition();
+  const priceRange = calculatePriceRange();
+  const calculatedPrice = selectedPriceOption !== null 
+    ? selectedPriceOption.toFixed(2)
+    : priceRange.prices[1]?.price.toFixed(2) || '0.00';
 
   // Bookshop options
   const toggleBookshop = (shopId: string) => {
@@ -461,6 +499,12 @@ export default function SellScreen() {
       return;
     }
 
+    // Validate price selected
+    if (selectedPriceOption === null) {
+      Alert.alert('Prezzo richiesto', 'Seleziona un prezzo dalla forbice di prezzi');
+      return;
+    }
+
     if (selectedBookshops.length === 0) {
       Alert.alert('Punto di scambio richiesto', 'Seleziona almeno una cartolibreria');
       return;
@@ -471,6 +515,14 @@ export default function SellScreen() {
       // Get selected bookshop details
       const selectedShopsDetails = bookshopsData.filter(b => selectedBookshops.includes(b.id));
       
+      // Prepare condition details
+      const conditionDetails = {
+        scritte: hasWritings,
+        evidenziature: hasHighlights,
+        pieghe: hasFolds,
+        copertina: coverCondition,
+      };
+      
       await axios.post(`${API_URL}/api/listings?user_id=${userId}`, {
         book_id: selectedBook.isbn || selectedBook.id,
         book_isbn: selectedBook.isbn,
@@ -478,22 +530,18 @@ export default function SellScreen() {
         book_autori: selectedBook.autori,
         book_disciplina: selectedBook.disciplina,
         prezzo_copertina: selectedBook.prezzo_copertina,
-        condizione: calculatedCondition,
-        prezzo_vendita: parseFloat(calculatedPrice),
+        condizione: conditionResult.condition, // ottimo, buono, accettabile, nuovo
+        prezzo_vendita: selectedPriceOption, // Prezzo selezionato dalla forbice
         foto_base64: listingPhotos[0], // Main photo
         foto_aggiuntive: listingPhotos.slice(1), // Additional photos
-        has_writings: hasWritings,
-        has_highlights: hasHighlights,
-        has_folds: hasFolds,
-        cover_condition: coverCondition,
-        pages_condition: pagesCondition,
+        condition_details: conditionDetails, // Dettagli slider
         bookstore_ids: selectedBookshops,
         bookstore_names: selectedShopsDetails.map(s => s.name),
         bookstore_addresses: selectedShopsDetails.map(s => s.address),
         notes: notes,
         child_profile_id: selectedChild?.id,
         child_name: selectedChild?.nome_figlio,
-        condition_percentage: conditionPercentage,
+        is_new_book: isNewBook,
       });
 
       Alert.alert('Successo!', 'Annuncio creato con successo');
@@ -1071,99 +1119,99 @@ export default function SellScreen() {
 
               {/* Detailed Conditions - disabled if new */}
               <View style={[isNewBook && styles.disabledSection]}>
-                <Text style={[styles.formLabel, isNewBook && styles.disabledText]}>Difetti presenti</Text>
-                <View style={styles.detailsContainer}>
-                  <View style={styles.detailRow}>
-                    <View style={styles.detailInfo}>
-                      <Ionicons name="pencil" size={20} color={isNewBook ? "#ccc" : "#666"} />
-                      <Text style={[styles.detailLabel, isNewBook && styles.disabledText]}>Scritte a penna/matita</Text>
-                    </View>
-                    <Switch
-                      value={hasWritings}
-                      onValueChange={setHasWritings}
-                      trackColor={{ false: '#e0e0e0', true: '#FF9800' }}
-                      thumbColor={hasWritings ? '#fff' : '#fff'}
-                      disabled={isNewBook}
-                    />
+                <Text style={[styles.formLabel, isNewBook && styles.disabledText]}>Condizioni del libro</Text>
+                <Text style={styles.sliderHint}>Trascina gli slider: 0% = Perfetto, 100% = Molto rovinato</Text>
+                
+                {/* Slider Scritte */}
+                <View style={styles.sliderContainer}>
+                  <View style={styles.sliderHeader}>
+                    <Ionicons name="pencil" size={18} color={isNewBook ? "#ccc" : "#666"} />
+                    <Text style={[styles.sliderLabel, isNewBook && styles.disabledText]}>Scritte (penna/matita)</Text>
+                    <Text style={[styles.sliderValue, { color: `rgb(${Math.round(hasWritings * 2.55)}, ${Math.round(255 - hasWritings * 2.55)}, 0)` }]}>
+                      {hasWritings}%
+                    </Text>
                   </View>
-
-                  <View style={styles.detailRow}>
-                    <View style={styles.detailInfo}>
-                      <Ionicons name="color-fill" size={20} color={isNewBook ? "#ccc" : "#666"} />
-                      <Text style={[styles.detailLabel, isNewBook && styles.disabledText]}>Evidenziature</Text>
-                    </View>
-                    <Switch
-                      value={hasHighlights}
-                      onValueChange={setHasHighlights}
-                      trackColor={{ false: '#e0e0e0', true: '#FF9800' }}
-                      thumbColor={hasHighlights ? '#fff' : '#fff'}
-                      disabled={isNewBook}
-                    />
-                  </View>
-
-                  <View style={styles.detailRow}>
-                    <View style={styles.detailInfo}>
-                      <Ionicons name="document" size={20} color={isNewBook ? "#ccc" : "#666"} />
-                      <Text style={[styles.detailLabel, isNewBook && styles.disabledText]}>Pieghe/Orecchie</Text>
-                    </View>
-                    <Switch
-                      value={hasFolds}
-                      onValueChange={setHasFolds}
-                      trackColor={{ false: '#e0e0e0', true: '#FF9800' }}
-                      thumbColor={hasFolds ? '#fff' : '#fff'}
-                      disabled={isNewBook}
-                    />
-                  </View>
+                  <Slider
+                    style={styles.slider}
+                    minimumValue={0}
+                    maximumValue={100}
+                    step={5}
+                    value={hasWritings}
+                    onValueChange={(val) => !isNewBook && setHasWritings(val)}
+                    minimumTrackTintColor={`rgb(${Math.round(hasWritings * 2.55)}, ${Math.round(255 - hasWritings * 2.55)}, 0)`}
+                    maximumTrackTintColor="#e0e0e0"
+                    thumbTintColor={isNewBook ? "#ccc" : "#1a472a"}
+                    disabled={isNewBook}
+                  />
                 </View>
 
-                {/* Cover Condition */}
-                <Text style={[styles.formLabel, isNewBook && styles.disabledText]}>Condizione Copertina</Text>
-                <View style={styles.optionsRow}>
-                  {['perfetta', 'buona', 'usurata'].map((opt) => (
-                    <TouchableOpacity
-                      key={opt}
-                      style={[
-                        styles.optionChip,
-                        !isNewBook && coverCondition === opt && styles.optionChipActive,
-                        isNewBook && styles.optionChipDisabled
-                      ]}
-                      onPress={() => !isNewBook && setCoverCondition(opt)}
-                      disabled={isNewBook}
-                    >
-                      <Text style={[
-                        styles.optionChipText,
-                        !isNewBook && coverCondition === opt && styles.optionChipTextActive,
-                        isNewBook && styles.disabledText
-                      ]}>
-                        {opt.charAt(0).toUpperCase() + opt.slice(1)}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+                {/* Slider Evidenziature */}
+                <View style={styles.sliderContainer}>
+                  <View style={styles.sliderHeader}>
+                    <Ionicons name="color-fill" size={18} color={isNewBook ? "#ccc" : "#666"} />
+                    <Text style={[styles.sliderLabel, isNewBook && styles.disabledText]}>Evidenziature</Text>
+                    <Text style={[styles.sliderValue, { color: `rgb(${Math.round(hasHighlights * 2.55)}, ${Math.round(255 - hasHighlights * 2.55)}, 0)` }]}>
+                      {hasHighlights}%
+                    </Text>
+                  </View>
+                  <Slider
+                    style={styles.slider}
+                    minimumValue={0}
+                    maximumValue={100}
+                    step={5}
+                    value={hasHighlights}
+                    onValueChange={(val) => !isNewBook && setHasHighlights(val)}
+                    minimumTrackTintColor={`rgb(${Math.round(hasHighlights * 2.55)}, ${Math.round(255 - hasHighlights * 2.55)}, 0)`}
+                    maximumTrackTintColor="#e0e0e0"
+                    thumbTintColor={isNewBook ? "#ccc" : "#1a472a"}
+                    disabled={isNewBook}
+                  />
                 </View>
 
-                {/* Pages Condition */}
-                <Text style={[styles.formLabel, isNewBook && styles.disabledText]}>Condizione Pagine</Text>
-                <View style={styles.optionsRow}>
-                  {[{value: 'perfette', label: 'Ottime'}, {value: 'buone', label: 'Buone'}, {value: 'ingiallite', label: 'Ingiallite'}].map((opt) => (
-                    <TouchableOpacity
-                      key={opt.value}
-                      style={[
-                        styles.optionChip,
-                        !isNewBook && pagesCondition === opt.value && styles.optionChipActive,
-                        isNewBook && styles.optionChipDisabled
-                      ]}
-                      onPress={() => !isNewBook && setPagesCondition(opt.value)}
-                      disabled={isNewBook}
-                    >
-                      <Text style={[
-                        styles.optionChipText,
-                        !isNewBook && pagesCondition === opt.value && styles.optionChipTextActive,
-                        isNewBook && styles.disabledText
-                      ]}>
-                        {opt.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+                {/* Slider Pieghe/Orecchie */}
+                <View style={styles.sliderContainer}>
+                  <View style={styles.sliderHeader}>
+                    <Ionicons name="document" size={18} color={isNewBook ? "#ccc" : "#666"} />
+                    <Text style={[styles.sliderLabel, isNewBook && styles.disabledText]}>Orecchie/Pieghe</Text>
+                    <Text style={[styles.sliderValue, { color: `rgb(${Math.round(hasFolds * 2.55)}, ${Math.round(255 - hasFolds * 2.55)}, 0)` }]}>
+                      {hasFolds}%
+                    </Text>
+                  </View>
+                  <Slider
+                    style={styles.slider}
+                    minimumValue={0}
+                    maximumValue={100}
+                    step={5}
+                    value={hasFolds}
+                    onValueChange={(val) => !isNewBook && setHasFolds(val)}
+                    minimumTrackTintColor={`rgb(${Math.round(hasFolds * 2.55)}, ${Math.round(255 - hasFolds * 2.55)}, 0)`}
+                    maximumTrackTintColor="#e0e0e0"
+                    thumbTintColor={isNewBook ? "#ccc" : "#1a472a"}
+                    disabled={isNewBook}
+                  />
+                </View>
+
+                {/* Slider Copertina */}
+                <View style={styles.sliderContainer}>
+                  <View style={styles.sliderHeader}>
+                    <Ionicons name="book" size={18} color={isNewBook ? "#ccc" : "#666"} />
+                    <Text style={[styles.sliderLabel, isNewBook && styles.disabledText]}>Copertina</Text>
+                    <Text style={[styles.sliderValue, { color: `rgb(${Math.round(coverCondition * 2.55)}, ${Math.round(255 - coverCondition * 2.55)}, 0)` }]}>
+                      {coverCondition}%
+                    </Text>
+                  </View>
+                  <Slider
+                    style={styles.slider}
+                    minimumValue={0}
+                    maximumValue={100}
+                    step={5}
+                    value={coverCondition}
+                    onValueChange={(val) => !isNewBook && setCoverCondition(val)}
+                    minimumTrackTintColor={`rgb(${Math.round(coverCondition * 2.55)}, ${Math.round(255 - coverCondition * 2.55)}, 0)`}
+                    maximumTrackTintColor="#e0e0e0"
+                    thumbTintColor={isNewBook ? "#ccc" : "#1a472a"}
+                    disabled={isNewBook}
+                  />
                 </View>
               </View>
 
@@ -1179,10 +1227,17 @@ export default function SellScreen() {
               />
 
               {/* Condizione Calcolata Automaticamente */}
-              <Text style={styles.formLabel}>Condizione Calcolata</Text>
+              <Text style={styles.formLabel}>Stato complessivo del libro</Text>
               <View style={styles.calculatedConditionContainer}>
                 {(() => {
-                  const condConfig = CONDITION_OPTIONS.find(c => c.value === calculatedCondition) || CONDITION_OPTIONS[1];
+                  const { condition, score } = conditionResult;
+                  const condConfig = {
+                    'nuovo': { label: 'Nuovo', color: '#2196F3', icon: 'star' },
+                    'ottimo': { label: 'Ottimo', color: '#4CAF50', icon: 'checkmark-circle' },
+                    'buono': { label: 'Buono', color: '#FF9800', icon: 'thumbs-up' },
+                    'accettabile': { label: 'Accettabile', color: '#f44336', icon: 'alert-circle' },
+                  }[condition] || { label: 'Buono', color: '#FF9800', icon: 'thumbs-up' };
+                  
                   return (
                     <View style={[styles.calculatedConditionBox, { borderColor: condConfig.color }]}>
                       <View style={[styles.trafficLight, { backgroundColor: condConfig.color }]}>
@@ -1193,7 +1248,7 @@ export default function SellScreen() {
                           {condConfig.label}
                         </Text>
                         <Text style={styles.calculatedConditionHint}>
-                          Calcolato in base ai difetti selezionati
+                          {isNewBook ? 'Libro nuovo' : `Media difetti: ${Math.round(score)}%`}
                         </Text>
                       </View>
                     </View>
@@ -1201,16 +1256,64 @@ export default function SellScreen() {
                 })()}
               </View>
 
-              {/* Price - Calcolato Automaticamente */}
-              <Text style={styles.formLabel}>Prezzo di vendita</Text>
-              <View style={styles.calculatedPriceContainer}>
-                <View style={styles.calculatedPriceBox}>
-                  <Text style={styles.calculatedPriceLabel}>Prezzo calcolato</Text>
-                  <Text style={styles.calculatedPriceValue}>€{calculatedPrice}</Text>
-                  <Text style={styles.calculatedPricePercentage}>
-                    {Math.round(conditionPercentage * 100)}% del prezzo di copertina
-                  </Text>
+              {/* Price - Forbice di prezzi selezionabili */}
+              <Text style={styles.formLabel}>💰 Scegli il tuo prezzo</Text>
+              <View style={styles.priceRangeContainer}>
+                <Text style={styles.priceRangeTitle}>
+                  Il tuo libro vale circa: €{priceRange.prices[1]?.price.toFixed(2) || '0.00'}
+                </Text>
+                <Text style={styles.priceRangeSubtitle}>
+                  Stato: {priceRange.condition === 'nuovo' ? 'Nuovo' : priceRange.condition === 'ottimo' ? 'Ottimo' : priceRange.condition === 'buono' ? 'Buono' : 'Accettabile'}
+                </Text>
+                
+                <View style={styles.priceOptionsContainer}>
+                  {priceRange.prices.map((priceOpt, index) => (
+                    <TouchableOpacity
+                      key={index}
+                      style={[
+                        styles.priceOptionButton,
+                        selectedPriceOption === priceOpt.price && styles.priceOptionButtonSelected,
+                        index === 2 && styles.priceOptionButtonFast
+                      ]}
+                      onPress={() => setSelectedPriceOption(priceOpt.price)}
+                    >
+                      <Text style={[
+                        styles.priceOptionLabel,
+                        selectedPriceOption === priceOpt.price && styles.priceOptionLabelSelected
+                      ]}>
+                        {priceOpt.label}
+                      </Text>
+                      <Text style={[
+                        styles.priceOptionValue,
+                        selectedPriceOption === priceOpt.price && styles.priceOptionValueSelected
+                      ]}>
+                        €{priceOpt.price.toFixed(2)}
+                      </Text>
+                      <Text style={[
+                        styles.priceOptionPercentage,
+                        selectedPriceOption === priceOpt.price && styles.priceOptionPercentageSelected
+                      ]}>
+                        ({Math.round(priceOpt.percentage * 100)}%)
+                      </Text>
+                      {index === 2 && (
+                        <View style={styles.fastSaleBadge}>
+                          <Ionicons name="flash" size={12} color="#fff" />
+                          <Text style={styles.fastSaleBadgeText}>Vendi più veloce</Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  ))}
                 </View>
+
+                {selectedPriceOption !== null && (
+                  <View style={styles.selectedPriceInfo}>
+                    <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+                    <Text style={styles.selectedPriceText}>
+                      Prezzo selezionato: €{selectedPriceOption.toFixed(2)}
+                    </Text>
+                  </View>
+                )}
+                
                 {selectedBook && selectedBook.prezzo_copertina && (
                   <Text style={styles.originalPriceHint}>
                     Prezzo copertina: €{selectedBook.prezzo_copertina.toFixed(2)}
@@ -1749,6 +1852,135 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 8,
     textAlign: 'center',
+  },
+  // Slider styles
+  sliderHint: {
+    fontSize: 12,
+    color: '#888',
+    marginBottom: 12,
+    fontStyle: 'italic',
+  },
+  sliderContainer: {
+    marginBottom: 16,
+    backgroundColor: '#f8f9fa',
+    padding: 12,
+    borderRadius: 10,
+  },
+  sliderHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  sliderLabel: {
+    flex: 1,
+    fontSize: 14,
+    color: '#333',
+  },
+  sliderValue: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    minWidth: 40,
+    textAlign: 'right',
+  },
+  slider: {
+    width: '100%',
+    height: 40,
+  },
+  // Price Range styles
+  priceRangeContainer: {
+    backgroundColor: '#f8f9fa',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  priceRangeTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1a472a',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  priceRangeSubtitle: {
+    fontSize: 13,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  priceOptionsContainer: {
+    gap: 10,
+  },
+  priceOptionButton: {
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: '#e0e0e0',
+    borderRadius: 12,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  priceOptionButtonSelected: {
+    borderColor: '#4CAF50',
+    backgroundColor: '#e8f5e9',
+  },
+  priceOptionButtonFast: {
+    borderColor: '#FF9800',
+  },
+  priceOptionLabel: {
+    fontSize: 13,
+    color: '#666',
+    flex: 1,
+  },
+  priceOptionLabelSelected: {
+    color: '#1a472a',
+    fontWeight: '600',
+  },
+  priceOptionValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    marginHorizontal: 10,
+  },
+  priceOptionValueSelected: {
+    color: '#4CAF50',
+  },
+  priceOptionPercentage: {
+    fontSize: 12,
+    color: '#999',
+  },
+  priceOptionPercentageSelected: {
+    color: '#4CAF50',
+  },
+  fastSaleBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FF9800',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    gap: 4,
+    marginLeft: 8,
+  },
+  fastSaleBadgeText: {
+    fontSize: 10,
+    color: '#fff',
+    fontWeight: '600',
+  },
+  selectedPriceInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 12,
+    padding: 10,
+    backgroundColor: '#e8f5e9',
+    borderRadius: 8,
+    justifyContent: 'center',
+  },
+  selectedPriceText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#4CAF50',
   },
   // Condition section header
   conditionSectionHeader: {
