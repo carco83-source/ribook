@@ -550,112 +550,126 @@ export default function RadarScreen() {
             )}
 
             {/* Libri Usati Disponibili - CON NUMERO COPIE E LINK */}
-            {compatibility.comprare?.libri_usati && compatibility.comprare.libri_usati.length > 0 && (
-              <View style={styles.classCard}>
-                <Text style={styles.sampleBooksTitle}>
-                  Libri usati da acquistare per {child?.nome_figlio}:
-                </Text>
-                {compatibility.comprare.libri_usati.map((book: any, idx: number) => (
-                  <TouchableOpacity 
-                    key={idx} 
-                    style={[
-                      styles.sampleBookItem,
-                      book.copie_disponibili > 0 && styles.sampleBookItemClickable
-                    ]}
-                    onPress={() => {
-                      if (book.copie_disponibili > 0 && book.isbn) {
-                        router.push(`/book-sellers/${book.isbn}`);
-                      }
-                    }}
-                    disabled={!book.copie_disponibili || book.copie_disponibili === 0}
-                  >
-                    <View style={styles.sampleBookInfo}>
-                      <Text style={styles.sampleBookTitle} numberOfLines={2}>
-                        {book.titolo}
-                      </Text>
-                      <Text style={styles.sampleBookSubject} numberOfLines={1}>
-                        {book.disciplina}
-                      </Text>
-                    </View>
-                    <View style={{ alignItems: 'flex-end', flexDirection: 'row', gap: 8 }}>
-                      {/* Badge copie disponibili */}
-                      <View style={[
-                        styles.copieBadge,
-                        book.copie_disponibili > 0 ? styles.copieBadgeAvailable : styles.copieBadgeNone
-                      ]}>
-                        <Text style={[
-                          styles.copieBadgeText,
-                          book.copie_disponibili > 0 ? styles.copieBadgeTextAvailable : styles.copieBadgeTextNone
-                        ]}>
-                          {book.copie_disponibili || 0}
+            {(() => {
+              // Combina libri_usati + libri da "nuovi" che hanno copie usate disponibili
+              const libriUsatiBase = compatibility.comprare?.libri_usati || [];
+              const libriNuoviConUsati = (compatibility.nuovi?.libri || []).filter(
+                (book: any) => book.copie_usate_disponibili > 0 && !book.is_nuova_edizione
+              );
+              const tuttiLibriUsati = [...libriUsatiBase, ...libriNuoviConUsati];
+              
+              if (tuttiLibriUsati.length === 0) return null;
+              
+              return (
+                <View style={styles.classCard}>
+                  <Text style={styles.sampleBooksTitle}>
+                    Libri usati da acquistare per {child?.nome_figlio}:
+                  </Text>
+                  {tuttiLibriUsati.map((book: any, idx: number) => {
+                    const copie = book.copie_disponibili || book.copie_usate_disponibili || 0;
+                    return (
+                      <TouchableOpacity 
+                        key={idx} 
+                        style={[
+                          styles.sampleBookItem,
+                          copie > 0 && styles.sampleBookItemClickable
+                        ]}
+                        onPress={() => {
+                          if (copie > 0 && book.isbn) {
+                            router.push(`/book-sellers/${book.isbn}`);
+                          }
+                        }}
+                        disabled={copie === 0}
+                      >
+                        <View style={styles.sampleBookInfo}>
+                          <Text style={styles.sampleBookTitle} numberOfLines={2}>
+                            {book.titolo}
+                          </Text>
+                          <Text style={styles.sampleBookSubject} numberOfLines={1}>
+                            {book.disciplina}
+                          </Text>
+                        </View>
+                        <View style={{ alignItems: 'flex-end', flexDirection: 'row', gap: 8 }}>
+                          <View style={[
+                            styles.copieBadge,
+                            copie > 0 ? styles.copieBadgeAvailable : styles.copieBadgeNone
+                          ]}>
+                            <Text style={[
+                              styles.copieBadgeText,
+                              copie > 0 ? styles.copieBadgeTextAvailable : styles.copieBadgeTextNone
+                            ]}>
+                              {copie}
+                            </Text>
+                          </View>
+                          {copie > 0 && (
+                            <Ionicons name="chevron-forward" size={20} color="#4CAF50" />
+                          )}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              );
+            })()}
+
+            {/* Libri non reperibili usati o di nuova edizione */}
+            {(() => {
+              // Filtra solo libri senza copie usate disponibili O nuove edizioni
+              const libriNonReperibili = (compatibility.nuovi?.libri || []).filter(
+                (book: any) => book.copie_usate_disponibili === 0 || book.is_nuova_edizione
+              );
+              
+              if (libriNonReperibili.length === 0) return null;
+              
+              return (
+                <View style={styles.classCard}>
+                  <Text style={[styles.sampleBooksTitle, { color: '#FF9800' }]}>
+                    Libri non reperibili usati o di nuova edizione:
+                  </Text>
+                  <Text style={{ fontSize: 11, color: '#666', marginBottom: 12, fontStyle: 'italic' }}>
+                    Al momento da acquistare nuovi
+                  </Text>
+                  {libriNonReperibili.map((book: any, idx: number) => (
+                    <TouchableOpacity 
+                      key={idx} 
+                      style={[
+                        styles.sampleBookItem,
+                        book.copie_usate_disponibili > 0 && styles.sampleBookItemClickable
+                      ]}
+                      onPress={() => {
+                        if (book.copie_usate_disponibili > 0 && book.isbn) {
+                          router.push(`/book-sellers/${book.isbn}`);
+                        }
+                      }}
+                    >
+                      <View style={styles.sampleBookInfo}>
+                        <Text style={styles.sampleBookTitle} numberOfLines={2}>
+                          {book.titolo}
+                        </Text>
+                        <Text style={styles.sampleBookSubject} numberOfLines={1}>
+                          {book.disciplina}
+                        </Text>
+                        {book.is_nuova_edizione && (
+                          <Text style={{ fontSize: 10, color: '#f44336', fontWeight: 'bold' }}>
+                            ⚠️ NUOVA EDIZIONE 2025 - Solo nuovo
+                          </Text>
+                        )}
+                        {!book.is_nuova_edizione && (
+                          <Text style={{ fontSize: 10, color: '#999' }}>
+                            Nessuna copia usata al momento
+                          </Text>
+                        )}
+                      </View>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={[styles.sampleBookPrice, { color: '#FF9800' }]}>
+                          €{book.prezzo?.toFixed(2)}
                         </Text>
                       </View>
-                      {book.copie_disponibili > 0 && (
-                        <Ionicons name="chevron-forward" size={20} color="#4CAF50" />
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-
-            {/* Libri non reperiti usati o nuove edizioni */}
-            {compatibility.nuovi?.libri && compatibility.nuovi.libri.length > 0 && (
-              <View style={styles.classCard}>
-                <Text style={[styles.sampleBooksTitle, { color: '#FF9800' }]}>
-                  Libri non reperiti usati o nuove edizioni:
-                </Text>
-                <Text style={{ fontSize: 11, color: '#666', marginBottom: 12, fontStyle: 'italic' }}>
-                  Al momento da acquistare nuovi (oppure usati se disponibili)
-                </Text>
-                {compatibility.nuovi.libri.map((book: any, idx: number) => (
-                  <TouchableOpacity 
-                    key={idx} 
-                    style={[
-                      styles.sampleBookItem,
-                      book.copie_usate_disponibili > 0 && styles.sampleBookItemClickable
-                    ]}
-                    onPress={() => {
-                      // SEMPRE cliccabile se ci sono copie usate
-                      if (book.copie_usate_disponibili > 0 && book.isbn) {
-                        router.push(`/book-sellers/${book.isbn}`);
-                      }
-                    }}
-                  >
-                    <View style={styles.sampleBookInfo}>
-                      <Text style={styles.sampleBookTitle} numberOfLines={2}>
-                        {book.titolo}
-                      </Text>
-                      <Text style={styles.sampleBookSubject} numberOfLines={1}>
-                        {book.disciplina}
-                      </Text>
-                      {book.is_nuova_edizione && (
-                        <Text style={{ fontSize: 10, color: '#f44336', fontWeight: 'bold' }}>
-                          ⚠️ NUOVA EDIZIONE 2025 - Solo nuovo
-                        </Text>
-                      )}
-                      {!book.is_nuova_edizione && book.copie_usate_disponibili > 0 ? (
-                        <Text style={{ fontSize: 10, color: '#4CAF50', fontWeight: 'bold' }}>
-                          ✅ {book.copie_usate_disponibili} copie usate disponibili - Tocca per acquistare
-                        </Text>
-                      ) : !book.is_nuova_edizione && (
-                        <Text style={{ fontSize: 10, color: '#999' }}>
-                          Nessuna copia usata al momento
-                        </Text>
-                      )}
-                    </View>
-                    <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={[styles.sampleBookPrice, { color: '#FF9800' }]}>
-                        €{book.prezzo?.toFixed(2)}
-                      </Text>
-                      {book.copie_usate_disponibili > 0 && !book.is_nuova_edizione && (
-                        <Ionicons name="chevron-forward" size={16} color="#4CAF50" />
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              );
+            })()}
 
             {/* Testi Consigliati o Da Non Acquistare */}
             {compatibility.consigliati?.libri_da_comprare && compatibility.consigliati.libri_da_comprare.length > 0 && (
