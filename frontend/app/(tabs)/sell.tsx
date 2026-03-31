@@ -1270,42 +1270,46 @@ export default function SellScreen() {
                 </Text>
                 
                 <View style={styles.priceOptionsContainer}>
-                  {priceRange.prices.map((priceOpt, index) => (
-                    <TouchableOpacity
-                      key={index}
-                      style={[
-                        styles.priceOptionButton,
-                        selectedPriceOption === priceOpt.price && styles.priceOptionButtonSelected,
-                        index === 2 && styles.priceOptionButtonFast
-                      ]}
-                      onPress={() => setSelectedPriceOption(priceOpt.price)}
-                    >
-                      <Text style={[
-                        styles.priceOptionLabel,
-                        selectedPriceOption === priceOpt.price && styles.priceOptionLabelSelected
-                      ]}>
-                        {priceOpt.label}
-                      </Text>
-                      <Text style={[
-                        styles.priceOptionValue,
-                        selectedPriceOption === priceOpt.price && styles.priceOptionValueSelected
-                      ]}>
-                        €{priceOpt.price.toFixed(2)}
-                      </Text>
-                      <Text style={[
-                        styles.priceOptionPercentage,
-                        selectedPriceOption === priceOpt.price && styles.priceOptionPercentageSelected
-                      ]}>
-                        ({Math.round(priceOpt.percentage * 100)}%)
-                      </Text>
-                      {index === 2 && (
-                        <View style={styles.fastSaleBadge}>
-                          <Ionicons name="flash" size={12} color="#fff" />
-                          <Text style={styles.fastSaleBadgeText}>Vendi più veloce</Text>
+                  {priceRange.prices.map((priceOpt, index) => {
+                    const buyerPrice = (priceOpt.price * 1.15).toFixed(2); // +15% commissione
+                    return (
+                      <TouchableOpacity
+                        key={index}
+                        style={[
+                          styles.priceOptionButton,
+                          selectedPriceOption === priceOpt.price && styles.priceOptionButtonSelected,
+                          index === 2 && styles.priceOptionButtonFast
+                        ]}
+                        onPress={() => setSelectedPriceOption(priceOpt.price)}
+                      >
+                        <View style={styles.priceOptionLeft}>
+                          <Text style={[
+                            styles.priceOptionLabel,
+                            selectedPriceOption === priceOpt.price && styles.priceOptionLabelSelected
+                          ]}>
+                            {priceOpt.label}
+                          </Text>
+                          {index === 2 && (
+                            <View style={styles.fastSaleBadge}>
+                              <Ionicons name="flash" size={10} color="#fff" />
+                              <Text style={styles.fastSaleBadgeText}>Rapido</Text>
+                            </View>
+                          )}
                         </View>
-                      )}
-                    </TouchableOpacity>
-                  ))}
+                        <View style={styles.priceOptionRight}>
+                          <Text style={[
+                            styles.priceOptionValue,
+                            selectedPriceOption === priceOpt.price && styles.priceOptionValueSelected
+                          ]}>
+                            €{priceOpt.price.toFixed(2)}
+                          </Text>
+                          <Text style={styles.priceOptionBuyerCost}>
+                            Costo acquirente: €{buyerPrice}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
 
                 {selectedPriceOption !== null && (
@@ -1946,10 +1950,18 @@ const styles = StyleSheet.create({
   priceOptionButtonFast: {
     borderColor: '#FF9800',
   },
+  priceOptionLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  priceOptionRight: {
+    alignItems: 'flex-end',
+  },
   priceOptionLabel: {
     fontSize: 13,
     color: '#666',
-    flex: 1,
   },
   priceOptionLabelSelected: {
     color: '#1a472a',
@@ -1959,10 +1971,14 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     color: '#333',
-    marginHorizontal: 10,
   },
   priceOptionValueSelected: {
     color: '#4CAF50',
+  },
+  priceOptionBuyerCost: {
+    fontSize: 11,
+    color: '#888',
+    marginTop: 2,
   },
   priceOptionPercentage: {
     fontSize: 12,
@@ -1975,14 +1991,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FF9800',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 10,
-    gap: 4,
-    marginLeft: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    gap: 3,
   },
   fastSaleBadgeText: {
-    fontSize: 10,
+    fontSize: 9,
     color: '#fff',
     fontWeight: '600',
   },
