@@ -612,7 +612,7 @@ export default function RadarScreen() {
               );
             })()}
 
-            {/* Libri non reperibili usati o di nuova edizione */}
+            {/* Libri ancora non reperiti usati o di nuova adozione */}
             {(() => {
               // Filtra solo libri senza copie usate disponibili O nuove edizioni
               const libriNonReperibili = (compatibility.nuovi?.libri || []).filter(
@@ -624,7 +624,7 @@ export default function RadarScreen() {
               return (
                 <View style={styles.classCard}>
                   <Text style={[styles.sampleBooksTitle, { color: '#FF9800' }]}>
-                    Libri non reperibili usati o di nuova edizione:
+                    Libri ancora non reperiti usati o di nuova adozione:
                   </Text>
                   <Text style={{ fontSize: 11, color: '#666', marginBottom: 12, fontStyle: 'italic' }}>
                     Al momento da acquistare nuovi
