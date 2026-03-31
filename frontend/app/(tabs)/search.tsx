@@ -433,43 +433,28 @@ export default function SearchScreen() {
                 return (
                   <TouchableOpacity
                     key={child.id}
-                    style={[
-                      styles.childOption,
-                      !canBuy && styles.childOptionDisabled
-                    ]}
-                    onPress={() => canBuy && selectChildProfile(child)}
-                    disabled={!canBuy}
+                    style={styles.childOption}
+                    onPress={() => selectChildProfile(child)}
                   >
                     <View style={styles.childOptionIcon}>
                       <Ionicons 
                         name="person" 
                         size={24} 
-                        color={canBuy ? "#1a472a" : "#999"} 
+                        color="#1a472a" 
                       />
                     </View>
                     <View style={styles.childOptionInfo}>
-                      <Text style={[
-                        styles.childOptionName,
-                        !canBuy && styles.childOptionNameDisabled
-                      ]}>
+                      <Text style={styles.childOptionName}>
                         {child.nome_figlio}
                       </Text>
                       <Text style={styles.childOptionSchool}>
                         {child.classe}ª {isMedia ? 'Media' : 'Superiore'} - {child.scuola.substring(0, 25)}...
                       </Text>
-                      {canBuy ? (
-                        <Text style={styles.childOptionHint}>
-                          → Cerca libri della {childClasse + 1}ª da comprare
-                        </Text>
-                      ) : (
-                        <Text style={[styles.childOptionHint, { color: '#f44336' }]}>
-                          Fine ciclo - nessun libro da comprare
-                        </Text>
-                      )}
+                      <Text style={styles.childOptionHint}>
+                        → Cerca libri per {child.nome_figlio}
+                      </Text>
                     </View>
-                    {canBuy && (
-                      <Ionicons name="chevron-forward" size={20} color="#666" />
-                    )}
+                    <Ionicons name="chevron-forward" size={20} color="#666" />
                   </TouchableOpacity>
                 );
               })
