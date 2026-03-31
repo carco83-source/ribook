@@ -662,59 +662,61 @@ export default function SellScreen() {
               Per quale figlio vuoi vendere i libri?
             </Text>
 
-            {childProfiles.length === 0 ? (
-              <View style={styles.noChildrenContainer}>
-                <Ionicons name="person-add-outline" size={48} color="#ccc" />
-                <Text style={styles.noChildrenText}>Nessun profilo figlio</Text>
-                <TouchableOpacity
-                  style={styles.goToProfileButton}
-                  onPress={() => {
-                    setShowChildPicker(false);
-                    router.push('/(tabs)/profile');
-                  }}
-                >
-                  <Text style={styles.goToProfileButtonText}>Vai al Profilo</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              childProfiles.map((child) => {
-                const isMedia = child.tipo_scuola === 'primo_grado';
-                const childClasse = parseInt(child.classe);
-                const minClasse = isMedia ? 1 : (childClasse <= 2 ? 1 : 3);
-                const canSell = childClasse > minClasse;
-
-                return (
+            <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={true}>
+              {childProfiles.length === 0 ? (
+                <View style={styles.noChildrenContainer}>
+                  <Ionicons name="person-add-outline" size={48} color="#ccc" />
+                  <Text style={styles.noChildrenText}>Nessun profilo figlio</Text>
                   <TouchableOpacity
-                    key={child.id}
-                    style={[styles.childOption, !canSell && styles.childOptionDisabled]}
-                    onPress={() => canSell && selectChildForSelling(child)}
-                    disabled={!canSell}
+                    style={styles.goToProfileButton}
+                    onPress={() => {
+                      setShowChildPicker(false);
+                      router.push('/(tabs)/profile');
+                    }}
                   >
-                    <View style={[styles.childOptionIcon, { backgroundColor: canSell ? '#e8f5e9' : '#f0f0f0' }]}>
-                      <Ionicons name="person" size={24} color={canSell ? "#1a472a" : "#999"} />
-                    </View>
-                    <View style={styles.childOptionInfo}>
-                      <Text style={[styles.childOptionName, !canSell && styles.childOptionNameDisabled]}>
-                        {child.nome_figlio}
-                      </Text>
-                      <Text style={styles.childOptionSchool}>
-                        {child.classe}ª {isMedia ? 'Media' : 'Superiore'}
-                      </Text>
-                      {canSell ? (
-                        <Text style={styles.childOptionHint}>
-                          → Vendi libri della {childClasse - 1}ª
-                        </Text>
-                      ) : (
-                        <Text style={[styles.childOptionHint, { color: '#f44336' }]}>
-                          Primo anno - niente da vendere
-                        </Text>
-                      )}
-                    </View>
-                    {canSell && <Ionicons name="chevron-forward" size={20} color="#666" />}
+                    <Text style={styles.goToProfileButtonText}>Vai al Profilo</Text>
                   </TouchableOpacity>
-                );
-              })
-            )}
+                </View>
+              ) : (
+                childProfiles.map((child) => {
+                  const isMedia = child.tipo_scuola === 'primo_grado';
+                  const childClasse = parseInt(child.classe);
+                  const minClasse = isMedia ? 1 : (childClasse <= 2 ? 1 : 3);
+                  const canSell = childClasse > minClasse;
+
+                  return (
+                    <TouchableOpacity
+                      key={child.id}
+                      style={[styles.childOption, !canSell && styles.childOptionDisabled]}
+                      onPress={() => canSell && selectChildForSelling(child)}
+                      disabled={!canSell}
+                    >
+                      <View style={[styles.childOptionIcon, { backgroundColor: canSell ? '#e8f5e9' : '#f0f0f0' }]}>
+                        <Ionicons name="person" size={24} color={canSell ? "#1a472a" : "#999"} />
+                      </View>
+                      <View style={styles.childOptionInfo}>
+                        <Text style={[styles.childOptionName, !canSell && styles.childOptionNameDisabled]}>
+                          {child.nome_figlio}
+                        </Text>
+                        <Text style={styles.childOptionSchool}>
+                          {child.classe}ª {isMedia ? 'Media' : 'Superiore'}
+                        </Text>
+                        {canSell ? (
+                          <Text style={styles.childOptionHint}>
+                            → Vendi libri della {childClasse - 1}ª
+                          </Text>
+                        ) : (
+                          <Text style={[styles.childOptionHint, { color: '#f44336' }]}>
+                            Primo anno - niente da vendere
+                          </Text>
+                        )}
+                      </View>
+                      {canSell && <Ionicons name="chevron-forward" size={20} color="#666" />}
+                    </TouchableOpacity>
+                  );
+                })
+              )}
+            </ScrollView>
 
             {/* Divider and "Vendi altro libro" button */}
             <View style={styles.dividerContainer}>
