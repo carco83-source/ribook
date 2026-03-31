@@ -1020,54 +1020,6 @@ export default function SellScreen() {
                 </Text>
               )}
 
-              {/* Bookshop Selection - Multi-select */}
-              <Text style={styles.formLabel}>Punti di scambio *</Text>
-              <Text style={styles.bookshopHint}>Seleziona una o più cartolibrerie dove consegnerai il libro</Text>
-              <View style={styles.bookshopOptions}>
-                {bookshopsData.map((shop) => {
-                  const isSelected = selectedBookshops.includes(shop.id);
-                  return (
-                    <TouchableOpacity
-                      key={shop.id}
-                      style={[
-                        styles.bookshopCard,
-                        isSelected && styles.bookshopCardActive
-                      ]}
-                      onPress={() => toggleBookshop(shop.id)}
-                    >
-                      <View style={styles.bookshopHeader}>
-                        <Ionicons 
-                          name={isSelected ? "checkbox" : "square-outline"} 
-                          size={24} 
-                          color={isSelected ? "#1a472a" : "#666"} 
-                        />
-                        <Text style={[
-                          styles.bookshopName,
-                          isSelected && styles.bookshopNameActive
-                        ]}>
-                          {shop.name}
-                        </Text>
-                      </View>
-                      <View style={styles.bookshopDetails}>
-                        <View style={styles.bookshopDetailRow}>
-                          <Ionicons name="location-outline" size={14} color="#666" />
-                          <Text style={styles.bookshopAddress}>{shop.address}</Text>
-                        </View>
-                        <View style={styles.bookshopDetailRow}>
-                          <Ionicons name="call-outline" size={14} color="#666" />
-                          <Text style={styles.bookshopPhone}>{shop.phone}</Text>
-                        </View>
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-              {selectedBookshops.length > 0 && (
-                <Text style={styles.selectedBookshopsCount}>
-                  {selectedBookshops.length} cartolibreri{selectedBookshops.length === 1 ? 'a' : 'e'} selezionat{selectedBookshops.length === 1 ? 'a' : 'e'}
-                </Text>
-              )}
-
               {/* ========== SEZIONE STATO LIBRO ========== */}
               <View style={styles.conditionSectionHeader}>
                 <Ionicons name="clipboard" size={20} color="#1a472a" />
@@ -1265,6 +1217,54 @@ export default function SellScreen() {
                   </Text>
                 )}
               </View>
+
+              {/* Bookshop Selection - Multi-select */}
+              <Text style={styles.formLabel}>Punti di ritiro *</Text>
+              <Text style={styles.bookshopHint}>Seleziona una o più cartolibrerie dove consegnerai il libro</Text>
+              <View style={styles.bookshopOptions}>
+                {bookshopsData.map((shop) => {
+                  const isSelected = selectedBookshops.includes(shop.id);
+                  return (
+                    <TouchableOpacity
+                      key={shop.id}
+                      style={[
+                        styles.bookshopCard,
+                        isSelected && styles.bookshopCardActive
+                      ]}
+                      onPress={() => toggleBookshop(shop.id)}
+                    >
+                      <View style={styles.bookshopHeader}>
+                        <Ionicons 
+                          name={isSelected ? "checkbox" : "square-outline"} 
+                          size={24} 
+                          color={isSelected ? "#1a472a" : "#666"} 
+                        />
+                        <Text style={[
+                          styles.bookshopName,
+                          isSelected && styles.bookshopNameActive
+                        ]}>
+                          {shop.name}
+                        </Text>
+                      </View>
+                      <View style={styles.bookshopDetails}>
+                        <View style={styles.bookshopDetailRow}>
+                          <Ionicons name="location-outline" size={14} color="#666" />
+                          <Text style={styles.bookshopAddress}>{shop.address}</Text>
+                        </View>
+                        <View style={styles.bookshopDetailRow}>
+                          <Ionicons name="call-outline" size={14} color="#666" />
+                          <Text style={styles.bookshopPhone}>{shop.phone}</Text>
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              {selectedBookshops.length > 0 && (
+                <Text style={styles.selectedBookshopsCount}>
+                  {selectedBookshops.length} cartolibreri{selectedBookshops.length === 1 ? 'a' : 'e'} selezionat{selectedBookshops.length === 1 ? 'a' : 'e'}
+                </Text>
+              )}
 
               {/* Submit */}
               <TouchableOpacity
