@@ -318,14 +318,14 @@ export default function SellScreen() {
     
     // Reset form - condizione e prezzo saranno calcolati automaticamente
     setListingPhotos([]);
-    setHasWritings(false);
-    setHasHighlights(false);
-    setHasFolds(false);
-    setCoverCondition('perfetta');
-    setPagesCondition('perfette');
+    setHasWritings(0);
+    setHasHighlights(0);
+    setHasFolds(0);
+    setCoverCondition(0);
     setSelectedBookshops([]);
     setIsNewBook(false);
     setNotes('');
+    setSelectedPriceOption(null);
     
     setShowListingForm(true);
   };
