@@ -406,59 +406,61 @@ export default function SearchScreen() {
               Per chi vuoi cercare i libri da comprare?
             </Text>
 
-            {childProfiles.length === 0 ? (
-              <View style={styles.noChildrenContainer}>
-                <Ionicons name="person-add-outline" size={48} color="#ccc" />
-                <Text style={styles.noChildrenText}>Nessun profilo figlio</Text>
-                <Text style={styles.noChildrenSubtext}>
-                  Vai al Profilo per aggiungere i tuoi figli
-                </Text>
-                <TouchableOpacity
-                  style={styles.addChildButton}
-                  onPress={() => {
-                    setShowChildPicker(false);
-                    router.push('/(tabs)/profile');
-                  }}
-                >
-                  <Text style={styles.addChildButtonText}>Vai al Profilo</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              childProfiles.map((child) => {
-                const isMedia = child.tipo_scuola === 'primo_grado';
-                const childClasse = parseInt(child.classe);
-                const maxClasse = isMedia ? 3 : (childClasse <= 2 ? 2 : 5);
-                const canBuy = childClasse < maxClasse;
-
-                return (
+            <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={true}>
+              {childProfiles.length === 0 ? (
+                <View style={styles.noChildrenContainer}>
+                  <Ionicons name="person-add-outline" size={48} color="#ccc" />
+                  <Text style={styles.noChildrenText}>Nessun profilo figlio</Text>
+                  <Text style={styles.noChildrenSubtext}>
+                    Vai al Profilo per aggiungere i tuoi figli
+                  </Text>
                   <TouchableOpacity
-                    key={child.id}
-                    style={styles.childOption}
-                    onPress={() => selectChildProfile(child)}
+                    style={styles.addChildButton}
+                    onPress={() => {
+                      setShowChildPicker(false);
+                      router.push('/(tabs)/profile');
+                    }}
                   >
-                    <View style={styles.childOptionIcon}>
-                      <Ionicons 
-                        name="person" 
-                        size={24} 
-                        color="#1a472a" 
-                      />
-                    </View>
-                    <View style={styles.childOptionInfo}>
-                      <Text style={styles.childOptionName}>
-                        {child.nome_figlio}
-                      </Text>
-                      <Text style={styles.childOptionSchool}>
-                        {child.classe}ª {isMedia ? 'Media' : 'Superiore'} - {child.scuola.substring(0, 25)}...
-                      </Text>
-                      <Text style={styles.childOptionHint}>
-                        → Cerca libri per {child.nome_figlio}
-                      </Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={20} color="#666" />
+                    <Text style={styles.addChildButtonText}>Vai al Profilo</Text>
                   </TouchableOpacity>
-                );
-              })
-            )}
+                </View>
+              ) : (
+                childProfiles.map((child) => {
+                  const isMedia = child.tipo_scuola === 'primo_grado';
+                  const childClasse = parseInt(child.classe);
+                  const maxClasse = isMedia ? 3 : (childClasse <= 2 ? 2 : 5);
+                  const canBuy = childClasse < maxClasse;
+
+                  return (
+                    <TouchableOpacity
+                      key={child.id}
+                      style={styles.childOption}
+                      onPress={() => selectChildProfile(child)}
+                    >
+                      <View style={styles.childOptionIcon}>
+                        <Ionicons 
+                          name="person" 
+                          size={24} 
+                          color="#1a472a" 
+                        />
+                      </View>
+                      <View style={styles.childOptionInfo}>
+                        <Text style={styles.childOptionName}>
+                          {child.nome_figlio}
+                        </Text>
+                        <Text style={styles.childOptionSchool}>
+                          {child.classe}ª {isMedia ? 'Media' : 'Superiore'} - {child.scuola.substring(0, 25)}...
+                        </Text>
+                        <Text style={styles.childOptionHint}>
+                          → Cerca libri per {child.nome_figlio}
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={20} color="#666" />
+                    </TouchableOpacity>
+                  );
+                })
+              )}
+            </ScrollView>
           </View>
         </TouchableOpacity>
       </Modal>
