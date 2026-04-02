@@ -2866,8 +2866,8 @@ async def generate_books_pdf(user_id: str, child_id: str):
     classe_label = f"{child_classe} {child_sezione}"
     
     header_data = [[
-        Paragraph(f"<b>{scuola_nome.upper()}</b><br/>88100 Catanzaro", header_style),
-        Paragraph(f"<b>{child_codice_scuola}</b>", ParagraphStyle('Code', fontSize=11, fontName='Helvetica-Bold', alignment=TA_CENTER)),
+        Paragraph(f"<b>{scuola_nome.upper()}</b><br/><font size='8'>{child_codice_scuola}</font><br/>88100 Catanzaro", header_style),
+        Paragraph(f"<b><font size='14'>RiLiBro</font></b><br/><br/><font size='9'>{child_codice_scuola}</font>", ParagraphStyle('Code', fontSize=11, fontName='Helvetica-Bold', alignment=TA_CENTER)),
         Paragraph(f"<b>ELENCO DEI LIBRI DI TESTO<br/>ADOTTATI O CONSIGLIATI</b><br/><br/>Tipo Scuola: {tipo_scuola_label}<br/>Classe: {classe_label}<br/>Anno Scolastico 2025-2026", 
                  ParagraphStyle('RightHeader', fontSize=9, leading=11, alignment=TA_LEFT))
     ]]
@@ -2982,7 +2982,7 @@ async def generate_books_pdf(user_id: str, child_id: str):
     # Footer
     elements.append(Spacer(1, 0.3*cm))
     footer_style = ParagraphStyle('Footer', fontSize=8)
-    elements.append(Paragraph(f"Data aggiornamento: {datetime.now().strftime('%Y')}                                                                    Generato da ScambiaLibri", footer_style))
+    elements.append(Paragraph(f"Data aggiornamento: {datetime.now().strftime('%Y')}                                                                    Generato da RiLiBro", footer_style))
     
     doc.build(elements)
     buffer.seek(0)
