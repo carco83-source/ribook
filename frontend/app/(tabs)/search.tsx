@@ -30,6 +30,7 @@ interface Book {
   prezzo_copertina?: number;
   classe?: string;
   editore?: string;
+  copie_disponibili?: number;
 }
 
 interface ChildProfile {
@@ -228,6 +229,8 @@ export default function SearchScreen() {
 
   const renderBook = ({ item }: { item: Book }) => {
     const isSearching = userRequests.includes(item.id);
+    const copieDisponibili = item.copie_disponibili || 0;
+    const hasAvailableCopies = copieDisponibili > 0;
 
     return (
       <View style={styles.bookCard}>
@@ -250,25 +253,38 @@ export default function SearchScreen() {
         </View>
 
         <View style={styles.bookActions}>
-          <TouchableOpacity
-            style={[
-              styles.addButton,
-              isSearching && styles.addButtonActive,
-            ]}
-            onPress={() => handleAddRequest(item)}
-          >
-            <Ionicons
-              name={isSearching ? 'checkmark-circle' : 'add-circle'}
-              size={28}
-              color={isSearching ? '#4CAF50' : '#1a472a'}
-            />
-            <Text style={[
-              styles.addButtonText,
-              isSearching && styles.addButtonTextActive
-            ]}>
-              {isSearching ? 'Cercando' : 'Cerca'}
-            </Text>
-          </TouchableOpacity>
+          {hasAvailableCopies ? (
+            <TouchableOpacity
+              style={styles.availableButton}
+              onPress={() => {
+                if (item.isbn) {
+                  router.push(`/book-sellers/${item.isbn}`);
+                }
+              }}
+            >
+              <View style={styles.availableBadge}>
+                <Text style={styles.availableBadgeText}>{copieDisponibili}</Text>
+              </View>
+              <Text style={styles.availableButtonText}>
+                disponibil{copieDisponibili === 1 ? 'e' : 'i'}
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={[
+                styles.createRequestButton,
+                isSearching && styles.createRequestButtonActive,
+              ]}
+              onPress={() => handleAddRequest(item)}
+            >
+              <Text style={[
+                styles.createRequestButtonText,
+                isSearching && styles.createRequestButtonTextActive
+              ]}>
+                {isSearching ? 'Richiesta attiva' : 'Crea richiesta'}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     );
@@ -764,6 +780,51 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   addButtonTextActive: {
+    color: '#4CAF50',
+  },
+  // Disponibile button
+  availableButton: {
+    alignItems: 'center',
+    padding: 8,
+  },
+  availableBadge: {
+    backgroundColor: '#4CAF50',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  availableBadgeText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  availableButtonText: {
+    fontSize: 11,
+    color: '#4CAF50',
+    marginTop: 4,
+    fontWeight: '600',
+  },
+  // Crea richiesta button
+  createRequestButton: {
+    backgroundColor: '#f5f5f5',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  createRequestButtonActive: {
+    backgroundColor: '#e8f5e9',
+    borderColor: '#4CAF50',
+  },
+  createRequestButtonText: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '500',
+  },
+  createRequestButtonTextActive: {
     color: '#4CAF50',
   },
   emptyContainer: {

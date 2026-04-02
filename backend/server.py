@@ -3288,6 +3288,13 @@ async def get_books_to_buy(user_id: str, child_id: str):
         if disc in succ_books_disc:
             book_succ = succ_books_disc[disc]
             if same_series(my_book, book_succ):
+                # Conta copie disponibili
+                isbn = my_book.get("isbn", "")
+                copie_count = await db.listings.count_documents({
+                    "book_isbn": isbn,
+                    "status": "available"
+                }) if isbn else 0
+                
                 comprabilità.append({
                     "id": my_book.get("isbn", ""),
                     "isbn": my_book.get("isbn", ""),
@@ -3298,7 +3305,8 @@ async def get_books_to_buy(user_id: str, child_id: str):
                     "prezzo_copertina": my_book.get("prezzo_copertina", 0),
                     "prezzo_usato": round(my_book.get("prezzo_copertina", 0) * 0.5, 2),
                     "risparmio": round(my_book.get("prezzo_copertina", 0) * 0.5, 2),
-                    "classe_origine": classe_successiva
+                    "classe_origine": classe_successiva,
+                    "copie_disponibili": copie_count
                 })
     
     return {
