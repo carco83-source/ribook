@@ -2867,7 +2867,7 @@ async def generate_books_pdf(user_id: str, child_id: str):
     
     header_data = [[
         Paragraph(f"<b>{scuola_nome.upper()}</b><br/><font size='8'>{child_codice_scuola}</font><br/>88100 Catanzaro", header_style),
-        Paragraph(f"<b><font size='14'>RiLiBro</font></b><br/><br/><font size='9'>{child_codice_scuola}</font>", ParagraphStyle('Code', fontSize=11, fontName='Helvetica-Bold', alignment=TA_CENTER)),
+        Paragraph(f"<b><font size='20'>RiLiBro</font></b>", ParagraphStyle('Code', fontSize=11, fontName='Helvetica-Bold', alignment=TA_CENTER)),
         Paragraph(f"<b>ELENCO DEI LIBRI DI TESTO<br/>ADOTTATI O CONSIGLIATI</b><br/><br/>Tipo Scuola: {tipo_scuola_label}<br/>Classe: {classe_label}<br/>Anno Scolastico 2025-2026", 
                  ParagraphStyle('RightHeader', fontSize=9, leading=11, alignment=TA_LEFT))
     ]]
