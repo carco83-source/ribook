@@ -163,10 +163,38 @@ export default function SearchScreen() {
     }
   };
 
-  const handleAddRequest = async (book: Book) => {
+  // State per tracciare richieste in corso (per disabilitare il pulsante durante la creazione)
+  const [creatingRequest, setCreatingRequest] = useState<string | null>(null);
+
+  const handleCreateRequestInline = async (book: Book) => {
     if (!userId) return;
 
-    // First, show available listings for this book
+    // Check if already searching
+    if (userRequests.includes(book.id)) {
+      return;
+    }
+
+    setCreatingRequest(book.id);
+
+    try {
+      await axios.post(`${API_URL}/api/requests?user_id=${userId}`, {
+        book_id: book.id,
+      });
+
+      // Aggiorna lo stato locale immediatamente
+      setUserRequests([...userRequests, book.id]);
+    } catch (error) {
+      console.error('Error adding request:', error);
+      Alert.alert('Errore', 'Impossibile creare la richiesta');
+    } finally {
+      setCreatingRequest(null);
+    }
+  };
+
+  // Funzione legacy per aprire modal con listings (usata quando ci sono copie disponibili)
+  const handleViewListings = async (book: Book) => {
+    if (!userId) return;
+
     setSelectedBook(book);
     setShowListingsModal(true);
     setLoadingListings(true);
@@ -179,31 +207,6 @@ export default function SearchScreen() {
       setBookListings([]);
     } finally {
       setLoadingListings(false);
-    }
-  };
-
-  const handleCreateRequest = async () => {
-    if (!userId || !selectedBook) return;
-
-    if (userRequests.includes(selectedBook.id)) {
-      Alert.alert('Info', 'Stai già cercando questo libro');
-      return;
-    }
-
-    try {
-      await axios.post(`${API_URL}/api/requests?user_id=${userId}`, {
-        book_id: selectedBook.id,
-      });
-
-      setUserRequests([...userRequests, selectedBook.id]);
-      setShowListingsModal(false);
-      Alert.alert(
-        'Richiesta creata!',
-        `Verrai notificato quando qualcuno metterà in vendita "${selectedBook.titolo}".`
-      );
-    } catch (error) {
-      console.error('Error adding request:', error);
-      Alert.alert('Errore', 'Impossibile creare la richiesta');
     }
   };
 
@@ -229,6 +232,7 @@ export default function SearchScreen() {
 
   const renderBook = ({ item }: { item: Book }) => {
     const isSearching = userRequests.includes(item.id);
+    const isCreating = creatingRequest === item.id;
     const copieDisponibili = item.copie_disponibili || 0;
     const hasAvailableCopies = copieDisponibili > 0;
 
@@ -254,6 +258,7 @@ export default function SearchScreen() {
 
         <View style={styles.bookActions}>
           {hasAvailableCopies ? (
+            /* Caso 1: Ci sono copie disponibili - mostra numero */
             <TouchableOpacity
               style={styles.availableButton}
               onPress={() => {
@@ -269,20 +274,29 @@ export default function SearchScreen() {
                 disponibil{copieDisponibili === 1 ? 'e' : 'i'}
               </Text>
             </TouchableOpacity>
+          ) : isSearching ? (
+            /* Caso 2: Nessuna copia + richiesta attiva - mostra R */
+            <View style={styles.requestActiveContainer}>
+              <View style={styles.requestActiveBadge}>
+                <Text style={styles.requestActiveBadgeText}>R</Text>
+              </View>
+              <Text style={styles.requestActiveText}>in attesa</Text>
+            </View>
           ) : (
+            /* Caso 3: Nessuna copia + nessuna richiesta - mostra pulsante Crea */
             <TouchableOpacity
               style={[
                 styles.createRequestButton,
-                isSearching && styles.createRequestButtonActive,
+                isCreating && styles.createRequestButtonDisabled,
               ]}
-              onPress={() => handleAddRequest(item)}
+              onPress={() => handleCreateRequestInline(item)}
+              disabled={isCreating}
             >
-              <Text style={[
-                styles.createRequestButtonText,
-                isSearching && styles.createRequestButtonTextActive
-              ]}>
-                {isSearching ? 'Richiesta attiva' : 'Crea richiesta'}
-              </Text>
+              {isCreating ? (
+                <ActivityIndicator size="small" color="#1a472a" />
+              ) : (
+                <Text style={styles.createRequestButtonText}>Crea richiesta</Text>
+              )}
             </TouchableOpacity>
           )}
         </View>
@@ -586,11 +600,16 @@ export default function SearchScreen() {
                   Puoi creare una richiesta e verrai notificato quando sarà disponibile.
                 </Text>
                 <TouchableOpacity
-                  style={styles.createRequestButton}
-                  onPress={handleCreateRequest}
+                  style={styles.createRequestButtonModal}
+                  onPress={() => {
+                    if (selectedBook) {
+                      handleCreateRequestInline(selectedBook);
+                      setShowListingsModal(false);
+                    }
+                  }}
                 >
                   <Ionicons name="notifications-outline" size={20} color="#fff" />
-                  <Text style={styles.createRequestButtonText}>Crea Richiesta</Text>
+                  <Text style={styles.createRequestButtonModalText}>Crea Richiesta</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -814,18 +833,40 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#ddd',
+    minWidth: 80,
+    alignItems: 'center',
   },
-  createRequestButtonActive: {
-    backgroundColor: '#e8f5e9',
-    borderColor: '#4CAF50',
+  createRequestButtonDisabled: {
+    opacity: 0.6,
   },
   createRequestButtonText: {
     fontSize: 12,
     color: '#666',
     fontWeight: '500',
   },
-  createRequestButtonTextActive: {
-    color: '#4CAF50',
+  // Richiesta attiva badge (R)
+  requestActiveContainer: {
+    alignItems: 'center',
+    padding: 8,
+  },
+  requestActiveBadge: {
+    backgroundColor: '#FF9800',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  requestActiveBadgeText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  requestActiveText: {
+    fontSize: 11,
+    color: '#FF9800',
+    marginTop: 4,
+    fontWeight: '600',
   },
   emptyContainer: {
     flex: 1,
@@ -1093,7 +1134,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     lineHeight: 20,
   },
-  createRequestButton: {
+  createRequestButtonModal: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#1a472a',
@@ -1103,7 +1144,7 @@ const styles = StyleSheet.create({
     marginTop: 24,
     gap: 8,
   },
-  createRequestButtonText: {
+  createRequestButtonModalText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',

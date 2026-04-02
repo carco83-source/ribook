@@ -1388,20 +1388,56 @@ async def create_request(request_data: BookRequestCreate, user_id: str):
     if not user:
         raise HTTPException(status_code=404, detail="Utente non trovato")
     
-    book = await db.books.find_one({"id": request_data.book_id})
-    if not book:
-        raise HTTPException(status_code=404, detail="Libro non trovato")
+    # Cerca prima nella collezione books, poi in adozioni
+    book = await db.books.find_one({"$or": [
+        {"id": request_data.book_id},
+        {"isbn": request_data.book_id}
+    ]})
     
-    book_request = BookRequest(
-        buyer_id=user_id,
-        buyer_username=user["username"],
-        book_id=book["id"],
-        book_titolo=book["titolo"],
-        book_autore=book["autore"],
-        book_isbn=book["isbn"],
-        book_materia=book["materia"],
-        book_classe=book["classe"]
-    )
+    if not book:
+        # Prova a cercare nella collezione adozioni
+        book = await db.adozioni.find_one({"isbn": request_data.book_id})
+    
+    if not book:
+        # Se non trovato, crea una richiesta minima con i dati disponibili
+        book_request = BookRequest(
+            buyer_id=user_id,
+            buyer_username=user["username"],
+            book_id=request_data.book_id,
+            book_titolo="Libro richiesto",
+            book_autore="",
+            book_isbn=request_data.book_id,
+            book_materia="",
+            book_classe=""
+        )
+    else:
+        # Gestisci anni_corso/classe che può essere lista o stringa
+        book_classe = book.get("classe", book.get("anni_corso", ""))
+        if isinstance(book_classe, list):
+            book_classe = str(book_classe[0]) if book_classe else ""
+        else:
+            book_classe = str(book_classe) if book_classe else ""
+            
+        book_request = BookRequest(
+            buyer_id=user_id,
+            buyer_username=user["username"],
+            book_id=book.get("id", book.get("isbn", request_data.book_id)),
+            book_titolo=book.get("titolo", ""),
+            book_autore=book.get("autore", book.get("autori", "")),
+            book_isbn=book.get("isbn", request_data.book_id),
+            book_materia=book.get("materia", book.get("disciplina", "")),
+            book_classe=book_classe
+        )
+    
+    # Verifica se esiste già una richiesta per questo libro
+    existing = await db.requests.find_one({
+        "buyer_id": user_id,
+        "book_isbn": book_request.book_isbn,
+        "stato": "cercando"
+    })
+    if existing:
+        existing.pop('_id', None)
+        return existing
     
     await db.requests.insert_one(book_request.dict())
     return book_request
