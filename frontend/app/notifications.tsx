@@ -17,12 +17,16 @@ const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
 interface Notification {
   id: string;
-  type: 'match' | 'sale' | 'delivery' | 'pickup' | 'chat' | 'system';
+  type: 'match' | 'sale' | 'delivery' | 'pickup' | 'chat' | 'system' | 'book_available';
   title: string;
   message: string;
   data?: any;
   read: boolean;
   created_at: string;
+  book_isbn?: string;
+  book_titolo?: string;
+  listing_id?: string;
+  prezzo?: number;
 }
 
 const NOTIFICATION_CONFIG: Record<string, { icon: string; color: string }> = {
@@ -32,6 +36,7 @@ const NOTIFICATION_CONFIG: Record<string, { icon: string; color: string }> = {
   pickup: { icon: 'checkmark-circle', color: '#9C27B0' },
   chat: { icon: 'chatbubble', color: '#00BCD4' },
   system: { icon: 'information-circle', color: '#607D8B' },
+  book_available: { icon: 'book', color: '#4CAF50' },
 };
 
 export default function NotificationsScreen() {
@@ -50,7 +55,9 @@ export default function NotificationsScreen() {
         // Try to load from API, fall back to generated notifications
         try {
           const response = await axios.get(`${API_URL}/api/notifications/${storedUserId}`);
-          setNotifications(response.data);
+          // API returns { notifications: [...], unread_count: N }
+          const apiNotifications = response.data.notifications || response.data || [];
+          setNotifications(apiNotifications);
         } catch (error) {
           // Generate mock notifications based on user activity
           const mockNotifications = await generateNotifications(storedUserId);

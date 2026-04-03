@@ -93,6 +93,10 @@ export default function RadarScreen() {
   // Cart state
   const [cartData, setCartData] = useState<CartData | null>(null);
 
+  // Notifications state
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+
   useFocusEffect(
     useCallback(() => {
       loadData();
@@ -160,6 +164,15 @@ export default function RadarScreen() {
         setCartData(cartResponse.data);
       } catch (e) {
         console.log('Failed to load cart');
+      }
+      
+      // Load notifications
+      try {
+        const notifResponse = await axios.get(`${API_URL}/api/notifications/${storedUserId}`);
+        setNotifications(notifResponse.data.notifications || []);
+        setUnreadCount(notifResponse.data.unread_count || 0);
+      } catch (e) {
+        console.log('Failed to load notifications');
       }
       
       // Select first child by default
@@ -265,10 +278,10 @@ export default function RadarScreen() {
             onPress={() => router.push('/notifications')}
           >
             <Ionicons name="notifications" size={24} color="#1a472a" />
-            {radarData && radarData.total_matches > 0 && (
+            {unreadCount > 0 && (
               <View style={styles.notificationBadge}>
                 <Text style={styles.notificationBadgeText}>
-                  {radarData.total_matches > 9 ? '9+' : radarData.total_matches}
+                  {unreadCount > 9 ? '9+' : unreadCount}
                 </Text>
               </View>
             )}

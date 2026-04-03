@@ -1243,7 +1243,57 @@ async def create_listing(listing_data: BookListingCreate, user_id: str = Query(.
     )
     
     await db.listings.insert_one(listing.dict())
+    
+    # NOTIFICA: Cerca utenti che hanno richieste attive per questo libro
+    book_isbn = listing.book_isbn
+    if book_isbn:
+        # Trova tutte le richieste attive per questo ISBN (escludi il venditore)
+        active_requests = await db.requests.find({
+            "book_isbn": book_isbn,
+            "stato": "cercando",
+            "buyer_id": {"$ne": user_id}  # Non notificare il venditore stesso
+        }).to_list(100)
+        
+        # Crea notifiche per ogni utente che stava cercando questo libro
+        for request in active_requests:
+            notification = {
+                "id": str(uuid.uuid4()),
+                "user_id": request.get("buyer_id"),
+                "type": "book_available",
+                "title": "Libro Disponibile!",
+                "message": f"Il libro '{listing.book_titolo[:50]}' che stavi cercando è ora disponibile!",
+                "book_isbn": book_isbn,
+                "book_titolo": listing.book_titolo,
+                "listing_id": listing.id,
+                "prezzo": listing.prezzo_vendita,
+                "read": False,
+                "created_at": datetime.utcnow().isoformat()
+            }
+            await db.notifications.insert_one(notification)
+    
     return listing
+
+# Endpoint per le notifiche
+@api_router.get("/notifications/{user_id}")
+async def get_notifications(user_id: str, limit: int = 50):
+    """Recupera le notifiche per un utente"""
+    notifications = await db.notifications.find(
+        {"user_id": user_id}
+    ).sort("created_at", -1).limit(limit).to_list(limit)
+    
+    for n in notifications:
+        n.pop('_id', None)
+    
+    return {"notifications": notifications, "unread_count": sum(1 for n in notifications if not n.get("read", True))}
+
+@api_router.put("/notifications/{notification_id}/read")
+async def mark_notification_read(notification_id: str):
+    """Segna una notifica come letta"""
+    result = await db.notifications.update_one(
+        {"id": notification_id},
+        {"$set": {"read": True}}
+    )
+    return {"success": result.modified_count > 0}
 
 @api_router.get("/listings")
 async def get_listings(classe: Optional[str] = None, materia: Optional[str] = None, stato: str = "disponibile", limit: int = 50, skip: int = 0):
