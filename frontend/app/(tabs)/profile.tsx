@@ -153,14 +153,12 @@ export default function ProfileScreen() {
       const pdfUrl = `${API_URL}/api/profiles/${userId}/children/${childId}/books-pdf`;
       
       if (Platform.OS === 'web') {
-        // On web, create a temporary link and click it to download/view PDF
-        const link = document.createElement('a');
-        link.href = pdfUrl;
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        // On web, directly navigate to PDF URL in new window
+        const newWindow = window.open(pdfUrl, '_blank', 'noopener,noreferrer');
+        if (!newWindow) {
+          // If popup blocked, try with location
+          window.location.href = pdfUrl;
+        }
       } else {
         // On mobile, download and share
         const filename = `lista_libri_${childName}_${childClasse}.pdf`;
