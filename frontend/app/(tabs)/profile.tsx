@@ -153,11 +153,30 @@ export default function ProfileScreen() {
       const pdfUrl = `${API_URL}/api/profiles/${userId}/children/${childId}/books-pdf`;
       
       if (Platform.OS === 'web') {
-        // On web, directly navigate to PDF URL in new window
-        const newWindow = window.open(pdfUrl, '_blank', 'noopener,noreferrer');
-        if (!newWindow) {
-          // If popup blocked, try with location
-          window.location.href = pdfUrl;
+        // On web, fetch the PDF as blob and open it
+        try {
+          const response = await fetch(pdfUrl);
+          const blob = await response.blob();
+          const blobUrl = URL.createObjectURL(blob);
+          
+          // Open in new tab
+          const newWindow = window.open(blobUrl, '_blank');
+          
+          // If popup blocked, create download link
+          if (!newWindow) {
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = `lista_libri_${childName}_${childClasse}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+          }
+          
+          // Clean up blob URL after a delay
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+        } catch (e) {
+          console.error('Error fetching PDF:', e);
+          showAlert('Errore', 'Impossibile scaricare il PDF');
         }
       } else {
         // On mobile, download and share
