@@ -9,7 +9,6 @@ import {
   ActivityIndicator,
   Platform,
   Linking,
-  Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -51,8 +50,6 @@ export default function ProfileScreen() {
   const [childProfiles, setChildProfiles] = useState<any[]>([]);
   const [childrenCompatibility, setChildrenCompatibility] = useState<{[key: string]: any}>({});
   const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
-  const [pdfViewerUrl, setPdfViewerUrl] = useState<string | null>(null);
-  const [showPdfModal, setShowPdfModal] = useState(false);
 
   useEffect(() => {
     loadUserData();
@@ -153,21 +150,13 @@ export default function ProfileScreen() {
     setDownloadingPdf(childId);
     try {
       const userId = await AsyncStorage.getItem('user_id');
-      
-      if (!userId) {
-        showAlert('Errore', 'Utente non autenticato');
-        return;
-      }
-      
       const pdfUrl = `${API_URL}/api/profiles/${userId}/children/${childId}/books-pdf`;
       
-      console.log('PDF URL:', pdfUrl);
-      
-      // Check if we're on actual native mobile (not web)
-      const isNativeMobile = Platform.OS === 'ios' || Platform.OS === 'android';
-      
-      if (isNativeMobile) {
-        // On mobile, download and share (original behavior)
+      if (Platform.OS === 'web') {
+        // On web, open PDF in new tab
+        window.open(pdfUrl, '_blank');
+      } else {
+        // On mobile, download and share
         const filename = `lista_libri_${childName}_${childClasse}.pdf`;
         const fileUri = FileSystem.documentDirectory + filename;
         
@@ -177,7 +166,7 @@ export default function ProfileScreen() {
           if (await Sharing.isAvailableAsync()) {
             await Sharing.shareAsync(downloadResult.uri, {
               mimeType: 'application/pdf',
-              dialogTitle: 'Salva Lista Libri'
+              dialogTitle: 'Condividi Lista Libri'
             });
           } else {
             showAlert('PDF Scaricato', `File salvato: ${filename}`);
@@ -185,10 +174,6 @@ export default function ProfileScreen() {
         } else {
           showAlert('Errore', 'Impossibile scaricare il PDF');
         }
-      } else {
-        // On web, show PDF URL in modal for user to open manually
-        setPdfViewerUrl(pdfUrl);
-        setShowPdfModal(true);
       }
     } catch (error) {
       console.error('Error downloading PDF:', error);
@@ -606,49 +591,6 @@ export default function ProfileScreen() {
           Acquisto libro usato assistito
         </Text>
       </View>
-
-      {/* PDF Viewer Modal - only for web */}
-      {Platform.OS === 'web' && (
-        <Modal
-          visible={showPdfModal}
-          animationType="slide"
-          transparent={false}
-          onRequestClose={() => setShowPdfModal(false)}
-        >
-          <View style={styles.pdfModalContainer}>
-            <View style={styles.pdfModalHeader}>
-              <Text style={styles.pdfModalTitle}>Lista Libri PDF</Text>
-              <TouchableOpacity
-                style={styles.pdfModalCloseButton}
-                onPress={() => setShowPdfModal(false)}
-              >
-                <Ionicons name="close" size={24} color="#fff" />
-              </TouchableOpacity>
-            </View>
-            <View style={styles.pdfWebContent}>
-              <Ionicons name="document-text-outline" size={80} color="#1a472a" />
-              <Text style={styles.pdfWebTitle}>PDF Pronto</Text>
-              <Text style={styles.pdfWebSubtitle}>
-                Copia questo link e incollalo in una nuova scheda del browser:
-              </Text>
-              <View style={styles.pdfUrlContainer}>
-                <Text style={styles.pdfUrlText} selectable={true}>
-                  {pdfViewerUrl}
-                </Text>
-              </View>
-              <Text style={styles.pdfHintText}>
-                Tieni premuto sul link per selezionarlo e copiarlo
-              </Text>
-              <TouchableOpacity
-                style={styles.pdfCloseModalButton}
-                onPress={() => setShowPdfModal(false)}
-              >
-                <Text style={styles.pdfCloseModalButtonText}>Chiudi</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Modal>
-      )}
     </ScrollView>
   );
 }
