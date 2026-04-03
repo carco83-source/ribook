@@ -629,30 +629,21 @@ export default function ProfileScreen() {
               <Ionicons name="document-text-outline" size={80} color="#1a472a" />
               <Text style={styles.pdfWebTitle}>PDF Pronto</Text>
               <Text style={styles.pdfWebSubtitle}>
-                Clicca il pulsante qui sotto per aprire il PDF in una nuova scheda
+                Copia questo link e incollalo in una nuova scheda del browser:
+              </Text>
+              <View style={styles.pdfUrlContainer}>
+                <Text style={styles.pdfUrlText} selectable={true}>
+                  {pdfViewerUrl}
+                </Text>
+              </View>
+              <Text style={styles.pdfHintText}>
+                Tieni premuto sul link per selezionarlo e copiarlo
               </Text>
               <TouchableOpacity
-                style={styles.pdfOpenButton}
-                onPress={() => {
-                  if (pdfViewerUrl) {
-                    window.open(pdfViewerUrl, '_blank');
-                  }
-                }}
+                style={styles.pdfCloseModalButton}
+                onPress={() => setShowPdfModal(false)}
               >
-                <Ionicons name="open-outline" size={20} color="#fff" />
-                <Text style={styles.pdfOpenButtonText}>Apri PDF</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.pdfCopyButton}
-                onPress={() => {
-                  if (pdfViewerUrl) {
-                    navigator.clipboard.writeText(pdfViewerUrl);
-                    showAlert('Copiato!', 'Link copiato negli appunti');
-                  }
-                }}
-              >
-                <Ionicons name="copy-outline" size={20} color="#1a472a" />
-                <Text style={styles.pdfCopyButtonText}>Copia Link</Text>
+                <Text style={styles.pdfCloseModalButtonText}>Chiudi</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1406,6 +1397,37 @@ const styles = StyleSheet.create({
   },
   pdfCopyButtonText: {
     color: '#1a472a',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  pdfUrlContainer: {
+    backgroundColor: '#f0f0f0',
+    padding: 16,
+    borderRadius: 8,
+    width: '100%',
+    marginVertical: 16,
+  },
+  pdfUrlText: {
+    fontSize: 12,
+    color: '#333',
+    fontFamily: 'monospace',
+    wordBreak: 'break-all',
+  },
+  pdfHintText: {
+    fontSize: 14,
+    color: '#888',
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  pdfCloseModalButton: {
+    backgroundColor: '#1a472a',
+    paddingVertical: 14,
+    paddingHorizontal: 48,
+    borderRadius: 12,
+  },
+  pdfCloseModalButtonText: {
+    color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
   },
