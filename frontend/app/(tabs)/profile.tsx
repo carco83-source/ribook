@@ -163,12 +163,11 @@ export default function ProfileScreen() {
       
       console.log('PDF URL:', pdfUrl);
       
-      if (Platform.OS === 'web') {
-        // On web, show PDF in a modal with iframe
-        setPdfViewerUrl(pdfUrl);
-        setShowPdfModal(true);
-      } else {
-        // On mobile, download and share
+      // Check if we're on actual native mobile (not web)
+      const isNativeMobile = Platform.OS === 'ios' || Platform.OS === 'android';
+      
+      if (isNativeMobile) {
+        // On mobile, download and share (original behavior)
         const filename = `lista_libri_${childName}_${childClasse}.pdf`;
         const fileUri = FileSystem.documentDirectory + filename;
         
@@ -186,6 +185,10 @@ export default function ProfileScreen() {
         } else {
           showAlert('Errore', 'Impossibile scaricare il PDF');
         }
+      } else {
+        // On web, show PDF URL in modal for user to open manually
+        setPdfViewerUrl(pdfUrl);
+        setShowPdfModal(true);
       }
     } catch (error) {
       console.error('Error downloading PDF:', error);
@@ -622,24 +625,35 @@ export default function ProfileScreen() {
                 <Ionicons name="close" size={24} color="#fff" />
               </TouchableOpacity>
             </View>
-            <View style={styles.pdfIframeContainer}>
-              {pdfViewerUrl && (
-                <object
-                  data={pdfViewerUrl}
-                  type="application/pdf"
-                  width="100%"
-                  height="100%"
-                  style={{ border: 'none', flex: 1 }}
-                >
-                  <iframe
-                    src={pdfViewerUrl}
-                    width="100%"
-                    height="100%"
-                    style={{ border: 'none', flex: 1 }}
-                    title="PDF Viewer"
-                  />
-                </object>
-              )}
+            <View style={styles.pdfWebContent}>
+              <Ionicons name="document-text-outline" size={80} color="#1a472a" />
+              <Text style={styles.pdfWebTitle}>PDF Pronto</Text>
+              <Text style={styles.pdfWebSubtitle}>
+                Clicca il pulsante qui sotto per aprire il PDF in una nuova scheda
+              </Text>
+              <TouchableOpacity
+                style={styles.pdfOpenButton}
+                onPress={() => {
+                  if (pdfViewerUrl) {
+                    window.open(pdfViewerUrl, '_blank');
+                  }
+                }}
+              >
+                <Ionicons name="open-outline" size={20} color="#fff" />
+                <Text style={styles.pdfOpenButtonText}>Apri PDF</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.pdfCopyButton}
+                onPress={() => {
+                  if (pdfViewerUrl) {
+                    navigator.clipboard.writeText(pdfViewerUrl);
+                    showAlert('Copiato!', 'Link copiato negli appunti');
+                  }
+                }}
+              >
+                <Ionicons name="copy-outline" size={20} color="#1a472a" />
+                <Text style={styles.pdfCopyButtonText}>Copia Link</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </Modal>
@@ -1344,5 +1358,55 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     height: '100%',
+  },
+  pdfWebContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  pdfWebTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1a472a',
+    marginTop: 16,
+  },
+  pdfWebSubtitle: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 8,
+    marginBottom: 32,
+  },
+  pdfOpenButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1a472a',
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+    gap: 8,
+    marginBottom: 16,
+  },
+  pdfOpenButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  pdfCopyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#1a472a',
+    gap: 8,
+  },
+  pdfCopyButtonText: {
+    color: '#1a472a',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
