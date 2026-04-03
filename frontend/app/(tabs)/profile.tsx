@@ -156,22 +156,17 @@ export default function ProfileScreen() {
         // On web, open PDF in new tab
         window.open(pdfUrl, '_blank');
       } else {
-        // On mobile, download and share
+        // On mobile, download and use Print for sharing
         const filename = `lista_libri_${childName}_${childClasse}.pdf`;
         const fileUri = FileSystem.documentDirectory + filename;
         
         const downloadResult = await FileSystem.downloadAsync(pdfUrl, fileUri);
         
         if (downloadResult.status === 200) {
-          if (await Sharing.isAvailableAsync()) {
-            await Sharing.shareAsync(downloadResult.uri, {
-              mimeType: 'application/pdf',
-              dialogTitle: 'Condividi Lista Libri',
-              UTI: 'com.adobe.pdf'
-            });
-          } else {
-            showAlert('PDF Scaricato', `File salvato: ${filename}`);
-          }
+          // Use Print.printAsync which shows share button on iOS
+          await Print.printAsync({
+            uri: downloadResult.uri,
+          });
         } else {
           showAlert('Errore', 'Impossibile scaricare il PDF');
         }
@@ -360,8 +355,8 @@ export default function ProfileScreen() {
                     <ActivityIndicator size="small" color="#fff" />
                   ) : (
                     <>
-                      <Ionicons name="share-outline" size={20} color="#fff" />
-                      <Text style={styles.pdfDownloadButtonText}>Condividi Lista Libri (PDF)</Text>
+                      <Ionicons name="document-text" size={20} color="#fff" />
+                      <Text style={styles.pdfDownloadButtonText}>Scarica Lista Libri (PDF)</Text>
                     </>
                   )}
                 </TouchableOpacity>
