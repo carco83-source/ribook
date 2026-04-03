@@ -359,8 +359,8 @@ export default function ProfileScreen() {
                     <ActivityIndicator size="small" color="#fff" />
                   ) : (
                     <>
-                      <Ionicons name="document-text" size={20} color="#fff" />
-                      <Text style={styles.pdfDownloadButtonText}>Scarica Lista Libri (PDF)</Text>
+                      <Ionicons name="share-outline" size={20} color="#fff" />
+                      <Text style={styles.pdfDownloadButtonText}>Condividi Lista Libri (PDF)</Text>
                     </>
                   )}
                 </TouchableOpacity>
