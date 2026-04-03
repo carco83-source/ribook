@@ -622,17 +622,25 @@ export default function ProfileScreen() {
                 <Ionicons name="close" size={24} color="#fff" />
               </TouchableOpacity>
             </View>
-            {pdfViewerUrl && (
-              <iframe
-                src={pdfViewerUrl}
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  border: 'none',
-                }}
-                title="PDF Viewer"
-              />
-            )}
+            <View style={styles.pdfIframeContainer}>
+              {pdfViewerUrl && (
+                <object
+                  data={pdfViewerUrl}
+                  type="application/pdf"
+                  width="100%"
+                  height="100%"
+                  style={{ border: 'none', flex: 1 }}
+                >
+                  <iframe
+                    src={pdfViewerUrl}
+                    width="100%"
+                    height="100%"
+                    style={{ border: 'none', flex: 1 }}
+                    title="PDF Viewer"
+                  />
+                </object>
+              )}
+            </View>
           </View>
         </Modal>
       )}
@@ -1331,5 +1339,10 @@ const styles = StyleSheet.create({
   },
   pdfModalCloseButton: {
     padding: 8,
+  },
+  pdfIframeContainer: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
   },
 });
