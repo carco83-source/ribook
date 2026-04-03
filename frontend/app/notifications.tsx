@@ -142,6 +142,15 @@ export default function NotificationsScreen() {
   );
 
   const handleNotificationPress = (notification: Notification) => {
+    // Segna la notifica come letta
+    if (!notification.read && userId) {
+      axios.put(`${API_URL}/api/notifications/${notification.id}/read`).catch(console.error);
+      // Aggiorna lo stato locale
+      setNotifications(prev => prev.map(n => 
+        n.id === notification.id ? { ...n, read: true } : n
+      ));
+    }
+    
     switch (notification.type) {
       case 'match':
         router.push('/radar/sellers');
@@ -155,6 +164,12 @@ export default function NotificationsScreen() {
         break;
       case 'chat':
         router.push('/(tabs)/chats');
+        break;
+      case 'book_available':
+        // Naviga alla pagina dei venditori per questo libro
+        if (notification.book_isbn) {
+          router.push(`/book-sellers/${notification.book_isbn}`);
+        }
         break;
       default:
         break;
