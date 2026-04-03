@@ -496,46 +496,6 @@ export default function ListingDetailScreen() {
           </View>
         </View>
 
-        {/* Bookstore Selection - ONLY seller's bookstores */}
-        {listing.bookstores && listing.bookstores.length > 0 ? (
-          <View style={styles.bookstoreSelectionCard}>
-            <Text style={styles.sectionTitle}>Seleziona punto di ritiro</Text>
-            <Text style={styles.sectionSubtitle}>Il venditore consegnerà il libro qui</Text>
-            
-            {listing.bookstores.map((store: any, index: number) => (
-              <TouchableOpacity
-                key={store.id || index}
-                style={[
-                  styles.bookstoreItem,
-                  selectedBookstore?.id === store.id && styles.bookstoreItemSelected,
-                ]}
-                onPress={() => setSelectedBookstore(store)}
-              >
-                <Ionicons 
-                  name={selectedBookstore?.id === store.id ? "radio-button-on" : "radio-button-off"} 
-                  size={22} 
-                  color={selectedBookstore?.id === store.id ? "#1a472a" : "#666"} 
-                />
-                <View style={styles.bookstoreInfo}>
-                  <Text style={[
-                    styles.bookstoreName,
-                    selectedBookstore?.id === store.id && { color: '#1a472a', fontWeight: '600' }
-                  ]}>
-                    {store.nome}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
-        ) : (
-          <View style={styles.noBookstores}>
-            <Ionicons name="alert-circle-outline" size={24} color="#f4a460" />
-            <Text style={styles.noBookstoresText}>
-              Nessun punto di ritiro disponibile per questo annuncio
-            </Text>
-          </View>
-        )}
-
         {/* Add to Cart Button */}
         <TouchableOpacity
           style={[
