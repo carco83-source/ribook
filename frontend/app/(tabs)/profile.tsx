@@ -152,31 +152,25 @@ export default function ProfileScreen() {
       const userId = await AsyncStorage.getItem('user_id');
       const pdfUrl = `${API_URL}/api/profiles/${userId}/children/${childId}/books-pdf`;
       
+      console.log('PDF URL:', pdfUrl);
+      
       if (Platform.OS === 'web') {
-        // On web, fetch the PDF as blob and open it
-        try {
-          const response = await fetch(pdfUrl);
-          const blob = await response.blob();
-          const blobUrl = URL.createObjectURL(blob);
+        // Try multiple approaches for web download
+        
+        // Approach 1: Use window.open
+        const newWindow = window.open(pdfUrl, '_blank');
+        
+        // Approach 2: If popup blocked, try iframe
+        if (!newWindow || newWindow.closed) {
+          const iframe = document.createElement('iframe');
+          iframe.style.display = 'none';
+          iframe.src = pdfUrl;
+          document.body.appendChild(iframe);
           
-          // Open in new tab
-          const newWindow = window.open(blobUrl, '_blank');
-          
-          // If popup blocked, create download link
-          if (!newWindow) {
-            const link = document.createElement('a');
-            link.href = blobUrl;
-            link.download = `lista_libri_${childName}_${childClasse}.pdf`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-          }
-          
-          // Clean up blob URL after a delay
-          setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
-        } catch (e) {
-          console.error('Error fetching PDF:', e);
-          showAlert('Errore', 'Impossibile scaricare il PDF');
+          // Cleanup after 10 seconds
+          setTimeout(() => {
+            try { document.body.removeChild(iframe); } catch(e) {}
+          }, 10000);
         }
       } else {
         // On mobile, download and share
