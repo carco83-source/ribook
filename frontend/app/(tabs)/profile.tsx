@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Platform,
   Linking,
+  Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -50,6 +51,8 @@ export default function ProfileScreen() {
   const [childProfiles, setChildProfiles] = useState<any[]>([]);
   const [childrenCompatibility, setChildrenCompatibility] = useState<{[key: string]: any}>({});
   const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
+  const [pdfViewerUrl, setPdfViewerUrl] = useState<string | null>(null);
+  const [showPdfModal, setShowPdfModal] = useState(false);
 
   useEffect(() => {
     loadUserData();
@@ -158,40 +161,12 @@ export default function ProfileScreen() {
       
       const pdfUrl = `${API_URL}/api/profiles/${userId}/children/${childId}/books-pdf`;
       
-      console.log('Downloading PDF from:', pdfUrl);
+      console.log('PDF URL:', pdfUrl);
       
       if (Platform.OS === 'web') {
-        // On web, fetch as blob and trigger download only (no new window)
-        try {
-          const response = await fetch(pdfUrl);
-          
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-          }
-          
-          const blob = await response.blob();
-          const blobUrl = window.URL.createObjectURL(blob);
-          
-          // Create a link and trigger download
-          const link = document.createElement('a');
-          link.href = blobUrl;
-          link.download = `lista_libri_${childName}_${childClasse}.pdf`;
-          link.style.display = 'none';
-          document.body.appendChild(link);
-          link.click();
-          
-          // Cleanup
-          setTimeout(() => {
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(blobUrl);
-          }, 1000);
-          
-          showAlert('Download avviato', 'Il PDF è stato scaricato nella cartella Download.');
-          
-        } catch (fetchError) {
-          console.error('Fetch error:', fetchError);
-          showAlert('Errore', 'Impossibile scaricare il PDF. Riprova.');
-        }
+        // On web, show PDF in a modal with iframe
+        setPdfViewerUrl(pdfUrl);
+        setShowPdfModal(true);
       } else {
         // On mobile, download and share
         const filename = `lista_libri_${childName}_${childClasse}.pdf`;
@@ -628,6 +603,39 @@ export default function ProfileScreen() {
           Acquisto libro usato assistito
         </Text>
       </View>
+
+      {/* PDF Viewer Modal - only for web */}
+      {Platform.OS === 'web' && (
+        <Modal
+          visible={showPdfModal}
+          animationType="slide"
+          transparent={false}
+          onRequestClose={() => setShowPdfModal(false)}
+        >
+          <View style={styles.pdfModalContainer}>
+            <View style={styles.pdfModalHeader}>
+              <Text style={styles.pdfModalTitle}>Lista Libri PDF</Text>
+              <TouchableOpacity
+                style={styles.pdfModalCloseButton}
+                onPress={() => setShowPdfModal(false)}
+              >
+                <Ionicons name="close" size={24} color="#fff" />
+              </TouchableOpacity>
+            </View>
+            {pdfViewerUrl && (
+              <iframe
+                src={pdfViewerUrl}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  border: 'none',
+                }}
+                title="PDF Viewer"
+              />
+            )}
+          </View>
+        </Modal>
+      )}
     </ScrollView>
   );
 }
@@ -1302,5 +1310,26 @@ const styles = StyleSheet.create({
     color: '#999',
     marginTop: 8,
     fontStyle: 'italic',
+  },
+  // PDF Modal styles
+  pdfModalContainer: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  pdfModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#1a472a',
+    padding: 16,
+    paddingTop: 40,
+  },
+  pdfModalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  pdfModalCloseButton: {
+    padding: 8,
   },
 });
