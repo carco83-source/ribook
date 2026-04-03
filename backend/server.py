@@ -1320,6 +1320,24 @@ async def get_listing_by_id(listing_id: str):
         raise HTTPException(status_code=404, detail="Annuncio non trovato")
     
     listing.pop('_id', None)
+    
+    # Carica i dati completi delle cartolibrerie
+    bookstore_ids = listing.get("bookstore_ids", [])
+    if bookstore_ids:
+        bookstores = []
+        for bs_id in bookstore_ids:
+            # Cerca per id o per nome parziale (rimuovi apostrofi per match migliore)
+            clean_id = bs_id.replace("'", "").replace("l", "").replace("L", "")
+            store = await db.bookstores.find_one({"$or": [
+                {"id": bs_id},
+                {"nome": {"$regex": bs_id, "$options": "i"}},
+                {"nome": {"$regex": clean_id, "$options": "i"}}
+            ]})
+            if store:
+                store.pop('_id', None)
+                bookstores.append(store)
+        listing["bookstores"] = bookstores
+    
     return listing
 
 
@@ -4137,8 +4155,8 @@ async def create_transaction(transaction_data: TransactionCreate, user_id: str):
         commissione_cartolibreria = prezzo * 0.05  # 5% to bookstore (paid by app from subscription revenue)
         importo_venditore = prezzo
     else:
-        # Free: 15% total commission (10% app + 5% bookstore)
-        commissione_totale = prezzo * 0.15
+        # Free: 17% total commission (12% app + 5% bookstore)
+        commissione_totale = prezzo * 0.17
         commissione_cartolibreria = prezzo * 0.05
         commissione_app = commissione_totale - commissione_cartolibreria
         importo_venditore = prezzo - commissione_totale

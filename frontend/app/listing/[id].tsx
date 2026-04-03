@@ -158,7 +158,7 @@ export default function ListingDetailScreen() {
     if (isPremium) {
       return { commission: 0, total: listing.prezzo_vendita };
     }
-    const commission = listing.prezzo_vendita * 0.15;
+    const commission = listing.prezzo_vendita * 0.17;
     return { commission, total: listing.prezzo_vendita };
   };
 
@@ -483,46 +483,17 @@ export default function ListingDetailScreen() {
           </View>
         )}
 
-        {/* Price Breakdown */}
+        {/* Price Display - Simplified */}
         <View style={styles.priceBreakdown}>
-          <Text style={styles.breakdownTitle}>Riepilogo costi</Text>
-          <View style={styles.breakdownRow}>
-            <Text style={styles.breakdownLabel}>Prezzo libro:</Text>
-            <Text style={styles.breakdownValue}>
-              €{listing.prezzo_vendita.toFixed(2)}
-            </Text>
-          </View>
-          <View style={styles.breakdownRow}>
-            <Text style={styles.breakdownLabel}>
-              Commissione ({isPremium ? 'Premium' : 'Standard'}):
-            </Text>
-            <Text
-              style={[
-                styles.breakdownValue,
-                { color: isPremium ? '#4CAF50' : '#f4a460' },
-              ]}
-            >
-              {isPremium ? 'GRATIS' : `\u20ac${commission.toFixed(2)} (15%)`}
-            </Text>
-          </View>
-          <View style={[styles.breakdownRow, styles.totalRow]}>
-            <Text style={styles.totalLabel}>Totale:</Text>
-            <Text style={styles.totalValue}>
+          <View style={styles.totalPriceContainer}>
+            <Text style={styles.totalPriceLabel}>Totale</Text>
+            <Text style={styles.totalPriceValue}>
               €{(total + commission).toFixed(2)}
             </Text>
+            <Text style={styles.serviceRLB}>
+              service RLB €{commission.toFixed(2)}
+            </Text>
           </View>
-          
-          {!isPremium && (
-            <TouchableOpacity
-              style={styles.premiumHint}
-              onPress={() => router.push('/(tabs)/profile')}
-            >
-              <Ionicons name="diamond" size={16} color="#f4a460" />
-              <Text style={styles.premiumHintText}>
-                Diventa Premium per risparmiare \u20ac{commission.toFixed(2)}!
-              </Text>
-            </TouchableOpacity>
-          )}
         </View>
 
         {/* Bookstore Selection - ONLY seller's bookstores */}
@@ -1189,5 +1160,25 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#fff',
+  },
+  // Simplified price display
+  totalPriceContainer: {
+    alignItems: 'center',
+    paddingVertical: 16,
+  },
+  totalPriceLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 4,
+  },
+  totalPriceValue: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#1a472a',
+  },
+  serviceRLB: {
+    fontSize: 12,
+    color: '#888',
+    marginTop: 4,
   },
 });

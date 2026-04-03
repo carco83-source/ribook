@@ -1271,7 +1271,7 @@ export default function SellScreen() {
                 
                 <View style={styles.priceOptionsContainer}>
                   {priceRange.prices.map((priceOpt, index) => {
-                    const buyerPrice = (priceOpt.price * 1.15).toFixed(2); // +15% commissione
+                    const buyerPrice = (priceOpt.price * 1.17).toFixed(2); // +17% commissione
                     return (
                       <TouchableOpacity
                         key={index}
