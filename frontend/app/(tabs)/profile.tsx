@@ -150,27 +150,45 @@ export default function ProfileScreen() {
     setDownloadingPdf(childId);
     try {
       const userId = await AsyncStorage.getItem('user_id');
+      
+      if (!userId) {
+        showAlert('Errore', 'Utente non autenticato');
+        return;
+      }
+      
       const pdfUrl = `${API_URL}/api/profiles/${userId}/children/${childId}/books-pdf`;
       
-      console.log('PDF URL:', pdfUrl);
+      console.log('Downloading PDF from:', pdfUrl);
       
       if (Platform.OS === 'web') {
-        // Try multiple approaches for web download
-        
-        // Approach 1: Use window.open
-        const newWindow = window.open(pdfUrl, '_blank');
-        
-        // Approach 2: If popup blocked, try iframe
-        if (!newWindow || newWindow.closed) {
-          const iframe = document.createElement('iframe');
-          iframe.style.display = 'none';
-          iframe.src = pdfUrl;
-          document.body.appendChild(iframe);
+        // On web, fetch as blob then open/download
+        try {
+          const response = await fetch(pdfUrl);
           
-          // Cleanup after 10 seconds
-          setTimeout(() => {
-            try { document.body.removeChild(iframe); } catch(e) {}
-          }, 10000);
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          
+          const blob = await response.blob();
+          const blobUrl = window.URL.createObjectURL(blob);
+          
+          // Create a link and trigger download
+          const link = document.createElement('a');
+          link.href = blobUrl;
+          link.download = `lista_libri_${childName}_${childClasse}.pdf`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          
+          // Also try to open in new tab
+          window.open(blobUrl, '_blank');
+          
+          // Cleanup blob URL after delay
+          setTimeout(() => window.URL.revokeObjectURL(blobUrl), 30000);
+          
+        } catch (fetchError) {
+          console.error('Fetch error:', fetchError);
+          showAlert('Errore', 'Impossibile scaricare il PDF. Riprova.');
         }
       } else {
         // On mobile, download and share
