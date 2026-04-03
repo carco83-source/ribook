@@ -166,7 +166,8 @@ export default function ProfileScreen() {
           if (await Sharing.isAvailableAsync()) {
             await Sharing.shareAsync(downloadResult.uri, {
               mimeType: 'application/pdf',
-              dialogTitle: 'Condividi Lista Libri'
+              dialogTitle: 'Condividi Lista Libri',
+              UTI: 'com.adobe.pdf'
             });
           } else {
             showAlert('PDF Scaricato', `File salvato: ${filename}`);
