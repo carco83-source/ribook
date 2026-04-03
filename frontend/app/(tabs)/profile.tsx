@@ -161,7 +161,7 @@ export default function ProfileScreen() {
       console.log('Downloading PDF from:', pdfUrl);
       
       if (Platform.OS === 'web') {
-        // On web, fetch as blob then open/download
+        // On web, fetch as blob and trigger download only (no new window)
         try {
           const response = await fetch(pdfUrl);
           
@@ -176,15 +176,17 @@ export default function ProfileScreen() {
           const link = document.createElement('a');
           link.href = blobUrl;
           link.download = `lista_libri_${childName}_${childClasse}.pdf`;
+          link.style.display = 'none';
           document.body.appendChild(link);
           link.click();
-          document.body.removeChild(link);
           
-          // Also try to open in new tab
-          window.open(blobUrl, '_blank');
+          // Cleanup
+          setTimeout(() => {
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(blobUrl);
+          }, 1000);
           
-          // Cleanup blob URL after delay
-          setTimeout(() => window.URL.revokeObjectURL(blobUrl), 30000);
+          showAlert('Download avviato', 'Il PDF è stato scaricato nella cartella Download.');
           
         } catch (fetchError) {
           console.error('Fetch error:', fetchError);
