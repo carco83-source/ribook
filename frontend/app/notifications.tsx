@@ -17,7 +17,7 @@ const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
 interface Notification {
   id: string;
-  type: 'match' | 'sale' | 'delivery' | 'pickup' | 'chat' | 'system' | 'book_available';
+  type: 'match' | 'sale' | 'delivery' | 'pickup' | 'chat' | 'system' | 'book_available' | 'confirmation_request' | 'cart_request';
   title: string;
   message: string;
   data?: any;
@@ -37,6 +37,8 @@ const NOTIFICATION_CONFIG: Record<string, { icon: string; color: string }> = {
   chat: { icon: 'chatbubble', color: '#00BCD4' },
   system: { icon: 'information-circle', color: '#607D8B' },
   book_available: { icon: 'book', color: '#4CAF50' },
+  confirmation_request: { icon: 'checkmark-circle', color: '#4CAF50' },
+  cart_request: { icon: 'checkmark-circle', color: '#4CAF50' },
 };
 
 export default function NotificationsScreen() {

@@ -9,7 +9,6 @@ import {
   ActivityIndicator,
   Platform,
   Linking,
-  Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,7 +16,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
-import { WebView } from 'react-native-webview';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -52,9 +50,6 @@ export default function ProfileScreen() {
   const [childProfiles, setChildProfiles] = useState<any[]>([]);
   const [childrenCompatibility, setChildrenCompatibility] = useState<{[key: string]: any}>({});
   const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
-  const [showPdfModal, setShowPdfModal] = useState(false);
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-  const [pdfChildName, setPdfChildName] = useState<string>('');
 
   useEffect(() => {
     loadUserData();
@@ -155,16 +150,34 @@ export default function ProfileScreen() {
     setDownloadingPdf(childId);
     try {
       const userId = await AsyncStorage.getItem('user_id');
-      const pdfUrlFull = `${API_URL}/api/profiles/${userId}/children/${childId}/books-pdf`;
+      const pdfUrl = `${API_URL}/api/profiles/${userId}/children/${childId}/books-pdf`;
       
-      // Apri il modal con il PDF
-      setPdfUrl(pdfUrlFull);
-      setPdfChildName(childName);
-      setShowPdfModal(true);
-      
+      if (Platform.OS === 'web') {
+        // On web, open PDF in new tab
+        window.open(pdfUrl, '_blank');
+      } else {
+        // On mobile, download and share
+        const filename = `lista_libri_${childName}_${childClasse}.pdf`;
+        const fileUri = FileSystem.documentDirectory + filename;
+        
+        const downloadResult = await FileSystem.downloadAsync(pdfUrl, fileUri);
+        
+        if (downloadResult.status === 200) {
+          if (await Sharing.isAvailableAsync()) {
+            await Sharing.shareAsync(downloadResult.uri, {
+              mimeType: 'application/pdf',
+              dialogTitle: 'Condividi Lista Libri'
+            });
+          } else {
+            showAlert('PDF Scaricato', `File salvato: ${filename}`);
+          }
+        } else {
+          showAlert('Errore', 'Impossibile scaricare il PDF');
+        }
+      }
     } catch (error) {
-      console.error('Error loading PDF:', error);
-      showAlert('Errore', 'Impossibile caricare il PDF');
+      console.error('Error downloading PDF:', error);
+      showAlert('Errore', 'Impossibile generare il PDF');
     } finally {
       setDownloadingPdf(null);
     }
@@ -578,39 +591,6 @@ export default function ProfileScreen() {
           Acquisto libro usato assistito
         </Text>
       </View>
-
-      {/* PDF Viewer Modal */}
-      <Modal
-        visible={showPdfModal}
-        animationType="slide"
-        onRequestClose={() => setShowPdfModal(false)}
-      >
-        <View style={styles.pdfModalContainer}>
-          <View style={styles.pdfModalHeader}>
-            <TouchableOpacity
-              style={styles.pdfBackButton}
-              onPress={() => setShowPdfModal(false)}
-            >
-              <Ionicons name="arrow-back" size={24} color="#fff" />
-              <Text style={styles.pdfBackButtonText}>Torna indietro</Text>
-            </TouchableOpacity>
-            <Text style={styles.pdfModalTitle}>Lista Libri - {pdfChildName}</Text>
-          </View>
-          {pdfUrl && (
-            <WebView
-              source={{ uri: pdfUrl }}
-              style={styles.pdfWebView}
-              startInLoadingState={true}
-              renderLoading={() => (
-                <View style={styles.pdfLoading}>
-                  <ActivityIndicator size="large" color="#1a472a" />
-                  <Text style={styles.pdfLoadingText}>Caricamento PDF...</Text>
-                </View>
-              )}
-            />
-          )}
-        </View>
-      </Modal>
     </ScrollView>
   );
 }

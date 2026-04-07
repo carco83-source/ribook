@@ -491,7 +491,7 @@ export default function ListingDetailScreen() {
               €{(total + commission).toFixed(2)}
             </Text>
             <Text style={styles.serviceRLB}>
-              service RLB €{commission.toFixed(2)}
+              comprensivo di gestione RLB
             </Text>
           </View>
         </View>
