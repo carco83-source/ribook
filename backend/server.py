@@ -356,6 +356,92 @@ class Transaction(BaseModel):
     consegnato_il: Optional[datetime] = None
     ritirato_il: Optional[datetime] = None
 
+# ============== PAYMENT/ORDER SYSTEM ==============
+
+# Stati dell'ordine
+ORDER_STATES = {
+    "pending_payment": "In attesa di pagamento",
+    "paid_escrow": "Pagato (in escrow)",
+    "delivering_to_bookstore": "In consegna alla cartolibreria",
+    "ready_for_pickup": "Pronto per il ritiro",
+    "picked_up": "Ritirato (confermato)",
+    "completed": "Completato (pagamento trasferito)",
+    "cancelled": "Annullato",
+    "refunded": "Rimborsato"
+}
+
+class PaymentIntent(BaseModel):
+    """Simula Stripe PaymentIntent"""
+    id: str = Field(default_factory=lambda: f"pi_{uuid.uuid4().hex[:24]}")
+    amount: int  # in centesimi
+    currency: str = "eur"
+    status: str = "requires_payment_method"  # requires_payment_method, succeeded, canceled
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class Order(BaseModel):
+    """Ordine con sistema escrow"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    
+    # Riferimenti
+    buyer_id: str
+    buyer_name: str
+    seller_id: str
+    seller_name: str
+    listing_id: str
+    bookstore_id: str
+    bookstore_name: str
+    
+    # Dettagli libro
+    book_isbn: str
+    book_titolo: str
+    book_autore: str = ""
+    
+    # Prezzi (in euro)
+    prezzo_libro: float  # Prezzo del libro (va al venditore)
+    commissione_app: float  # 17% commissione app
+    commissione_cartolibreria: float  # 5% per la cartolibreria
+    totale_acquirente: float  # Quello che paga l'acquirente
+    netto_venditore: float  # Quello che riceve il venditore
+    
+    # Pagamento (simulato)
+    payment_intent_id: Optional[str] = None
+    payment_status: str = "pending"  # pending, paid, released, refunded
+    
+    # Stato ordine
+    status: str = "pending_payment"
+    status_history: List[dict] = Field(default_factory=list)
+    
+    # Date
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    paid_at: Optional[datetime] = None
+    delivered_to_bookstore_at: Optional[datetime] = None
+    ready_for_pickup_at: Optional[datetime] = None
+    picked_up_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    escrow_release_deadline: Optional[datetime] = None  # 2 giorni dopo ready_for_pickup
+    
+    # Stripe Connect (per futuro)
+    seller_stripe_account_id: Optional[str] = None
+
+class CreateOrderRequest(BaseModel):
+    listing_id: str
+    bookstore_id: str
+
+class ConfirmPaymentRequest(BaseModel):
+    order_id: str
+    # In produzione qui ci sarebbe il payment_method_id di Stripe
+    payment_method: str = "mock_card"
+
+class SellerBankAccount(BaseModel):
+    """Account bancario del venditore (simulato)"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    account_holder_name: str
+    iban: str
+    is_verified: bool = False
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    # In produzione: stripe_account_id per Stripe Connect
+
 # Compatibility/Match Model
 class Match(BaseModel):
     listing: dict
@@ -4034,6 +4120,487 @@ async def get_user_purchases(user_id: str):
         listing.pop('foto_base64', None)
     
     return listings
+
+# ============== PAYMENT & ORDER SYSTEM (MOCK/ESCROW) ==============
+
+@api_router.post("/orders/create")
+async def create_order(request: CreateOrderRequest, user_id: str = Query(...)):
+    """Crea un nuovo ordine a partire da un listing"""
+    
+    # Verifica utente
+    buyer = await db.users.find_one({"id": user_id})
+    if not buyer:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+    
+    # Verifica listing
+    listing = await db.listings.find_one({"id": request.listing_id, "status": "available"})
+    if not listing:
+        raise HTTPException(status_code=404, detail="Annuncio non disponibile")
+    
+    # Non puoi comprare i tuoi libri
+    if listing.get("seller_id") == user_id:
+        raise HTTPException(status_code=400, detail="Non puoi acquistare i tuoi libri")
+    
+    # Verifica cartolibreria
+    bookstore = await db.bookstores.find_one({"id": request.bookstore_id})
+    if not bookstore:
+        # Cerca per nome parziale
+        bookstore = await db.bookstores.find_one({"nome": {"$regex": request.bookstore_id, "$options": "i"}})
+    if not bookstore:
+        raise HTTPException(status_code=404, detail="Cartolibreria non trovata")
+    
+    # Ottieni info venditore
+    seller = await db.users.find_one({"id": listing.get("seller_id")})
+    seller_name = seller.get("username", "Venditore") if seller else "Venditore"
+    
+    # Calcola prezzi
+    prezzo_libro = listing.get("prezzo_vendita", listing.get("prezzo", 0))
+    commissione_app = prezzo_libro * 0.12  # 12% app
+    commissione_cartolibreria = prezzo_libro * 0.05  # 5% cartolibreria
+    totale_acquirente = prezzo_libro + commissione_app + commissione_cartolibreria  # +17%
+    netto_venditore = prezzo_libro  # Il venditore riceve il prezzo del libro
+    
+    # Crea ordine
+    order = Order(
+        buyer_id=user_id,
+        buyer_name=buyer.get("username", "Acquirente"),
+        seller_id=listing.get("seller_id"),
+        seller_name=seller_name,
+        listing_id=listing.get("id"),
+        bookstore_id=bookstore.get("id"),
+        bookstore_name=bookstore.get("nome"),
+        book_isbn=listing.get("book_isbn", ""),
+        book_titolo=listing.get("book_titolo", ""),
+        book_autore=listing.get("book_autore", ""),
+        prezzo_libro=round(prezzo_libro, 2),
+        commissione_app=round(commissione_app, 2),
+        commissione_cartolibreria=round(commissione_cartolibreria, 2),
+        totale_acquirente=round(totale_acquirente, 2),
+        netto_venditore=round(netto_venditore, 2),
+        status="pending_payment",
+        status_history=[{
+            "status": "pending_payment",
+            "timestamp": datetime.utcnow().isoformat(),
+            "note": "Ordine creato"
+        }]
+    )
+    
+    await db.orders.insert_one(order.dict())
+    
+    return {
+        "order_id": order.id,
+        "totale": order.totale_acquirente,
+        "status": order.status,
+        "message": "Ordine creato. Procedi con il pagamento."
+    }
+
+@api_router.post("/orders/{order_id}/pay")
+async def pay_order(order_id: str, user_id: str = Query(...)):
+    """Simula il pagamento e mette i fondi in escrow"""
+    
+    order = await db.orders.find_one({"id": order_id, "buyer_id": user_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="Ordine non trovato")
+    
+    if order.get("status") != "pending_payment":
+        raise HTTPException(status_code=400, detail=f"Ordine non in attesa di pagamento. Stato: {order.get('status')}")
+    
+    # Simula PaymentIntent di Stripe
+    payment_intent_id = f"pi_mock_{uuid.uuid4().hex[:16]}"
+    
+    # Aggiorna ordine
+    now = datetime.utcnow()
+    update_data = {
+        "payment_intent_id": payment_intent_id,
+        "payment_status": "paid",
+        "status": "paid_escrow",
+        "paid_at": now,
+        "status_history": order.get("status_history", []) + [{
+            "status": "paid_escrow",
+            "timestamp": now.isoformat(),
+            "note": "Pagamento ricevuto - fondi in escrow"
+        }]
+    }
+    
+    await db.orders.update_one({"id": order_id}, {"$set": update_data})
+    
+    # Aggiorna listing come riservato
+    await db.listings.update_one(
+        {"id": order.get("listing_id")},
+        {"$set": {"status": "reserved", "reserved_by": user_id, "order_id": order_id}}
+    )
+    
+    # Notifica al venditore
+    notification = {
+        "id": str(uuid.uuid4()),
+        "user_id": order.get("seller_id"),
+        "type": "order_paid",
+        "title": "Nuovo ordine pagato!",
+        "message": f"Hai ricevuto un ordine per '{order.get('book_titolo')[:40]}'. Consegna il libro presso {order.get('bookstore_name')}.",
+        "order_id": order_id,
+        "read": False,
+        "created_at": now.isoformat()
+    }
+    await db.notifications.insert_one(notification)
+    
+    return {
+        "success": True,
+        "order_id": order_id,
+        "status": "paid_escrow",
+        "message": "Pagamento completato! I fondi sono in escrow fino alla conferma del ritiro."
+    }
+
+@api_router.post("/orders/{order_id}/deliver-to-bookstore")
+async def mark_delivered_to_bookstore(order_id: str, user_id: str = Query(...)):
+    """Il venditore conferma di aver consegnato il libro alla cartolibreria"""
+    
+    order = await db.orders.find_one({"id": order_id, "seller_id": user_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="Ordine non trovato")
+    
+    if order.get("status") != "paid_escrow":
+        raise HTTPException(status_code=400, detail="L'ordine deve essere pagato prima della consegna")
+    
+    now = datetime.utcnow()
+    update_data = {
+        "status": "delivering_to_bookstore",
+        "delivered_to_bookstore_at": now,
+        "status_history": order.get("status_history", []) + [{
+            "status": "delivering_to_bookstore",
+            "timestamp": now.isoformat(),
+            "note": "Libro consegnato alla cartolibreria"
+        }]
+    }
+    
+    await db.orders.update_one({"id": order_id}, {"$set": update_data})
+    
+    # Notifica all'acquirente
+    notification = {
+        "id": str(uuid.uuid4()),
+        "user_id": order.get("buyer_id"),
+        "type": "book_at_bookstore",
+        "title": "Libro in arrivo!",
+        "message": f"Il venditore ha consegnato '{order.get('book_titolo')[:40]}' presso {order.get('bookstore_name')}. Riceverai una notifica quando sarà pronto.",
+        "order_id": order_id,
+        "read": False,
+        "created_at": now.isoformat()
+    }
+    await db.notifications.insert_one(notification)
+    
+    return {"success": True, "status": "delivering_to_bookstore"}
+
+@api_router.post("/orders/{order_id}/ready-for-pickup")
+async def mark_ready_for_pickup(order_id: str, bookstore_id: str = Query(None)):
+    """La cartolibreria conferma che il libro è pronto per il ritiro"""
+    
+    order = await db.orders.find_one({"id": order_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="Ordine non trovato")
+    
+    if order.get("status") not in ["delivering_to_bookstore", "paid_escrow"]:
+        raise HTTPException(status_code=400, detail="Stato ordine non valido per questa operazione")
+    
+    now = datetime.utcnow()
+    # Deadline escrow: 2 giorni da ora
+    from datetime import timedelta
+    escrow_deadline = now + timedelta(days=2)
+    
+    update_data = {
+        "status": "ready_for_pickup",
+        "ready_for_pickup_at": now,
+        "escrow_release_deadline": escrow_deadline,
+        "status_history": order.get("status_history", []) + [{
+            "status": "ready_for_pickup",
+            "timestamp": now.isoformat(),
+            "note": f"Libro pronto per il ritiro presso la cartolibreria. Deadline escrow: {escrow_deadline.isoformat()}"
+        }]
+    }
+    
+    await db.orders.update_one({"id": order_id}, {"$set": update_data})
+    
+    # Notifica all'acquirente
+    notification = {
+        "id": str(uuid.uuid4()),
+        "user_id": order.get("buyer_id"),
+        "type": "ready_for_pickup",
+        "title": "Libro pronto per il ritiro!",
+        "message": f"'{order.get('book_titolo')[:40]}' è pronto presso {order.get('bookstore_name')}. Hai 2 giorni per ritirarlo.",
+        "order_id": order_id,
+        "read": False,
+        "created_at": now.isoformat()
+    }
+    await db.notifications.insert_one(notification)
+    
+    return {
+        "success": True,
+        "status": "ready_for_pickup",
+        "escrow_deadline": escrow_deadline.isoformat()
+    }
+
+@api_router.post("/orders/{order_id}/confirm-pickup")
+async def confirm_pickup(order_id: str, user_id: str = Query(...)):
+    """L'acquirente conferma il ritiro - sblocca i fondi al venditore"""
+    
+    order = await db.orders.find_one({"id": order_id, "buyer_id": user_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="Ordine non trovato")
+    
+    if order.get("status") != "ready_for_pickup":
+        raise HTTPException(status_code=400, detail="Il libro non è ancora pronto per il ritiro")
+    
+    now = datetime.utcnow()
+    
+    # Aggiorna ordine a completato
+    update_data = {
+        "status": "completed",
+        "payment_status": "released",
+        "picked_up_at": now,
+        "completed_at": now,
+        "status_history": order.get("status_history", []) + [{
+            "status": "picked_up",
+            "timestamp": now.isoformat(),
+            "note": "Ritiro confermato dall'acquirente"
+        }, {
+            "status": "completed",
+            "timestamp": now.isoformat(),
+            "note": f"Pagamento di €{order.get('netto_venditore', 0):.2f} rilasciato al venditore"
+        }]
+    }
+    
+    await db.orders.update_one({"id": order_id}, {"$set": update_data})
+    
+    # Aggiorna listing come venduto
+    await db.listings.update_one(
+        {"id": order.get("listing_id")},
+        {"$set": {"status": "sold", "sold_at": now, "sold_to": user_id}}
+    )
+    
+    # Notifica al venditore
+    notification = {
+        "id": str(uuid.uuid4()),
+        "user_id": order.get("seller_id"),
+        "type": "payment_released",
+        "title": "Pagamento ricevuto!",
+        "message": f"L'acquirente ha confermato il ritiro di '{order.get('book_titolo')[:40]}'. €{order.get('netto_venditore', 0):.2f} sono stati accreditati.",
+        "order_id": order_id,
+        "read": False,
+        "created_at": now.isoformat()
+    }
+    await db.notifications.insert_one(notification)
+    
+    return {
+        "success": True,
+        "status": "completed",
+        "message": "Ritiro confermato! Il venditore riceverà il pagamento."
+    }
+
+@api_router.get("/orders/{order_id}")
+async def get_order(order_id: str, user_id: str = Query(...)):
+    """Ottieni dettagli ordine"""
+    
+    order = await db.orders.find_one({
+        "id": order_id,
+        "$or": [{"buyer_id": user_id}, {"seller_id": user_id}]
+    })
+    
+    if not order:
+        raise HTTPException(status_code=404, detail="Ordine non trovato")
+    
+    order.pop('_id', None)
+    order["status_label"] = ORDER_STATES.get(order.get("status"), order.get("status"))
+    order["is_buyer"] = order.get("buyer_id") == user_id
+    order["is_seller"] = order.get("seller_id") == user_id
+    
+    return order
+
+@api_router.get("/orders/user/{user_id}")
+async def get_user_orders(user_id: str, role: str = Query("all")):
+    """Ottieni tutti gli ordini di un utente (come acquirente o venditore)"""
+    
+    query = {}
+    if role == "buyer":
+        query["buyer_id"] = user_id
+    elif role == "seller":
+        query["seller_id"] = user_id
+    else:
+        query["$or"] = [{"buyer_id": user_id}, {"seller_id": user_id}]
+    
+    orders = await db.orders.find(query).sort("created_at", -1).to_list(100)
+    
+    for order in orders:
+        order.pop('_id', None)
+        order["status_label"] = ORDER_STATES.get(order.get("status"), order.get("status"))
+        order["is_buyer"] = order.get("buyer_id") == user_id
+        order["is_seller"] = order.get("seller_id") == user_id
+    
+    return {"orders": orders, "total": len(orders)}
+
+@api_router.post("/orders/{order_id}/cancel")
+async def cancel_order(order_id: str, user_id: str = Query(...), reason: str = Query("")):
+    """Annulla un ordine (solo se non ancora pagato o con rimborso)"""
+    
+    order = await db.orders.find_one({
+        "id": order_id,
+        "$or": [{"buyer_id": user_id}, {"seller_id": user_id}]
+    })
+    
+    if not order:
+        raise HTTPException(status_code=404, detail="Ordine non trovato")
+    
+    # Può essere annullato solo se in pending o paid_escrow (con rimborso simulato)
+    if order.get("status") not in ["pending_payment", "paid_escrow"]:
+        raise HTTPException(status_code=400, detail="Ordine non annullabile in questo stato")
+    
+    now = datetime.utcnow()
+    is_refund = order.get("status") == "paid_escrow"
+    
+    update_data = {
+        "status": "refunded" if is_refund else "cancelled",
+        "payment_status": "refunded" if is_refund else "cancelled",
+        "status_history": order.get("status_history", []) + [{
+            "status": "refunded" if is_refund else "cancelled",
+            "timestamp": now.isoformat(),
+            "note": f"Annullato da {'acquirente' if order.get('buyer_id') == user_id else 'venditore'}. {reason}"
+        }]
+    }
+    
+    await db.orders.update_one({"id": order_id}, {"$set": update_data})
+    
+    # Ripristina listing
+    await db.listings.update_one(
+        {"id": order.get("listing_id")},
+        {"$set": {"status": "available"}, "$unset": {"reserved_by": "", "order_id": ""}}
+    )
+    
+    # Notifica all'altra parte
+    other_user_id = order.get("seller_id") if order.get("buyer_id") == user_id else order.get("buyer_id")
+    notification = {
+        "id": str(uuid.uuid4()),
+        "user_id": other_user_id,
+        "type": "order_cancelled",
+        "title": "Ordine annullato",
+        "message": f"L'ordine per '{order.get('book_titolo')[:40]}' è stato annullato." + (" Il rimborso è stato elaborato." if is_refund else ""),
+        "order_id": order_id,
+        "read": False,
+        "created_at": now.isoformat()
+    }
+    await db.notifications.insert_one(notification)
+    
+    return {
+        "success": True,
+        "status": "refunded" if is_refund else "cancelled",
+        "refunded": is_refund
+    }
+
+@api_router.post("/orders/process-escrow-releases")
+async def process_escrow_releases():
+    """Job automatico: rilascia i pagamenti dopo 2 giorni dalla disponibilità per il ritiro"""
+    
+    now = datetime.utcnow()
+    
+    # Trova ordini con escrow scaduto
+    expired_orders = await db.orders.find({
+        "status": "ready_for_pickup",
+        "escrow_release_deadline": {"$lt": now}
+    }).to_list(100)
+    
+    released_count = 0
+    
+    for order in expired_orders:
+        # Auto-completa l'ordine
+        update_data = {
+            "status": "completed",
+            "payment_status": "released",
+            "completed_at": now,
+            "status_history": order.get("status_history", []) + [{
+                "status": "completed",
+                "timestamp": now.isoformat(),
+                "note": "Auto-completato: deadline escrow raggiunta senza conferma ritiro"
+            }]
+        }
+        
+        await db.orders.update_one({"id": order.get("id")}, {"$set": update_data})
+        
+        # Aggiorna listing
+        await db.listings.update_one(
+            {"id": order.get("listing_id")},
+            {"$set": {"status": "sold", "sold_at": now}}
+        )
+        
+        # Notifica al venditore
+        notification = {
+            "id": str(uuid.uuid4()),
+            "user_id": order.get("seller_id"),
+            "type": "payment_released",
+            "title": "Pagamento automatico rilasciato",
+            "message": f"Il pagamento per '{order.get('book_titolo')[:40]}' è stato rilasciato automaticamente (deadline escrow).",
+            "order_id": order.get("id"),
+            "read": False,
+            "created_at": now.isoformat()
+        }
+        await db.notifications.insert_one(notification)
+        
+        released_count += 1
+    
+    return {"processed": released_count, "message": f"{released_count} ordini completati automaticamente"}
+
+# ============== SELLER BANK ACCOUNT (Mock per Stripe Connect) ==============
+
+@api_router.post("/seller/bank-account")
+async def add_bank_account(user_id: str = Query(...), account_holder_name: str = Query(...), iban: str = Query(...)):
+    """Aggiunge un conto bancario al venditore (mock per Stripe Connect)"""
+    
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+    
+    # Verifica formato IBAN (semplificato)
+    if len(iban.replace(" ", "")) < 15:
+        raise HTTPException(status_code=400, detail="IBAN non valido")
+    
+    bank_account = SellerBankAccount(
+        user_id=user_id,
+        account_holder_name=account_holder_name,
+        iban=iban.replace(" ", "").upper(),
+        is_verified=True  # In mock, verifichiamo subito
+    )
+    
+    # Salva o aggiorna
+    existing = await db.bank_accounts.find_one({"user_id": user_id})
+    if existing:
+        await db.bank_accounts.update_one(
+            {"user_id": user_id},
+            {"$set": bank_account.dict()}
+        )
+    else:
+        await db.bank_accounts.insert_one(bank_account.dict())
+    
+    # Aggiorna utente
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"has_bank_account": True, "bank_account_verified": True}}
+    )
+    
+    return {
+        "success": True,
+        "message": "Conto bancario aggiunto con successo",
+        "iban_masked": f"****{iban[-4:]}"
+    }
+
+@api_router.get("/seller/bank-account/{user_id}")
+async def get_bank_account(user_id: str):
+    """Ottieni info conto bancario (mascherato)"""
+    
+    account = await db.bank_accounts.find_one({"user_id": user_id})
+    if not account:
+        return {"has_account": False}
+    
+    return {
+        "has_account": True,
+        "account_holder_name": account.get("account_holder_name"),
+        "iban_masked": f"****{account.get('iban', '')[-4:]}",
+        "is_verified": account.get("is_verified", False)
+    }
 
 # ============== BOOKSTORE ROUTES ==============
 
