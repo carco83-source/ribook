@@ -1,0 +1,71 @@
+{
+  "total": 9,
+  "passed": 9,
+  "failed": 0,
+  "success_rate": 100.0,
+  "results": [
+    {
+      "test": "Get Listings",
+      "success": true,
+      "details": "Found 2 listings, using listing_id: d4b7b094-c562-4183-b232-e650bbcb8355 from seller: ddea2dc4-d23b-4965-b78a-a1470b3339bc",
+      "timestamp": "2026-04-08T06:42:13.608906",
+      "response_data": null
+    },
+    {
+      "test": "Get Bookstores",
+      "success": true,
+      "details": "Found 4 bookstores, using bookstore_id: 21d774b1-2fbe-4b21-ae5b-94d158df2f72",
+      "timestamp": "2026-04-08T06:42:13.693366",
+      "response_data": null
+    },
+    {
+      "test": "Create Order",
+      "success": true,
+      "details": "Order created with ID: ff76a3f3-e458-46b6-9118-f44c1f513742, status: pending_payment",
+      "timestamp": "2026-04-08T06:42:13.739799",
+      "response_data": null
+    },
+    {
+      "test": "Pay Order",
+      "success": true,
+      "details": "Payment successful, status: paid_escrow",
+      "timestamp": "2026-04-08T06:42:13.796495",
+      "response_data": null
+    },
+    {
+      "test": "Get User Orders",
+      "success": true,
+      "details": "Found 1 orders for buyer",
+      "timestamp": "2026-04-08T06:42:13.840634",
+      "response_data": null
+    },
+    {
+      "test": "Get Order Details",
+      "success": true,
+      "details": "Order details retrieved, status: paid_escrow, history entries: 2",
+      "timestamp": "2026-04-08T06:42:13.923195",
+      "response_data": null
+    },
+    {
+      "test": "Seller Delivery Confirmation",
+      "success": true,
+      "details": "Delivery confirmed, status: delivering_to_bookstore",
+      "timestamp": "2026-04-08T06:42:14.004685",
+      "response_data": null
+    },
+    {
+      "test": "Ready for Pickup",
+      "success": true,
+      "details": "Ready for pickup, status: ready_for_pickup, deadline: 2026-04-10T06:42:14.030013",
+      "timestamp": "2026-04-08T06:42:14.082331",
+      "response_data": null
+    },
+    {
+      "test": "Confirm Pickup",
+      "success": true,
+      "details": "Pickup confirmed, status: completed",
+      "timestamp": "2026-04-08T06:42:14.165517",
+      "response_data": null
+    }
+  ]
+}

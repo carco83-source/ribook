@@ -165,6 +165,14 @@ export default function TransactionsScreen() {
       {/* Quick Links */}
       <View style={styles.quickLinksContainer}>
         <TouchableOpacity
+          style={[styles.quickLinkButton, styles.quickLinkPrimary]}
+          onPress={() => router.push('/orders')}
+        >
+          <Ionicons name="receipt" size={20} color="#fff" />
+          <Text style={[styles.quickLinkText, { color: '#fff', fontWeight: '600' }]}>I miei ordini (Escrow)</Text>
+          <Ionicons name="chevron-forward" size={16} color="#fff" />
+        </TouchableOpacity>
+        <TouchableOpacity
           style={styles.quickLinkButton}
           onPress={() => router.push('/my-purchases')}
         >
@@ -275,6 +283,9 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 12,
     gap: 12,
+  },
+  quickLinkPrimary: {
+    backgroundColor: '#1a472a',
   },
   quickLinkText: {
     flex: 1,

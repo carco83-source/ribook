@@ -242,6 +242,68 @@ export default function ListingDetailScreen() {
     }
   };
 
+  const handleBuyNow = async () => {
+    if (!selectedBookstore) {
+      Alert.alert('Errore', 'Seleziona un punto di ritiro');
+      return;
+    }
+
+    // Mostra conferma con dettagli prezzo
+    const totalPrice = total + commission;
+    
+    Alert.alert(
+      'Conferma acquisto',
+      `Stai per acquistare "${listing?.book_titolo}".\n\n` +
+      `Totale: €${totalPrice.toFixed(2)}\n` +
+      `(comprensivo di gestione RLB)\n\n` +
+      `Ritiro: ${selectedBookstore.nome}\n\n` +
+      `I fondi saranno bloccati in escrow fino al ritiro.`,
+      [
+        { text: 'Annulla', style: 'cancel' },
+        {
+          text: 'Procedi al pagamento',
+          onPress: async () => {
+            setPurchasing(true);
+            try {
+              // 1. Crea ordine
+              const orderResponse = await axios.post(
+                `${API_URL}/api/orders?user_id=${userId}`,
+                {
+                  listing_id: listing?.id,
+                  bookstore_id: selectedBookstore.id
+                }
+              );
+              
+              const orderId = orderResponse.data.order_id;
+              
+              // 2. Simula pagamento
+              const payResponse = await axios.post(
+                `${API_URL}/api/orders/${orderId}/pay?user_id=${userId}`
+              );
+              
+              Alert.alert(
+                'Pagamento completato!',
+                `I fondi sono in escrow.\n\n` +
+                `Il venditore è stato notificato e consegnerà il libro presso ${selectedBookstore.nome}.\n\n` +
+                `Riceverai una notifica quando sarà pronto per il ritiro.`,
+                [
+                  { text: 'OK', onPress: () => router.push('/orders') }
+                ]
+              );
+            } catch (error: any) {
+              console.error('Error creating order:', error);
+              const errorMsg = error.response?.data?.detail || 'Impossibile completare l\'acquisto';
+              Alert.alert('Errore', errorMsg);
+            } finally {
+              setPurchasing(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // Manteniamo anche la funzione per aggiungere al carrello (vecchio sistema) se necessario
   const handleAddToCart = async () => {
     if (!selectedBookstore) {
       Alert.alert('Errore', 'Seleziona un punto di ritiro');
@@ -496,21 +558,21 @@ export default function ListingDetailScreen() {
           </View>
         </View>
 
-        {/* Add to Cart Button */}
+        {/* Buy Now Button - NEW Escrow System */}
         <TouchableOpacity
           style={[
             styles.purchaseButton,
             (!selectedBookstore || purchasing) && styles.purchaseButtonDisabled,
           ]}
-          onPress={handleAddToCart}
+          onPress={handleBuyNow}
           disabled={!selectedBookstore || purchasing}
         >
           {purchasing ? (
             <ActivityIndicator color="#fff" />
           ) : (
             <>
-              <Ionicons name="cart-outline" size={24} color="#fff" />
-              <Text style={styles.purchaseButtonText}>Aggiungi al carrello</Text>
+              <Ionicons name="flash" size={24} color="#fff" />
+              <Text style={styles.purchaseButtonText}>Acquista ora</Text>
             </>
           )}
         </TouchableOpacity>
