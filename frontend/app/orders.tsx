@@ -9,16 +9,19 @@ import {
   RefreshControl,
   Alert,
   Modal,
+  Platform,
 } from 'react-native';
 import { useRouter, Stack, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import QRCode from 'react-native-qrcode-svg';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
 interface Order {
   id: string;
+  order_code: string;  // Codice 6 caratteri per QR
   buyer_id: string;
   buyer_name: string;
   seller_id: string;
@@ -443,6 +446,35 @@ export default function OrdersScreen() {
                 </Text>
               )}
             </View>
+
+            {/* QR Code for buyer - show when ready for pickup */}
+            {isBuyer && selectedOrder.order_code && selectedOrder.status === 'ready_for_pickup' && (
+              <View style={styles.qrCodeSection}>
+                <Text style={styles.qrCodeTitle}>Mostra questo codice alla cartolibreria</Text>
+                <View style={styles.qrCodeContainer}>
+                  <QRCode
+                    value={selectedOrder.order_code}
+                    size={180}
+                    color="#1a472a"
+                    backgroundColor="#fff"
+                  />
+                </View>
+                <View style={styles.orderCodeBox}>
+                  <Text style={styles.orderCodeLabel}>Codice ritiro</Text>
+                  <Text style={styles.orderCodeValue}>{selectedOrder.order_code}</Text>
+                </View>
+              </View>
+            )}
+
+            {/* Order Code display for all statuses */}
+            {selectedOrder.order_code && selectedOrder.status !== 'ready_for_pickup' && (
+              <View style={styles.orderCodeSection}>
+                <Ionicons name="barcode-outline" size={20} color="#666" />
+                <Text style={styles.orderCodeSectionText}>
+                  Codice ordine: <Text style={styles.orderCodeBold}>{selectedOrder.order_code}</Text>
+                </Text>
+              </View>
+            )}
 
             {/* Book Info */}
             <View style={styles.detailSection}>
@@ -1037,5 +1069,72 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderWidth: 1,
     borderColor: '#f44336',
+  },
+  // QR Code styles
+  qrCodeSection: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: '#1a472a',
+    borderStyle: 'dashed',
+  },
+  qrCodeTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1a472a',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  qrCodeContainer: {
+    padding: 16,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  orderCodeBox: {
+    marginTop: 16,
+    backgroundColor: '#E8F5E9',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  orderCodeLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 4,
+  },
+  orderCodeValue: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#1a472a',
+    letterSpacing: 4,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  orderCodeSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#f8f9fa',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  orderCodeSectionText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  orderCodeBold: {
+    fontWeight: 'bold',
+    color: '#1a472a',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
 });

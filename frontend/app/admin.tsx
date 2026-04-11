@@ -43,6 +43,20 @@ interface Transaction {
   created_at: string;
 }
 
+interface BookstoreRequest {
+  id: string;
+  nome_attivita: string;
+  email: string;
+  partita_iva: string;
+  indirizzo: string;
+  citta: string;
+  telefono: string;
+  status: string;
+  generated_password?: string;
+  created_at: string;
+  approved_at?: string;
+}
+
 export default function AdminScreen() {
   const router = useRouter();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -51,7 +65,9 @@ export default function AdminScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [stats, setStats] = useState<Stats | null>(null);
   const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
-  const [activeTab, setActiveTab] = useState<'stats' | 'transactions' | 'users'>('stats');
+  const [bookstoreRequests, setBookstoreRequests] = useState<BookstoreRequest[]>([]);
+  const [activeTab, setActiveTab] = useState<'stats' | 'transactions' | 'bookstores'>('stats');
+  const [approvingId, setApprovingId] = useState<string | null>(null);
 
   useEffect(() => {
     checkAuth();
@@ -84,6 +100,8 @@ export default function AdminScreen() {
   const loadData = async () => {
     setLoading(true);
     try {
+      const userId = await AsyncStorage.getItem('user_id');
+      
       // Load stats from admin endpoint
       const statsRes = await axios.get(`${API_URL}/api/admin/stats`);
       const data = statsRes.data;
@@ -103,12 +121,67 @@ export default function AdminScreen() {
       // Load recent transactions
       const transRes = await axios.get(`${API_URL}/api/admin/transactions?limit=20`);
       setRecentTransactions(transRes.data);
+      
+      // Load bookstore requests
+      try {
+        const reqRes = await axios.get(`${API_URL}/api/admin/bookstore-requests?admin_id=${userId}`);
+        setBookstoreRequests(reqRes.data.requests || []);
+      } catch (e) {
+        console.log('No bookstore requests endpoint or not admin');
+      }
     } catch (error) {
       console.error('Error loading admin data:', error);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
+  };
+
+  const handleApproveRequest = async (requestId: string) => {
+    setApprovingId(requestId);
+    try {
+      const userId = await AsyncStorage.getItem('user_id');
+      const response = await axios.post(
+        `${API_URL}/api/admin/bookstore-requests/${requestId}/approve?admin_id=${userId}`
+      );
+      
+      Alert.alert(
+        'Richiesta approvata!',
+        `Email: ${response.data.email}\nPassword: ${response.data.password}\n\nInvia queste credenziali alla cartolibreria.`,
+        [{ text: 'OK' }]
+      );
+      
+      loadData();
+    } catch (error: any) {
+      Alert.alert('Errore', error.response?.data?.detail || 'Errore approvazione');
+    } finally {
+      setApprovingId(null);
+    }
+  };
+
+  const handleRejectRequest = async (requestId: string) => {
+    Alert.alert(
+      'Rifiuta richiesta',
+      'Sei sicuro di voler rifiutare questa richiesta?',
+      [
+        { text: 'Annulla', style: 'cancel' },
+        {
+          text: 'Rifiuta',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const userId = await AsyncStorage.getItem('user_id');
+              await axios.post(
+                `${API_URL}/api/admin/bookstore-requests/${requestId}/reject?admin_id=${userId}`
+              );
+              loadData();
+            } catch (error: any) {
+              Alert.alert('Errore', error.response?.data?.detail || 'Errore');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const onRefresh = () => {
@@ -187,6 +260,26 @@ export default function AdminScreen() {
           <Text style={[styles.tabText, activeTab === 'transactions' && styles.tabTextActive]}>
             Transazioni
           </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'bookstores' && styles.tabActive]}
+          onPress={() => setActiveTab('bookstores')}
+        >
+          <Ionicons
+            name="storefront"
+            size={20}
+            color={activeTab === 'bookstores' ? '#1a472a' : '#666'}
+          />
+          <Text style={[styles.tabText, activeTab === 'bookstores' && styles.tabTextActive]}>
+            Cartolibrerie
+          </Text>
+          {bookstoreRequests.filter(r => r.status === 'pending').length > 0 && (
+            <View style={styles.badgeCount}>
+              <Text style={styles.badgeCountText}>
+                {bookstoreRequests.filter(r => r.status === 'pending').length}
+              </Text>
+            </View>
+          )}
         </TouchableOpacity>
       </View>
 
@@ -292,7 +385,105 @@ export default function AdminScreen() {
               <Text style={styles.emptyText}>Nessuna transazione recente</Text>
             )}
           </View>
-        )}
+        ) : activeTab === 'bookstores' ? (
+          <View style={styles.bookstoreRequestsContainer}>
+            <Text style={styles.sectionTitle}>Richieste di registrazione</Text>
+            
+            {bookstoreRequests.filter(r => r.status === 'pending').length === 0 ? (
+              <Text style={styles.emptyText}>Nessuna richiesta in attesa</Text>
+            ) : (
+              bookstoreRequests
+                .filter(r => r.status === 'pending')
+                .map((request) => (
+                  <View key={request.id} style={styles.requestCard}>
+                    <View style={styles.requestHeader}>
+                      <Ionicons name="storefront" size={24} color="#9C27B0" />
+                      <Text style={styles.requestName}>{request.nome_attivita}</Text>
+                    </View>
+                    
+                    <View style={styles.requestDetails}>
+                      <View style={styles.requestRow}>
+                        <Ionicons name="mail" size={16} color="#666" />
+                        <Text style={styles.requestText}>{request.email}</Text>
+                      </View>
+                      <View style={styles.requestRow}>
+                        <Ionicons name="document-text" size={16} color="#666" />
+                        <Text style={styles.requestText}>P.IVA: {request.partita_iva}</Text>
+                      </View>
+                      {request.indirizzo && (
+                        <View style={styles.requestRow}>
+                          <Ionicons name="location" size={16} color="#666" />
+                          <Text style={styles.requestText}>{request.indirizzo}, {request.citta}</Text>
+                        </View>
+                      )}
+                      {request.telefono && (
+                        <View style={styles.requestRow}>
+                          <Ionicons name="call" size={16} color="#666" />
+                          <Text style={styles.requestText}>{request.telefono}</Text>
+                        </View>
+                      )}
+                    </View>
+                    
+                    <View style={styles.requestActions}>
+                      <TouchableOpacity
+                        style={[styles.requestButton, styles.approveButton]}
+                        onPress={() => handleApproveRequest(request.id)}
+                        disabled={approvingId === request.id}
+                      >
+                        {approvingId === request.id ? (
+                          <ActivityIndicator color="#fff" size="small" />
+                        ) : (
+                          <>
+                            <Ionicons name="checkmark" size={18} color="#fff" />
+                            <Text style={styles.requestButtonText}>Approva</Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.requestButton, styles.rejectButton]}
+                        onPress={() => handleRejectRequest(request.id)}
+                      >
+                        <Ionicons name="close" size={18} color="#f44336" />
+                        <Text style={[styles.requestButtonText, { color: '#f44336' }]}>Rifiuta</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))
+            )}
+
+            {/* Approved requests with password */}
+            {bookstoreRequests.filter(r => r.status === 'approved').length > 0 && (
+              <>
+                <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Approvate di recente</Text>
+                {bookstoreRequests
+                  .filter(r => r.status === 'approved')
+                  .slice(0, 5)
+                  .map((request) => (
+                    <View key={request.id} style={[styles.requestCard, { borderLeftColor: '#4CAF50', borderLeftWidth: 4 }]}>
+                      <View style={styles.requestHeader}>
+                        <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
+                        <Text style={styles.requestName}>{request.nome_attivita}</Text>
+                      </View>
+                      <View style={styles.requestDetails}>
+                        <View style={styles.requestRow}>
+                          <Ionicons name="mail" size={16} color="#666" />
+                          <Text style={styles.requestText}>{request.email}</Text>
+                        </View>
+                        {request.generated_password && (
+                          <View style={[styles.requestRow, styles.passwordRow]}>
+                            <Ionicons name="key" size={16} color="#4CAF50" />
+                            <Text style={[styles.requestText, styles.passwordText]}>
+                              Password: {request.generated_password}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                  ))}
+              </>
+            )}
+          </View>
+        ) : null}
       </ScrollView>
     </View>
   );
@@ -545,5 +736,106 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#1a472a',
+  },
+  // Badge count for tabs
+  badgeCount: {
+    backgroundColor: '#f44336',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 6,
+  },
+  badgeCountText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: 'bold',
+  },
+  // Bookstore requests styles
+  bookstoreRequestsContainer: {
+    padding: 4,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 12,
+  },
+  requestCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  requestHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 12,
+  },
+  requestName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    flex: 1,
+  },
+  requestDetails: {
+    gap: 6,
+    marginBottom: 12,
+  },
+  requestRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  requestText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  passwordRow: {
+    backgroundColor: '#E8F5E9',
+    padding: 8,
+    borderRadius: 6,
+    marginTop: 8,
+  },
+  passwordText: {
+    color: '#4CAF50',
+    fontWeight: '600',
+    fontFamily: 'monospace',
+  },
+  requestActions: {
+    flexDirection: 'row',
+    gap: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+    paddingTop: 12,
+  },
+  requestButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 10,
+    borderRadius: 8,
+    gap: 6,
+  },
+  approveButton: {
+    backgroundColor: '#4CAF50',
+  },
+  rejectButton: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#f44336',
+  },
+  requestButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
   },
 });

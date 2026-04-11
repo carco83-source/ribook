@@ -1,0 +1,50 @@
+{
+  "total": 6,
+  "passed": 3,
+  "failed": 3,
+  "success_rate": 50.0,
+  "results": [
+    {
+      "test": "Bookstore Registration Request",
+      "success": false,
+      "details": "Request failed - connection error",
+      "timestamp": "2026-04-11T14:27:56.198205",
+      "response_data": null
+    },
+    {
+      "test": "Make User Admin",
+      "success": true,
+      "details": "User is already admin",
+      "timestamp": "2026-04-11T14:27:56.299387",
+      "response_data": null
+    },
+    {
+      "test": "Get Bookstore Requests (Admin)",
+      "success": true,
+      "details": "Retrieved 2 bookstore requests",
+      "timestamp": "2026-04-11T14:27:56.400014",
+      "response_data": null
+    },
+    {
+      "test": "Bookstore Login Without Password",
+      "success": false,
+      "details": "Request failed - connection error",
+      "timestamp": "2026-04-11T14:27:56.505056",
+      "response_data": null
+    },
+    {
+      "test": "Order with Order Code",
+      "success": false,
+      "details": "Order creation request failed",
+      "timestamp": "2026-04-11T14:27:56.780608",
+      "response_data": null
+    },
+    {
+      "test": "Bookstore Orders Endpoint",
+      "success": true,
+      "details": "Retrieved orders for bookstore 'AEMME 77 di Ruoppolo Francesco': 0 orders",
+      "timestamp": "2026-04-11T14:27:56.871117",
+      "response_data": null
+    }
+  ]
+}

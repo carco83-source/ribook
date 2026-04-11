@@ -572,6 +572,20 @@ export default function ProfileScreen() {
 
         <TouchableOpacity 
           style={styles.menuItem}
+          onPress={() => router.push('/bookstore-portal')}
+        >
+          <View style={[styles.menuItemIcon, { backgroundColor: '#f3e5f5' }]}>
+            <Ionicons name="business" size={20} color="#9C27B0" />
+          </View>
+          <View style={styles.menuItemContent}>
+            <Text style={styles.menuItemTitle}>Area Cartolibrerie</Text>
+            <Text style={styles.menuItemSubtitle}>Login e gestione ordini (per cartolibrerie)</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#999" />
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={styles.menuItem}
           onPress={() => router.push('/admin')}
         >
           <View style={[styles.menuItemIcon, { backgroundColor: '#fce4ec' }]}>

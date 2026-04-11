@@ -80,6 +80,16 @@ def generate_username():
     random_part = ''.join(random.choices(chars, k=5))
     return f"Utente_{random_part}"
 
+def generate_order_code():
+    """Genera codice ordine alfanumerico di 6 caratteri (es. A1B2C3)"""
+    chars = string.ascii_uppercase + string.digits
+    return ''.join(random.choices(chars, k=6))
+
+def generate_bookstore_password():
+    """Genera password casuale per cartolibreria (8 caratteri)"""
+    chars = string.ascii_letters + string.digits
+    return ''.join(random.choices(chars, k=8))
+
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
 
@@ -381,6 +391,7 @@ class PaymentIntent(BaseModel):
 class Order(BaseModel):
     """Ordine con sistema escrow"""
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    order_code: str = Field(default_factory=generate_order_code)  # Codice 6 caratteri per QR
     
     # Riferimenti
     buyer_id: str
@@ -441,6 +452,31 @@ class SellerBankAccount(BaseModel):
     is_verified: bool = False
     created_at: datetime = Field(default_factory=datetime.utcnow)
     # In produzione: stripe_account_id per Stripe Connect
+
+# ============== BOOKSTORE REGISTRATION SYSTEM ==============
+
+class BookstoreRegistrationRequest(BaseModel):
+    """Richiesta di registrazione cartolibreria"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    nome_attivita: str
+    email: str
+    partita_iva: str
+    indirizzo: Optional[str] = ""
+    citta: Optional[str] = ""
+    telefono: Optional[str] = ""
+    status: str = "pending"  # pending, approved, rejected
+    generated_password: Optional[str] = None  # Password generata dall'admin
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    approved_at: Optional[datetime] = None
+    approved_by: Optional[str] = None  # admin user_id
+
+class BookstoreRegistrationRequestCreate(BaseModel):
+    nome_attivita: str
+    email: str
+    partita_iva: str
+    indirizzo: Optional[str] = ""
+    citta: Optional[str] = ""
+    telefono: Optional[str] = ""
 
 # Compatibility/Match Model
 class Match(BaseModel):
@@ -4691,6 +4727,317 @@ async def confirm_book_pickup(bookstore_id: str, transaction_id: str, buyer_name
     )
     
     return {"message": "Ritiro confermato, transazione completata"}
+
+# ============== BOOKSTORE REGISTRATION SYSTEM ==============
+
+@api_router.post("/bookstore/registration-request")
+async def submit_bookstore_registration(data: BookstoreRegistrationRequestCreate):
+    """Cartolibreria invia richiesta di registrazione"""
+    
+    # Verifica email non già registrata
+    existing = await db.bookstores.find_one({"email": data.email.lower()})
+    if existing:
+        raise HTTPException(status_code=400, detail="Email già registrata come cartolibreria")
+    
+    # Verifica richiesta pendente
+    pending = await db.bookstore_requests.find_one({
+        "email": data.email.lower(),
+        "status": "pending"
+    })
+    if pending:
+        raise HTTPException(status_code=400, detail="Richiesta già in attesa di approvazione")
+    
+    request = BookstoreRegistrationRequest(
+        nome_attivita=data.nome_attivita,
+        email=data.email.lower(),
+        partita_iva=data.partita_iva,
+        indirizzo=data.indirizzo or "",
+        citta=data.citta or "",
+        telefono=data.telefono or "",
+        status="pending"
+    )
+    
+    await db.bookstore_requests.insert_one(request.dict())
+    
+    return {
+        "success": True,
+        "request_id": request.id,
+        "message": "Richiesta inviata! Riceverai la password via email dopo l'approvazione."
+    }
+
+@api_router.get("/admin/bookstore-requests")
+async def get_bookstore_requests(admin_id: str = Query(...)):
+    """Admin: visualizza tutte le richieste di registrazione cartolibrerie"""
+    
+    # Verifica admin (semplificato - in produzione usare ruoli)
+    admin = await db.users.find_one({"id": admin_id})
+    if not admin or not admin.get("is_admin", False):
+        raise HTTPException(status_code=403, detail="Accesso non autorizzato")
+    
+    requests = await db.bookstore_requests.find().sort("created_at", -1).to_list(100)
+    
+    for req in requests:
+        req.pop('_id', None)
+    
+    return {"requests": requests}
+
+@api_router.post("/admin/bookstore-requests/{request_id}/approve")
+async def approve_bookstore_request(request_id: str, admin_id: str = Query(...)):
+    """Admin: approva richiesta cartolibreria e genera password"""
+    
+    # Verifica admin
+    admin = await db.users.find_one({"id": admin_id})
+    if not admin or not admin.get("is_admin", False):
+        raise HTTPException(status_code=403, detail="Accesso non autorizzato")
+    
+    request = await db.bookstore_requests.find_one({"id": request_id})
+    if not request:
+        raise HTTPException(status_code=404, detail="Richiesta non trovata")
+    
+    if request.get("status") != "pending":
+        raise HTTPException(status_code=400, detail="Richiesta già processata")
+    
+    # Genera password
+    password = generate_bookstore_password()
+    
+    # Crea cartolibreria
+    bookstore = Bookstore(
+        nome=request["nome_attivita"],
+        indirizzo=request.get("indirizzo", ""),
+        citta=request.get("citta", ""),
+        telefono=request.get("telefono", ""),
+        email=request["email"],
+        password_hash=hash_password(password)
+    )
+    
+    await db.bookstores.insert_one(bookstore.dict())
+    
+    # Aggiorna richiesta
+    now = datetime.utcnow()
+    await db.bookstore_requests.update_one(
+        {"id": request_id},
+        {"$set": {
+            "status": "approved",
+            "generated_password": password,
+            "approved_at": now,
+            "approved_by": admin_id
+        }}
+    )
+    
+    return {
+        "success": True,
+        "bookstore_id": bookstore.id,
+        "email": request["email"],
+        "password": password,
+        "message": f"Cartolibreria approvata! Password generata: {password}"
+    }
+
+@api_router.post("/admin/bookstore-requests/{request_id}/reject")
+async def reject_bookstore_request(request_id: str, admin_id: str = Query(...), reason: str = Query("")):
+    """Admin: rifiuta richiesta cartolibreria"""
+    
+    admin = await db.users.find_one({"id": admin_id})
+    if not admin or not admin.get("is_admin", False):
+        raise HTTPException(status_code=403, detail="Accesso non autorizzato")
+    
+    request = await db.bookstore_requests.find_one({"id": request_id})
+    if not request:
+        raise HTTPException(status_code=404, detail="Richiesta non trovata")
+    
+    await db.bookstore_requests.update_one(
+        {"id": request_id},
+        {"$set": {
+            "status": "rejected",
+            "rejection_reason": reason,
+            "approved_at": datetime.utcnow(),
+            "approved_by": admin_id
+        }}
+    )
+    
+    return {"success": True, "message": "Richiesta rifiutata"}
+
+# ============== BOOKSTORE PORTAL ==============
+
+@api_router.post("/bookstore/login")
+async def bookstore_login(email: str = Query(...), password: str = Query(...)):
+    """Login cartolibreria"""
+    
+    bookstore = await db.bookstores.find_one({"email": email.lower()})
+    if not bookstore:
+        raise HTTPException(status_code=401, detail="Credenziali non valide")
+    
+    if bookstore.get("password_hash") != hash_password(password):
+        raise HTTPException(status_code=401, detail="Credenziali non valide")
+    
+    return {
+        "success": True,
+        "bookstore_id": bookstore["id"],
+        "nome": bookstore["nome"],
+        "email": bookstore["email"]
+    }
+
+@api_router.get("/bookstore/{bookstore_id}/orders")
+async def get_bookstore_orders(bookstore_id: str):
+    """Cartolibreria: visualizza ordini assegnati"""
+    
+    bookstore = await db.bookstores.find_one({"id": bookstore_id})
+    if not bookstore:
+        raise HTTPException(status_code=404, detail="Cartolibreria non trovata")
+    
+    # Trova ordini per questa cartolibreria
+    orders = await db.orders.find({
+        "bookstore_id": bookstore_id,
+        "status": {"$in": ["paid_escrow", "delivering_to_bookstore", "ready_for_pickup"]}
+    }).sort("created_at", -1).to_list(100)
+    
+    for order in orders:
+        order.pop('_id', None)
+        order["status_label"] = ORDER_STATES.get(order.get("status"), order.get("status"))
+    
+    return {
+        "bookstore_name": bookstore["nome"],
+        "orders": orders,
+        "total": len(orders)
+    }
+
+@api_router.post("/bookstore/{bookstore_id}/confirm-pickup-by-code")
+async def bookstore_confirm_pickup_by_code(bookstore_id: str, order_code: str = Query(...)):
+    """Cartolibreria: conferma ritiro tramite codice ordine (scansione QR o manuale)"""
+    
+    bookstore = await db.bookstores.find_one({"id": bookstore_id})
+    if not bookstore:
+        raise HTTPException(status_code=404, detail="Cartolibreria non trovata")
+    
+    # Trova ordine per codice
+    order = await db.orders.find_one({
+        "order_code": order_code.upper(),
+        "bookstore_id": bookstore_id
+    })
+    
+    if not order:
+        raise HTTPException(status_code=404, detail="Ordine non trovato con questo codice")
+    
+    if order.get("status") != "ready_for_pickup":
+        status_label = ORDER_STATES.get(order.get("status"), order.get("status"))
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Ordine non pronto per il ritiro. Stato attuale: {status_label}"
+        )
+    
+    now = datetime.utcnow()
+    
+    # Aggiorna ordine a completato
+    update_data = {
+        "status": "completed",
+        "payment_status": "released",
+        "picked_up_at": now,
+        "completed_at": now,
+        "confirmed_by_bookstore": True,
+        "status_history": order.get("status_history", []) + [{
+            "status": "picked_up",
+            "timestamp": now.isoformat(),
+            "note": f"Ritiro confermato dalla cartolibreria {bookstore['nome']}"
+        }, {
+            "status": "completed",
+            "timestamp": now.isoformat(),
+            "note": f"Pagamento di €{order.get('netto_venditore', 0):.2f} rilasciato al venditore"
+        }]
+    }
+    
+    await db.orders.update_one({"id": order["id"]}, {"$set": update_data})
+    
+    # Aggiorna listing come venduto
+    await db.listings.update_one(
+        {"id": order.get("listing_id")},
+        {"$set": {"status": "sold", "sold_at": now, "sold_to": order.get("buyer_id")}}
+    )
+    
+    # Notifica al venditore
+    notification = {
+        "id": str(uuid.uuid4()),
+        "user_id": order.get("seller_id"),
+        "type": "payment_released",
+        "title": "Pagamento ricevuto!",
+        "message": f"L'acquirente ha ritirato '{order.get('book_titolo')[:40]}'. €{order.get('netto_venditore', 0):.2f} sono stati accreditati.",
+        "order_id": order["id"],
+        "read": False,
+        "created_at": now.isoformat()
+    }
+    await db.notifications.insert_one(notification)
+    
+    # Notifica all'acquirente
+    notification_buyer = {
+        "id": str(uuid.uuid4()),
+        "user_id": order.get("buyer_id"),
+        "type": "pickup_confirmed",
+        "title": "Ritiro confermato!",
+        "message": f"Hai ritirato '{order.get('book_titolo')[:40]}'. Grazie per aver usato RiLiBro!",
+        "order_id": order["id"],
+        "read": False,
+        "created_at": now.isoformat()
+    }
+    await db.notifications.insert_one(notification_buyer)
+    
+    return {
+        "success": True,
+        "order_id": order["id"],
+        "order_code": order.get("order_code"),
+        "book_titolo": order.get("book_titolo"),
+        "buyer_name": order.get("buyer_name"),
+        "message": "Ritiro confermato! Transazione completata."
+    }
+
+@api_router.post("/bookstore/{bookstore_id}/mark-ready/{order_id}")
+async def bookstore_mark_ready(bookstore_id: str, order_id: str):
+    """Cartolibreria: segna ordine come pronto per il ritiro"""
+    
+    bookstore = await db.bookstores.find_one({"id": bookstore_id})
+    if not bookstore:
+        raise HTTPException(status_code=404, detail="Cartolibreria non trovata")
+    
+    order = await db.orders.find_one({"id": order_id, "bookstore_id": bookstore_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="Ordine non trovato")
+    
+    if order.get("status") not in ["paid_escrow", "delivering_to_bookstore"]:
+        raise HTTPException(status_code=400, detail="Ordine non in stato valido")
+    
+    now = datetime.utcnow()
+    from datetime import timedelta
+    escrow_deadline = now + timedelta(days=2)
+    
+    update_data = {
+        "status": "ready_for_pickup",
+        "ready_for_pickup_at": now,
+        "escrow_release_deadline": escrow_deadline,
+        "status_history": order.get("status_history", []) + [{
+            "status": "ready_for_pickup",
+            "timestamp": now.isoformat(),
+            "note": f"Libro pronto per il ritiro presso {bookstore['nome']}"
+        }]
+    }
+    
+    await db.orders.update_one({"id": order_id}, {"$set": update_data})
+    
+    # Notifica all'acquirente
+    notification = {
+        "id": str(uuid.uuid4()),
+        "user_id": order.get("buyer_id"),
+        "type": "ready_for_pickup",
+        "title": "Libro pronto per il ritiro!",
+        "message": f"'{order.get('book_titolo')[:40]}' è pronto presso {bookstore['nome']}. Codice ritiro: {order.get('order_code')}",
+        "order_id": order_id,
+        "order_code": order.get("order_code"),
+        "read": False,
+        "created_at": now.isoformat()
+    }
+    await db.notifications.insert_one(notification)
+    
+    return {
+        "success": True,
+        "order_code": order.get("order_code"),
+        "message": "Ordine segnato come pronto per il ritiro"
+    }
 
 # ============== TRANSACTION ROUTES ==============
 
