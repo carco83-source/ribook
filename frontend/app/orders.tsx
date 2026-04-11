@@ -55,10 +55,16 @@ interface Order {
 
 // Stati con colori e icone
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: string; bgColor: string }> = {
+  pending_seller_confirmation: { 
+    label: 'In attesa conferma venditore', 
+    color: '#FF9800', 
+    icon: 'hourglass-outline',
+    bgColor: '#FFF3E0'
+  },
   pending_payment: { 
     label: 'In attesa di pagamento', 
     color: '#FF9800', 
-    icon: 'time-outline',
+    icon: 'card-outline',
     bgColor: '#FFF3E0'
   },
   paid_escrow: { 
@@ -194,6 +200,73 @@ export default function OrdersScreen() {
   };
 
   // === AZIONI ORDINE ===
+
+  // Venditore conferma disponibilità
+  const handleSellerConfirm = async (order: Order) => {
+    Alert.alert(
+      'Conferma disponibilità',
+      `Confermi che "${order.book_titolo}" è disponibile per la vendita?`,
+      [
+        { text: 'Annulla', style: 'cancel' },
+        {
+          text: 'Sì, confermo',
+          onPress: async () => {
+            setActionLoading(true);
+            try {
+              await axios.post(
+                `${API_URL}/api/orders/${order.id}/seller-confirm?user_id=${userId}`
+              );
+              Alert.alert(
+                'Disponibilità confermata!',
+                'L\'acquirente è stato notificato e potrà procedere al pagamento.',
+                [{ text: 'OK' }]
+              );
+              loadOrders();
+              setShowDetailModal(false);
+            } catch (error: any) {
+              Alert.alert('Errore', error.response?.data?.detail || 'Errore nella conferma');
+            } finally {
+              setActionLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // Venditore rifiuta/annulla
+  const handleSellerReject = async (order: Order) => {
+    Alert.alert(
+      'Rifiuta ordine',
+      `Il libro "${order.book_titolo}" non è più disponibile?`,
+      [
+        { text: 'No, annulla', style: 'cancel' },
+        {
+          text: 'Sì, rifiuta ordine',
+          style: 'destructive',
+          onPress: async () => {
+            setActionLoading(true);
+            try {
+              await axios.post(
+                `${API_URL}/api/orders/${order.id}/seller-reject?user_id=${userId}&reason=Libro non più disponibile`
+              );
+              Alert.alert(
+                'Ordine rifiutato',
+                'L\'acquirente è stato notificato.',
+                [{ text: 'OK' }]
+              );
+              loadOrders();
+              setShowDetailModal(false);
+            } catch (error: any) {
+              Alert.alert('Errore', error.response?.data?.detail || 'Errore');
+            } finally {
+              setActionLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const handlePayOrder = async (order: Order) => {
     Alert.alert(
@@ -547,6 +620,42 @@ export default function OrdersScreen() {
 
             {/* Actions */}
             <View style={styles.actionsSection}>
+              {/* Seller: Confirm availability */}
+              {!isBuyer && selectedOrder.status === 'pending_seller_confirmation' && (
+                <>
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.confirmButton]}
+                    onPress={() => handleSellerConfirm(selectedOrder)}
+                    disabled={actionLoading}
+                  >
+                    {actionLoading ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <>
+                        <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                        <Text style={styles.actionButtonText}>Confermo disponibilità</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.cancelButton]}
+                    onPress={() => handleSellerReject(selectedOrder)}
+                    disabled={actionLoading}
+                  >
+                    <Ionicons name="close-circle" size={20} color="#f44336" />
+                    <Text style={[styles.actionButtonText, { color: '#f44336' }]}>Libro non disponibile</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+
+              {/* Buyer: Waiting for seller */}
+              {isBuyer && selectedOrder.status === 'pending_seller_confirmation' && (
+                <View style={styles.waitingBox}>
+                  <Ionicons name="hourglass-outline" size={24} color="#FF9800" />
+                  <Text style={styles.waitingText}>In attesa che il venditore confermi la disponibilità</Text>
+                </View>
+              )}
+
               {/* Buyer: Pay */}
               {isBuyer && selectedOrder.status === 'pending_payment' && (
                 <TouchableOpacity
@@ -1136,5 +1245,22 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#1a472a',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  waitingBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    backgroundColor: '#FFF3E0',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FF9800',
+  },
+  waitingText: {
+    fontSize: 14,
+    color: '#FF9800',
+    fontWeight: '500',
+    flex: 1,
   },
 });

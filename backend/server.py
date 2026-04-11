@@ -4213,21 +4213,148 @@ async def create_order(request: CreateOrderRequest, user_id: str = Query(...)):
         commissione_cartolibreria=round(commissione_cartolibreria, 2),
         totale_acquirente=round(totale_acquirente, 2),
         netto_venditore=round(netto_venditore, 2),
-        status="pending_payment",
+        status="pending_seller_confirmation",  # Prima deve confermare il venditore
         status_history=[{
-            "status": "pending_payment",
+            "status": "pending_seller_confirmation",
             "timestamp": datetime.utcnow().isoformat(),
-            "note": "Ordine creato"
+            "note": "In attesa di conferma disponibilità dal venditore"
         }]
     )
     
     await db.orders.insert_one(order.dict())
     
+    # Segna il listing come riservato
+    await db.listings.update_one(
+        {"id": listing.get("id")},
+        {"$set": {"status": "reserved", "reserved_by": user_id, "order_id": order.id}}
+    )
+    
+    # Notifica al venditore per confermare la disponibilità
+    notification = {
+        "id": str(uuid.uuid4()),
+        "user_id": listing.get("seller_id"),
+        "type": "seller_confirmation_request",
+        "title": "Conferma disponibilità libro",
+        "message": f"'{order.book_titolo[:40]}' è stato richiesto. Conferma la disponibilità entro 24h.",
+        "order_id": order.id,
+        "data": {
+            "order_id": order.id,
+            "book_titolo": order.book_titolo,
+            "buyer_name": order.buyer_name,
+            "bookstore_name": order.bookstore_name,
+            "prezzo": order.netto_venditore
+        },
+        "read": False,
+        "created_at": datetime.utcnow().isoformat()
+    }
+    await db.notifications.insert_one(notification)
+    
     return {
         "order_id": order.id,
+        "order_code": order.order_code,
         "totale": order.totale_acquirente,
         "status": order.status,
-        "message": "Ordine creato. Procedi con il pagamento."
+        "message": "Richiesta inviata! Il venditore deve confermare la disponibilità."
+    }
+
+@api_router.post("/orders/{order_id}/seller-confirm")
+async def seller_confirm_order(order_id: str, user_id: str = Query(...)):
+    """Venditore conferma la disponibilità del libro"""
+    
+    order = await db.orders.find_one({"id": order_id, "seller_id": user_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="Ordine non trovato")
+    
+    if order.get("status") != "pending_seller_confirmation":
+        raise HTTPException(status_code=400, detail="Ordine non in attesa di conferma")
+    
+    now = datetime.utcnow()
+    
+    # Aggiorna ordine - ora può essere pagato
+    update_data = {
+        "status": "pending_payment",
+        "seller_confirmed_at": now,
+        "status_history": order.get("status_history", []) + [{
+            "status": "pending_payment",
+            "timestamp": now.isoformat(),
+            "note": "Venditore ha confermato la disponibilità"
+        }]
+    }
+    
+    await db.orders.update_one({"id": order_id}, {"$set": update_data})
+    
+    # Notifica all'acquirente che può pagare
+    notification = {
+        "id": str(uuid.uuid4()),
+        "user_id": order.get("buyer_id"),
+        "type": "ready_for_payment",
+        "title": "Libro disponibile! Procedi al pagamento",
+        "message": f"Il venditore ha confermato '{order.get('book_titolo')[:40]}'. Completa l'acquisto ora!",
+        "order_id": order_id,
+        "data": {
+            "order_id": order_id,
+            "book_titolo": order.get("book_titolo"),
+            "totale": order.get("totale_acquirente")
+        },
+        "read": False,
+        "created_at": now.isoformat()
+    }
+    await db.notifications.insert_one(notification)
+    
+    return {
+        "success": True,
+        "message": "Disponibilità confermata! L'acquirente è stato notificato."
+    }
+
+@api_router.post("/orders/{order_id}/seller-reject")
+async def seller_reject_order(order_id: str, user_id: str = Query(...), reason: str = Query("")):
+    """Venditore rifiuta/annulla l'ordine"""
+    
+    order = await db.orders.find_one({"id": order_id, "seller_id": user_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="Ordine non trovato")
+    
+    if order.get("status") != "pending_seller_confirmation":
+        raise HTTPException(status_code=400, detail="Ordine non può essere rifiutato")
+    
+    now = datetime.utcnow()
+    
+    # Aggiorna ordine
+    update_data = {
+        "status": "cancelled",
+        "cancelled_at": now,
+        "cancellation_reason": reason or "Libro non disponibile",
+        "status_history": order.get("status_history", []) + [{
+            "status": "cancelled",
+            "timestamp": now.isoformat(),
+            "note": f"Rifiutato dal venditore: {reason or 'Libro non disponibile'}"
+        }]
+    }
+    
+    await db.orders.update_one({"id": order_id}, {"$set": update_data})
+    
+    # Rimetti il listing come disponibile
+    await db.listings.update_one(
+        {"id": order.get("listing_id")},
+        {"$set": {"status": "available"}, "$unset": {"reserved_by": "", "order_id": ""}}
+    )
+    
+    # Notifica all'acquirente
+    notification = {
+        "id": str(uuid.uuid4()),
+        "user_id": order.get("buyer_id"),
+        "type": "order_rejected",
+        "title": "Ordine annullato",
+        "message": f"Il venditore non può confermare '{order.get('book_titolo')[:40]}'. {reason or 'Libro non disponibile.'}",
+        "order_id": order_id,
+        "read": False,
+        "created_at": now.isoformat()
+    }
+    await db.notifications.insert_one(notification)
+    
+    return {
+        "success": True,
+        "message": "Ordine rifiutato."
     }
 
 @api_router.post("/orders/{order_id}/pay")
@@ -4278,6 +4405,22 @@ async def pay_order(order_id: str, user_id: str = Query(...)):
         "created_at": now.isoformat()
     }
     await db.notifications.insert_one(notification)
+    
+    # Notifica alla cartolibreria che riceverà un libro
+    # (le cartolibrerie non hanno un sistema utente standard, ma possiamo salvare la notifica nel database)
+    bookstore_notification = {
+        "id": str(uuid.uuid4()),
+        "bookstore_id": order.get("bookstore_id"),
+        "type": "incoming_order",
+        "title": "Nuovo ordine in arrivo!",
+        "message": f"Un libro è in arrivo: '{order.get('book_titolo')[:40]}'. Codice: {order.get('order_code')}",
+        "order_id": order_id,
+        "order_code": order.get("order_code"),
+        "buyer_name": order.get("buyer_name"),
+        "read": False,
+        "created_at": now.isoformat()
+    }
+    await db.bookstore_notifications.insert_one(bookstore_notification)
     
     return {
         "success": True,

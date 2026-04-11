@@ -255,34 +255,36 @@ export default function ListingDetailScreen() {
     const proceedWithPurchase = async () => {
       setPurchasing(true);
       try {
-        // 1. Crea ordine
+        // 1. Crea ordine (in attesa conferma venditore)
         const orderResponse = await axios.post(
-          `${API_URL}/api/orders?user_id=${userId}`,
+          `${API_URL}/api/orders/create?user_id=${userId}`,
           {
             listing_id: listing?.id,
             bookstore_id: selectedBookstore.id
           }
         );
         
-        const orderId = orderResponse.data.order_id;
-        
-        // 2. Simula pagamento
-        const payResponse = await axios.post(
-          `${API_URL}/api/orders/${orderId}/pay?user_id=${userId}`
-        );
-        
-        Alert.alert(
-          'Pagamento completato!',
-          `I fondi sono in escrow.\n\n` +
-          `Il venditore è stato notificato e consegnerà il libro presso ${selectedBookstore.nome}.\n\n` +
-          `Riceverai una notifica quando sarà pronto per il ritiro.`,
-          [
-            { text: 'OK', onPress: () => router.push('/orders') }
-          ]
-        );
+        // Mostra messaggio di successo
+        if (Platform.OS === 'web') {
+          window.alert(
+            `Richiesta inviata!\n\n` +
+            `Il venditore deve confermare la disponibilità del libro.\n\n` +
+            `Riceverai una notifica quando potrai procedere al pagamento.`
+          );
+          router.push('/orders');
+        } else {
+          Alert.alert(
+            'Richiesta inviata!',
+            `Il venditore deve confermare la disponibilità del libro.\n\n` +
+            `Riceverai una notifica quando potrai procedere al pagamento.`,
+            [
+              { text: 'OK', onPress: () => router.push('/orders') }
+            ]
+          );
+        }
       } catch (error: any) {
         console.error('Error creating order:', error);
-        const errorMsg = error.response?.data?.detail || 'Impossibile completare l\'acquisto';
+        const errorMsg = error.response?.data?.detail || 'Impossibile completare la richiesta';
         Alert.alert('Errore', errorMsg);
       } finally {
         setPurchasing(false);
