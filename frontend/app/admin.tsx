@@ -362,7 +362,7 @@ export default function AdminScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        ) : (
+        ) : activeTab === 'transactions' ? (
           <View style={styles.transactionsContainer}>
             {recentTransactions && recentTransactions.length > 0 ? (
               recentTransactions.map((trans: any, index: number) => (

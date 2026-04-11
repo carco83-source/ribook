@@ -16,7 +16,20 @@ import { useRouter, Stack, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+
+// Conditional import for camera (not available on web)
+let CameraView: any = null;
+let useCameraPermissions: any = () => [{ granted: false }, () => {}];
+
+if (Platform.OS !== 'web') {
+  try {
+    const camera = require('expo-camera');
+    CameraView = camera.CameraView;
+    useCameraPermissions = camera.useCameraPermissions;
+  } catch (e) {
+    console.log('Camera not available');
+  }
+}
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
