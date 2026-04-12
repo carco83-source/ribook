@@ -4698,8 +4698,8 @@ async def cancel_order(order_id: str, user_id: str = Query(...), reason: str = Q
     if not order:
         raise HTTPException(status_code=404, detail="Ordine non trovato")
     
-    # Può essere annullato solo se in pending o paid_escrow (con rimborso simulato)
-    if order.get("status") not in ["pending_payment", "paid_escrow"]:
+    # Può essere annullato solo se in pending_seller_confirmation, pending_payment o paid_escrow (con rimborso simulato)
+    if order.get("status") not in ["pending_seller_confirmation", "pending_payment", "paid_escrow"]:
         raise HTTPException(status_code=400, detail="Ordine non annullabile in questo stato")
     
     now = datetime.utcnow()

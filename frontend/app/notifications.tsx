@@ -111,12 +111,8 @@ export default function NotificationsScreen() {
 
   // Funzione per procedere al pagamento (acquirente)
   const handleProceedToPayment = async (notification: Notification) => {
-    const orderId = notification.order_id || notification.data?.order_id;
-    if (!orderId) {
-      router.push('/orders');
-      return;
-    }
-    router.push(`/orders?pay=${orderId}`);
+    // Naviga direttamente al carrello
+    router.push('/cart');
   };
 
   const loadNotifications = async () => {
@@ -453,8 +449,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
   },
   notificationCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'column',
     backgroundColor: '#fff',
     padding: 16,
     borderRadius: 12,
@@ -464,6 +459,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
+  },
+  notificationTouchable: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   notificationUnread: {
     backgroundColor: '#f0f9f0',
@@ -502,5 +501,57 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: '#4CAF50',
     marginRight: 8,
+  },
+  // Action Buttons Styles
+  actionButtonsContainer: {
+    flexDirection: 'row',
+    marginTop: 12,
+    gap: 10,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+  },
+  actionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    gap: 6,
+  },
+  actionButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  confirmButton: {
+    backgroundColor: '#4CAF50',
+  },
+  rejectButton: {
+    backgroundColor: '#f44336',
+  },
+  payButton: {
+    backgroundColor: '#1a472a',
+  },
+  continueButton: {
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: '#1a472a',
+  },
+  pendingInfoBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+    gap: 8,
+  },
+  pendingInfoText: {
+    fontSize: 13,
+    color: '#FF9800',
+    fontStyle: 'italic',
   },
 });

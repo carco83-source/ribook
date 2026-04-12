@@ -8,59 +8,52 @@ import {
   ActivityIndicator,
   Alert,
   RefreshControl,
+  Platform,
 } from 'react-native';
-import { useRouter, Stack } from 'expo-router';
+import { useRouter, Stack, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
-interface CartItem {
+interface EscrowOrder {
   id: string;
-  listing_id: string;
+  order_code: string;
   buyer_id: string;
   seller_id: string;
+  seller_name: string;
+  listing_id: string;
+  bookstore_id: string;
+  bookstore_name: string;
   book_isbn: string;
   book_titolo: string;
-  book_editore: string;
-  prezzo: number;
-  bookstore_id: string;
-  bookstore_nome: string;
-  status: 'pending' | 'confirmed' | 'rejected' | 'expired';
+  book_autore: string;
+  prezzo_libro: number;
+  commissione_app: number;
+  commissione_cartolibreria: number;
+  totale_acquirente: number;
+  netto_venditore: number;
+  status: string;
   created_at: string;
-  expires_at: string;
-  condizione?: string;
-  condition_details?: {
-    sottolineature?: number;
-    copertina?: number;
-    pagine?: number;
-    esercizi?: number;
-  };
-}
-
-interface CartData {
-  items: CartItem[];
-  confirmed: CartItem[];
-  pending: CartItem[];
-  expired: CartItem[];
-  total_confirmed: number;
-  total_pending: number;
-  can_checkout: boolean;
 }
 
 export default function CartScreen() {
   const router = useRouter();
-  const [cartData, setCartData] = useState<CartData | null>(null);
+  const [pendingPaymentOrders, setPendingPaymentOrders] = useState<EscrowOrder[]>([]);
+  const [pendingConfirmationOrders, setPendingConfirmationOrders] = useState<EscrowOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [purchasing, setPurchasing] = useState(false);
+  const [payingOrderId, setPayingOrderId] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [isPremium, setIsPremium] = useState(false);
 
-  useEffect(() => {
-    loadCart();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      loadCart();
+    }, [])
+  );
 
   const loadCart = async () => {
     try {
@@ -70,8 +63,16 @@ export default function CartScreen() {
       setIsPremium(storedPremium === 'true');
 
       if (storedUserId) {
-        const response = await axios.get(`${API_URL}/api/cart/${storedUserId}`);
-        setCartData(response.data);
+        // Carica ordini come acquirente
+        const response = await axios.get(`${API_URL}/api/orders/user/${storedUserId}?role=buyer`);
+        const orders = response.data || [];
+        
+        // Filtra ordini per stato
+        const paymentReady = orders.filter((o: EscrowOrder) => o.status === 'pending_payment');
+        const awaitingConfirmation = orders.filter((o: EscrowOrder) => o.status === 'pending_seller_confirmation');
+        
+        setPendingPaymentOrders(paymentReady);
+        setPendingConfirmationOrders(awaitingConfirmation);
       }
     } catch (error) {
       console.error('Error loading cart:', error);
@@ -94,139 +95,152 @@ export default function CartScreen() {
     }
   };
 
-  const removeFromCart = async (cartItemId: string) => {
-    try {
-      await axios.delete(`${API_URL}/api/cart/${cartItemId}?buyer_id=${userId}`);
-      loadCart();
-    } catch (error) {
-      Alert.alert('Errore', 'Impossibile rimuovere dal carrello');
+  const handlePayOrder = async (order: EscrowOrder) => {
+    const proceedWithPayment = async () => {
+      setPayingOrderId(order.id);
+      setPurchasing(true);
+      
+      try {
+        // Effettua il pagamento simulato
+        const response = await axios.post(`${API_URL}/api/orders/${order.id}/pay?user_id=${userId}`);
+        
+        const successMessage = `Pagamento completato!\n\n` +
+          `Libro: ${order.book_titolo}\n` +
+          `Codice Ordine: ${order.order_code}\n` +
+          `Totale: €${order.totale_acquirente.toFixed(2)}\n\n` +
+          `Il venditore è stato notificato.\n` +
+          `Ritirerai il libro presso: ${order.bookstore_name}`;
+        
+        if (Platform.OS === 'web') {
+          window.alert(successMessage);
+        } else {
+          Alert.alert('Pagamento completato!', successMessage, [{ text: 'OK' }]);
+        }
+        
+        // Ricarica il carrello
+        loadCart();
+        
+      } catch (error: any) {
+        console.error('Error paying order:', error);
+        const errorMsg = error.response?.data?.detail || 'Errore durante il pagamento';
+        if (Platform.OS === 'web') {
+          window.alert('Errore: ' + errorMsg);
+        } else {
+          Alert.alert('Errore', errorMsg);
+        }
+      } finally {
+        setPayingOrderId(null);
+        setPurchasing(false);
+      }
+    };
+    
+    // Su web procedi direttamente, su mobile mostra conferma
+    if (Platform.OS === 'web') {
+      await proceedWithPayment();
+    } else {
+      Alert.alert(
+        'Conferma pagamento',
+        `Stai per pagare €${order.totale_acquirente.toFixed(2)} per:\n\n"${order.book_titolo}"\n\nI fondi rimarranno in escrow fino al ritiro.`,
+        [
+          { text: 'Annulla', style: 'cancel' },
+          { text: 'Paga ora', onPress: proceedWithPayment }
+        ]
+      );
     }
   };
 
-  const getConditionLabel = (condition: string) => {
-    switch (condition) {
-      case 'come_nuovo': return 'Come nuovo';
-      case 'buono': return 'Buono';
-      case 'molto_usato': return 'Molto usato';
-      default: return condition;
+  const handlePayAll = async () => {
+    const total = pendingPaymentOrders.reduce((sum, o) => sum + o.totale_acquirente, 0);
+    
+    const proceedWithPayment = async () => {
+      setPurchasing(true);
+      
+      try {
+        // Paga tutti gli ordini
+        for (const order of pendingPaymentOrders) {
+          await axios.post(`${API_URL}/api/orders/${order.id}/pay?user_id=${userId}`);
+        }
+        
+        const successMessage = `Tutti i pagamenti completati!\n\n` +
+          `${pendingPaymentOrders.length} libri acquistati\n` +
+          `Totale: €${total.toFixed(2)}\n\n` +
+          `I venditori sono stati notificati.`;
+        
+        if (Platform.OS === 'web') {
+          window.alert(successMessage);
+        } else {
+          Alert.alert('Pagamento completato!', successMessage, [{ text: 'OK' }]);
+        }
+        
+        loadCart();
+        
+      } catch (error: any) {
+        console.error('Error paying orders:', error);
+        const errorMsg = error.response?.data?.detail || 'Errore durante il pagamento';
+        if (Platform.OS === 'web') {
+          window.alert('Errore: ' + errorMsg);
+        } else {
+          Alert.alert('Errore', errorMsg);
+        }
+      } finally {
+        setPurchasing(false);
+      }
+    };
+    
+    if (Platform.OS === 'web') {
+      await proceedWithPayment();
+    } else {
+      Alert.alert(
+        'Conferma pagamento',
+        `Stai per pagare €${total.toFixed(2)} per ${pendingPaymentOrders.length} libri.\n\nI fondi rimarranno in escrow fino al ritiro.`,
+        [
+          { text: 'Annulla', style: 'cancel' },
+          { text: 'Paga tutto', onPress: proceedWithPayment }
+        ]
+      );
     }
   };
 
-  const getStatusInfo = (status: string) => {
-    switch (status) {
-      case 'confirmed':
-        return { 
-          icon: 'checkmark-circle', 
-          color: '#4CAF50', 
-          text: 'Confermato',
-          description: 'Pronto per il pagamento'
-        };
-      case 'pending':
-        return { 
-          icon: 'time', 
-          color: '#FF9800', 
-          text: 'In attesa',
-          description: 'Attesa conferma venditore (24h)'
-        };
-      case 'expired':
-        return { 
-          icon: 'alert-circle', 
-          color: '#f44336', 
-          text: 'Scaduto',
-          description: 'Il venditore non ha risposto'
-        };
-      case 'rejected':
-        return { 
-          icon: 'close-circle', 
-          color: '#f44336', 
-          text: 'Non disponibile',
-          description: 'Il venditore ha rifiutato'
-        };
-      default:
-        return { icon: 'help-circle', color: '#999', text: status, description: '' };
+  const handleCancelOrder = async (order: EscrowOrder) => {
+    const proceedWithCancel = async () => {
+      try {
+        await axios.post(`${API_URL}/api/orders/${order.id}/cancel?user_id=${userId}`);
+        
+        if (Platform.OS === 'web') {
+          window.alert('Ordine annullato');
+        } else {
+          Alert.alert('Ordine annullato', 'La richiesta è stata annullata.');
+        }
+        
+        loadCart();
+      } catch (error: any) {
+        const errorMsg = error.response?.data?.detail || 'Errore';
+        if (Platform.OS === 'web') {
+          window.alert('Errore: ' + errorMsg);
+        } else {
+          Alert.alert('Errore', errorMsg);
+        }
+      }
+    };
+    
+    if (Platform.OS === 'web') {
+      if (window.confirm(`Vuoi annullare l'ordine per "${order.book_titolo}"?`)) {
+        await proceedWithCancel();
+      }
+    } else {
+      Alert.alert(
+        'Annulla ordine',
+        `Vuoi annullare l'ordine per "${order.book_titolo}"?`,
+        [
+          { text: 'No', style: 'cancel' },
+          { text: 'Sì, annulla', style: 'destructive', onPress: proceedWithCancel }
+        ]
+      );
     }
   };
 
-  const calculateTimeRemaining = (expiresAt: string) => {
-    const now = new Date();
-    const expires = new Date(expiresAt);
-    const diff = expires.getTime() - now.getTime();
-    
-    if (diff <= 0) return 'Scaduto';
-    
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    
-    if (hours > 0) return `${hours}h ${minutes}m rimanenti`;
-    return `${minutes}m rimanenti`;
-  };
-
-  const calculateTotal = () => {
-    if (!cartData) return { subtotal: 0, commission: 0, total: 0 };
-    
-    const confirmedItems = cartData.confirmed || [];
-    const subtotal = confirmedItems.reduce((sum, item) => sum + item.prezzo, 0);
-    const commission = isPremium ? 0 : subtotal * 0.15;
-    return { subtotal, commission, total: subtotal + commission };
-  };
-
-  const handleCheckout = async () => {
-    if (!cartData || cartData.confirmed.length === 0) return;
-
-    const { subtotal, commission, total } = calculateTotal();
-
-    Alert.alert(
-      'Conferma acquisto',
-      `Stai per acquistare ${cartData.confirmed.length} libri confermati.\n\n` +
-      `Subtotale: €${subtotal.toFixed(2)}\n` +
-      (commission > 0 ? `Commissione (15%): €${commission.toFixed(2)}\n` : '') +
-      `Totale: €${total.toFixed(2)}`,
-      [
-        { text: 'Annulla', style: 'cancel' },
-        {
-          text: 'Paga ora',
-          onPress: async () => {
-            setPurchasing(true);
-            try {
-              const results = [];
-              for (const item of cartData.confirmed) {
-                const response = await axios.post(`${API_URL}/api/purchase?buyer_id=${userId}`, {
-                  listing_id: item.listing_id,
-                  bookstore_id: item.bookstore_id,
-                });
-                results.push({
-                  titolo: item.book_titolo,
-                  codice: response.data.codice_ritiro,
-                  bookstore: item.bookstore_nome
-                });
-              }
-
-              const codesText = results.map(r => 
-                `${r.titolo.substring(0, 30)}...\nCodice: ${r.codice}\nRitiro: ${r.bookstore}`
-              ).join('\n\n');
-
-              Alert.alert(
-                'Acquisto completato!',
-                `I venditori hanno 5 giorni per consegnare i libri.\n\n${codesText}`,
-                [{ text: 'OK', onPress: () => router.push('/my-purchases') }]
-              );
-              
-              loadCart();
-            } catch (error: any) {
-              Alert.alert('Errore', error.response?.data?.detail || 'Impossibile completare l\'acquisto');
-            } finally {
-              setPurchasing(false);
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const { subtotal, commission, total } = calculateTotal();
-  const allItems = cartData?.items || [];
-  const confirmedItems = cartData?.confirmed || [];
-  const pendingItems = cartData?.pending || [];
+  const totalAmount = pendingPaymentOrders.reduce((sum, o) => sum + o.totale_acquirente, 0);
+  const allItems = [...pendingPaymentOrders, ...pendingConfirmationOrders];
 
   if (loading) {
     return (
@@ -267,9 +281,11 @@ export default function CartScreen() {
         <View style={styles.emptyContainer}>
           <Ionicons name="cart-outline" size={64} color="#ccc" />
           <Text style={styles.emptyText}>Il carrello è vuoto</Text>
-          <Text style={styles.emptySubtext}>Aggiungi libri dalla sezione "Libri acquistabili"</Text>
+          <Text style={styles.emptySubtext}>
+            Quando clicchi "Acquista ora" su un libro e il venditore conferma la disponibilità, lo troverai qui pronto per il pagamento.
+          </Text>
           <TouchableOpacity style={styles.browseButton} onPress={() => router.push('/(tabs)')}>
-            <Text style={styles.browseButtonText}>Sfoglia libri</Text>
+            <Text style={styles.browseButtonText}>Cerca libri</Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -284,126 +300,153 @@ export default function CartScreen() {
             <View style={styles.infoBanner}>
               <Ionicons name="information-circle" size={20} color="#1a472a" />
               <Text style={styles.infoBannerText}>
-                I venditori hanno 24h per confermare la disponibilità
+                I fondi rimangono in escrow fino al ritiro del libro
               </Text>
             </View>
 
-            {/* Pending Items */}
-            {pendingItems.length > 0 && (
+            {/* SEZIONE: Pronti per il pagamento */}
+            {pendingPaymentOrders.length > 0 && (
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
-                  <Ionicons name="time" size={20} color="#FF9800" />
-                  <Text style={styles.sectionTitle}>In attesa di conferma ({pendingItems.length})</Text>
+                  <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
+                  <Text style={[styles.sectionTitle, { color: '#4CAF50' }]}>
+                    Pronti per il pagamento ({pendingPaymentOrders.length})
+                  </Text>
                 </View>
-                {pendingItems.map((item) => (
-                  <View key={item.id} style={[styles.cartItem, styles.cartItemPending]}>
-                    <View style={styles.statusBanner}>
-                      <Ionicons name="time" size={16} color="#FF9800" />
-                      <Text style={styles.statusBannerText}>
-                        {calculateTimeRemaining(item.expires_at)}
+                
+                {pendingPaymentOrders.map((order) => (
+                  <View key={order.id} style={[styles.orderCard, styles.orderCardReady]}>
+                    <View style={styles.statusBannerConfirmed}>
+                      <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
+                      <Text style={styles.statusBannerTextConfirmed}>
+                        Venditore ha confermato - Pronto per il pagamento
                       </Text>
                     </View>
-                    <Text style={styles.itemTitle} numberOfLines={2}>{item.book_titolo}</Text>
-                    <Text style={styles.itemPublisher}>{item.book_editore}</Text>
-                    <View style={styles.itemFooter}>
-                      <Text style={styles.price}>€{item.prezzo.toFixed(2)}</Text>
-                      <View style={styles.bookstoreTag}>
-                        <Ionicons name="location" size={14} color="#1a472a" />
-                        <Text style={styles.bookstoreText}>{item.bookstore_nome}</Text>
+                    
+                    <Text style={styles.orderTitle} numberOfLines={2}>{order.book_titolo}</Text>
+                    {order.book_autore && (
+                      <Text style={styles.orderAuthor}>{order.book_autore}</Text>
+                    )}
+                    
+                    <View style={styles.orderDetails}>
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Venditore:</Text>
+                        <Text style={styles.detailValue}>{order.seller_name}</Text>
+                      </View>
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Ritiro:</Text>
+                        <Text style={styles.detailValue}>{order.bookstore_name}</Text>
+                      </View>
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Codice:</Text>
+                        <Text style={[styles.detailValue, styles.orderCode]}>{order.order_code}</Text>
                       </View>
                     </View>
+                    
+                    <View style={styles.priceContainer}>
+                      <Text style={styles.priceLabel}>Totale</Text>
+                      <Text style={styles.priceValue}>€{order.totale_acquirente.toFixed(2)}</Text>
+                    </View>
+                    
+                    <TouchableOpacity
+                      style={[styles.payButton, payingOrderId === order.id && styles.payButtonDisabled]}
+                      onPress={() => handlePayOrder(order)}
+                      disabled={purchasing}
+                    >
+                      {payingOrderId === order.id ? (
+                        <ActivityIndicator color="#fff" size="small" />
+                      ) : (
+                        <>
+                          <Ionicons name="card-outline" size={20} color="#fff" />
+                          <Text style={styles.payButtonText}>Paga €{order.totale_acquirente.toFixed(2)}</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
                   </View>
                 ))}
               </View>
             )}
 
-            {/* Confirmed Items */}
-            {confirmedItems.length > 0 && (
+            {/* SEZIONE: In attesa di conferma venditore */}
+            {pendingConfirmationOrders.length > 0 && (
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
-                  <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
-                  <Text style={[styles.sectionTitle, { color: '#4CAF50' }]}>
-                    Confermati - Pronti per pagamento ({confirmedItems.length})
+                  <Ionicons name="time" size={24} color="#FF9800" />
+                  <Text style={[styles.sectionTitle, { color: '#FF9800' }]}>
+                    In attesa di conferma ({pendingConfirmationOrders.length})
                   </Text>
                 </View>
-                {confirmedItems.map((item) => (
-                  <View key={item.id} style={[styles.cartItem, styles.cartItemConfirmed]}>
-                    <View style={styles.statusBannerConfirmed}>
-                      <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
-                      <Text style={styles.statusBannerTextConfirmed}>Confermato dal venditore</Text>
+                
+                {pendingConfirmationOrders.map((order) => (
+                  <View key={order.id} style={[styles.orderCard, styles.orderCardPending]}>
+                    <View style={styles.statusBannerPending}>
+                      <Ionicons name="hourglass" size={16} color="#FF9800" />
+                      <Text style={styles.statusBannerTextPending}>
+                        In attesa di conferma dal venditore
+                      </Text>
                     </View>
-                    <View style={styles.itemHeader}>
-                      {item.condizione && (
-                        <View style={[
-                          styles.conditionBadge,
-                          item.condizione === 'come_nuovo' && { backgroundColor: '#4CAF50' },
-                          item.condizione === 'buono' && { backgroundColor: '#8BC34A' },
-                          item.condizione === 'molto_usato' && { backgroundColor: '#FF9800' },
-                        ]}>
-                          <Text style={styles.conditionText}>{getConditionLabel(item.condizione)}</Text>
-                        </View>
-                      )}
-                      <TouchableOpacity 
-                        style={styles.removeButton}
-                        onPress={() => {
-                          Alert.alert(
-                            'Rimuovi dal carrello',
-                            `Vuoi rimuovere "${item.book_titolo}"?`,
-                            [
-                              { text: 'Annulla', style: 'cancel' },
-                              { text: 'Rimuovi', style: 'destructive', onPress: () => removeFromCart(item.id) }
-                            ]
-                          );
-                        }}
-                      >
-                        <Ionicons name="trash-outline" size={20} color="#f44336" />
-                      </TouchableOpacity>
-                    </View>
-                    <Text style={styles.itemTitle} numberOfLines={2}>{item.book_titolo}</Text>
-                    <Text style={styles.itemPublisher}>{item.book_editore}</Text>
-                    <View style={styles.itemFooter}>
-                      <Text style={styles.priceConfirmed}>€{item.prezzo.toFixed(2)}</Text>
-                      <View style={styles.bookstoreTag}>
-                        <Ionicons name="location" size={14} color="#1a472a" />
-                        <Text style={styles.bookstoreText}>{item.bookstore_nome}</Text>
+                    
+                    <Text style={styles.orderTitle} numberOfLines={2}>{order.book_titolo}</Text>
+                    {order.book_autore && (
+                      <Text style={styles.orderAuthor}>{order.book_autore}</Text>
+                    )}
+                    
+                    <View style={styles.orderDetails}>
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Venditore:</Text>
+                        <Text style={styles.detailValue}>{order.seller_name}</Text>
+                      </View>
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Ritiro:</Text>
+                        <Text style={styles.detailValue}>{order.bookstore_name}</Text>
                       </View>
                     </View>
+                    
+                    <View style={styles.priceContainerPending}>
+                      <Text style={styles.priceLabelPending}>Totale previsto</Text>
+                      <Text style={styles.priceValuePending}>€{order.totale_acquirente.toFixed(2)}</Text>
+                    </View>
+                    
+                    <TouchableOpacity
+                      style={styles.cancelButton}
+                      onPress={() => handleCancelOrder(order)}
+                    >
+                      <Ionicons name="close-circle-outline" size={18} color="#f44336" />
+                      <Text style={styles.cancelButtonText}>Annulla richiesta</Text>
+                    </TouchableOpacity>
                   </View>
                 ))}
               </View>
             )}
           </ScrollView>
 
-          {/* Checkout Section - Solo se ci sono confermati */}
-          {confirmedItems.length > 0 && (
+          {/* Footer: Paga Tutto (solo se ci sono ordini pronti) */}
+          {pendingPaymentOrders.length > 0 && (
             <View style={styles.checkoutContainer}>
-              {pendingItems.length > 0 && (
+              {pendingConfirmationOrders.length > 0 && (
                 <View style={styles.pendingWarning}>
-                  <Ionicons name="warning" size={16} color="#FF9800" />
+                  <Ionicons name="hourglass-outline" size={16} color="#FF9800" />
                   <Text style={styles.pendingWarningText}>
-                    {pendingItems.length} libri in attesa di conferma
+                    {pendingConfirmationOrders.length} libri in attesa di conferma
                   </Text>
                 </View>
               )}
               
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Subtotale ({confirmedItems.length} confermati)</Text>
-                <Text style={styles.summaryValue}>€{subtotal.toFixed(2)}</Text>
+                <Text style={styles.summaryLabel}>
+                  Subtotale ({pendingPaymentOrders.length} libri confermati)
+                </Text>
+                <Text style={styles.summaryValue}>€{totalAmount.toFixed(2)}</Text>
               </View>
-              {!isPremium && commission > 0 && (
-                <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>Commissione (15%)</Text>
-                  <Text style={styles.summaryValue}>€{commission.toFixed(2)}</Text>
-                </View>
-              )}
+              
               <View style={[styles.summaryRow, styles.totalRow]}>
-                <Text style={styles.totalLabel}>Totale</Text>
-                <Text style={styles.totalValue}>€{total.toFixed(2)}</Text>
+                <Text style={styles.totalLabel}>Totale da pagare</Text>
+                <Text style={styles.totalValue}>€{totalAmount.toFixed(2)}</Text>
               </View>
 
               <TouchableOpacity
                 style={[styles.checkoutButton, purchasing && styles.checkoutButtonDisabled]}
-                onPress={handleCheckout}
+                onPress={handlePayAll}
                 disabled={purchasing}
               >
                 {purchasing ? (
@@ -411,15 +454,17 @@ export default function CartScreen() {
                 ) : (
                   <>
                     <Ionicons name="card-outline" size={24} color="#fff" />
-                    <Text style={styles.checkoutButtonText}>Paga €{total.toFixed(2)}</Text>
+                    <Text style={styles.checkoutButtonText}>
+                      Paga tutto €{totalAmount.toFixed(2)}
+                    </Text>
                   </>
                 )}
               </TouchableOpacity>
             </View>
           )}
 
-          {/* Info se solo pending */}
-          {confirmedItems.length === 0 && pendingItems.length > 0 && (
+          {/* Footer: solo pending */}
+          {pendingPaymentOrders.length === 0 && pendingConfirmationOrders.length > 0 && (
             <View style={styles.waitingFooter}>
               <Ionicons name="hourglass" size={24} color="#FF9800" />
               <Text style={styles.waitingFooterText}>
@@ -461,6 +506,7 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 8,
     textAlign: 'center',
+    lineHeight: 20,
   },
   browseButton: {
     marginTop: 24,
@@ -494,46 +540,37 @@ const styles = StyleSheet.create({
   },
   section: {
     padding: 16,
-    paddingTop: 8,
+    paddingTop: 16,
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
+    gap: 10,
+    marginBottom: 16,
   },
   sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: '700',
     color: '#333',
   },
-  cartItem: {
+  orderCard: {
     backgroundColor: '#fff',
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  cartItemPending: {
-    borderLeftWidth: 4,
-    borderLeftColor: '#FF9800',
-  },
-  cartItemConfirmed: {
+  orderCardReady: {
     borderLeftWidth: 4,
     borderLeftColor: '#4CAF50',
   },
-  statusBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 12,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  statusBannerText: {
-    fontSize: 13,
-    color: '#FF9800',
-    fontWeight: '500',
+  orderCardPending: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#FF9800',
   },
   statusBannerConfirmed: {
     flexDirection: 'row',
@@ -545,68 +582,124 @@ const styles = StyleSheet.create({
     borderBottomColor: '#e8f5e9',
   },
   statusBannerTextConfirmed: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#4CAF50',
-    fontWeight: '500',
+    fontWeight: '600',
   },
-  itemHeader: {
+  statusBannerPending: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    gap: 6,
+    marginBottom: 12,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#fff3e0',
   },
-  conditionBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  conditionText: {
-    fontSize: 11,
+  statusBannerTextPending: {
+    fontSize: 12,
+    color: '#FF9800',
     fontWeight: '600',
-    color: '#fff',
   },
-  removeButton: {
-    padding: 4,
-  },
-  itemTitle: {
+  orderTitle: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#333',
     marginBottom: 4,
   },
-  itemPublisher: {
-    fontSize: 13,
+  orderAuthor: {
+    fontSize: 14,
     color: '#666',
     marginBottom: 12,
   },
-  itemFooter: {
+  orderDetails: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    gap: 6,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  detailLabel: {
+    fontSize: 13,
+    color: '#666',
+  },
+  detailValue: {
+    fontSize: 13,
+    color: '#333',
+    fontWeight: '500',
+  },
+  orderCode: {
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    backgroundColor: '#e8f5e9',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    color: '#1a472a',
+    fontWeight: '700',
+  },
+  priceContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 12,
   },
-  price: {
+  priceLabel: {
+    fontSize: 14,
+    color: '#666',
+  },
+  priceValue: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#4CAF50',
+  },
+  priceContainerPending: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  priceLabelPending: {
+    fontSize: 14,
+    color: '#999',
+  },
+  priceValuePending: {
     fontSize: 20,
     fontWeight: 'bold',
     color: '#FF9800',
   },
-  priceConfirmed: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#4CAF50',
-  },
-  bookstoreTag: {
+  payButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#e8f5e9',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    gap: 4,
+    justifyContent: 'center',
+    backgroundColor: '#4CAF50',
+    padding: 14,
+    borderRadius: 10,
+    gap: 8,
   },
-  bookstoreText: {
-    fontSize: 12,
-    color: '#1a472a',
-    fontWeight: '500',
+  payButtonDisabled: {
+    backgroundColor: '#ccc',
+  },
+  payButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  cancelButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffebee',
+    padding: 12,
+    borderRadius: 8,
+    gap: 6,
+  },
+  cancelButtonText: {
+    color: '#f44336',
+    fontSize: 14,
+    fontWeight: '600',
   },
   checkoutContainer: {
     backgroundColor: '#fff',
@@ -660,7 +753,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#1a472a',
     padding: 16,
     borderRadius: 12,
     marginTop: 16,
@@ -672,7 +765,7 @@ const styles = StyleSheet.create({
   checkoutButtonText: {
     color: '#fff',
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   waitingFooter: {
     flexDirection: 'row',
