@@ -2970,6 +2970,30 @@ async def get_child_compatibility(user_id: str, child_id: str):
         # NUOVA SEZIONE: Tetto di spesa ministeriale
         "tetto_spesa": tetto_info,
         
+        # NUOVA SEZIONE: Transazioni reali per questo profilo figlio
+        "libri_acquistati_reali": await db.orders.count_documents({
+            "buyer_id": user_id,
+            "status": {"$in": ["completed", "picked_up", "paid_escrow", "ready_for_pickup"]}
+        }),
+        "libri_venduti_reali": await db.orders.count_documents({
+            "seller_id": user_id,
+            "status": {"$in": ["completed", "picked_up", "paid_escrow", "ready_for_pickup"]}
+        }),
+        "spesa_reale": sum([
+            o.get("totale_acquirente", 0) 
+            async for o in db.orders.find({
+                "buyer_id": user_id,
+                "status": {"$in": ["completed", "picked_up", "paid_escrow", "ready_for_pickup"]}
+            })
+        ]),
+        "guadagno_reale": sum([
+            o.get("netto_venditore", 0) 
+            async for o in db.orders.find({
+                "seller_id": user_id,
+                "status": {"$in": ["completed", "picked_up"]}
+            })
+        ]),
+        
         "summary": {
             "totale_miei_libri": len(my_books_disc),
             "vendibili": num_vendibili,

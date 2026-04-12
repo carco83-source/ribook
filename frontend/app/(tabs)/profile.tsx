@@ -349,6 +349,48 @@ export default function ProfileScreen() {
                   </View>
                 </View>
                 
+                {/* TOTALE PARZIALE SPESA per questo profilo */}
+                {(() => {
+                  const costoUsatiParziale = (compatibility.comprare?.totale_usati || 0) * 10; // stima media €10 per libro usato
+                  const costoNuoviParziale = compatibility.nuovi?.costo_totale || 0;
+                  const guadagnoParziale = (compatibility.vendere?.totale_vendibili || 0) * 8; // stima media €8 guadagno
+                  const spesaParziale = costoUsatiParziale + costoNuoviParziale - guadagnoParziale;
+                  
+                  return (
+                    <View style={styles.partialTotalBox}>
+                      <View style={styles.partialTotalRow}>
+                        <Ionicons name="calculator-outline" size={18} color="#1a472a" />
+                        <Text style={styles.partialTotalLabel}>Totale parziale {child.nome_figlio}:</Text>
+                        <Text style={[styles.partialTotalValue, spesaParziale < 0 && { color: '#4CAF50' }]}>
+                          €{Math.abs(spesaParziale).toFixed(0)} {spesaParziale < 0 ? '(guadagno)' : ''}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })()}
+                
+                {/* LIBRI REALMENTE ACQUISTATI/VENDUTI per questo profilo */}
+                <View style={styles.realTransactionsBox}>
+                  <Text style={styles.realTransactionsTitle}>Transazioni reali {child.nome_figlio}</Text>
+                  <View style={styles.realTransactionsRow}>
+                    <View style={styles.realTransactionItem}>
+                      <Ionicons name="cart" size={16} color="#4CAF50" />
+                      <Text style={styles.realTransactionNumber}>{compatibility.libri_acquistati_reali || 0}</Text>
+                      <Text style={styles.realTransactionLabel}>acquistati</Text>
+                    </View>
+                    <View style={styles.realTransactionItem}>
+                      <Ionicons name="pricetag" size={16} color="#2196F3" />
+                      <Text style={styles.realTransactionNumber}>{compatibility.libri_venduti_reali || 0}</Text>
+                      <Text style={styles.realTransactionLabel}>venduti</Text>
+                    </View>
+                    <View style={styles.realTransactionItem}>
+                      <Ionicons name="wallet" size={16} color="#1a472a" />
+                      <Text style={styles.realTransactionNumber}>€{(compatibility.spesa_reale || 0).toFixed(0)}</Text>
+                      <Text style={styles.realTransactionLabel}>speso</Text>
+                    </View>
+                  </View>
+                </View>
+                
                 {/* PDF Download Button */}
                 <TouchableOpacity
                   style={styles.pdfDownloadButton}
@@ -1429,6 +1471,64 @@ const styles = StyleSheet.create({
   pdfLoadingText: {
     marginTop: 16,
     fontSize: 16,
+    color: '#666',
+  },
+  // Totale parziale per profilo
+  partialTotalBox: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#1a472a',
+  },
+  partialTotalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  partialTotalLabel: {
+    flex: 1,
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '500',
+  },
+  partialTotalValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1a472a',
+  },
+  // Transazioni reali per profilo
+  realTransactionsBox: {
+    backgroundColor: '#E8F5E9',
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 10,
+    marginBottom: 12,
+  },
+  realTransactionsTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1a472a',
+    marginBottom: 8,
+    textAlign: 'center',
+    textTransform: 'uppercase',
+  },
+  realTransactionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  realTransactionItem: {
+    alignItems: 'center',
+    gap: 2,
+  },
+  realTransactionNumber: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1a472a',
+  },
+  realTransactionLabel: {
+    fontSize: 11,
     color: '#666',
   },
 });
