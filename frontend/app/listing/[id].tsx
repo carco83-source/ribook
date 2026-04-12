@@ -272,24 +272,9 @@ export default function ListingDetailScreen() {
         
         console.log('Order created:', orderResponse.data);
         
-        // Mostra messaggio di successo
-        if (Platform.OS === 'web') {
-          window.alert(
-            `Richiesta inviata!\n\n` +
-            `Il venditore deve confermare la disponibilità del libro.\n\n` +
-            `Riceverai una notifica quando potrai procedere al pagamento.`
-          );
-          router.push('/orders');
-        } else {
-          Alert.alert(
-            'Richiesta inviata!',
-            `Il venditore deve confermare la disponibilità del libro.\n\n` +
-            `Riceverai una notifica quando potrai procedere al pagamento.`,
-            [
-              { text: 'OK', onPress: () => router.push('/orders') }
-            ]
-          );
-        }
+        // Naviga direttamente alle notifiche
+        router.push('/notifications');
+        
       } catch (error: any) {
         console.error('Error creating order:', error);
         const errorMsg = error.response?.data?.detail || 'Impossibile completare la richiesta';

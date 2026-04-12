@@ -4,27 +4,44 @@ import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function TabLayout() {
+  // Calcola l'altezza della tab bar in base alla piattaforma
+  const getTabBarHeight = () => {
+    if (Platform.OS === 'ios') return 88;
+    if (Platform.OS === 'android') return 65;
+    return 70; // Web
+  };
+  
+  const getTabBarPaddingBottom = () => {
+    if (Platform.OS === 'ios') return 24;
+    if (Platform.OS === 'android') return 10;
+    return 12; // Web
+  };
+
   return (
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: '#1a472a',
-        tabBarInactiveTintColor: '#999',
+        tabBarInactiveTintColor: '#888',
         tabBarStyle: {
-          backgroundColor: '#fff',
+          backgroundColor: '#ffffff',
           borderTopWidth: 1,
           borderTopColor: '#e0e0e0',
-          paddingBottom: Platform.OS === 'ios' ? 24 : 8,
+          paddingBottom: getTabBarPaddingBottom(),
           paddingTop: 8,
-          height: Platform.OS === 'ios' ? 88 : 65,
-          elevation: 8,
+          height: getTabBarHeight(),
+          elevation: 10,
           shadowColor: '#000',
-          shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.1,
-          shadowRadius: 4,
+          shadowOffset: { width: 0, height: -3 },
+          shadowOpacity: 0.15,
+          shadowRadius: 6,
         },
         tabBarLabelStyle: {
-          fontSize: 11,
+          fontSize: 10,
           fontWeight: '600',
+          marginTop: 2,
+        },
+        tabBarIconStyle: {
+          marginTop: 4,
         },
         headerStyle: {
           backgroundColor: '#1a472a',
