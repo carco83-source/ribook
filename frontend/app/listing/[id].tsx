@@ -390,7 +390,7 @@ export default function ListingDetailScreen() {
       <View style={styles.content}>
         {/* Book Details */}
         <View style={styles.priceRow}>
-          <Text style={styles.price}>€{listing.prezzo_vendita.toFixed(2)}</Text>
+          <Text style={styles.price}>€{(total + commission).toFixed(2)}</Text>
           <View style={styles.conditionBadge}>
             <Text style={styles.conditionText}>
               {getConditionLabel(listing.condizione)}

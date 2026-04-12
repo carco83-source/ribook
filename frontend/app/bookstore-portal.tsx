@@ -408,28 +408,64 @@ export default function BookstorePortalScreen() {
                 Notifiche {unreadCount > 0 && `(${unreadCount} nuove)`}
               </Text>
             </View>
-            {notifications.slice(0, 5).map((notif) => (
-              <View 
-                key={notif.id} 
-                style={[
-                  styles.notificationCard,
-                  !notif.read && styles.notificationUnread
-                ]}
-              >
-                <View style={styles.notificationIcon}>
-                  <Ionicons name="cube" size={20} color="#FF9800" />
+            {notifications.slice(0, 5).map((notif) => {
+              const isCompleted = notif.type === 'order_completed';
+              return (
+                <View 
+                  key={notif.id} 
+                  style={[
+                    styles.notificationCard,
+                    !notif.read && styles.notificationUnread,
+                    isCompleted && styles.notificationCompleted
+                  ]}
+                >
+                  <View style={[styles.notificationIcon, isCompleted && { backgroundColor: '#e8f5e9' }]}>
+                    <Ionicons 
+                      name={isCompleted ? "checkmark-circle" : "cube"} 
+                      size={20} 
+                      color={isCompleted ? "#4CAF50" : "#FF9800"} 
+                    />
+                  </View>
+                  <View style={styles.notificationContent}>
+                    <Text style={[styles.notificationTitleText, isCompleted && { color: '#4CAF50' }]}>
+                      {notif.title}
+                    </Text>
+                    <Text style={styles.notificationMessage}>{notif.message}</Text>
+                    {notif.order_code && (
+                      <View style={[styles.notificationCodeBadge, isCompleted && { backgroundColor: '#e8f5e9' }]}>
+                        <Text style={[styles.notificationCodeText, isCompleted && { color: '#4CAF50' }]}>
+                          Codice: {notif.order_code}
+                        </Text>
+                      </View>
+                    )}
+                    {isCompleted && notif.commissione_cartolibreria && (
+                      <View style={styles.earningsBadge}>
+                        <Ionicons name="cash" size={14} color="#4CAF50" />
+                        <Text style={styles.earningsText}>
+                          Ricavato: €{notif.commissione_cartolibreria.toFixed(2)}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
                 </View>
-                <View style={styles.notificationContent}>
-                  <Text style={styles.notificationTitleText}>{notif.title}</Text>
-                  <Text style={styles.notificationMessage}>{notif.message}</Text>
-                  {notif.order_code && (
-                    <View style={styles.notificationCodeBadge}>
-                      <Text style={styles.notificationCodeText}>Codice: {notif.order_code}</Text>
-                    </View>
-                  )}
-                </View>
-              </View>
-            ))}
+              );
+            })}
+          </View>
+        )}
+        
+        {/* Totale Ricavato */}
+        {orders.filter(o => o.status === 'completed').length > 0 && (
+          <View style={styles.totalEarningsCard}>
+            <Ionicons name="wallet" size={24} color="#4CAF50" />
+            <View style={styles.totalEarningsContent}>
+              <Text style={styles.totalEarningsLabel}>Totale Ricavato (5%)</Text>
+              <Text style={styles.totalEarningsValue}>
+                €{orders
+                  .filter(o => o.status === 'completed')
+                  .reduce((sum, o) => sum + (o.commissione_cartolibreria || 0), 0)
+                  .toFixed(2)}
+              </Text>
+            </View>
           </View>
         )}
         
@@ -941,5 +977,47 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#1a472a',
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  notificationCompleted: {
+    backgroundColor: '#e8f5e9',
+    borderLeftColor: '#4CAF50',
+  },
+  earningsBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#c8e6c9',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+    marginTop: 8,
+    gap: 6,
+  },
+  earningsText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#2e7d32',
+  },
+  totalEarningsCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#e8f5e9',
+    margin: 16,
+    marginBottom: 8,
+    padding: 16,
+    borderRadius: 12,
+    gap: 12,
+  },
+  totalEarningsContent: {
+    flex: 1,
+  },
+  totalEarningsLabel: {
+    fontSize: 12,
+    color: '#666',
+  },
+  totalEarningsValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#4CAF50',
   },
 });

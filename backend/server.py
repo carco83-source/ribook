@@ -5354,6 +5354,21 @@ async def bookstore_confirm_pickup_by_code(bookstore_id: str, order_code: str = 
     }
     await db.notifications.insert_one(notification_buyer)
     
+    # Notifica alla cartolibreria - ORDINE COMPLETATO
+    bookstore_completed_notification = {
+        "id": str(uuid.uuid4()),
+        "bookstore_id": bookstore_id,
+        "type": "order_completed",
+        "title": "✅ ORDINE COMPLETATO",
+        "message": f"Ordine {order.get('order_code')} completato!\n\nLibro: {order.get('book_titolo')}\nAcquirente: {order.get('buyer_name')}\nVenditore: {order.get('seller_name')}",
+        "order_id": order["id"],
+        "order_code": order.get("order_code"),
+        "commissione_cartolibreria": order.get("commissione_cartolibreria", 0),
+        "read": False,
+        "created_at": now.isoformat()
+    }
+    await db.bookstore_notifications.insert_one(bookstore_completed_notification)
+    
     return {
         "success": True,
         "order_id": order["id"],
