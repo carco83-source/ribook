@@ -4516,6 +4516,29 @@ async def pay_order(order_id: str, user_id: str = Query(...)):
     }
     await db.bookstore_notifications.insert_one(bookstore_notification)
     
+    # Notifica all'acquirente con QR code
+    buyer_qr_notification = {
+        "id": str(uuid.uuid4()),
+        "user_id": order.get("buyer_id"),
+        "type": "order_qr_code",
+        "title": "🎉 ACQUISTO COMPLETATO!",
+        "message": f"Il tuo ordine per:\n{order.get('book_titolo')}\n\nCODICE RITIRO: {order.get('order_code')}\n\nMostra questo codice o il QR alla cartolibreria quando ritiri il libro.\n\n📸 Ti consigliamo di fare uno screenshot di questa notifica!",
+        "order_id": order_id,
+        "order_code": order.get("order_code"),
+        "bookstore_name": order.get("bookstore_name"),
+        "data": {
+            "order_id": order_id,
+            "order_code": order.get("order_code"),
+            "book_titolo": order.get("book_titolo"),
+            "bookstore_name": order.get("bookstore_name"),
+            "show_qr": True
+        },
+        "read": False,
+        "persistent": True,
+        "created_at": now.isoformat()
+    }
+    await db.notifications.insert_one(buyer_qr_notification)
+    
     return {
         "success": True,
         "order_id": order_id,

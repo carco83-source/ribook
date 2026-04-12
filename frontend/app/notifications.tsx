@@ -8,11 +8,13 @@ import {
   ActivityIndicator,
   RefreshControl,
   Alert,
+  Platform,
 } from 'react-native';
 import { useRouter, Stack, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import QRCode from 'react-native-qrcode-svg';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -48,6 +50,7 @@ const NOTIFICATION_CONFIG: Record<string, { icon: string; color: string }> = {
   order_paid: { icon: 'checkmark-circle', color: '#4CAF50' },
   payment_released: { icon: 'cash', color: '#4CAF50' },
   ready_for_pickup: { icon: 'location', color: '#9C27B0' },
+  order_qr_code: { icon: 'qr-code', color: '#1a472a' },
 };
 
 export default function NotificationsScreen() {
@@ -390,6 +393,37 @@ export default function NotificationsScreen() {
                     <Text style={styles.pendingInfoText}>In attesa di conferma dal venditore</Text>
                   </View>
                 )}
+                
+                {/* QR Code per ordini completati */}
+                {notification.type === 'order_qr_code' && notification.data?.order_code && (
+                  <View style={styles.qrCodeContainer}>
+                    <View style={styles.qrCodeBox}>
+                      {Platform.OS !== 'web' ? (
+                        <QRCode
+                          value={notification.data.order_code}
+                          size={150}
+                          backgroundColor="white"
+                          color="#1a472a"
+                        />
+                      ) : (
+                        <View style={styles.qrCodePlaceholder}>
+                          <Ionicons name="qr-code" size={100} color="#1a472a" />
+                        </View>
+                      )}
+                    </View>
+                    <View style={styles.qrCodeInfo}>
+                      <Text style={styles.qrCodeLabel}>CODICE RITIRO</Text>
+                      <Text style={styles.qrCodeValue}>{notification.data.order_code}</Text>
+                      <Text style={styles.qrCodeBookstore}>📍 {notification.data.bookstore_name}</Text>
+                    </View>
+                    <View style={styles.screenshotTip}>
+                      <Ionicons name="camera" size={16} color="#1a472a" />
+                      <Text style={styles.screenshotTipText}>
+                        📸 Fai uno screenshot per mostrare questo codice al libraio
+                      </Text>
+                    </View>
+                  </View>
+                )}
               </View>
             );
           })
@@ -546,5 +580,67 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#FF9800',
     fontStyle: 'italic',
+  },
+  // QR Code styles
+  qrCodeContainer: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+    alignItems: 'center',
+  },
+  qrCodeBox: {
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    marginBottom: 12,
+  },
+  qrCodePlaceholder: {
+    width: 150,
+    height: 150,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
+  },
+  qrCodeInfo: {
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  qrCodeLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 4,
+  },
+  qrCodeValue: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#1a472a',
+    letterSpacing: 4,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  qrCodeBookstore: {
+    fontSize: 14,
+    color: '#333',
+    marginTop: 8,
+  },
+  screenshotTip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#e8f5e9',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    gap: 8,
+  },
+  screenshotTipText: {
+    fontSize: 12,
+    color: '#1a472a',
+    fontWeight: '500',
   },
 });
