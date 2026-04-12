@@ -267,6 +267,11 @@ export default function ListingDetailScreen() {
           {
             listing_id: listing?.id,
             bookstore_id: selectedBookstore.id
+          },
+          {
+            headers: {
+              'Content-Type': 'application/json'
+            }
           }
         );
         
