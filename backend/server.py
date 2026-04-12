@@ -2975,26 +2975,34 @@ async def get_child_compatibility(user_id: str, child_id: str):
         # NUOVA SEZIONE: Tetto di spesa ministeriale
         "tetto_spesa": tetto_info,
         
-        # NUOVA SEZIONE: Transazioni reali per questo profilo figlio
+        # NUOVA SEZIONE: Transazioni reali per questo profilo figlio SPECIFICO
+        # Acquisti: libri acquistati DAL GENITORE PER questo figlio
         "libri_acquistati_reali": await db.orders.count_documents({
             "buyer_id": user_id,
+            "child_profile_id": child_id,
             "status": {"$in": ["completed", "picked_up", "paid_escrow", "ready_for_pickup"]}
         }),
+        # Vendite: libri venduti DA questo figlio (il listing appartiene a questo profilo)
         "libri_venduti_reali": await db.orders.count_documents({
             "seller_id": user_id,
+            "seller_child_profile_id": child_id,
             "status": {"$in": ["completed", "picked_up", "paid_escrow", "ready_for_pickup"]}
         }),
+        # Spesa reale: totale speso per acquisti PER questo figlio
         "spesa_reale": sum([
             o.get("totale_acquirente", 0) 
             async for o in db.orders.find({
                 "buyer_id": user_id,
+                "child_profile_id": child_id,
                 "status": {"$in": ["completed", "picked_up", "paid_escrow", "ready_for_pickup"]}
             })
         ]),
+        # Guadagno reale: totale guadagnato dalle vendite DI questo figlio
         "guadagno_reale": sum([
             o.get("netto_venditore", 0) 
             async for o in db.orders.find({
                 "seller_id": user_id,
+                "seller_child_profile_id": child_id,
                 "status": {"$in": ["completed", "picked_up"]}
             })
         ]),

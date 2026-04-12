@@ -390,9 +390,11 @@ export default function ProfileScreen() {
                       <Text style={styles.realTransactionLabel}>venduti</Text>
                     </View>
                     <View style={styles.realTransactionItem}>
-                      <Ionicons name="wallet" size={16} color="#1a472a" />
-                      <Text style={styles.realTransactionNumber}>€{(compatibility.spesa_reale || 0).toFixed(0)}</Text>
-                      <Text style={styles.realTransactionLabel}>speso</Text>
+                      <Ionicons name="swap-horizontal" size={16} color={((compatibility.guadagno_reale || 0) - (compatibility.spesa_reale || 0)) >= 0 ? "#4CAF50" : "#f44336"} />
+                      <Text style={[styles.realTransactionNumber, { color: ((compatibility.guadagno_reale || 0) - (compatibility.spesa_reale || 0)) >= 0 ? "#4CAF50" : "#f44336" }]}>
+                        {((compatibility.guadagno_reale || 0) - (compatibility.spesa_reale || 0)) >= 0 ? '+' : ''}€{((compatibility.guadagno_reale || 0) - (compatibility.spesa_reale || 0)).toFixed(0)}
+                      </Text>
+                      <Text style={styles.realTransactionLabel}>saldo</Text>
                     </View>
                   </View>
                 </View>
