@@ -4278,8 +4278,8 @@ async def create_order(request: CreateOrderRequest, user_id: str = Query(...)):
         "id": str(uuid.uuid4()),
         "user_id": listing.get("seller_id"),
         "type": "seller_confirmation_request",
-        "title": "Conferma disponibilità libro",
-        "message": f"'{order.book_titolo[:40]}' è stato richiesto. Conferma la disponibilità entro 24h.",
+        "title": "RICHIESTA D'ACQUISTO",
+        "message": f"RICHIESTA D'ACQUISTO PER:\n{order.book_titolo}\n\nCONFERMA LA DISPONIBILITÀ",
         "order_id": order.id,
         "data": {
             "order_id": order.id,
@@ -4332,8 +4332,8 @@ async def seller_confirm_order(order_id: str, user_id: str = Query(...)):
         "id": str(uuid.uuid4()),
         "user_id": order.get("buyer_id"),
         "type": "ready_for_payment",
-        "title": "Libro disponibile! Procedi al pagamento",
-        "message": f"Il venditore ha confermato '{order.get('book_titolo')[:40]}'. Completa l'acquisto ora!",
+        "title": "COMPLIMENTI! LIBRO DISPONIBILE",
+        "message": f"COMPLIMENTI!\n{order.get('book_titolo')}\nÈ DISPONIBILE!\n\nAGGIUNGI AL CARRELLO PER COMPLETARE L'ACQUISTO\nOPPURE CONTINUA CON I TUOI ACQUISTI",
         "order_id": order_id,
         "data": {
             "order_id": order_id,
@@ -4388,8 +4388,8 @@ async def seller_reject_order(order_id: str, user_id: str = Query(...), reason: 
         "id": str(uuid.uuid4()),
         "user_id": order.get("buyer_id"),
         "type": "order_rejected",
-        "title": "Ordine annullato",
-        "message": f"Il venditore non può confermare '{order.get('book_titolo')[:40]}'. {reason or 'Libro non disponibile.'}",
+        "title": "CI DISPIACE!",
+        "message": f"CI DISPIACE!\nIL TESTO RICHIESTO:\n{order.get('book_titolo')}\n\nNON È PIÙ DISPONIBILE",
         "order_id": order_id,
         "read": False,
         "created_at": now.isoformat()
@@ -4442,8 +4442,8 @@ async def pay_order(order_id: str, user_id: str = Query(...)):
         "id": str(uuid.uuid4()),
         "user_id": order.get("seller_id"),
         "type": "order_paid",
-        "title": "Nuovo ordine pagato!",
-        "message": f"Hai ricevuto un ordine per '{order.get('book_titolo')[:40]}'. Consegna il libro presso {order.get('bookstore_name')}.",
+        "title": "COMPLIMENTI! VENDITA COMPLETATA",
+        "message": f"COMPLIMENTI!\n{order.get('book_titolo')}\nÈ STATO VENDUTO!\n\nCONSEGNA ENTRO 2 GIORNI LAVORATIVI PRESSO:\n{order.get('bookstore_name')}\n\nI FONDI VERRANNO ACCREDITATI DOPO LA CONFERMA DEL RITIRO",
         "order_id": order_id,
         "read": False,
         "created_at": now.isoformat()
@@ -4451,15 +4451,15 @@ async def pay_order(order_id: str, user_id: str = Query(...)):
     await db.notifications.insert_one(notification)
     
     # Notifica alla cartolibreria che riceverà un libro
-    # (le cartolibrerie non hanno un sistema utente standard, ma possiamo salvare la notifica nel database)
     bookstore_notification = {
         "id": str(uuid.uuid4()),
         "bookstore_id": order.get("bookstore_id"),
         "type": "incoming_order",
-        "title": "Nuovo ordine in arrivo!",
-        "message": f"Un libro è in arrivo: '{order.get('book_titolo')[:40]}'. Codice: {order.get('order_code')}",
+        "title": "NUOVO ORDINE IN ARRIVO",
+        "message": f"ORDINE: {order.get('order_code')}\n\nLIBRO: {order.get('book_titolo')}\n\nVENDITORE: {order.get('seller_name')}\nACQUIRENTE: {order.get('buyer_name')}",
         "order_id": order_id,
         "order_code": order.get("order_code"),
+        "seller_name": order.get("seller_name"),
         "buyer_name": order.get("buyer_name"),
         "read": False,
         "created_at": now.isoformat()
@@ -4546,9 +4546,10 @@ async def mark_ready_for_pickup(order_id: str, bookstore_id: str = Query(None)):
         "id": str(uuid.uuid4()),
         "user_id": order.get("buyer_id"),
         "type": "ready_for_pickup",
-        "title": "Libro pronto per il ritiro!",
-        "message": f"'{order.get('book_titolo')[:40]}' è pronto presso {order.get('bookstore_name')}. Hai 2 giorni per ritirarlo.",
+        "title": "LIBRO PRONTO PER IL RITIRO",
+        "message": f"{order.get('book_titolo')}\n\nÈ DISPONIBILE PER IL RITIRO PRESSO:\n{order.get('bookstore_name')}\n\nCodice ritiro: {order.get('order_code')}",
         "order_id": order_id,
+        "order_code": order.get("order_code"),
         "read": False,
         "created_at": now.isoformat()
     }
@@ -4603,8 +4604,8 @@ async def confirm_pickup(order_id: str, user_id: str = Query(...)):
         "id": str(uuid.uuid4()),
         "user_id": order.get("seller_id"),
         "type": "payment_released",
-        "title": "Pagamento ricevuto!",
-        "message": f"L'acquirente ha confermato il ritiro di '{order.get('book_titolo')[:40]}'. €{order.get('netto_venditore', 0):.2f} sono stati accreditati.",
+        "title": "FONDI IN ARRIVO!",
+        "message": f"FONDI IN ARRIVO PER:\n{order.get('book_titolo')}\n\nImporto: €{order.get('netto_venditore', 0):.2f}",
         "order_id": order_id,
         "read": False,
         "created_at": now.isoformat()
