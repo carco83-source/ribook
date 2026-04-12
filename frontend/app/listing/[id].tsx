@@ -472,11 +472,71 @@ export default function ListingDetailScreen() {
         )}
 
         {/* Bookstores where seller can deliver */}
-        {listing.bookstore_names && listing.bookstore_names.length > 0 && (
+        {/* Usa listing.bookstores se disponibile, altrimenti fallback a bookstore_names */}
+        {((listing.bookstores && listing.bookstores.length > 0) || (listing.bookstore_names && listing.bookstore_names.length > 0)) && (
           <View style={styles.bookstoresAvailableCard}>
             <Text style={styles.bookstoresAvailableTitle}>Punti di ritiro disponibili</Text>
             <Text style={styles.bookstoresAvailableSubtitle}>Seleziona dove vuoi ritirare il libro</Text>
-            {listing.bookstore_names.map((name: string, index: number) => {
+            {(listing.bookstores && listing.bookstores.length > 0) ? (
+              listing.bookstores.map((bs: any, index: number) => {
+                const isSelected = selectedBookstore?.id === bs.id;
+                return (
+                  <TouchableOpacity
+                    key={bs.id || index}
+                    style={[
+                      styles.bookstoreAvailableCard,
+                      isSelected && styles.bookstoreAvailableCardSelected
+                    ]}
+                    onPress={() => setSelectedBookstore({ 
+                      id: bs.id, 
+                      nome: bs.nome,
+                      indirizzo: bs.indirizzo,
+                      citta: bs.citta,
+                      telefono: bs.telefono
+                    })}
+                  >
+                    <View style={styles.bookstoreAvailableHeader}>
+                      <Ionicons 
+                        name={isSelected ? "radio-button-on" : "radio-button-off"} 
+                        size={22} 
+                        color={isSelected ? "#1a472a" : "#666"} 
+                      />
+                      <View style={styles.bookstoreAvailableInfo}>
+                        <Text style={[
+                          styles.bookstoreAvailableName,
+                          isSelected && styles.bookstoreAvailableNameSelected
+                        ]}>
+                          {bs.nome}
+                        </Text>
+                        {bs.indirizzo && (
+                          <Text style={styles.bookstoreAvailableAddress}>
+                            {bs.indirizzo}{bs.citta ? `, ${bs.citta}` : ''}
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                    {bs.indirizzo && (
+                      <TouchableOpacity
+                        style={styles.mapsButton}
+                        onPress={() => {
+                          const encodedAddress = encodeURIComponent(`${bs.indirizzo}, ${bs.citta || ''}`);
+                          const mapsUrl = Platform.select({
+                            ios: `maps:0,0?q=${encodedAddress}`,
+                            android: `geo:0,0?q=${encodedAddress}`,
+                            default: `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`
+                          });
+                          Linking.openURL(mapsUrl as string);
+                        }}
+                      >
+                        <Ionicons name="navigate" size={16} color="#1a472a" />
+                        <Text style={styles.mapsButtonText}>Indicazioni</Text>
+                      </TouchableOpacity>
+                    )}
+                  </TouchableOpacity>
+                );
+              })
+            ) : (
+              listing.bookstore_names.map((name: string, index: number) => {
               const address = listing.bookstore_addresses?.[index] || '';
               const isSelected = selectedBookstore?.nome === name;
               
@@ -529,7 +589,8 @@ export default function ListingDetailScreen() {
                   )}
                 </TouchableOpacity>
               );
-            })}
+            })
+            )}
           </View>
         )}
 
