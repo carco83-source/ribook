@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -6,25 +6,14 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
-  Alert,
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Modal,
-  FlatList,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
-import {
-  SCHOOL_TYPES,
-  getSchoolsByType,
-  getClassiByType,
-  SEZIONI,
-  SchoolType,
-  School,
-} from '../../src/constants/schools';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -37,84 +26,40 @@ export default function RegisterScreen() {
     telefono: '',
     password: '',
     confirmPassword: '',
-    tipoScuola: '' as SchoolType | '',
-    scuola: '',
-    scuolaNome: '',
-    classe: '',
-    sezione: '',
   });
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  
-  // Modal states
-  const [showTipoScuolaModal, setShowTipoScuolaModal] = useState(false);
-  const [showScuolaModal, setShowScuolaModal] = useState(false);
-  const [showClasseModal, setShowClasseModal] = useState(false);
-  const [showSezioneModal, setShowSezioneModal] = useState(false);
-
-  const [availableSchools, setAvailableSchools] = useState<School[]>([]);
-  const [availableClassi, setAvailableClassi] = useState<string[]>([]);
-
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-
-  useEffect(() => {
-    if (formData.tipoScuola) {
-      setAvailableSchools(getSchoolsByType(formData.tipoScuola as SchoolType));
-      setAvailableClassi(getClassiByType(formData.tipoScuola as SchoolType));
-      // Reset dependent fields
-      setFormData(prev => ({
-        ...prev,
-        scuola: '',
-        scuolaNome: '',
-        classe: '',
-      }));
-    }
-  }, [formData.tipoScuola]);
 
   const updateField = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-  };
-
-  const handleSelectSchool = (school: School) => {
-    setFormData(prev => ({
-      ...prev,
-      scuola: school.id,
-      scuolaNome: school.nome,
-    }));
-    setShowScuolaModal(false);
+    setErrorMessage('');
   };
 
   const handleRegister = async () => {
     setErrorMessage('');
-    const { nome, cognome, email, telefono, password, confirmPassword, scuolaNome, classe, sezione, tipoScuola } = formData;
+    const { nome, cognome, email, telefono, password, confirmPassword } = formData;
 
-    // Validate all fields
-    if (!nome || !cognome) {
-      setErrorMessage('Inserisci nome e cognome');
+    // Validazione campi
+    if (!nome.trim()) {
+      setErrorMessage('Inserisci il tuo nome');
       return;
     }
-    if (!email) {
+    if (!cognome.trim()) {
+      setErrorMessage('Inserisci il tuo cognome');
+      return;
+    }
+    if (!email.trim()) {
       setErrorMessage('Inserisci la tua email');
       return;
     }
-    if (!telefono) {
+    if (!email.includes('@')) {
+      setErrorMessage('Inserisci un\'email valida');
+      return;
+    }
+    if (!telefono.trim()) {
       setErrorMessage('Inserisci il tuo numero di telefono');
-      return;
-    }
-    if (!tipoScuola) {
-      setErrorMessage('Seleziona il tipo di scuola');
-      return;
-    }
-    if (!scuolaNome) {
-      setErrorMessage('Seleziona la tua scuola');
-      return;
-    }
-    if (!classe) {
-      setErrorMessage('Seleziona la classe');
-      return;
-    }
-    if (!sezione) {
-      setErrorMessage('Seleziona la sezione');
       return;
     }
     if (!password) {
@@ -132,28 +77,21 @@ export default function RegisterScreen() {
 
     setLoading(true);
     try {
-      console.log('Sending registration request...', { nome, cognome, email, scuolaNome, classe, sezione, tipoScuola });
       const response = await axios.post(`${API_URL}/api/auth/register`, {
-        nome,
-        cognome,
-        email,
-        telefono,
+        nome: nome.trim(),
+        cognome: cognome.trim(),
+        email: email.trim().toLowerCase(),
+        telefono: telefono.trim(),
         password,
-        scuola: scuolaNome,
-        classe,
-        sezione,
-        tipo_scuola: tipoScuola,
       });
 
-      console.log('Registration successful:', response.data);
-      
       // Login automatico dopo la registrazione
       await AsyncStorage.setItem('user_id', response.data.user_id);
       await AsyncStorage.setItem('username', response.data.username);
       await AsyncStorage.setItem('user_nome', nome);
       await AsyncStorage.setItem('is_premium', 'false');
       
-      // Vai direttamente alla home
+      // Vai alla home - l'utente creerà i profili figli successivamente
       router.replace('/(tabs)');
       
     } catch (error: any) {
@@ -163,29 +101,6 @@ export default function RegisterScreen() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const renderDropdown = (
-    label: string,
-    value: string,
-    onPress: () => void,
-    disabled?: boolean
-  ) => (
-    <TouchableOpacity
-      style={[styles.dropdownButton, disabled && styles.dropdownDisabled]}
-      onPress={onPress}
-      disabled={disabled}
-    >
-      <Text style={[styles.dropdownText, !value && styles.dropdownPlaceholder]}>
-        {value || label}
-      </Text>
-      <Ionicons name="chevron-down" size={20} color={disabled ? '#ccc' : '#666'} />
-    </TouchableOpacity>
-  );
-
-  const getTipoScuolaLabel = () => {
-    const tipo = SCHOOL_TYPES.find(t => t.key === formData.tipoScuola);
-    return tipo?.label || '';
   };
 
   return (
@@ -198,152 +113,166 @@ export default function RegisterScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.headerBanner}>
-          <Ionicons name="location" size={20} color="#1a472a" />
-          <Text style={styles.headerBannerText}>Solo per le scuole di Catanzaro</Text>
+          <Ionicons name="book" size={48} color="#fff" />
+          <Text style={styles.headerTitle}>RiLiBro</Text>
+          <Text style={styles.headerSubtitle}>Crea il tuo account</Text>
         </View>
 
-        <Text style={styles.title}>Crea il tuo account</Text>
-        <Text style={styles.subtitle}>
-          I tuoi dati personali rimarranno privati. Ti verrà assegnato un username anonimo.
-        </Text>
-
-        <View style={styles.form}>
-          {/* Error Message */}
+        <View style={styles.formContainer}>
           {errorMessage ? (
-            <View style={styles.errorBanner}>
-              <Ionicons name="alert-circle" size={20} color="#c62828" />
+            <View style={styles.errorContainer}>
+              <Ionicons name="alert-circle" size={20} color="#f44336" />
               <Text style={styles.errorText}>{errorMessage}</Text>
             </View>
           ) : null}
 
-          <Text style={styles.sectionTitle}>Dati Personali</Text>
-          
-          <View style={styles.row}>
-            <View style={[styles.inputContainer, styles.halfInput]}>
+          <Text style={styles.sectionTitle}>I tuoi dati</Text>
+
+          {/* Nome */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Nome *</Text>
+            <View style={styles.inputWrapper}>
+              <Ionicons name="person-outline" size={20} color="#666" style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
-                placeholder="Nome"
+                placeholder="Il tuo nome"
+                placeholderTextColor="#999"
                 value={formData.nome}
                 onChangeText={(v) => updateField('nome', v)}
+                autoCapitalize="words"
               />
             </View>
-            <View style={[styles.inputContainer, styles.halfInput]}>
+          </View>
+
+          {/* Cognome */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Cognome *</Text>
+            <View style={styles.inputWrapper}>
+              <Ionicons name="person-outline" size={20} color="#666" style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
-                placeholder="Cognome"
+                placeholder="Il tuo cognome"
+                placeholderTextColor="#999"
                 value={formData.cognome}
                 onChangeText={(v) => updateField('cognome', v)}
+                autoCapitalize="words"
               />
             </View>
           </View>
 
-          <View style={styles.inputContainer}>
-            <Ionicons name="mail-outline" size={20} color="#666" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Email"
-              value={formData.email}
-              onChangeText={(v) => updateField('email', v)}
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Ionicons name="call-outline" size={20} color="#666" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Telefono"
-              value={formData.telefono}
-              onChangeText={(v) => updateField('telefono', v)}
-              keyboardType="phone-pad"
-            />
-          </View>
-
-          <Text style={styles.sectionTitle}>Scuola</Text>
-
-          {/* Tipo Scuola Dropdown */}
-          <Text style={styles.dropdownLabel}>Tipo di scuola</Text>
-          {renderDropdown(
-            'Seleziona tipo scuola...',
-            getTipoScuolaLabel(),
-            () => setShowTipoScuolaModal(true)
-          )}
-
-          {/* Scuola Dropdown */}
-          <Text style={styles.dropdownLabel}>Scuola</Text>
-          {renderDropdown(
-            'Seleziona la tua scuola...',
-            formData.scuolaNome,
-            () => setShowScuolaModal(true),
-            !formData.tipoScuola
-          )}
-
-          {/* Classe e Sezione */}
-          <View style={styles.row}>
-            <View style={styles.halfInput}>
-              <Text style={styles.dropdownLabel}>Classe</Text>
-              {renderDropdown(
-                'Classe',
-                formData.classe ? `${formData.classe}°` : '',
-                () => setShowClasseModal(true),
-                !formData.tipoScuola
-              )}
-            </View>
-            <View style={styles.halfInput}>
-              <Text style={styles.dropdownLabel}>Sezione</Text>
-              {renderDropdown(
-                'Sezione',
-                formData.sezione,
-                () => setShowSezioneModal(true),
-                !formData.scuola
-              )}
-            </View>
-          </View>
-
-          <Text style={styles.sectionTitle}>Sicurezza</Text>
-
-          <View style={styles.inputContainer}>
-            <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Password"
-              value={formData.password}
-              onChangeText={(v) => updateField('password', v)}
-              secureTextEntry={!showPassword}
-            />
-            <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-              <Ionicons
-                name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                size={20}
-                color="#666"
+          {/* Email */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Email *</Text>
+            <View style={styles.inputWrapper}>
+              <Ionicons name="mail-outline" size={20} color="#666" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="La tua email"
+                placeholderTextColor="#999"
+                value={formData.email}
+                onChangeText={(v) => updateField('email', v)}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
               />
-            </TouchableOpacity>
+            </View>
           </View>
 
-          <View style={styles.inputContainer}>
-            <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Conferma Password"
-              value={formData.confirmPassword}
-              onChangeText={(v) => updateField('confirmPassword', v)}
-              secureTextEntry={!showPassword}
-            />
+          {/* Telefono */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Telefono *</Text>
+            <View style={styles.inputWrapper}>
+              <Ionicons name="call-outline" size={20} color="#666" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="Il tuo numero di telefono"
+                placeholderTextColor="#999"
+                value={formData.telefono}
+                onChangeText={(v) => updateField('telefono', v)}
+                keyboardType="phone-pad"
+              />
+            </View>
           </View>
 
+          <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Sicurezza</Text>
+
+          {/* Password */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Password *</Text>
+            <View style={styles.inputWrapper}>
+              <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="Almeno 6 caratteri"
+                placeholderTextColor="#999"
+                value={formData.password}
+                onChangeText={(v) => updateField('password', v)}
+                secureTextEntry={!showPassword}
+              />
+              <TouchableOpacity
+                onPress={() => setShowPassword(!showPassword)}
+                style={styles.eyeButton}
+              >
+                <Ionicons
+                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                  size={20}
+                  color="#666"
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Conferma Password */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Conferma Password *</Text>
+            <View style={styles.inputWrapper}>
+              <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="Ripeti la password"
+                placeholderTextColor="#999"
+                value={formData.confirmPassword}
+                onChangeText={(v) => updateField('confirmPassword', v)}
+                secureTextEntry={!showConfirmPassword}
+              />
+              <TouchableOpacity
+                onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                style={styles.eyeButton}
+              >
+                <Ionicons
+                  name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'}
+                  size={20}
+                  color="#666"
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Info Box */}
+          <View style={styles.infoBox}>
+            <Ionicons name="information-circle" size={20} color="#1a472a" />
+            <Text style={styles.infoText}>
+              Dopo la registrazione potrai aggiungere i profili dei tuoi figli con le relative scuole e classi.
+            </Text>
+          </View>
+
+          {/* Bottone Registrati */}
           <TouchableOpacity
-            style={styles.registerButton}
+            style={[styles.registerButton, loading && styles.registerButtonDisabled]}
             onPress={handleRegister}
             disabled={loading}
           >
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.registerButtonText}>Registrati</Text>
+              <>
+                <Ionicons name="person-add" size={20} color="#fff" />
+                <Text style={styles.registerButtonText}>Registrati</Text>
+              </>
             )}
           </TouchableOpacity>
 
+          {/* Link Login */}
           <TouchableOpacity
             style={styles.loginLink}
             onPress={() => router.push('/(auth)/login')}
@@ -354,143 +283,6 @@ export default function RegisterScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
-
-      {/* Tipo Scuola Modal */}
-      <Modal
-        visible={showTipoScuolaModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowTipoScuolaModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Seleziona tipo scuola</Text>
-              <TouchableOpacity onPress={() => setShowTipoScuolaModal(false)}>
-                <Ionicons name="close" size={24} color="#333" />
-              </TouchableOpacity>
-            </View>
-            {SCHOOL_TYPES.map((tipo) => (
-              <TouchableOpacity
-                key={tipo.key}
-                style={styles.modalItem}
-                onPress={() => {
-                  updateField('tipoScuola', tipo.key);
-                  setShowTipoScuolaModal(false);
-                }}
-              >
-                <Text style={styles.modalItemText}>{tipo.label}</Text>
-                {formData.tipoScuola === tipo.key && (
-                  <Ionicons name="checkmark" size={20} color="#1a472a" />
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      </Modal>
-
-      {/* Scuola Modal */}
-      <Modal
-        visible={showScuolaModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowScuolaModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, styles.modalContentLarge]}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Seleziona la tua scuola</Text>
-              <TouchableOpacity onPress={() => setShowScuolaModal(false)}>
-                <Ionicons name="close" size={24} color="#333" />
-              </TouchableOpacity>
-            </View>
-            <FlatList
-              data={availableSchools}
-              keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.modalItem}
-                  onPress={() => handleSelectSchool(item)}
-                >
-                  <Text style={styles.modalItemText}>{item.nome}</Text>
-                  {formData.scuola === item.id && (
-                    <Ionicons name="checkmark" size={20} color="#1a472a" />
-                  )}
-                </TouchableOpacity>
-              )}
-              showsVerticalScrollIndicator={false}
-            />
-          </View>
-        </View>
-      </Modal>
-
-      {/* Classe Modal */}
-      <Modal
-        visible={showClasseModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowClasseModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Seleziona la classe</Text>
-              <TouchableOpacity onPress={() => setShowClasseModal(false)}>
-                <Ionicons name="close" size={24} color="#333" />
-              </TouchableOpacity>
-            </View>
-            {availableClassi.map((classe) => (
-              <TouchableOpacity
-                key={classe}
-                style={styles.modalItem}
-                onPress={() => {
-                  updateField('classe', classe);
-                  setShowClasseModal(false);
-                }}
-              >
-                <Text style={styles.modalItemText}>{classe}° Anno</Text>
-                {formData.classe === classe && (
-                  <Ionicons name="checkmark" size={20} color="#1a472a" />
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      </Modal>
-
-      {/* Sezione Modal */}
-      <Modal
-        visible={showSezioneModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowSezioneModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Seleziona la sezione</Text>
-              <TouchableOpacity onPress={() => setShowSezioneModal(false)}>
-                <Ionicons name="close" size={24} color="#333" />
-              </TouchableOpacity>
-            </View>
-            {SEZIONI.map((sezione) => (
-              <TouchableOpacity
-                key={sezione}
-                style={styles.modalItem}
-                onPress={() => {
-                  updateField('sezione', sezione);
-                  setShowSezioneModal(false);
-                }}
-              >
-                <Text style={styles.modalItemText}>Sezione {sezione}</Text>
-                {formData.sezione === sezione && (
-                  <Ionicons name="checkmark" size={20} color="#1a472a" />
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -502,179 +294,125 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    padding: 24,
   },
   headerBanner: {
-    flexDirection: 'row',
+    backgroundColor: '#1a472a',
+    paddingTop: 60,
+    paddingBottom: 40,
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#e8f5e9',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-    gap: 8,
   },
-  headerBannerText: {
-    color: '#1a472a',
-    fontWeight: '600',
+  headerTitle: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginTop: 12,
   },
-  errorBanner: {
+  headerSubtitle: {
+    fontSize: 16,
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 4,
+  },
+  formContainer: {
+    padding: 20,
+    marginTop: -20,
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    minHeight: 500,
+  },
+  errorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#ffebee',
     padding: 12,
     borderRadius: 8,
-    marginBottom: 12,
+    marginBottom: 16,
     gap: 8,
-    borderWidth: 1,
-    borderColor: '#ef9a9a',
   },
   errorText: {
     flex: 1,
-    color: '#c62828',
+    color: '#f44336',
     fontSize: 14,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1a472a',
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
-    marginTop: 8,
-    marginBottom: 24,
-  },
-  form: {
-    gap: 12,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 16,
+  },
+  inputGroup: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    fontSize: 14,
     fontWeight: '600',
-    color: '#1a472a',
-    marginTop: 8,
-    marginBottom: 4,
+    color: '#333',
+    marginBottom: 8,
   },
-  row: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  inputContainer: {
+  inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: '#f8f9fa',
     borderRadius: 12,
-    paddingHorizontal: 16,
     borderWidth: 1,
     borderColor: '#e0e0e0',
   },
-  halfInput: {
-    flex: 1,
-  },
   inputIcon: {
-    marginRight: 12,
+    paddingLeft: 14,
   },
   input: {
     flex: 1,
-    paddingVertical: 14,
-    fontSize: 16,
-  },
-  dropdownLabel: {
-    fontSize: 13,
-    color: '#666',
-    marginBottom: 6,
-    marginTop: 4,
-  },
-  dropdownButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-  },
-  dropdownDisabled: {
-    backgroundColor: '#f5f5f5',
-    borderColor: '#e8e8e8',
-  },
-  dropdownText: {
+    padding: 14,
     fontSize: 16,
     color: '#333',
-    flex: 1,
   },
-  dropdownPlaceholder: {
-    color: '#999',
+  eyeButton: {
+    padding: 14,
+  },
+  infoBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#e8f5e9',
+    padding: 14,
+    borderRadius: 10,
+    marginTop: 8,
+    marginBottom: 24,
+    gap: 10,
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#1a472a',
+    lineHeight: 18,
   },
   registerButton: {
-    backgroundColor: '#1a472a',
-    paddingVertical: 16,
-    borderRadius: 12,
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 16,
+    justifyContent: 'center',
+    backgroundColor: '#1a472a',
+    padding: 16,
+    borderRadius: 12,
+    gap: 8,
+  },
+  registerButtonDisabled: {
+    backgroundColor: '#ccc',
   },
   registerButtonText: {
     color: '#fff',
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   loginLink: {
     alignItems: 'center',
-    marginTop: 16,
-    marginBottom: 32,
+    marginTop: 20,
+    paddingBottom: 20,
   },
   loginLinkText: {
-    color: '#666',
     fontSize: 14,
+    color: '#666',
   },
   loginLinkBold: {
     color: '#1a472a',
-    fontWeight: 'bold',
-  },
-  // Modal styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingBottom: 32,
-    maxHeight: '50%',
-  },
-  modalContentLarge: {
-    maxHeight: '70%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-  },
-  modalItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  modalItemText: {
-    fontSize: 16,
-    color: '#333',
-    flex: 1,
+    fontWeight: '700',
   },
 });

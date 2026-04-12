@@ -110,9 +110,9 @@ class UserCreate(BaseModel):
     email: str
     telefono: str
     password: str
-    scuola: str
-    classe: str
-    sezione: str
+    scuola: Optional[str] = None
+    classe: Optional[str] = None
+    sezione: Optional[str] = None
     tipo_scuola: Optional[str] = None  # primo_grado or secondo_grado
 
 class UserLogin(BaseModel):
@@ -126,9 +126,9 @@ class User(BaseModel):
     email: str
     telefono: str
     password_hash: str
-    scuola: str
-    classe: str
-    sezione: str
+    scuola: Optional[str] = None
+    classe: Optional[str] = None
+    sezione: Optional[str] = None
     tipo_scuola: Optional[str] = None  # primo_grado or secondo_grado
     username: str  # Auto-generated anonymous username
     is_premium: bool = False
