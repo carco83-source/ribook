@@ -4159,6 +4159,20 @@ async def get_user_purchases(user_id: str):
 
 # ============== PAYMENT & ORDER SYSTEM (MOCK/ESCROW) ==============
 
+@api_router.post("/listings/{listing_id}/reset")
+async def reset_listing(listing_id: str):
+    """Resetta un listing a disponibile (per testing)"""
+    result = await db.listings.update_one(
+        {"id": listing_id},
+        {
+            "$set": {"stato": "disponibile", "status": "available"},
+            "$unset": {"reserved_by": "", "order_id": ""}
+        }
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Listing non trovato")
+    return {"success": True, "message": "Listing resettato a disponibile"}
+
 @api_router.post("/orders/create")
 async def create_order(request: CreateOrderRequest, user_id: str = Query(...)):
     """Crea un nuovo ordine a partire da un listing"""
