@@ -3202,25 +3202,38 @@ async def generate_books_pdf(user_id: str, child_id: str):
         vol = "U" if book.get('is_volume_unico') else str(child_classe)
         nuova_adoz = "Si" if book.get('nuova_adozione') else "No"
         
-        # Logica "Da Acquistare"
-        if book.get('is_volume_unico'):
-            # MEDIE (primo_grado): volumi unici sono TRIENNALI (1-2-3)
-            # Solo chi fa la 1ª deve comprarli
-            if child_tipo == "primo_grado":
-                da_acq = "Si" if child_classe == 1 else "No"
-            else:
-                # SUPERIORI: dipende dal ciclo (biennio 1-2, triennio 3-4-5)
-                if child_classe <= 2:
-                    # Biennio: comprare solo in 1ª
+        # Logica "Da Acquistare" - USA IL CAMPO DAL DATABASE (come nel PDF MIUR)
+        # Il campo da_acquistare nel DB indica se il libro va acquistato quest'anno
+        da_acq_db = book.get('da_acquistare')
+        
+        if da_acq_db is not None:
+            # Usa il valore dal database (fonte: MIUR)
+            da_acq = "Si" if da_acq_db == True else "No"
+        else:
+            # Fallback per vecchi dati senza il campo
+            if book.get('is_volume_unico'):
+                # MEDIE (primo_grado): volumi unici sono TRIENNALI (1-2-3)
+                # Solo chi fa la 1ª deve comprarli
+                if child_tipo == "primo_grado":
                     da_acq = "Si" if child_classe == 1 else "No"
                 else:
-                    # Triennio: comprare solo in 3ª
-                    da_acq = "Si" if child_classe == 3 else "No"
-        else:
-            # Libro annuale: sempre da acquistare
-            da_acq = "Si"
+                    # SUPERIORI: dipende dal ciclo (biennio 1-2, triennio 3-4-5)
+                    if child_classe <= 2:
+                        # Biennio: comprare solo in 1ª
+                        da_acq = "Si" if child_classe == 1 else "No"
+                    else:
+                        # Triennio: comprare solo in 3ª
+                        da_acq = "Si" if child_classe == 3 else "No"
+            else:
+                # Libro annuale: sempre da acquistare
+                da_acq = "Si"
         
-        consigliato = "Ap" if book.get('consigliato') else "No"
+        # Logica "Consigliato" - USA IL CAMPO DAL DATABASE (come nel PDF MIUR)
+        cons_db = book.get('consigliato')
+        if cons_db == True:
+            consigliato = "Ap"
+        else:
+            consigliato = "No"
         
         table_data.append([
             Paragraph(disciplina, cell_style),
