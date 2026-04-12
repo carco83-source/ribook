@@ -688,7 +688,10 @@ export default function RadarScreen() {
             {compatibility.consigliati?.libri_da_comprare && compatibility.consigliati.libri_da_comprare.length > 0 && (
               <View style={styles.classCard}>
                 <Text style={[styles.sampleBooksTitle, { color: '#9C27B0' }]}>
-                  Testi unici già in possesso o consigliati:
+                  NON DA ACQUISTARE - Già in possesso o facoltativi:
+                </Text>
+                <Text style={{ fontSize: 11, color: '#9C27B0', marginBottom: 12, fontStyle: 'italic', fontWeight: 'bold' }}>
+                  ⚠️ Questi libri NON vanno acquistati: sono già in tuo possesso o sono facoltativi
                 </Text>
                 {compatibility.consigliati.libri_da_comprare.map((book: any, idx: number) => (
                   <TouchableOpacity 
