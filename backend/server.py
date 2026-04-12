@@ -284,6 +284,7 @@ class BookListing(BaseModel):
     foto_base64: Optional[str] = None
     # Stati: disponibile -> venduto -> in_consegna -> consegnato -> ritirato
     stato: str = "disponibile"
+    status: str = "available"  # Per compatibilità con le query del Radar
     # Tracking consegna (5 giorni per consegnare)
     data_vendita: Optional[datetime] = None  # Quando è stato venduto
     deadline_consegna: Optional[datetime] = None  # data_vendita + 5 giorni
