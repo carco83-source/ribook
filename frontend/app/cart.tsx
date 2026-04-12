@@ -65,7 +65,7 @@ export default function CartScreen() {
       if (storedUserId) {
         // Carica ordini come acquirente
         const response = await axios.get(`${API_URL}/api/orders/user/${storedUserId}?role=buyer`);
-        const orders = response.data || [];
+        const orders = response.data?.orders || response.data || [];
         
         // Filtra ordini per stato
         const paymentReady = orders.filter((o: EscrowOrder) => o.status === 'pending_payment');

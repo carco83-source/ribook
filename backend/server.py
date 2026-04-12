@@ -4370,13 +4370,20 @@ async def seller_confirm_order(order_id: str, user_id: str = Query(...)):
     
     await db.orders.update_one({"id": order_id}, {"$set": update_data})
     
+    # Elimina/segna come processata la notifica del venditore
+    await db.notifications.delete_many({
+        "user_id": user_id,
+        "order_id": order_id,
+        "type": "seller_confirmation_request"
+    })
+    
     # Notifica all'acquirente che può pagare
     notification = {
         "id": str(uuid.uuid4()),
         "user_id": order.get("buyer_id"),
         "type": "ready_for_payment",
         "title": "COMPLIMENTI! LIBRO DISPONIBILE",
-        "message": f"COMPLIMENTI!\n{order.get('book_titolo')}\nÈ DISPONIBILE!\n\nAGGIUNGI AL CARRELLO PER COMPLETARE L'ACQUISTO\nOPPURE CONTINUA CON I TUOI ACQUISTI",
+        "message": f"COMPLIMENTI!\n{order.get('book_titolo')}\nÈ DISPONIBILE!\n\nAGGIUNGI AL CARRELLO PER COMPLETARE L'ACQUISTO",
         "order_id": order_id,
         "data": {
             "order_id": order_id,

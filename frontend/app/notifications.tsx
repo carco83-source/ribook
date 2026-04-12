@@ -374,18 +374,11 @@ export default function NotificationsScreen() {
                 {isReadyForPayment && (
                   <View style={styles.actionButtonsContainer}>
                     <TouchableOpacity
-                      style={[styles.actionButton, styles.payButton]}
+                      style={[styles.actionButton, styles.payButton, { flex: 1 }]}
                       onPress={() => handleProceedToPayment(notification)}
                     >
                       <Ionicons name="cart" size={20} color="#fff" />
                       <Text style={styles.actionButtonText}>AGGIUNGI AL CARRELLO</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.actionButton, styles.continueButton]}
-                      onPress={() => router.push('/(tabs)/search')}
-                    >
-                      <Ionicons name="search" size={20} color="#1a472a" />
-                      <Text style={[styles.actionButtonText, { color: '#1a472a' }]}>CONTINUA ACQUISTI</Text>
                     </TouchableOpacity>
                   </View>
                 )}
