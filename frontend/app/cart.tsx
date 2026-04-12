@@ -156,15 +156,17 @@ export default function CartScreen() {
       setPurchasing(true);
       
       try {
-        // Paga tutti gli ordini
-        for (const order of pendingPaymentOrders) {
-          await axios.post(`${API_URL}/api/orders/${order.id}/pay?user_id=${userId}`);
-        }
+        // Usa il nuovo endpoint batch che raggruppa ordini dallo stesso venditore
+        const orderIds = pendingPaymentOrders.map(o => o.id).join(',');
+        const response = await axios.post(
+          `${API_URL}/api/orders/pay-batch?user_id=${userId}&order_ids=${orderIds}`
+        );
         
         const successMessage = `Tutti i pagamenti completati!\n\n` +
-          `${pendingPaymentOrders.length} libri acquistati\n` +
+          `${response.data.paid_count || pendingPaymentOrders.length} libri acquistati\n` +
           `Totale: €${total.toFixed(2)}\n\n` +
-          `I venditori sono stati notificati.`;
+          `I venditori sono stati notificati.\n` +
+          `Se hai acquistato più libri dallo stesso venditore, avrai un unico QR code!`;
         
         if (Platform.OS === 'web') {
           window.alert(successMessage);
@@ -361,6 +363,14 @@ export default function CartScreen() {
                           <Text style={styles.payButtonText}>Paga €{order.totale_acquirente.toFixed(2)}</Text>
                         </>
                       )}
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity
+                      style={styles.removeButton}
+                      onPress={() => handleCancelOrder(order)}
+                    >
+                      <Ionicons name="trash-outline" size={16} color="#f44336" />
+                      <Text style={styles.removeButtonText}>Rimuovi dal carrello</Text>
                     </TouchableOpacity>
                   </View>
                 ))}
@@ -779,5 +789,22 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     color: '#e65100',
+  },
+  removeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#f44336',
+    padding: 10,
+    borderRadius: 8,
+    marginTop: 8,
+    gap: 6,
+  },
+  removeButtonText: {
+    color: '#f44336',
+    fontSize: 13,
+    fontWeight: '500',
   },
 });

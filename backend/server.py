@@ -4666,6 +4666,160 @@ async def pay_order(order_id: str, user_id: str = Query(...)):
         "message": "Pagamento completato! I fondi sono in escrow fino alla conferma del ritiro."
     }
 
+@api_router.post("/orders/pay-batch")
+async def pay_orders_batch(user_id: str = Query(...), order_ids: str = Query(...)):
+    """
+    Paga più ordini insieme.
+    Se più ordini sono dello stesso venditore + stessa cartolibreria, genera un UNICO QR code condiviso.
+    """
+    ids = [x.strip() for x in order_ids.split(",") if x.strip()]
+    
+    if not ids:
+        raise HTTPException(status_code=400, detail="Nessun ordine specificato")
+    
+    # Carica tutti gli ordini
+    orders = await db.orders.find({
+        "id": {"$in": ids},
+        "buyer_id": user_id,
+        "status": "pending_payment"
+    }).to_list(50)
+    
+    if len(orders) != len(ids):
+        raise HTTPException(status_code=400, detail="Alcuni ordini non trovati o non pagabili")
+    
+    # Raggruppa per venditore + cartolibreria
+    from collections import defaultdict
+    groups = defaultdict(list)
+    for order in orders:
+        key = (order.get("seller_id"), order.get("bookstore_id"))
+        groups[key].append(order)
+    
+    now = datetime.utcnow()
+    paid_orders = []
+    
+    for (seller_id, bookstore_id), group_orders in groups.items():
+        # Se più ordini dallo stesso venditore, usa un unico codice
+        if len(group_orders) > 1:
+            # Genera un codice batch
+            batch_code = generate_order_code()
+            batch_id = str(uuid.uuid4())
+        else:
+            batch_code = group_orders[0].get("order_code")
+            batch_id = group_orders[0].get("id")
+        
+        # Calcola totali del gruppo
+        total_amount = sum(o.get("totale_acquirente", 0) for o in group_orders)
+        total_netto = sum(o.get("netto_venditore", 0) for o in group_orders)
+        book_titles = [o.get("book_titolo", "")[:40] for o in group_orders]
+        
+        # Paga tutti gli ordini del gruppo
+        for order in group_orders:
+            payment_intent_id = f"pi_mock_{uuid.uuid4().hex[:16]}"
+            update_data = {
+                "payment_intent_id": payment_intent_id,
+                "payment_status": "paid",
+                "status": "paid_escrow",
+                "paid_at": now,
+                "batch_code": batch_code if len(group_orders) > 1 else None,
+                "batch_id": batch_id if len(group_orders) > 1 else None,
+                "status_history": order.get("status_history", []) + [{
+                    "status": "paid_escrow",
+                    "timestamp": now.isoformat(),
+                    "note": f"Pagamento batch - codice condiviso: {batch_code}" if len(group_orders) > 1 else "Pagamento ricevuto"
+                }]
+            }
+            await db.orders.update_one({"id": order.get("id")}, {"$set": update_data})
+            
+            # Riserva il listing
+            await db.listings.update_one(
+                {"id": order.get("listing_id")},
+                {"$set": {"status": "reserved", "reserved_by": user_id, "order_id": order.get("id")}}
+            )
+            paid_orders.append(order)
+        
+        # Notifica al venditore - UNA SOLA per tutto il gruppo
+        if len(group_orders) > 1:
+            books_list = "\n".join([f"• {t}" for t in book_titles])
+            seller_message = f"COMPLIMENTI! {len(group_orders)} LIBRI VENDUTI!\n\n{books_list}\n\nCODICE CONSEGNA UNICO: {batch_code}\n\nCONSEGNA ENTRO 2 GIORNI LAVORATIVI PRESSO:\n{group_orders[0].get('bookstore_name')}\n\nMostra questo codice alla cartolibreria.\nTutti i libri con lo stesso codice!\n\n📸 Fai uno screenshot!"
+        else:
+            seller_message = f"COMPLIMENTI!\n{book_titles[0]}\nÈ STATO VENDUTO!\n\nCODICE CONSEGNA: {batch_code}\n\nCONSEGNA ENTRO 2 GIORNI PRESSO:\n{group_orders[0].get('bookstore_name')}\n\n📸 Fai uno screenshot!"
+        
+        seller_notification = {
+            "id": str(uuid.uuid4()),
+            "user_id": seller_id,
+            "type": "order_qr_code",
+            "title": f"🎉 {'VENDITE COMPLETATE!' if len(group_orders) > 1 else 'VENDITA COMPLETATA!'}",
+            "message": seller_message,
+            "order_id": batch_id,
+            "order_code": batch_code,
+            "bookstore_name": group_orders[0].get("bookstore_name"),
+            "data": {
+                "order_ids": [o.get("id") for o in group_orders],
+                "order_code": batch_code,
+                "books": book_titles,
+                "total_count": len(group_orders),
+                "bookstore_name": group_orders[0].get("bookstore_name"),
+                "show_qr": True,
+                "role": "seller"
+            },
+            "read": False,
+            "persistent": True,
+            "created_at": now.isoformat()
+        }
+        await db.notifications.insert_one(seller_notification)
+        
+        # Notifica all'acquirente - UNA SOLA per tutto il gruppo
+        if len(group_orders) > 1:
+            buyer_message = f"HAI ACQUISTATO {len(group_orders)} LIBRI!\n\n{books_list}\n\nCODICE RITIRO UNICO: {batch_code}\n\nRITIRA PRESSO:\n{group_orders[0].get('bookstore_name')}\n\nMostra questo codice alla cartolibreria.\nTutti i libri con lo stesso codice!\n\n📸 Fai uno screenshot!"
+        else:
+            buyer_message = f"Il tuo ordine per:\n{book_titles[0]}\n\nCODICE RITIRO: {batch_code}\n\nRITIRA PRESSO:\n{group_orders[0].get('bookstore_name')}\n\n📸 Fai uno screenshot!"
+        
+        buyer_qr_notification = {
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "type": "order_qr_code",
+            "title": f"🎉 {'ACQUISTI COMPLETATI!' if len(group_orders) > 1 else 'ACQUISTO COMPLETATO!'}",
+            "message": buyer_message,
+            "order_id": batch_id,
+            "order_code": batch_code,
+            "bookstore_name": group_orders[0].get("bookstore_name"),
+            "data": {
+                "order_ids": [o.get("id") for o in group_orders],
+                "order_code": batch_code,
+                "books": book_titles,
+                "total_count": len(group_orders),
+                "bookstore_name": group_orders[0].get("bookstore_name"),
+                "total_amount": total_amount,
+                "show_qr": True
+            },
+            "read": False,
+            "persistent": True,
+            "created_at": now.isoformat()
+        }
+        await db.notifications.insert_one(buyer_qr_notification)
+        
+        # Notifica alla cartolibreria
+        bookstore_notification = {
+            "id": str(uuid.uuid4()),
+            "bookstore_id": bookstore_id,
+            "type": "incoming_order",
+            "title": f"{'ORDINE MULTIPLO' if len(group_orders) > 1 else 'NUOVO ORDINE'} IN ARRIVO",
+            "message": f"CODICE: {batch_code}\n\n{'LIBRI:' if len(group_orders) > 1 else 'LIBRO:'}\n{books_list if len(group_orders) > 1 else book_titles[0]}\n\nVENDITORE: {group_orders[0].get('seller_name')}\nACQUIRENTE: {group_orders[0].get('buyer_name')}",
+            "order_id": batch_id,
+            "order_code": batch_code,
+            "order_count": len(group_orders),
+            "read": False,
+            "created_at": now.isoformat()
+        }
+        await db.bookstore_notifications.insert_one(bookstore_notification)
+    
+    return {
+        "success": True,
+        "paid_count": len(paid_orders),
+        "total_amount": sum(o.get("totale_acquirente", 0) for o in paid_orders),
+        "message": f"Pagati {len(paid_orders)} ordini con successo!"
+    }
+
 @api_router.post("/orders/{order_id}/deliver-to-bookstore")
 async def mark_delivered_to_bookstore(order_id: str, user_id: str = Query(...)):
     """Il venditore conferma di aver consegnato il libro alla cartolibreria"""
