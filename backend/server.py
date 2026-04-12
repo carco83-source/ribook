@@ -3103,7 +3103,7 @@ async def generate_books_pdf(user_id: str, child_id: str):
     """
     Genera PDF formato ufficiale MUR - ELENCO DEI LIBRI DI TESTO ADOTTATI O CONSIGLIATI
     """
-    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.pagesizes import landscape
     
     # Get user and child profile
     user = await db.users.find_one({"id": user_id})
@@ -3170,7 +3170,7 @@ async def generate_books_pdf(user_id: str, child_id: str):
     
     header_data = [[
         Paragraph(f"<b>{scuola_nome.upper()}</b><br/><font size='8'>{child_codice_scuola}</font><br/>88100 Catanzaro", header_style),
-        Paragraph(f"<b><font size='20'>RiLiBro</font></b>", ParagraphStyle('Code', fontSize=11, fontName='Helvetica-Bold', alignment=TA_CENTER)),
+        Paragraph("<b><font size='20'>RiLiBro</font></b>", ParagraphStyle('Code', fontSize=11, fontName='Helvetica-Bold', alignment=TA_CENTER)),
         Paragraph(f"<b>ELENCO DEI LIBRI DI TESTO<br/>ADOTTATI O CONSIGLIATI</b><br/><br/>Tipo Scuola: {tipo_scuola_label}<br/>Classe: {classe_label}<br/>Anno Scolastico 2025-2026", 
                  ParagraphStyle('RightHeader', fontSize=9, leading=11, alignment=TA_LEFT))
     ]]
@@ -3300,11 +3300,16 @@ async def get_books_to_sell(user_id: str, child_id: str):
     """
     Restituisce la lista dei libri che il figlio può VENDERE.
     
-    Logica:
-    1. Libri ANNUALI della classe precedente → vendibili se stessa serie/edizione
-    2. Libri PLURIENNALI → vendibili SOLO se max(anni_corso) < classe_attuale
-       (cioè la materia è finita e il libro non serve più)
-    3. Libri QUINQUENNALI (es. Religione [1,2,3,4,5]) → MAI vendibili
+    NUOVA LOGICA (allineata al Radar):
+    Mostra SOLO i libri che hanno una domanda reale (cioè quelli che gli studenti
+    della classe inferiore vogliono comprare perché la serie/edizione è compatibile).
+    
+    1. Prende i libri della classe PRECEDENTE (che lo studente ha usato)
+    2. Confronta con i libri della classe ATTUALE (che i compratori useranno)
+    3. Se stessa serie/edizione → VENDIBILE (c'è domanda)
+    4. Se edizione diversa → NON vendibile (non c'è domanda nel flusso naturale)
+    
+    I libri non mostrati qui possono comunque essere venduti via "Vendi altro libro".
     """
     import re
     
@@ -3325,7 +3330,7 @@ async def get_books_to_sell(user_id: str, child_id: str):
     if not child_codice_scuola:
         return {"books": [], "error": "Codice scuola non configurato"}
     
-    # Helper functions
+    # Helper functions (same as Radar)
     def get_series_name(title: str) -> str:
         title = title.upper().strip()
         title = re.sub(r'\s*V\.?\s*\d+', '', title, flags=re.IGNORECASE)
@@ -3373,182 +3378,167 @@ async def get_books_to_sell(user_id: str, child_id: str):
         similarity = len(common) / max(len(words1), len(words2))
         return similarity >= 0.7 and len(common) >= min(2, min_words)
     
-    def is_quinquennale(anni_corso: list) -> bool:
-        """Verifica se è un volume che copre tutti e 5 gli anni (o tutti e 3 per le medie)"""
-        if not anni_corso:
-            return False
-        # Per superiori: [1,2,3,4,5] o quasi
-        if len(anni_corso) >= 5:
-            return True
-        # Per medie: [1,2,3]
-        if child_tipo == "primo_grado" and len(anni_corso) >= 3:
-            return True
-        return False
-    
-    def is_volume_unico_still_needed(anni_corso: list, titolo: str = "") -> bool:
-        """
-        Verifica se un volume unico/pluriennale serve ancora allo studente.
-        Un libro non è vendibile se:
-        1. Copre la classe attuale o successiva
-        2. È un testo unico tipico (religione, ed. civica, scienze motorie, grammatica)
-        """
-        if not anni_corso:
-            return False
-        
-        # Se copre la classe attuale o successiva, serve ancora
-        if child_classe in anni_corso:
-            return True
-        classe_successiva = child_classe + 1
-        if classe_successiva in anni_corso:
-            return True
-        
-        # Verifica se è un testo unico tipico per titolo
-        titolo_upper = titolo.upper() if titolo else ""
-        testi_unici_keywords = [
-            "RELIGIONE", "RELIGIO", "IRC",
-            "EDUCAZIONE CIVICA", "ED. CIVICA", "CITTADINANZA",
-            "SCIENZE MOTORIE", "MOTORIE", "EDUCARE AL MOVIMENTO",
-            "GRAMMATICA",  # Grammatica italiana (non letteratura)
-        ]
-        for keyword in testi_unici_keywords:
-            if keyword in titolo_upper:
-                # Verifica se è ancora necessario (copre anni futuri)
-                if any(anno >= child_classe for anno in anni_corso):
-                    return True
-        
-        return False
-    
-    # Calcola classe precedente (per libri annuali)
+    # Calcola classe precedente (quella dei compratori potenziali)
+    # I compratori sono nella classe che TU hai fatto l'anno scorso
     isMedia = child_tipo == "primo_grado"
-    minClasse = 1 if isMedia else (1 if child_classe <= 2 else 3)
-    classe_precedente = child_classe - 1 if child_classe > minClasse else None
     
-    if not classe_precedente and child_classe == 1:
-        return {"books": [], "message": "Primo anno - niente da vendere"}
+    # Per medie: ciclo unico 1-2-3
+    # Per superiori: biennio (1-2) e triennio (3-4-5)
+    if isMedia:
+        # Medie: ciclo unico
+        classe_compratori = child_classe - 1 if child_classe > 1 else None
+    else:
+        # Superiori: biennio e triennio separati
+        if child_classe == 1:
+            classe_compratori = None  # Primo anno, niente da vendere
+        elif child_classe == 3:
+            # Terzo anno: vendi alla 2ª? No, il biennio è finito, non c'è domanda dal triennio
+            # I libri del 2° anno non servono al 3° anno (cambio ciclo)
+            # Puoi vendere solo tramite "Vendi altro libro"
+            classe_compratori = None
+        else:
+            classe_compratori = child_classe - 1
     
+    if not classe_compratori:
+        # Messaggio specifico per i casi speciali
+        if child_classe == 1:
+            return {"books": [], "message": "Primo anno - niente da vendere", "classe_destinazione": None}
+        elif child_classe == 3 and not isMedia:
+            return {"books": [], "message": "Inizio triennio - i libri del biennio non sono compatibili. Usa 'Vendi altro libro' per inserirli manualmente.", "classe_destinazione": 2}
+        else:
+            return {"books": [], "message": "Nessun libro vendibile nel flusso naturale", "classe_destinazione": None}
+    
+    # === LOGICA ALLINEATA AL RADAR ===
+    # USA LA STESSA LOGICA DEL COMPATIBILITY ENDPOINT (collezione adozioni)
+    
+    async def get_books_from_adozioni(codice_scuola: str, classe: int, sezione: str) -> list:
+        """Recupera libri dalla collezione adozioni per una specifica combinazione.
+        Se la sezione non esiste, usa la prima sezione disponibile (fallback)."""
+        # Prima prova con la sezione esatta
+        adozione = await db.adozioni.find_one({
+            "codice_scuola": codice_scuola,
+            "classe": classe,
+            "sezione": sezione.upper()
+        })
+        if adozione:
+            return adozione.get('libri', [])
+        
+        # FALLBACK: Se la sezione non esiste, usa qualsiasi sezione disponibile per quella classe
+        adozione_fallback = await db.adozioni.find_one({
+            "codice_scuola": codice_scuola,
+            "classe": classe
+        })
+        if adozione_fallback:
+            return adozione_fallback.get('libri', [])
+        
+        return []
+    
+    # Carica libri della classe PRECEDENTE (quelli che LO STUDENTE HA USATO)
+    child_sezione = child_profile.get("sezione", "A").upper()
+    libri_precedente = await get_books_from_adozioni(child_codice_scuola, child_classe - 1, child_sezione)
+    
+    # Carica libri della classe ATTUALE (quelli che i COMPRATORI useranno)
+    libri_compratori = await get_books_from_adozioni(child_codice_scuola, classe_compratori, child_sezione)
+    
+    # Organizza per disciplina (libri dei compratori) - SOLO libri obbligatori
+    compratori_disc = {}
+    for b in libri_compratori:
+        # Filtra solo libri obbligatori (da_acquistare=True e non consigliato)
+        if not b.get("da_acquistare", True) or b.get("consigliato", False):
+            continue
+            
+        disc = b.get("disciplina", "").strip().upper()
+        if disc and disc not in compratori_disc:
+            compratori_disc[disc] = {
+                "isbn": b.get("isbn", ""),
+                "titolo": b.get("titolo", ""),
+                "editore": b.get("editore", "").strip().upper(),
+                "autori": b.get("autori", ""),
+                "prezzo": b.get("prezzo_copertina", b.get("prezzo", 0)),
+                "titolo_base": get_series_name(b.get("titolo", "")),
+            }
+    
+    # Organizza i libri dello studente per disciplina - SOLO libri obbligatori
+    miei_libri_disc = {}
+    for b in libri_precedente:
+        # Filtra solo libri obbligatori (da_acquistare=True e non consigliato)
+        if not b.get("da_acquistare", True) or b.get("consigliato", False):
+            continue
+            
+        disc = b.get("disciplina", "").strip().upper()
+        if disc and disc not in miei_libri_disc:
+            miei_libri_disc[disc] = {
+                "isbn": b.get("isbn", ""),
+                "titolo": b.get("titolo", ""),
+                "editore": b.get("editore", "").strip().upper(),
+                "autori": b.get("autori", ""),
+                "prezzo": b.get("prezzo_copertina", b.get("prezzo", 0)),
+                "disciplina": disc,
+            }
+    
+    # Trova i libri VENDIBILI usando la STESSA LOGICA del compatibility endpoint
+    # LOGICA CORRETTA: i libri VENDIBILI sono quelli della CLASSE PRECEDENTE (che lo studente ha già usato)
+    # Confrontiamo con la classe attuale per verificare compatibilità serie/edizione
     vendibili = []
     
-    # === PARTE 1: Libri ANNUALI della classe precedente ===
-    if classe_precedente:
-        # Carica libri della classe ATTUALE (che il figlio ha ORA)
-        my_books = await db.books.find({
-            "scuole_adottanti": child_codice_scuola,
-            "anni_corso": child_classe
-        }).to_list(200)
-        
-        # Carica libri della classe PRECEDENTE
-        libri_prec = await db.books.find({
-            "scuole_adottanti": child_codice_scuola,
-            "anni_corso": classe_precedente
-        }).to_list(200)
-        
-        # Organizza per disciplina
-        my_books_disc = {}
-        for b in my_books:
-            disc = b.get("disciplina", "").strip().upper()
-            if disc and disc not in my_books_disc:
-                my_books_disc[disc] = b
-        
-        # Trova libri annuali vendibili
-        for b in libri_prec:
-            anni = b.get("anni_corso", [])
-            disc = b.get("disciplina", "").strip().upper()
-            titolo = b.get("titolo", "")
-            
-            # Salta i quinquennali/triennali
-            if is_quinquennale(anni):
-                continue
-            
-            # Salta se è un volume unico che serve ancora
-            if is_volume_unico_still_needed(anni, titolo):
-                continue
-            
-            # Se è un libro che copre PIÙ anni, controlla se la materia continua
-            if len(anni) > 1:
-                # Se max(anni) >= classe_attuale, il libro serve ancora → non vendibile
-                if max(anni) >= child_classe:
-                    continue
-                # Altrimenti la materia è finita → vendibile
-                vendibili.append({
-                    "id": b.get("isbn", ""),
-                    "isbn": b.get("isbn", ""),
-                    "titolo": b.get("titolo", ""),
-                    "autori": b.get("autori", ""),
-                    "disciplina": disc,
-                    "editore": b.get("editore", ""),
-                    "prezzo_copertina": b.get("prezzo_copertina", 0),
-                    "prezzo_suggerito": round(b.get("prezzo_copertina", 0) * 0.5, 2),
-                    "classe_destinazione": classe_precedente,
-                    "tipo": "pluriennale_finito"
-                })
-            else:
-                # Libro ANNUALE - verifica compatibilità serie con classe attuale
-                if disc in my_books_disc:
-                    my_book = my_books_disc[disc]
-                    if same_series(b, my_book):
-                        vendibili.append({
-                            "id": b.get("isbn", ""),
-                            "isbn": b.get("isbn", ""),
-                            "titolo": b.get("titolo", ""),
-                            "autori": b.get("autori", ""),
-                            "disciplina": disc,
-                            "editore": b.get("editore", ""),
-                            "prezzo_copertina": b.get("prezzo_copertina", 0),
-                            "prezzo_suggerito": round(b.get("prezzo_copertina", 0) * 0.5, 2),
-                            "classe_destinazione": classe_precedente,
-                            "tipo": "annuale"
-                        })
+    # Carica anche i libri della classe ATTUALE (4ª per GESON) per il confronto
+    libri_attuali = await get_books_from_adozioni(child_codice_scuola, child_classe, child_sezione)
     
-    # === PARTE 2: Libri PLURIENNALI che sono finiti ===
-    # Cerca tutti i libri della scuola che il figlio potrebbe aver usato in passato
-    # e che ora non servono più (max_anno < classe_attuale)
-    all_past_books = await db.books.find({
-        "scuole_adottanti": child_codice_scuola,
-        "anni_corso": {"$lt": child_classe}  # Libri di classi precedenti
-    }).to_list(300)
-    
-    # Trova libri pluriennali la cui materia è finita
-    already_added = set(v["isbn"] for v in vendibili)
-    for b in all_past_books:
-        isbn = b.get("isbn", "")
-        if isbn in already_added:
+    # Organizza libri attuali per disciplina - SOLO libri obbligatori
+    attuali_disc = {}
+    for b in libri_attuali:
+        # Filtra solo libri obbligatori (da_acquistare=True e non consigliato)
+        if not b.get("da_acquistare", True) or b.get("consigliato", False):
             continue
             
-        anni = b.get("anni_corso", [])
         disc = b.get("disciplina", "").strip().upper()
-        
-        # Salta i quinquennali
-        if is_quinquennale(anni):
-            continue
-        
-        # Se è pluriennale e max(anni) < classe_attuale → vendibile
-        if len(anni) > 1 and max(anni) < child_classe:
-            vendibili.append({
-                "id": isbn,
-                "isbn": isbn,
+        if disc and disc not in attuali_disc:
+            attuali_disc[disc] = {
+                "isbn": b.get("isbn", ""),
                 "titolo": b.get("titolo", ""),
+                "editore": b.get("editore", "").strip().upper(),
                 "autori": b.get("autori", ""),
-                "disciplina": disc,
-                "editore": b.get("editore", ""),
-                "prezzo_copertina": b.get("prezzo_copertina", 0),
-                "prezzo_suggerito": round(b.get("prezzo_copertina", 0) * 0.5, 2),
-                "classe_destinazione": max(anni),  # Chi entra in quella classe lo vuole
-                "tipo": "pluriennale_finito"
-            })
-            already_added.add(isbn)
+                "prezzo": b.get("prezzo_copertina", b.get("prezzo", 0)),
+                "titolo_base": get_series_name(b.get("titolo", "")),
+            }
     
-    # Rimuovi duplicati per ISBN
+    # STESSA LOGICA DEL COMPATIBILITY ENDPOINT:
+    # Itera sui libri della classe PRECEDENTE e confronta con classe ATTUALE
+    for disc, book_prec in miei_libri_disc.items():  # Libri della classe precedente (3ª)
+        if disc in attuali_disc:  # Se c'è un libro corrispondente nella classe attuale (4ª)
+            book_attuale = attuali_disc[disc]
+            if same_series(book_prec, book_attuale):
+                # Il libro della classe precedente è vendibile - stessa serie/edizione
+                vendibili.append({
+                    "id": book_prec.get("isbn", ""),
+                    "isbn": book_prec.get("isbn", ""),
+                    "titolo": book_prec.get("titolo", ""),
+                    "autori": book_prec.get("autori", ""),
+                    "disciplina": disc,
+                    "editore": book_prec.get("editore", ""),
+                    "prezzo_copertina": book_prec.get("prezzo", 0),
+                    "prezzo_suggerito": round(book_prec.get("prezzo", 0) * 0.5, 2),
+                    "classe_destinazione": classe_compratori,
+                    "tipo": "vendibile",
+                    "status": "VENDIBILE"
+                })
+            # Se non sono della stessa serie, il libro NON è vendibile (edizione cambiata)
+            # Non lo includiamo nella lista - l'utente può usare "Vendi altro libro"
+    
+    # Rimuovi duplicati per ISBN (just in case)
     seen_isbn = set()
     unique_vendibili = []
     for v in vendibili:
-        if v["isbn"] not in seen_isbn:
+        if v["isbn"] and v["isbn"] not in seen_isbn:
             seen_isbn.add(v["isbn"])
             unique_vendibili.append(v)
     
     return {
         "books": unique_vendibili,
         "classe_attuale": child_classe,
-        "totale": len(unique_vendibili)
+        "classe_destinazione": classe_compratori,
+        "totale": len(unique_vendibili),
+        "message": f"Libri vendibili alla {classe_compratori}ª" if unique_vendibili else "Nessun libro vendibile. Usa 'Vendi altro libro' per inserire manualmente."
     }
 
 
@@ -3846,8 +3836,6 @@ async def get_seller_listings(seller_id: str, buyer_id: Optional[str] = None):
 
 # ============== TRANSACTION & DELIVERY ROUTES ==============
 
-import random
-import string
 
 def generate_pickup_code():
     """Generate a unique 6-character pickup code"""

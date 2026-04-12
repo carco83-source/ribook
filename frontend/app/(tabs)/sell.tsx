@@ -969,10 +969,33 @@ export default function SellScreen() {
                 ListEmptyComponent={
                   <View style={styles.emptyBooks}>
                     <Ionicons name="book-outline" size={48} color="#ccc" />
-                    <Text style={styles.emptyBooksText}>Nessun libro vendibile</Text>
+                    <Text style={styles.emptyBooksText}>Nessun libro consigliato</Text>
                     <Text style={styles.emptyBooksSubtext}>
-                      I libri potrebbero avere edizione diversa
+                      Non ci sono libri con domanda diretta nel flusso naturale.
                     </Text>
+                    <Text style={[styles.emptyBooksSubtext, { marginTop: 8, color: '#1a472a' }]}>
+                      Puoi comunque vendere altri libri usando l'opzione sotto.
+                    </Text>
+                    <TouchableOpacity
+                      style={[styles.otherBookButton, { marginTop: 16, backgroundColor: '#fff3e0', borderRadius: 12, padding: 16 }]}
+                      onPress={() => {
+                        setShowBookPicker(false);
+                        setShowISBNSearch(true);
+                        setIsbnInput('');
+                        setIsbnError('');
+                      }}
+                    >
+                      <View style={[styles.childOptionIcon, { backgroundColor: '#FF9800' }]}>
+                        <Ionicons name="barcode-outline" size={24} color="#fff" />
+                      </View>
+                      <View style={styles.childOptionInfo}>
+                        <Text style={[styles.childOptionName, { color: '#FF9800' }]}>Vendi altro libro</Text>
+                        <Text style={styles.childOptionSchool}>
+                          Inserisci ISBN manualmente
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={20} color="#FF9800" />
+                    </TouchableOpacity>
                   </View>
                 }
               />
