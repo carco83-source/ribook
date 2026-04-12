@@ -3385,6 +3385,39 @@ async def get_books_to_sell(user_id: str, child_id: str):
             return True
         return False
     
+    def is_volume_unico_still_needed(anni_corso: list, titolo: str = "") -> bool:
+        """
+        Verifica se un volume unico/pluriennale serve ancora allo studente.
+        Un libro non è vendibile se:
+        1. Copre la classe attuale o successiva
+        2. È un testo unico tipico (religione, ed. civica, scienze motorie, grammatica)
+        """
+        if not anni_corso:
+            return False
+        
+        # Se copre la classe attuale o successiva, serve ancora
+        if child_classe in anni_corso:
+            return True
+        classe_successiva = child_classe + 1
+        if classe_successiva in anni_corso:
+            return True
+        
+        # Verifica se è un testo unico tipico per titolo
+        titolo_upper = titolo.upper() if titolo else ""
+        testi_unici_keywords = [
+            "RELIGIONE", "RELIGIO", "IRC",
+            "EDUCAZIONE CIVICA", "ED. CIVICA", "CITTADINANZA",
+            "SCIENZE MOTORIE", "MOTORIE", "EDUCARE AL MOVIMENTO",
+            "GRAMMATICA",  # Grammatica italiana (non letteratura)
+        ]
+        for keyword in testi_unici_keywords:
+            if keyword in titolo_upper:
+                # Verifica se è ancora necessario (copre anni futuri)
+                if any(anno >= child_classe for anno in anni_corso):
+                    return True
+        
+        return False
+    
     # Calcola classe precedente (per libri annuali)
     isMedia = child_tipo == "primo_grado"
     minClasse = 1 if isMedia else (1 if child_classe <= 2 else 3)
@@ -3420,9 +3453,14 @@ async def get_books_to_sell(user_id: str, child_id: str):
         for b in libri_prec:
             anni = b.get("anni_corso", [])
             disc = b.get("disciplina", "").strip().upper()
+            titolo = b.get("titolo", "")
             
             # Salta i quinquennali/triennali
             if is_quinquennale(anni):
+                continue
+            
+            # Salta se è un volume unico che serve ancora
+            if is_volume_unico_still_needed(anni, titolo):
                 continue
             
             # Se è un libro che copre PIÙ anni, controlla se la materia continua

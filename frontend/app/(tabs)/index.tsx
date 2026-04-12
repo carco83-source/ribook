@@ -576,7 +576,7 @@ export default function RadarScreen() {
               return (
                 <View style={styles.classCard}>
                   <Text style={styles.sampleBooksTitle}>
-                    Libri usati da acquistare per {child?.nome_figlio}:
+                    Libri usati acquistabili per {child?.nome_figlio}:
                   </Text>
                   {tuttiLibriUsati.map((book: any, idx: number) => {
                     const copie = book.copie_disponibili || book.copie_usate_disponibili || 0;
