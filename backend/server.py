@@ -1764,13 +1764,18 @@ async def get_radar_view(user_id: str):
         user_classe = str(first_child.get("classe", ""))
         user_sezione = first_child.get("sezione", "")
     
-    # Find listings by ISBN
+    # Find listings by ISBN (exclude reserved and sold)
     pipeline = [
         {
             "$match": {
                 "book_isbn": {"$in": wanted_isbns},
                 "seller_id": {"$ne": user_id},
-                "status": "available"
+                "$or": [
+                    {"status": "available"},
+                    {"stato": "disponibile"}
+                ],
+                "stato": {"$nin": ["riservato", "venduto"]},
+                "status": {"$nin": ["reserved", "sold"]}
             }
         },
         {
@@ -4267,19 +4272,24 @@ async def create_order(request: CreateOrderRequest, user_id: str = Query(...)):
     
     await db.orders.insert_one(order.dict())
     
-    # Segna il listing come riservato
+    # Segna il listing come riservato (usa entrambi i campi per compatibilità)
     await db.listings.update_one(
         {"id": listing.get("id")},
-        {"$set": {"status": "reserved", "reserved_by": user_id, "order_id": order.id}}
+        {"$set": {
+            "status": "reserved", 
+            "stato": "riservato",
+            "reserved_by": user_id, 
+            "order_id": order.id
+        }}
     )
     
     # Notifica al venditore per confermare la disponibilità
-    notification = {
+    notification_seller = {
         "id": str(uuid.uuid4()),
         "user_id": listing.get("seller_id"),
         "type": "seller_confirmation_request",
         "title": "RICHIESTA D'ACQUISTO",
-        "message": f"RICHIESTA D'ACQUISTO PER:\n{order.book_titolo}\n\nCONFERMA LA DISPONIBILITÀ",
+        "message": f"RICHIESTA D'ACQUISTO PER:\n{order.book_titolo}\n\nCONFERMA LA DISPONIBILITÀ ENTRO 24H",
         "order_id": order.id,
         "data": {
             "order_id": order.id,
@@ -4291,7 +4301,24 @@ async def create_order(request: CreateOrderRequest, user_id: str = Query(...)):
         "read": False,
         "created_at": datetime.utcnow().isoformat()
     }
-    await db.notifications.insert_one(notification)
+    await db.notifications.insert_one(notification_seller)
+    
+    # Notifica all'acquirente
+    notification_buyer = {
+        "id": str(uuid.uuid4()),
+        "user_id": user_id,
+        "type": "order_pending",
+        "title": "RICHIESTA INVIATA",
+        "message": f"LA TUA RICHIESTA PER:\n{order.book_titolo}\n\nÈ STATA INVIATA AL VENDITORE\n\nIL VENDITORE DOVRÀ CONFERMARE LA DISPONIBILITÀ ENTRO 24H",
+        "order_id": order.id,
+        "data": {
+            "order_id": order.id,
+            "book_titolo": order.book_titolo
+        },
+        "read": False,
+        "created_at": datetime.utcnow().isoformat()
+    }
+    await db.notifications.insert_one(notification_buyer)
     
     return {
         "order_id": order.id,

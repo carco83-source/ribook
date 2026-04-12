@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import { useRouter, Stack, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,7 +18,7 @@ const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
 interface Notification {
   id: string;
-  type: 'match' | 'sale' | 'delivery' | 'pickup' | 'chat' | 'system' | 'book_available' | 'confirmation_request' | 'cart_request';
+  type: string;
   title: string;
   message: string;
   data?: any;
@@ -27,6 +28,7 @@ interface Notification {
   book_titolo?: string;
   listing_id?: string;
   prezzo?: number;
+  order_id?: string;
 }
 
 const NOTIFICATION_CONFIG: Record<string, { icon: string; color: string }> = {
@@ -39,6 +41,13 @@ const NOTIFICATION_CONFIG: Record<string, { icon: string; color: string }> = {
   book_available: { icon: 'book', color: '#4CAF50' },
   confirmation_request: { icon: 'checkmark-circle', color: '#4CAF50' },
   cart_request: { icon: 'checkmark-circle', color: '#4CAF50' },
+  seller_confirmation_request: { icon: 'help-circle', color: '#FF9800' },
+  order_pending: { icon: 'time', color: '#2196F3' },
+  ready_for_payment: { icon: 'card', color: '#4CAF50' },
+  order_rejected: { icon: 'close-circle', color: '#f44336' },
+  order_paid: { icon: 'checkmark-circle', color: '#4CAF50' },
+  payment_released: { icon: 'cash', color: '#4CAF50' },
+  ready_for_pickup: { icon: 'location', color: '#9C27B0' },
 };
 
 export default function NotificationsScreen() {
@@ -47,6 +56,68 @@ export default function NotificationsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  // Funzione per confermare disponibilità (venditore)
+  const handleConfirmAvailability = async (notification: Notification) => {
+    const orderId = notification.order_id || notification.data?.order_id;
+    if (!orderId || !userId) return;
+
+    setActionLoading(notification.id);
+    try {
+      await axios.post(`${API_URL}/api/orders/${orderId}/seller-confirm?user_id=${userId}`);
+      Alert.alert(
+        'DISPONIBILITÀ CONFERMATA',
+        'L\'acquirente è stato notificato e potrà procedere al pagamento.',
+        [{ text: 'OK' }]
+      );
+      loadNotifications();
+    } catch (error: any) {
+      Alert.alert('Errore', error.response?.data?.detail || 'Errore nella conferma');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Funzione per rifiutare disponibilità (venditore)
+  const handleRejectAvailability = async (notification: Notification) => {
+    const orderId = notification.order_id || notification.data?.order_id;
+    if (!orderId || !userId) return;
+
+    Alert.alert(
+      'CONFERMA RIFIUTO',
+      'Sei sicuro che il libro non è più disponibile?',
+      [
+        { text: 'Annulla', style: 'cancel' },
+        {
+          text: 'Non disponibile',
+          style: 'destructive',
+          onPress: async () => {
+            setActionLoading(notification.id);
+            try {
+              await axios.post(`${API_URL}/api/orders/${orderId}/seller-reject?user_id=${userId}&reason=Libro non disponibile`);
+              Alert.alert('ORDINE ANNULLATO', 'L\'acquirente è stato notificato.');
+              loadNotifications();
+            } catch (error: any) {
+              Alert.alert('Errore', error.response?.data?.detail || 'Errore');
+            } finally {
+              setActionLoading(null);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  // Funzione per procedere al pagamento (acquirente)
+  const handleProceedToPayment = async (notification: Notification) => {
+    const orderId = notification.order_id || notification.data?.order_id;
+    if (!orderId) {
+      router.push('/orders');
+      return;
+    }
+    router.push(`/orders?pay=${orderId}`);
+  };
 
   const loadNotifications = async () => {
     try {
@@ -246,29 +317,91 @@ export default function NotificationsScreen() {
         ) : (
           notifications.map((notification) => {
             const config = NOTIFICATION_CONFIG[notification.type] || NOTIFICATION_CONFIG.system;
+            const isSellerConfirmation = notification.type === 'seller_confirmation_request';
+            const isReadyForPayment = notification.type === 'ready_for_payment';
+            const isOrderPending = notification.type === 'order_pending';
             
             return (
-              <TouchableOpacity
+              <View
                 key={notification.id}
                 style={[
                   styles.notificationCard,
                   !notification.read && styles.notificationUnread,
                 ]}
-                onPress={() => handleNotificationPress(notification)}
               >
-                <View style={[styles.iconContainer, { backgroundColor: config.color }]}>
-                  <Ionicons name={config.icon as any} size={24} color="#fff" />
-                </View>
-                <View style={styles.notificationContent}>
-                  <Text style={styles.notificationTitle}>{notification.title}</Text>
-                  <Text style={styles.notificationMessage}>{notification.message}</Text>
-                  <Text style={styles.notificationTime}>
-                    {formatTime(notification.created_at)}
-                  </Text>
-                </View>
-                {!notification.read && <View style={styles.unreadDot} />}
-                <Ionicons name="chevron-forward" size={20} color="#ccc" />
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.notificationTouchable}
+                  onPress={() => handleNotificationPress(notification)}
+                >
+                  <View style={[styles.iconContainer, { backgroundColor: config.color }]}>
+                    <Ionicons name={config.icon as any} size={24} color="#fff" />
+                  </View>
+                  <View style={styles.notificationContent}>
+                    <Text style={styles.notificationTitle}>{notification.title}</Text>
+                    <Text style={styles.notificationMessage}>{notification.message}</Text>
+                    <Text style={styles.notificationTime}>
+                      {formatTime(notification.created_at)}
+                    </Text>
+                  </View>
+                  {!notification.read && <View style={styles.unreadDot} />}
+                </TouchableOpacity>
+                
+                {/* Pulsanti per VENDITORE - Conferma disponibilità */}
+                {isSellerConfirmation && (
+                  <View style={styles.actionButtonsContainer}>
+                    <TouchableOpacity
+                      style={[styles.actionButton, styles.confirmButton]}
+                      onPress={() => handleConfirmAvailability(notification)}
+                      disabled={actionLoading === notification.id}
+                    >
+                      {actionLoading === notification.id ? (
+                        <ActivityIndicator color="#fff" size="small" />
+                      ) : (
+                        <>
+                          <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                          <Text style={styles.actionButtonText}>DISPONIBILE</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.actionButton, styles.rejectButton]}
+                      onPress={() => handleRejectAvailability(notification)}
+                      disabled={actionLoading === notification.id}
+                    >
+                      <Ionicons name="close-circle" size={20} color="#fff" />
+                      <Text style={styles.actionButtonText}>NON DISPONIBILE</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+                
+                {/* Pulsanti per ACQUIRENTE - Procedi al pagamento */}
+                {isReadyForPayment && (
+                  <View style={styles.actionButtonsContainer}>
+                    <TouchableOpacity
+                      style={[styles.actionButton, styles.payButton]}
+                      onPress={() => handleProceedToPayment(notification)}
+                    >
+                      <Ionicons name="cart" size={20} color="#fff" />
+                      <Text style={styles.actionButtonText}>AGGIUNGI AL CARRELLO</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.actionButton, styles.continueButton]}
+                      onPress={() => router.push('/(tabs)/search')}
+                    >
+                      <Ionicons name="search" size={20} color="#1a472a" />
+                      <Text style={[styles.actionButtonText, { color: '#1a472a' }]}>CONTINUA ACQUISTI</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+                
+                {/* Info per ACQUIRENTE - Ordine in attesa */}
+                {isOrderPending && (
+                  <View style={styles.pendingInfoBox}>
+                    <Ionicons name="time-outline" size={18} color="#FF9800" />
+                    <Text style={styles.pendingInfoText}>In attesa di conferma dal venditore</Text>
+                  </View>
+                )}
+              </View>
             );
           })
         )}
