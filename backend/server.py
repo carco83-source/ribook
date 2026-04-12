@@ -5088,6 +5088,41 @@ async def bookstore_login(email: str = Query(...), password: str = Query(...)):
         "email": bookstore["email"]
     }
 
+
+@api_router.get("/bookstore/{bookstore_id}/notifications")
+async def get_bookstore_notifications(bookstore_id: str):
+    """Cartolibreria: visualizza notifiche"""
+    
+    bookstore = await db.bookstores.find_one({"id": bookstore_id})
+    if not bookstore:
+        raise HTTPException(status_code=404, detail="Cartolibreria non trovata")
+    
+    # Trova notifiche per questa cartolibreria
+    notifications = await db.bookstore_notifications.find({
+        "bookstore_id": bookstore_id
+    }).sort("created_at", -1).to_list(50)
+    
+    for n in notifications:
+        n.pop('_id', None)
+    
+    unread_count = sum(1 for n in notifications if not n.get('read', False))
+    
+    return {
+        "notifications": notifications,
+        "unread_count": unread_count
+    }
+
+@api_router.put("/bookstore/{bookstore_id}/notifications/{notification_id}/read")
+async def mark_bookstore_notification_read(bookstore_id: str, notification_id: str):
+    """Cartolibreria: segna notifica come letta"""
+    
+    await db.bookstore_notifications.update_one(
+        {"id": notification_id, "bookstore_id": bookstore_id},
+        {"$set": {"read": True}}
+    )
+    return {"success": True}
+
+
 @api_router.get("/bookstore/{bookstore_id}/orders")
 async def get_bookstore_orders(bookstore_id: str):
     """Cartolibreria: visualizza ordini assegnati"""

@@ -73,6 +73,10 @@ export default function BookstorePortalScreen() {
   const [manualCode, setManualCode] = useState('');
   const [confirmingPickup, setConfirmingPickup] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
+  
+  // Notifications state
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     checkLoginStatus();
@@ -101,10 +105,23 @@ export default function BookstorePortalScreen() {
       const response = await axios.get(`${API_URL}/api/bookstore/${bsId}/orders`);
       setOrders(response.data.orders || []);
       setBookstoreName(response.data.bookstore_name || '');
+      
+      // Carica anche le notifiche
+      await loadNotifications(bsId);
     } catch (error) {
       console.error('Error loading orders:', error);
     } finally {
       setRefreshing(false);
+    }
+  };
+  
+  const loadNotifications = async (bsId: string) => {
+    try {
+      const response = await axios.get(`${API_URL}/api/bookstore/${bsId}/notifications`);
+      setNotifications(response.data.notifications || []);
+      setUnreadCount(response.data.unread_count || 0);
+    } catch (error) {
+      console.error('Error loading notifications:', error);
     }
   };
 
@@ -345,6 +362,40 @@ export default function BookstorePortalScreen() {
           />
         }
       >
+        {/* Notifiche Section */}
+        {notifications.length > 0 && (
+          <View style={styles.notificationsSection}>
+            <View style={styles.notificationHeader}>
+              <Ionicons name="notifications" size={20} color="#FF9800" />
+              <Text style={styles.notificationTitle}>
+                Notifiche {unreadCount > 0 && `(${unreadCount} nuove)`}
+              </Text>
+            </View>
+            {notifications.slice(0, 5).map((notif) => (
+              <View 
+                key={notif.id} 
+                style={[
+                  styles.notificationCard,
+                  !notif.read && styles.notificationUnread
+                ]}
+              >
+                <View style={styles.notificationIcon}>
+                  <Ionicons name="cube" size={20} color="#FF9800" />
+                </View>
+                <View style={styles.notificationContent}>
+                  <Text style={styles.notificationTitleText}>{notif.title}</Text>
+                  <Text style={styles.notificationMessage}>{notif.message}</Text>
+                  {notif.order_code && (
+                    <View style={styles.notificationCodeBadge}>
+                      <Text style={styles.notificationCodeText}>Codice: {notif.order_code}</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+        
         <Text style={styles.sectionTitle}>Ordini ({orders.length})</Text>
 
         {orders.length === 0 ? (
@@ -784,5 +835,74 @@ const styles = StyleSheet.create({
   },
   confirmButtonDisabled: {
     backgroundColor: '#ccc',
+  },
+  // Notification styles
+  notificationsSection: {
+    backgroundColor: '#fff3e0',
+    margin: 16,
+    marginBottom: 8,
+    borderRadius: 12,
+    padding: 16,
+  },
+  notificationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  notificationTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#e65100',
+  },
+  notificationCard: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#FF9800',
+  },
+  notificationUnread: {
+    backgroundColor: '#fffde7',
+    borderLeftColor: '#f44336',
+  },
+  notificationIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#fff3e0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  notificationContent: {
+    flex: 1,
+  },
+  notificationTitleText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  notificationMessage: {
+    fontSize: 12,
+    color: '#666',
+    lineHeight: 18,
+  },
+  notificationCodeBadge: {
+    backgroundColor: '#e8f5e9',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+    marginTop: 8,
+  },
+  notificationCodeText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1a472a',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
 });
