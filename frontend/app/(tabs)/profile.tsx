@@ -345,30 +345,32 @@ export default function ProfileScreen() {
                       </Text>
                       <Text style={styles.bookFlowLabel}>usati</Text>
                     </View>
-                    <Text style={styles.bookFlowHint}>
-                      {compatibility.comprare?.risparmio_totale > 0 
-                        ? `Risparmio €${compatibility.comprare.risparmio_totale.toFixed(0)}`
-                        : 'Fine ciclo'}
+                    {/* Spesa ipotetica per libri usati */}
+                    <Text style={[styles.bookFlowHint, { color: '#4CAF50', fontWeight: '600' }]}>
+                      Spesa: €{((compatibility.comprare?.totale_usati || 0) * 10).toFixed(0)}
                     </Text>
                   </View>
                 </View>
                 
                 {/* TOTALE PARZIALE SPESA per questo profilo */}
                 {(() => {
-                  const costoUsatiParziale = (compatibility.comprare?.totale_usati || 0) * 10; // stima media €10 per libro usato
+                  const costoUsatiParziale = (compatibility.comprare?.totale_usati || 0) * 10; // €10 per libro usato
                   const costoNuoviParziale = compatibility.nuovi?.costo_totale || 0;
-                  const guadagnoParziale = (compatibility.vendere?.totale_vendibili || 0) * 8; // stima media €8 guadagno
-                  const spesaParziale = costoUsatiParziale + costoNuoviParziale - guadagnoParziale;
+                  const ricavoParziale = (compatibility.vendere?.totale_vendibili || 0) * 8; // €8 ricavo per libro venduto
+                  const spesaNettaParziale = costoUsatiParziale + costoNuoviParziale - ricavoParziale;
                   
                   return (
                     <View style={styles.partialTotalBox}>
                       <View style={styles.partialTotalRow}>
                         <Ionicons name="calculator-outline" size={18} color="#1a472a" />
                         <Text style={styles.partialTotalLabel}>Totale parziale {child.nome_figlio}:</Text>
-                        <Text style={[styles.partialTotalValue, spesaParziale < 0 && { color: '#4CAF50' }]}>
-                          €{Math.abs(spesaParziale).toFixed(0)} {spesaParziale < 0 ? '(guadagno)' : ''}
+                        <Text style={[styles.partialTotalValue, spesaNettaParziale < 0 && { color: '#4CAF50' }]}>
+                          €{Math.abs(spesaNettaParziale).toFixed(0)} {spesaNettaParziale < 0 ? '(guadagno)' : ''}
                         </Text>
                       </View>
+                      <Text style={styles.partialTotalDetail}>
+                        (Usati €{costoUsatiParziale} + Nuovi €{costoNuoviParziale.toFixed(0)} - Ricavo €{ricavoParziale})
+                      </Text>
                     </View>
                   );
                 })()}
@@ -1501,6 +1503,12 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#1a472a',
+  },
+  partialTotalDetail: {
+    fontSize: 11,
+    color: '#666',
+    marginTop: 4,
+    textAlign: 'center',
   },
   // Transazioni reali per profilo
   realTransactionsBox: {
