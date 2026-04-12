@@ -1218,33 +1218,18 @@ async def create_listing(listing_data: BookListingCreate, user_id: str = Query(.
             "prezzo_copertina": listing_data.prezzo_copertina or 0
         }
     
-    # Check if book is from user's class or requires Premium
-    # Get active profile (could be main or child profile)
-    active_profile_id = user.get("active_profile_id")
-    if active_profile_id:
+    # Get child profile info if provided
+    # NOTA: La verifica Premium per vendere libri di altre classi è stata rimossa
+    # perché l'app ora mostra solo i libri vendibili (classe precedente o libri con stesso ISBN)
+    # tramite l'endpoint books-to-sell. Se l'utente usa "Vendi altro libro" può vendere qualsiasi libro.
+    
+    child_profile = None
+    child_profile_id = listing_data.child_profile_id
+    if child_profile_id:
         for profile in user.get("profili_figli", []):
-            if profile["id"] == active_profile_id:
-                user_classe = profile["classe"]
-                user_tipo_scuola = profile["tipo_scuola"]
+            if profile["id"] == child_profile_id:
+                child_profile = profile
                 break
-        else:
-            user_classe = user.get("classe", "")
-            user_tipo_scuola = user.get("tipo_scuola", "")
-    else:
-        user_classe = user.get("classe", "")
-        user_tipo_scuola = user.get("tipo_scuola", "")
-    
-    book_classe = book.get("classe", "")
-    book_tipo_scuola = book.get("tipo_scuola", "")
-    
-    # Check if selling from different class
-    is_different_class = str(user_classe) != str(book_classe) or user_tipo_scuola != book_tipo_scuola
-    
-    if is_different_class and not user.get("is_premium", False):
-        raise HTTPException(
-            status_code=403, 
-            detail="Per vendere libri di altre classi devi essere Premium (€9,90/anno). Vai al tuo profilo per l'upgrade."
-        )
     
     # Determine condition and price
     condition_details = None
