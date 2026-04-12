@@ -295,6 +295,10 @@ export default function ProfileScreen() {
                       </Text>
                       <Text style={styles.bookFlowLabel}>libri</Text>
                     </View>
+                    {/* Totale ipotetico ricavo */}
+                    <Text style={[styles.bookFlowHint, { color: '#2196F3', fontWeight: '600' }]}>
+                      Ricavo: €{((compatibility.vendere?.totale_vendibili || 0) * 8).toFixed(0)}
+                    </Text>
                     {(compatibility.vendere?.totale_non_vendibili || 0) > 0 && (
                       <Text style={[styles.bookFlowHint, { color: '#f44336' }]}>
                         {compatibility.vendere?.totale_non_vendibili} ed. cambiate
