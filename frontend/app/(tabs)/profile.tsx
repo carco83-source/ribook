@@ -560,36 +560,6 @@ export default function ProfileScreen() {
 
       {/* Quick Actions */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Le mie attività</Text>
-        
-        <TouchableOpacity 
-          style={styles.menuItem}
-          onPress={() => router.push('/my-sales')}
-        >
-          <View style={styles.menuItemIcon}>
-            <Ionicons name="pricetag" size={20} color="#1a472a" />
-          </View>
-          <View style={styles.menuItemContent}>
-            <Text style={styles.menuItemTitle}>Le mie vendite</Text>
-            <Text style={styles.menuItemSubtitle}>Gestisci i libri in vendita e le consegne</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color="#999" />
-        </TouchableOpacity>
-
-        <TouchableOpacity 
-          style={styles.menuItem}
-          onPress={() => router.push('/my-purchases')}
-        >
-          <View style={[styles.menuItemIcon, { backgroundColor: '#e8f5e9' }]}>
-            <Ionicons name="cart" size={20} color="#4CAF50" />
-          </View>
-          <View style={styles.menuItemContent}>
-            <Text style={styles.menuItemTitle}>I miei acquisti</Text>
-            <Text style={styles.menuItemSubtitle}>Stato degli ordini e codici ritiro</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color="#999" />
-        </TouchableOpacity>
-
         <TouchableOpacity 
           style={styles.menuItem}
           onPress={() => router.push('/profiles/manage')}

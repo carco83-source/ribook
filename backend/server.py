@@ -5494,19 +5494,60 @@ async def create_transaction(transaction_data: TransactionCreate, user_id: str):
 
 @api_router.get("/transactions/user/{user_id}")
 async def get_user_transactions(user_id: str):
-    # Get both as buyer and seller
-    as_buyer = await db.transactions.find({"buyer_id": user_id}).to_list(100)
-    as_seller = await db.transactions.find({"seller_id": user_id}).to_list(100)
+    # Get both from legacy transactions and new orders
+    as_buyer_transactions = await db.transactions.find({"buyer_id": user_id}).to_list(100)
+    as_seller_transactions = await db.transactions.find({"seller_id": user_id}).to_list(100)
     
-    # Remove MongoDB _id field to prevent serialization issues
-    for transaction in as_buyer:
-        transaction.pop('_id', None)
-    for transaction in as_seller:
-        transaction.pop('_id', None)
+    # Get from orders collection (new escrow system)
+    as_buyer_orders = await db.orders.find({
+        "buyer_id": user_id,
+        "status": {"$in": ["completed", "picked_up", "paid_escrow", "ready_for_pickup"]}
+    }).to_list(100)
+    as_seller_orders = await db.orders.find({
+        "seller_id": user_id,
+        "status": {"$in": ["completed", "picked_up", "paid_escrow", "ready_for_pickup"]}
+    }).to_list(100)
+    
+    # Convert orders to transaction format
+    def order_to_transaction(order, is_buyer=True):
+        return {
+            "id": order.get("id"),
+            "book_titolo": order.get("book_titolo", ""),
+            "buyer_username": order.get("buyer_name", ""),
+            "seller_username": order.get("seller_name", ""),
+            "bookstore_nome": order.get("bookstore_name", ""),
+            "prezzo_totale": order.get("totale_acquirente", 0),
+            "commissione_app": order.get("commissione_app", 0),
+            "importo_venditore": order.get("netto_venditore", 0),
+            "stato": "completato" if order.get("status") == "completed" else "in_custodia",
+            "buyer_is_premium": False,
+            "created_at": order.get("created_at", ""),
+            "order_code": order.get("order_code", "")
+        }
+    
+    # Combine and deduplicate
+    acquisti = []
+    vendite = []
+    
+    # Add transactions
+    for t in as_buyer_transactions:
+        t.pop('_id', None)
+        acquisti.append(t)
+    for t in as_seller_transactions:
+        t.pop('_id', None)
+        vendite.append(t)
+    
+    # Add orders (converted to transaction format)
+    for o in as_buyer_orders:
+        o.pop('_id', None)
+        acquisti.append(order_to_transaction(o, True))
+    for o in as_seller_orders:
+        o.pop('_id', None)
+        vendite.append(order_to_transaction(o, False))
     
     return {
-        "acquisti": as_buyer,
-        "vendite": as_seller
+        "acquisti": acquisti,
+        "vendite": vendite
     }
 
 @api_router.post("/transactions/{transaction_id}/confirm")
