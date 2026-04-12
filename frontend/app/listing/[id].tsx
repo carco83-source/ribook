@@ -303,24 +303,9 @@ export default function ListingDetailScreen() {
       }
     };
     
-    // Su web, usa confirm nativo
+    // Su web, procedi direttamente (il confirm a volte blocca)
     if (Platform.OS === 'web') {
-      try {
-        const confirmed = window.confirm(
-          `Conferma acquisto\n\n` +
-          `Stai per acquistare "${listing?.book_titolo}".\n\n` +
-          `Totale: €${totalPrice.toFixed(2)} (comprensivo di gestione RLB)\n\n` +
-          `Ritiro: ${selectedBookstore.nome}\n\n` +
-          `Procedere?`
-        );
-        if (confirmed) {
-          await proceedWithPurchase();
-        }
-      } catch (e) {
-        console.error('Confirm error:', e);
-        // Fallback: procedi direttamente
-        await proceedWithPurchase();
-      }
+      await proceedWithPurchase();
     } else {
       Alert.alert(
         'Conferma acquisto',
