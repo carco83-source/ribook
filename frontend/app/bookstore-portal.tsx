@@ -175,27 +175,64 @@ export default function BookstorePortalScreen() {
 
   const handleConfirmPickup = async (code: string) => {
     if (!code.trim()) {
-      Alert.alert('Errore', 'Inserisci il codice ordine');
+      if (Platform.OS === 'web') {
+        window.alert('Inserisci il codice ordine');
+      } else {
+        Alert.alert('Errore', 'Inserisci il codice ordine');
+      }
       return;
     }
 
     setConfirmingPickup(true);
     try {
-      const response = await axios.post(
-        `${API_URL}/api/bookstore/${bookstoreId}/confirm-pickup-by-code?order_code=${code.toUpperCase()}`
-      );
-      
-      Alert.alert(
-        'Ritiro confermato!',
-        `Ordine ${response.data.order_code}\n${response.data.book_titolo}\n\nAcquirente: ${response.data.buyer_name}`,
-        [{ text: 'OK' }]
-      );
-      
-      setShowScanner(false);
-      setManualCode('');
-      await loadOrders(bookstoreId!);
+      // Prima prova la consegna del venditore (paid_escrow -> ready_for_pickup)
+      try {
+        const response = await axios.post(
+          `${API_URL}/api/bookstore/${bookstoreId}/confirm-seller-delivery?order_code=${code.toUpperCase()}`
+        );
+        
+        const msg = `✅ CONSEGNA VENDITORE CONFERMATA!\n\nOrdine: ${response.data.order_code}\n${response.data.book_titolo}\n\nL'acquirente ${response.data.buyer_name} è stato notificato che può ritirare.`;
+        
+        if (Platform.OS === 'web') {
+          window.alert(msg);
+        } else {
+          Alert.alert('Consegna confermata!', msg, [{ text: 'OK' }]);
+        }
+        
+        setShowScanner(false);
+        setManualCode('');
+        await loadOrders(bookstoreId!);
+        return;
+      } catch (sellerError: any) {
+        // Se non è in stato paid_escrow, prova il ritiro acquirente
+        if (sellerError.response?.status === 400) {
+          // Prova la conferma ritiro acquirente
+          const response = await axios.post(
+            `${API_URL}/api/bookstore/${bookstoreId}/confirm-pickup-by-code?order_code=${code.toUpperCase()}`
+          );
+          
+          const msg = `✅ RITIRO ACQUIRENTE CONFERMATO!\n\nOrdine: ${response.data.order_code}\n${response.data.book_titolo}\n\nAcquirente: ${response.data.buyer_name}\n\n💰 Pagamento rilasciato al venditore!`;
+          
+          if (Platform.OS === 'web') {
+            window.alert(msg);
+          } else {
+            Alert.alert('Ritiro confermato!', msg, [{ text: 'OK' }]);
+          }
+          
+          setShowScanner(false);
+          setManualCode('');
+          await loadOrders(bookstoreId!);
+          return;
+        }
+        throw sellerError;
+      }
     } catch (error: any) {
-      Alert.alert('Errore', error.response?.data?.detail || 'Codice non valido');
+      const errorMsg = error.response?.data?.detail || 'Codice non valido o ordine non trovato';
+      if (Platform.OS === 'web') {
+        window.alert('Errore: ' + errorMsg);
+      } else {
+        Alert.alert('Errore', errorMsg);
+      }
     } finally {
       setConfirmingPickup(false);
     }

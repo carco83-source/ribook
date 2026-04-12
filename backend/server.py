@@ -4487,18 +4487,29 @@ async def pay_order(order_id: str, user_id: str = Query(...)):
         {"$set": {"status": "reserved", "reserved_by": user_id, "order_id": order_id}}
     )
     
-    # Notifica al venditore
-    notification = {
+    # Notifica al venditore con QR code
+    seller_notification = {
         "id": str(uuid.uuid4()),
         "user_id": order.get("seller_id"),
-        "type": "order_paid",
-        "title": "COMPLIMENTI! VENDITA COMPLETATA",
-        "message": f"COMPLIMENTI!\n{order.get('book_titolo')}\nÈ STATO VENDUTO!\n\nCONSEGNA ENTRO 2 GIORNI LAVORATIVI PRESSO:\n{order.get('bookstore_name')}\n\nI FONDI VERRANNO ACCREDITATI DOPO LA CONFERMA DEL RITIRO",
+        "type": "order_qr_code",
+        "title": "🎉 VENDITA COMPLETATA!",
+        "message": f"COMPLIMENTI!\n{order.get('book_titolo')}\nÈ STATO VENDUTO!\n\nCODICE CONSEGNA: {order.get('order_code')}\n\nCONSEGNA ENTRO 2 GIORNI LAVORATIVI PRESSO:\n{order.get('bookstore_name')}\n\nMostra questo codice o il QR alla cartolibreria quando consegni il libro.\n\n📸 Ti consigliamo di fare uno screenshot!",
         "order_id": order_id,
+        "order_code": order.get("order_code"),
+        "bookstore_name": order.get("bookstore_name"),
+        "data": {
+            "order_id": order_id,
+            "order_code": order.get("order_code"),
+            "book_titolo": order.get("book_titolo"),
+            "bookstore_name": order.get("bookstore_name"),
+            "show_qr": True,
+            "role": "seller"
+        },
         "read": False,
+        "persistent": True,
         "created_at": now.isoformat()
     }
-    await db.notifications.insert_one(notification)
+    await db.notifications.insert_one(seller_notification)
     
     # Notifica alla cartolibreria che riceverà un libro
     bookstore_notification = {
@@ -4506,7 +4517,7 @@ async def pay_order(order_id: str, user_id: str = Query(...)):
         "bookstore_id": order.get("bookstore_id"),
         "type": "incoming_order",
         "title": "NUOVO ORDINE IN ARRIVO",
-        "message": f"ORDINE: {order.get('order_code')}\n\nLIBRO: {order.get('book_titolo')}\n\nVENDITORE: {order.get('seller_name')}\nACQUIRENTE: {order.get('buyer_name')}",
+        "message": f"ORDINE: {order.get('order_code')}\n\nLIBRO: {order.get('book_titolo')}\n\nVENDITORE: {order.get('seller_name')}\nACQUIRENTE: {order.get('buyer_name')}\n\n1️⃣ Scansiona QR del VENDITORE quando consegna\n2️⃣ Scansiona QR dell'ACQUIRENTE quando ritira",
         "order_id": order_id,
         "order_code": order.get("order_code"),
         "seller_name": order.get("seller_name"),
@@ -5191,6 +5202,78 @@ async def get_bookstore_orders(bookstore_id: str):
         "bookstore_name": bookstore["nome"],
         "orders": orders,
         "total": len(orders)
+    }
+
+@api_router.post("/bookstore/{bookstore_id}/confirm-seller-delivery")
+async def bookstore_confirm_seller_delivery(bookstore_id: str, order_code: str = Query(...)):
+    """Cartolibreria: conferma che il VENDITORE ha consegnato il libro (1a scansione)"""
+    
+    bookstore = await db.bookstores.find_one({"id": bookstore_id})
+    if not bookstore:
+        raise HTTPException(status_code=404, detail="Cartolibreria non trovata")
+    
+    # Trova ordine per codice
+    order = await db.orders.find_one({
+        "order_code": order_code.upper(),
+        "bookstore_id": bookstore_id
+    })
+    
+    if not order:
+        raise HTTPException(status_code=404, detail="Ordine non trovato con questo codice")
+    
+    # Deve essere in stato paid_escrow per la consegna del venditore
+    if order.get("status") != "paid_escrow":
+        current_status = order.get("status")
+        if current_status == "ready_for_pickup":
+            raise HTTPException(status_code=400, detail="Il libro è già stato consegnato. In attesa del ritiro dell'acquirente.")
+        if current_status == "completed":
+            raise HTTPException(status_code=400, detail="Ordine già completato.")
+        raise HTTPException(status_code=400, detail=f"Stato ordine non valido per la consegna: {current_status}")
+    
+    now = datetime.utcnow()
+    
+    # Aggiorna ordine a "pronto per il ritiro"
+    update_data = {
+        "status": "ready_for_pickup",
+        "delivered_to_bookstore_at": now,
+        "ready_for_pickup_at": now,
+        "status_history": order.get("status_history", []) + [{
+            "status": "ready_for_pickup",
+            "timestamp": now.isoformat(),
+            "note": f"Libro consegnato dal venditore alla cartolibreria {bookstore['nome']}"
+        }]
+    }
+    
+    await db.orders.update_one({"id": order["id"]}, {"$set": update_data})
+    
+    # Notifica all'ACQUIRENTE che può ritirare
+    notification = {
+        "id": str(uuid.uuid4()),
+        "user_id": order.get("buyer_id"),
+        "type": "ready_for_pickup",
+        "title": "📦 IL TUO LIBRO È PRONTO!",
+        "message": f"Il libro:\n{order.get('book_titolo')}\n\nÈ PRONTO PER IL RITIRO PRESSO:\n{bookstore['nome']}\n\nMostra il codice {order.get('order_code')} o il QR che hai nelle notifiche.",
+        "order_id": order["id"],
+        "order_code": order.get("order_code"),
+        "bookstore_name": bookstore['nome'],
+        "data": {
+            "order_id": order["id"],
+            "order_code": order.get("order_code"),
+            "bookstore_name": bookstore['nome']
+        },
+        "read": False,
+        "created_at": now.isoformat()
+    }
+    await db.notifications.insert_one(notification)
+    
+    return {
+        "success": True,
+        "message": f"Consegna venditore confermata! L'acquirente {order.get('buyer_name')} è stato notificato.",
+        "order_id": order["id"],
+        "order_code": order.get("order_code"),
+        "book_titolo": order.get("book_titolo"),
+        "buyer_name": order.get("buyer_name"),
+        "next_step": "In attesa del ritiro dell'acquirente"
     }
 
 @api_router.post("/bookstore/{bookstore_id}/confirm-pickup-by-code")
