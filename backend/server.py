@@ -4203,8 +4203,24 @@ async def reset_listing(listing_id: str):
     return {"success": True, "message": "Listing resettato a disponibile"}
 
 @api_router.post("/orders/create")
-async def create_order(request: CreateOrderRequest, user_id: str = Query(...)):
+async def create_order(
+    user_id: str = Query(...),
+    listing_id: str = Query(None),
+    bookstore_id: str = Query(None),
+    request: CreateOrderRequest = None
+):
     """Crea un nuovo ordine a partire da un listing"""
+    
+    # Supporta sia query params che body JSON
+    actual_listing_id = listing_id
+    actual_bookstore_id = bookstore_id
+    
+    if request:
+        actual_listing_id = actual_listing_id or request.listing_id
+        actual_bookstore_id = actual_bookstore_id or request.bookstore_id
+    
+    if not actual_listing_id or not actual_bookstore_id:
+        raise HTTPException(status_code=400, detail="listing_id e bookstore_id sono richiesti")
     
     # Verifica utente
     buyer = await db.users.find_one({"id": user_id})
@@ -4213,7 +4229,7 @@ async def create_order(request: CreateOrderRequest, user_id: str = Query(...)):
     
     # Verifica listing
     listing = await db.listings.find_one({
-        "id": request.listing_id, 
+        "id": actual_listing_id, 
         "$or": [
             {"status": "available"},
             {"stato": "disponibile"}
@@ -4227,10 +4243,10 @@ async def create_order(request: CreateOrderRequest, user_id: str = Query(...)):
         raise HTTPException(status_code=400, detail="Non puoi acquistare i tuoi libri")
     
     # Verifica cartolibreria
-    bookstore = await db.bookstores.find_one({"id": request.bookstore_id})
+    bookstore = await db.bookstores.find_one({"id": actual_bookstore_id})
     if not bookstore:
         # Cerca per nome parziale
-        bookstore = await db.bookstores.find_one({"nome": {"$regex": request.bookstore_id, "$options": "i"}})
+        bookstore = await db.bookstores.find_one({"nome": {"$regex": actual_bookstore_id, "$options": "i"}})
     if not bookstore:
         raise HTTPException(status_code=404, detail="Cartolibreria non trovata")
     

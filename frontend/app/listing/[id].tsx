@@ -243,6 +243,8 @@ export default function ListingDetailScreen() {
   };
 
   const handleBuyNow = async () => {
+    console.log('handleBuyNow called', { selectedBookstore, userId, listing: listing?.id });
+    
     if (!selectedBookstore) {
       if (Platform.OS === 'web') {
         window.alert('Seleziona un punto di ritiro');
@@ -251,67 +253,53 @@ export default function ListingDetailScreen() {
       }
       return;
     }
-
-    // Mostra conferma con dettagli prezzo
-    const totalPrice = total + commission;
     
-    // Funzione per procedere con l'acquisto
-    const proceedWithPurchase = async () => {
-      setPurchasing(true);
-      try {
-        console.log('Creating order...', { listing_id: listing?.id, bookstore_id: selectedBookstore.id });
-        
-        // 1. Crea ordine (in attesa conferma venditore)
-        const orderResponse = await axios.post(
-          `${API_URL}/api/orders/create?user_id=${userId}`,
-          {
-            listing_id: listing?.id,
-            bookstore_id: selectedBookstore.id
-          },
-          {
-            headers: {
-              'Content-Type': 'application/json'
-            }
-          }
-        );
-        
-        console.log('Order created:', orderResponse.data);
-        
-        // Naviga direttamente alle notifiche
-        router.push('/notifications');
-        
-      } catch (error: any) {
-        console.error('Error creating order:', error);
-        const errorMsg = error.response?.data?.detail || 'Impossibile completare la richiesta';
-        if (Platform.OS === 'web') {
-          window.alert('Errore: ' + errorMsg);
-        } else {
-          Alert.alert('Errore', errorMsg);
-        }
-      } finally {
-        setPurchasing(false);
+    if (!userId) {
+      if (Platform.OS === 'web') {
+        window.alert('Devi effettuare il login');
+      } else {
+        Alert.alert('Errore', 'Devi effettuare il login');
       }
-    };
-    
-    // Su web, procedi direttamente (il confirm a volte blocca)
-    if (Platform.OS === 'web') {
-      await proceedWithPurchase();
-    } else {
-      Alert.alert(
-        'Conferma acquisto',
-        `Stai per acquistare "${listing?.book_titolo}".\n\n` +
-        `Totale: €${totalPrice.toFixed(2)}\n` +
-        `(comprensivo di gestione RLB)\n\n` +
-        `Ritiro: ${selectedBookstore.nome}\n\n` +
-        `I fondi saranno bloccati in escrow fino al ritiro.`,
-        [
-          { text: 'Annulla', style: 'cancel' },
-          {
-            text: 'Procedi al pagamento',
-            onPress: proceedWithPurchase,
-          },
-        ]
-      );
+      return;
+    }
+
+    // Procedi direttamente con l'acquisto
+    setPurchasing(true);
+    try {
+      // Usa query params per evitare problemi con il body attraverso il proxy
+      const url = `${API_URL}/api/orders/create?user_id=${userId}&listing_id=${listing?.id}&bookstore_id=${selectedBookstore.id}`;
+      
+      console.log('Creating order with URL:', url);
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
+      
+      const data = await response.json();
+      console.log('Response:', response.status, data);
+      
+      if (!response.ok) {
+        throw new Error(data.detail || `Error ${response.status}`);
+      }
+      
+      console.log('Order created:', data);
+      
+      // Naviga direttamente alle notifiche
+      router.push('/notifications');
+      
+    } catch (error: any) {
+      console.error('Error creating order:', error);
+      const errorMsg = error.message || 'Impossibile completare la richiesta';
+      if (Platform.OS === 'web') {
+        window.alert('Errore: ' + errorMsg);
+      } else {
+        Alert.alert('Errore', errorMsg);
+      }
+    } finally {
+      setPurchasing(false);
     }
   };
 
