@@ -23,7 +23,6 @@ export default function RegisterScreen() {
     nome: '',
     cognome: '',
     email: '',
-    telefono: '',
     password: '',
     confirmPassword: '',
   });
@@ -58,10 +57,6 @@ export default function RegisterScreen() {
       setErrorMessage('Inserisci un\'email valida');
       return;
     }
-    if (!telefono.trim()) {
-      setErrorMessage('Inserisci il tuo numero di telefono');
-      return;
-    }
     if (!password) {
       setErrorMessage('Inserisci una password');
       return;
@@ -81,7 +76,6 @@ export default function RegisterScreen() {
         nome: nome.trim(),
         cognome: cognome.trim(),
         email: email.trim().toLowerCase(),
-        telefono: telefono.trim(),
         password,
       });
 
@@ -174,22 +168,6 @@ export default function RegisterScreen() {
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
-              />
-            </View>
-          </View>
-
-          {/* Telefono */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Telefono *</Text>
-            <View style={styles.inputWrapper}>
-              <Ionicons name="call-outline" size={20} color="#666" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Il tuo numero di telefono"
-                placeholderTextColor="#999"
-                value={formData.telefono}
-                onChangeText={(v) => updateField('telefono', v)}
-                keyboardType="phone-pad"
               />
             </View>
           </View>

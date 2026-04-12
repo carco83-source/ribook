@@ -172,22 +172,6 @@ export default function TransactionsScreen() {
           <Text style={[styles.quickLinkText, { color: '#fff', fontWeight: '600' }]}>I miei ordini (Escrow)</Text>
           <Ionicons name="chevron-forward" size={16} color="#fff" />
         </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.quickLinkButton}
-          onPress={() => router.push('/my-purchases')}
-        >
-          <Ionicons name="cart" size={20} color="#1a472a" />
-          <Text style={styles.quickLinkText}>I miei acquisti</Text>
-          <Ionicons name="chevron-forward" size={16} color="#999" />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.quickLinkButton}
-          onPress={() => router.push('/my-sales')}
-        >
-          <Ionicons name="pricetag" size={20} color="#1a472a" />
-          <Text style={styles.quickLinkText}>Le mie vendite</Text>
-          <Ionicons name="chevron-forward" size={16} color="#999" />
-        </TouchableOpacity>
       </View>
 
       <View style={styles.tabContainer}>

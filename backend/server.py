@@ -108,7 +108,7 @@ class UserCreate(BaseModel):
     nome: str
     cognome: str
     email: str
-    telefono: str
+    telefono: Optional[str] = None
     password: str
     scuola: Optional[str] = None
     classe: Optional[str] = None
@@ -124,7 +124,7 @@ class User(BaseModel):
     nome: str
     cognome: str
     email: str
-    telefono: str
+    telefono: Optional[str] = None
     password_hash: str
     scuola: Optional[str] = None
     classe: Optional[str] = None
