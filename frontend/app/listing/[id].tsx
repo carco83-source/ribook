@@ -244,7 +244,11 @@ export default function ListingDetailScreen() {
 
   const handleBuyNow = async () => {
     if (!selectedBookstore) {
-      Alert.alert('Errore', 'Seleziona un punto di ritiro');
+      if (Platform.OS === 'web') {
+        window.alert('Seleziona un punto di ritiro');
+      } else {
+        Alert.alert('Errore', 'Seleziona un punto di ritiro');
+      }
       return;
     }
 
@@ -255,6 +259,8 @@ export default function ListingDetailScreen() {
     const proceedWithPurchase = async () => {
       setPurchasing(true);
       try {
+        console.log('Creating order...', { listing_id: listing?.id, bookstore_id: selectedBookstore.id });
+        
         // 1. Crea ordine (in attesa conferma venditore)
         const orderResponse = await axios.post(
           `${API_URL}/api/orders/create?user_id=${userId}`,
@@ -263,6 +269,8 @@ export default function ListingDetailScreen() {
             bookstore_id: selectedBookstore.id
           }
         );
+        
+        console.log('Order created:', orderResponse.data);
         
         // Mostra messaggio di successo
         if (Platform.OS === 'web') {
@@ -285,24 +293,32 @@ export default function ListingDetailScreen() {
       } catch (error: any) {
         console.error('Error creating order:', error);
         const errorMsg = error.response?.data?.detail || 'Impossibile completare la richiesta';
-        Alert.alert('Errore', errorMsg);
+        if (Platform.OS === 'web') {
+          window.alert('Errore: ' + errorMsg);
+        } else {
+          Alert.alert('Errore', errorMsg);
+        }
       } finally {
         setPurchasing(false);
       }
     };
     
-    // Su web, Alert.alert con buttons potrebbe non funzionare bene
-    // Usa confirm nativo su web
+    // Su web, usa confirm nativo
     if (Platform.OS === 'web') {
-      const confirmed = window.confirm(
-        `Conferma acquisto\n\n` +
-        `Stai per acquistare "${listing?.book_titolo}".\n\n` +
-        `Totale: €${totalPrice.toFixed(2)} (comprensivo di gestione RLB)\n\n` +
-        `Ritiro: ${selectedBookstore.nome}\n\n` +
-        `I fondi saranno bloccati in escrow fino al ritiro.\n\n` +
-        `Procedere?`
-      );
-      if (confirmed) {
+      try {
+        const confirmed = window.confirm(
+          `Conferma acquisto\n\n` +
+          `Stai per acquistare "${listing?.book_titolo}".\n\n` +
+          `Totale: €${totalPrice.toFixed(2)} (comprensivo di gestione RLB)\n\n` +
+          `Ritiro: ${selectedBookstore.nome}\n\n` +
+          `Procedere?`
+        );
+        if (confirmed) {
+          await proceedWithPurchase();
+        }
+      } catch (e) {
+        console.error('Confirm error:', e);
+        // Fallback: procedi direttamente
         await proceedWithPurchase();
       }
     } else {

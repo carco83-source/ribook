@@ -4169,7 +4169,13 @@ async def create_order(request: CreateOrderRequest, user_id: str = Query(...)):
         raise HTTPException(status_code=404, detail="Utente non trovato")
     
     # Verifica listing
-    listing = await db.listings.find_one({"id": request.listing_id, "status": "available"})
+    listing = await db.listings.find_one({
+        "id": request.listing_id, 
+        "$or": [
+            {"status": "available"},
+            {"stato": "disponibile"}
+        ]
+    })
     if not listing:
         raise HTTPException(status_code=404, detail="Annuncio non disponibile")
     
