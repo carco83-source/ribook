@@ -2,18 +2,29 @@ import React from 'react';
 import { Platform } from 'react-native';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function TabLayout() {
+  const insets = useSafeAreaInsets();
+  
   // Calcola l'altezza della tab bar in base alla piattaforma
+  // Per Android aggiungiamo spazio extra per la navigation bar di sistema
   const getTabBarHeight = () => {
     if (Platform.OS === 'ios') return 88;
-    if (Platform.OS === 'android') return 65;
+    if (Platform.OS === 'android') {
+      // Altezza base + inset bottom per la navigation bar di sistema
+      // Minimo 80px per garantire spazio sufficiente
+      return Math.max(80, 60 + insets.bottom);
+    }
     return 70; // Web
   };
   
   const getTabBarPaddingBottom = () => {
     if (Platform.OS === 'ios') return 24;
-    if (Platform.OS === 'android') return 10;
+    if (Platform.OS === 'android') {
+      // Padding extra per Android - almeno 20px o l'inset di sistema
+      return Math.max(20, insets.bottom + 8);
+    }
     return 12; // Web
   };
 
