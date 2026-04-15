@@ -333,9 +333,12 @@ export default function RadarScreen() {
         
         return (
           <View style={styles.classCompatSection}>
-            {/* Header su una riga, grassetto */}
+            {/* Header su DUE righe: scuola + classe/sezione */}
             <Text style={styles.classCompatSubtitleBold} numberOfLines={1}>
-              {child?.scuola}, classe {child?.classe}ª sezione {child?.sezione}
+              {child?.scuola}
+            </Text>
+            <Text style={styles.classCompatSubtitleLight}>
+              classe {child?.classe}ª sezione {child?.sezione}
             </Text>
 
             {/* Three Column Layout */}
@@ -1030,6 +1033,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
     color: '#333',
+    marginBottom: 2,
+    marginLeft: 4,
+  },
+  classCompatSubtitleLight: {
+    fontSize: 13,
+    color: '#666',
     marginBottom: 16,
     marginLeft: 4,
   },

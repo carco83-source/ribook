@@ -260,14 +260,17 @@ export default function ProfileScreen() {
             
             return (
               <View key={child.id} style={styles.childBookFlowCard}>
-                {/* Child Header - Con tutti i dati su una riga */}
+                {/* Child Header - Nome scuola prima riga, classe/sezione seconda riga */}
                 <View style={styles.childHeader}>
                   <View style={styles.childNameBadge}>
                     <Ionicons name="person" size={16} color="#fff" />
                     <Text style={styles.childNameText}>{child.nome_figlio}</Text>
                   </View>
                   <Text style={styles.childSchoolTextBold} numberOfLines={1}>
-                    {child.scuola}, classe {child.classe}ª sezione {child.sezione}
+                    {child.scuola}
+                  </Text>
+                  <Text style={styles.childClassText}>
+                    classe {child.classe}ª sezione {child.sezione}
                   </Text>
                 </View>
                 
@@ -354,13 +357,13 @@ export default function ProfileScreen() {
                   
                   return (
                     <View style={styles.partialTotalBoxExpanded}>
-                      {/* Totale nuovi nella parte superiore */}
+                      {/* TOTALE NUOVI nella parte superiore - stesso stile di TOTALE IPOTETICO */}
                       <View style={styles.totalNuoviRow}>
-                        <Ionicons name="book-outline" size={16} color="#FF9800" />
-                        <Text style={styles.totalNuoviLabel}>Totale nuovi:</Text>
-                        <Text style={styles.totalNuoviValue}>€{costoNuoviParziale.toFixed(0)}</Text>
+                        <Ionicons name="book-outline" size={18} color="#1a472a" />
+                        <Text style={styles.totalNuoviLabelBold}>TOTALE NUOVI:</Text>
+                        <Text style={styles.totalNuoviValueBold}>€{costoNuoviParziale.toFixed(0)}</Text>
                       </View>
-                      {/* Totale ipotetico */}
+                      {/* TOTALE IPOTETICO */}
                       <View style={styles.partialTotalRow}>
                         <Ionicons name="calculator-outline" size={18} color="#1a472a" />
                         <Text style={styles.partialTotalLabel}>TOTALE IPOTETICO ({child.nome_figlio?.toUpperCase()}):</Text>
@@ -1161,6 +1164,12 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginLeft: 4,
   },
+  childClassText: {
+    fontSize: 13,
+    color: '#666',
+    marginLeft: 4,
+    marginTop: 2,
+  },
   childSchoolTextCompact: {
     fontSize: 13,
     color: '#333',
@@ -1206,6 +1215,17 @@ const styles = StyleSheet.create({
   totalNuoviValue: {
     fontSize: 14,
     color: '#FF9800',
+    fontWeight: 'bold',
+    marginLeft: 'auto',
+  },
+  totalNuoviLabelBold: {
+    fontSize: 14,
+    color: '#1a472a',
+    fontWeight: 'bold',
+  },
+  totalNuoviValueBold: {
+    fontSize: 18,
+    color: '#1a472a',
     fontWeight: 'bold',
     marginLeft: 'auto',
   },
