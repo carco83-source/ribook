@@ -260,17 +260,14 @@ export default function ProfileScreen() {
             
             return (
               <View key={child.id} style={styles.childBookFlowCard}>
-                {/* Child Header - Con tutti i dati */}
+                {/* Child Header - Con tutti i dati su una riga */}
                 <View style={styles.childHeader}>
                   <View style={styles.childNameBadge}>
                     <Ionicons name="person" size={16} color="#fff" />
                     <Text style={styles.childNameText}>{child.nome_figlio}</Text>
                   </View>
                   <Text style={styles.childSchoolText} numberOfLines={1}>
-                    {child.scuola}
-                  </Text>
-                  <Text style={styles.childDetailsText}>
-                    {child.classe}ª {child.sezione} - {tipoScuolaLabel}
+                    {child.scuola} - {tipoScuolaLabel} - {child.classe}ª {child.sezione}
                   </Text>
                 </View>
                 

@@ -329,6 +329,7 @@ export default function RadarScreen() {
         const child = childProfiles.find(c => c.id === selectedChildId);
         const isMedia = child?.tipo_scuola === 'primo_grado';
         const tipoLabel = isMedia ? 'MEDIA' : 'SUP';
+        const tipoScuolaLabel = isMedia ? 'Scuola Media' : 'Scuola Superiore';
         
         return (
           <View style={styles.classCompatSection}>
@@ -337,8 +338,8 @@ export default function RadarScreen() {
               <Text style={styles.sectionTitle}>Flusso Libri</Text>
             </View>
             
-            <Text style={styles.classCompatSubtitle}>
-              {child?.scuola} - {child?.classe}ª {tipoLabel}
+            <Text style={styles.classCompatSubtitle} numberOfLines={1}>
+              {child?.scuola} - {tipoScuolaLabel} - {child?.classe}ª {child?.sezione}
             </Text>
 
             {/* Three Column Layout */}
