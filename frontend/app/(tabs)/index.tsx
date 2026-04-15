@@ -333,21 +333,17 @@ export default function RadarScreen() {
         
         return (
           <View style={styles.classCompatSection}>
-            <View style={styles.sectionHeader}>
-              <Ionicons name="swap-horizontal" size={24} color="#1a472a" />
-              <Text style={styles.sectionTitle}>Flusso Libri</Text>
-            </View>
-            
-            <Text style={styles.classCompatSubtitle} numberOfLines={1}>
-              {child?.scuola} - {tipoScuolaLabel} - {child?.classe}ª {child?.sezione}
+            {/* Header su una riga, grassetto */}
+            <Text style={styles.classCompatSubtitleBold} numberOfLines={1}>
+              {child?.scuola}, classe {child?.classe}ª sezione {child?.sezione}
             </Text>
 
             {/* Three Column Layout */}
             <View style={styles.bookFlowThreeColumns}>
               {/* LEFT - VENDI */}
               <View style={styles.bookFlowColumnNew}>
-                <View style={[styles.bookFlowColumnHeader, { backgroundColor: '#2196F3' }]}>
-                  <Text style={styles.bookFlowColumnHeaderText}>
+                <View style={[styles.bookFlowColumnHeaderCompact, { backgroundColor: '#2196F3' }]}>
+                  <Text style={styles.bookFlowColumnHeaderTextCompact}>
                     {compatibility.vendere?.classe_destinazione 
                       ? `${compatibility.vendere.classe_destinazione}ª ${tipoLabel}` 
                       : 'N/A'}
@@ -370,33 +366,26 @@ export default function RadarScreen() {
 
               {/* CENTER - TU */}
               <View style={styles.bookFlowColumnNew}>
-                <View style={[styles.bookFlowColumnHeader, { backgroundColor: '#1a472a' }]}>
-                  <Text style={styles.bookFlowColumnHeaderText}>{child?.classe}ª {tipoLabel}</Text>
+                <View style={[styles.bookFlowColumnHeaderCompact, { backgroundColor: '#1a472a' }]}>
+                  <Text style={styles.bookFlowColumnHeaderTextCompact}>{child?.classe}ª {tipoLabel}</Text>
                 </View>
                 <View style={styles.bookFlowColumnBody}>
-                  <View style={styles.bookFlowYouBadge}>
-                    <Text style={styles.bookFlowYouText}>{child?.nome_figlio?.charAt(0) || '?'}</Text>
-                  </View>
-                  <Text style={[styles.bookFlowColumnAction, { color: '#FF9800', fontSize: 10 }]}>NON REPERITI</Text>
+                  <Ionicons name="book" size={28} color="#FF9800" />
+                  <Text style={[styles.bookFlowColumnAction, { color: '#FF9800' }]}>NUOVI</Text>
                   <Text style={[styles.bookFlowColumnNumber, { color: '#FF9800' }]}>
                     {compatibility.nuovi?.totale || 0}
                   </Text>
-                  <Text style={[styles.bookFlowColumnLabel, { fontSize: 10 }]}>usati/nuovi</Text>
+                  <Text style={styles.bookFlowColumnLabel}>da comprare</Text>
                 </View>
                 <Text style={styles.bookFlowColumnHint}>
-                  €{compatibility.nuovi?.costo_totale?.toFixed(0) || 0} stimati
+                  €{compatibility.nuovi?.costo_totale?.toFixed(0) || 0}
                 </Text>
-                {(compatibility.consigliati?.totale_da_comprare || 0) > 0 && (
-                  <Text style={[styles.bookFlowColumnHint, { color: '#9C27B0', marginTop: 4, fontSize: 10 }]}>
-                    +{compatibility.consigliati?.totale_da_comprare} consigliati
-                  </Text>
-                )}
               </View>
 
               {/* RIGHT - COMPRA */}
               <View style={styles.bookFlowColumnNew}>
-                <View style={[styles.bookFlowColumnHeader, { backgroundColor: '#4CAF50' }]}>
-                  <Text style={styles.bookFlowColumnHeaderText}>
+                <View style={[styles.bookFlowColumnHeaderCompact, { backgroundColor: '#4CAF50' }]}>
+                  <Text style={styles.bookFlowColumnHeaderTextCompact}>
                     {compatibility.comprare?.classe_origine 
                       ? `${compatibility.comprare.classe_origine}ª ${tipoLabel}` 
                       : 'N/A'}
@@ -1037,6 +1026,13 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     marginLeft: 4,
   },
+  classCompatSubtitleBold: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 16,
+    marginLeft: 4,
+  },
   compatSummaryCard: {
     backgroundColor: '#fff',
     borderRadius: 12,
@@ -1318,9 +1314,15 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  bookFlowColumnHeader: {
-    paddingVertical: 12,
+  bookFlowColumnHeaderCompact: {
+    paddingVertical: 8,
+    paddingHorizontal: 6,
     alignItems: 'center',
+  },
+  bookFlowColumnHeaderTextCompact: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
   bookFlowColumnHeaderText: {
     color: '#fff',

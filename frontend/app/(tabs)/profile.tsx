@@ -266,8 +266,8 @@ export default function ProfileScreen() {
                     <Ionicons name="person" size={16} color="#fff" />
                     <Text style={styles.childNameText}>{child.nome_figlio}</Text>
                   </View>
-                  <Text style={styles.childSchoolText} numberOfLines={1}>
-                    {child.scuola} - {tipoScuolaLabel} - {child.classe}ª {child.sezione}
+                  <Text style={styles.childSchoolTextBold} numberOfLines={1}>
+                    {child.scuola}, classe {child.classe}ª sezione {child.sezione}
                   </Text>
                 </View>
                 
@@ -309,9 +309,7 @@ export default function ProfileScreen() {
                       </Text>
                     </View>
                     <View style={styles.bookFlowBody}>
-                      <View style={styles.bookFlowCenterBadge}>
-                        <Text style={styles.bookFlowCenterClass}>{child.nome_figlio?.charAt(0) || '?'}</Text>
-                      </View>
+                      <Ionicons name="book" size={28} color="#FF9800" />
                       <Text style={[styles.bookFlowAction, { color: '#FF9800' }]}>NUOVI</Text>
                       <Text style={[styles.bookFlowNumber, { color: '#FF9800' }]}>
                         {compatibility.nuovi?.totale || 0}
@@ -347,7 +345,7 @@ export default function ProfileScreen() {
                   </View>
                 </View>
                 
-                {/* TOTALE PARZIALE SPESA per questo profilo */}
+                {/* TOTALE PARZIALE SPESA per questo profilo - con Totale Nuovi sopra */}
                 {(() => {
                   const costoUsatiParziale = (compatibility.comprare?.totale_usati || 0) * 10; // €10 per libro usato
                   const costoNuoviParziale = compatibility.nuovi?.costo_totale || 0;
@@ -355,7 +353,14 @@ export default function ProfileScreen() {
                   const spesaNettaParziale = costoUsatiParziale + costoNuoviParziale - ricavoParziale;
                   
                   return (
-                    <View style={styles.partialTotalBox}>
+                    <View style={styles.partialTotalBoxExpanded}>
+                      {/* Totale nuovi nella parte superiore */}
+                      <View style={styles.totalNuoviRow}>
+                        <Ionicons name="book-outline" size={16} color="#FF9800" />
+                        <Text style={styles.totalNuoviLabel}>Totale nuovi:</Text>
+                        <Text style={styles.totalNuoviValue}>€{costoNuoviParziale.toFixed(0)}</Text>
+                      </View>
+                      {/* Totale ipotetico */}
                       <View style={styles.partialTotalRow}>
                         <Ionicons name="calculator-outline" size={18} color="#1a472a" />
                         <Text style={styles.partialTotalLabel}>TOTALE IPOTETICO ({child.nome_figlio?.toUpperCase()}):</Text>
@@ -1148,6 +1153,12 @@ const styles = StyleSheet.create({
   childSchoolText: {
     fontSize: 15,
     color: '#666',
+    marginLeft: 4,
+  },
+  childSchoolTextBold: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: 'bold',
     marginLeft: 4,
   },
   childSchoolTextCompact: {
