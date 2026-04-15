@@ -502,8 +502,8 @@ export default function RadarScreen() {
             {/* Libri Vendibili */}
             {compatibility.vendere?.libri_vendibili && compatibility.vendere.libri_vendibili.length > 0 && (
               <View style={styles.classCard}>
-                <Text style={[styles.sampleBooksTitle, { color: '#2196F3' }]}>
-                  Libri che {child?.nome_figlio} può vendere alla {compatibility.vendere?.classe_destinazione}ª:
+                <Text style={styles.sectionTitleBlue}>
+                  LIBRI CHE {child?.nome_figlio?.toUpperCase()} PUÒ VENDERE ALLA {compatibility.vendere?.classe_destinazione}ª
                 </Text>
                 {compatibility.vendere.libri_vendibili.map((book: any, idx: number) => (
                   <View key={idx} style={styles.sampleBookItem}>
@@ -540,8 +540,8 @@ export default function RadarScreen() {
             {/* Libri NON Vendibili (edizione cambiata) */}
             {compatibility.vendere?.libri_non_vendibili && compatibility.vendere.libri_non_vendibili.length > 0 && (
               <View style={[styles.classCard, { borderLeftColor: '#f44336', borderLeftWidth: 3 }]}>
-                <Text style={[styles.sampleBooksTitle, { color: '#f44336' }]}>
-                  Libri NON vendibili (edizione cambiata):
+                <Text style={styles.sectionTitleRed}>
+                  LIBRI NON VENDIBILI (EDIZIONE CAMBIATA)
                 </Text>
                 {compatibility.vendere.libri_non_vendibili.map((book: any, idx: number) => (
                   <View key={idx} style={styles.sampleBookItem}>
@@ -1182,6 +1182,22 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#9C27B0',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  sectionTitleBlue: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#2196F3',
+    marginBottom: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  sectionTitleRed: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#f44336',
     marginBottom: 8,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
