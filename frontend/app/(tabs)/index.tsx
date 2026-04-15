@@ -575,8 +575,8 @@ export default function RadarScreen() {
               
               return (
                 <View style={styles.classCard}>
-                  <Text style={styles.sampleBooksTitle}>
-                    Libri usati acquistabili per {child?.nome_figlio}:
+                  <Text style={styles.sectionTitleGreen}>
+                    LIBRI USATI ACQUISTABILI PER {child?.nome_figlio?.toUpperCase()}
                   </Text>
                   {tuttiLibriUsati.map((book: any, idx: number) => {
                     const copie = book.copie_disponibili || book.copie_usate_disponibili || 0;
@@ -625,7 +625,7 @@ export default function RadarScreen() {
               );
             })()}
 
-            {/* Libri ancora non reperiti usati o di nuova adozione */}
+            {/* Libri di nuova adozione o ancora non reperiti */}
             {(() => {
               // Filtra solo libri senza copie usate disponibili O nuove edizioni
               const libriNonReperibili = (compatibility.nuovi?.libri || []).filter(
@@ -636,8 +636,8 @@ export default function RadarScreen() {
               
               return (
                 <View style={styles.classCard}>
-                  <Text style={[styles.sampleBooksTitle, { color: '#FF9800' }]}>
-                    Libri ancora non reperiti usati o di nuova adozione:
+                  <Text style={styles.sectionTitleOrange}>
+                    LIBRI DI NUOVA ADOZIONE O ANCORA NON REPERITI
                   </Text>
                   <Text style={{ fontSize: 11, color: '#666', marginBottom: 12, fontStyle: 'italic' }}>
                     Al momento da acquistare nuovi
@@ -687,11 +687,11 @@ export default function RadarScreen() {
             {/* Testi Consigliati o Da Non Acquistare */}
             {compatibility.consigliati?.libri_da_comprare && compatibility.consigliati.libri_da_comprare.length > 0 && (
               <View style={styles.classCard}>
-                <Text style={[styles.sampleBooksTitle, { color: '#9C27B0' }]}>
-                  NON DA ACQUISTARE - Già in possesso o facoltativi:
+                <Text style={styles.sectionTitlePurple}>
+                  NON DA ACQUISTARE - GIÀ IN POSSESSO O FACOLTATIVI
                 </Text>
                 <Text style={{ fontSize: 11, color: '#9C27B0', marginBottom: 12, fontStyle: 'italic', fontWeight: 'bold' }}>
-                  ⚠️ Questi libri NON vanno acquistati: sono già in tuo possesso o sono facoltativi
+                  Questi libri NON vanno acquistati: sono già in tuo possesso o sono facoltativi
                 </Text>
                 {compatibility.consigliati.libri_da_comprare.map((book: any, idx: number) => (
                   <TouchableOpacity 
@@ -1161,6 +1161,30 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#333',
     marginBottom: 8,
+  },
+  sectionTitleGreen: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1a472a',
+    marginBottom: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  sectionTitleOrange: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#FF9800',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  sectionTitlePurple: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#9C27B0',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   sampleBookItem: {
     flexDirection: 'row',
