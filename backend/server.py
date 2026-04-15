@@ -2191,6 +2191,7 @@ async def get_class_compatibility(user_id: str):
             else:
                 non_vendibili.append({
                     "disciplina": disc,
+                    "isbn": book_prec.get("isbn", ""),
                     "titolo_vecchio": book_prec["titolo"][:40],
                     "titolo_nuovo": my_book["titolo"][:40],
                     "editore_vecchio": book_prec["editore"],
@@ -2657,6 +2658,7 @@ async def get_child_compatibility(user_id: str, child_id: str):
                 # Edizione cambiata - il libro della classe precedente non è più compatibile
                 non_vendibili.append({
                     "disciplina": disc,
+                    "isbn": book_prec.get("isbn", ""),
                     "titolo_vecchio": book_prec["titolo"][:40],  # Libro che avevi (classe precedente)
                     "titolo_nuovo": my_book["titolo"][:40],  # Libro nuovo adottato (classe attuale)
                     "status": "EDIZIONE CAMBIATA"
