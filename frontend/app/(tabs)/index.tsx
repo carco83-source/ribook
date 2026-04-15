@@ -599,7 +599,7 @@ export default function RadarScreen() {
                             {book.titolo}
                           </Text>
                           <Text style={styles.sampleBookSubject} numberOfLines={1}>
-                            {book.disciplina}
+                            {book.disciplina} • ISBN: {book.isbn}
                           </Text>
                         </View>
                         <View style={{ alignItems: 'flex-end', flexDirection: 'row', gap: 8 }}>
@@ -660,11 +660,11 @@ export default function RadarScreen() {
                           {book.titolo}
                         </Text>
                         <Text style={styles.sampleBookSubject} numberOfLines={1}>
-                          {book.disciplina}
+                          {book.disciplina} • ISBN: {book.isbn}
                         </Text>
                         {book.is_nuova_edizione && (
                           <Text style={{ fontSize: 10, color: '#f44336', fontWeight: 'bold' }}>
-                            ⚠️ NUOVA EDIZIONE 2025 - Solo nuovo
+                            NUOVA EDIZIONE 2025 - Solo nuovo
                           </Text>
                         )}
                         {!book.is_nuova_edizione && (
