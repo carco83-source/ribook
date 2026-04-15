@@ -1173,6 +1173,62 @@ async def get_usato_prediction_route(isbn: str):
     }
 
 
+@api_router.get("/books/search")
+async def search_books_generic(q: str = Query(..., min_length=3), limit: int = Query(20)):
+    """
+    Ricerca generica libri per titolo o ISBN nei libri delle scuole di Catanzaro.
+    """
+    # Cerca per ISBN esatto
+    if q.isdigit() and len(q) >= 10:
+        books = await db.adozioni.aggregate([
+            {"$unwind": "$libri"},
+            {"$match": {"libri.isbn": {"$regex": q, "$options": "i"}}},
+            {"$limit": limit},
+            {"$project": {
+                "_id": 0,
+                "id": "$libri.isbn",
+                "isbn": "$libri.isbn",
+                "titolo": "$libri.titolo",
+                "autori": "$libri.autori",
+                "disciplina": "$libri.disciplina",
+                "editore": "$libri.editore",
+                "prezzo_copertina": "$libri.prezzo_copertina",
+                "classe": "$classe",
+                "scuola": "$nome_scuola"
+            }}
+        ]).to_list(limit)
+    else:
+        # Cerca per titolo
+        books = await db.adozioni.aggregate([
+            {"$unwind": "$libri"},
+            {"$match": {"libri.titolo": {"$regex": q, "$options": "i"}}},
+            {"$limit": limit},
+            {"$project": {
+                "_id": 0,
+                "id": "$libri.isbn",
+                "isbn": "$libri.isbn",
+                "titolo": "$libri.titolo",
+                "autori": "$libri.autori",
+                "disciplina": "$libri.disciplina",
+                "editore": "$libri.editore",
+                "prezzo_copertina": "$libri.prezzo_copertina",
+                "classe": "$classe",
+                "scuola": "$nome_scuola"
+            }}
+        ]).to_list(limit)
+    
+    # Rimuovi duplicati per ISBN
+    seen = set()
+    unique_books = []
+    for book in books:
+        isbn = book.get("isbn", "")
+        if isbn and isbn not in seen:
+            seen.add(isbn)
+            unique_books.append(book)
+    
+    return {"books": unique_books, "total": len(unique_books)}
+
+
 @api_router.get("/books/{book_id}", response_model=Book)
 async def get_book(book_id: str):
     book = await db.books.find_one({"id": book_id})

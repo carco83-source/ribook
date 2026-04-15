@@ -78,6 +78,11 @@ export default function SearchScreen() {
   // Listings modal
   const [showListingsModal, setShowListingsModal] = useState(false);
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
+  
+  // Generic search
+  const [genericSearchQuery, setGenericSearchQuery] = useState('');
+  const [genericResults, setGenericResults] = useState<Book[]>([]);
+  const [genericSearchLoading, setGenericSearchLoading] = useState(false);
   const [bookListings, setBookListings] = useState<Listing[]>([]);
   const [loadingListings, setLoadingListings] = useState(false);
 
@@ -165,6 +170,35 @@ export default function SearchScreen() {
 
   // State per tracciare richieste in corso (per disabilitare il pulsante durante la creazione)
   const [creatingRequest, setCreatingRequest] = useState<string | null>(null);
+
+  // Funzione per ricerca generica per titolo/ISBN
+  const handleGenericSearch = async (query: string) => {
+    setGenericSearchQuery(query);
+    
+    if (query.length < 3) {
+      setGenericResults([]);
+      return;
+    }
+    
+    setGenericSearchLoading(true);
+    try {
+      // Cerca nei libri di tutte le scuole di Catanzaro
+      const response = await axios.get(`${API_URL}/api/books/search`, {
+        params: { q: query, limit: 20 }
+      });
+      
+      if (response.data && response.data.books) {
+        setGenericResults(response.data.books);
+      } else {
+        setGenericResults([]);
+      }
+    } catch (error) {
+      console.error('Error searching books:', error);
+      setGenericResults([]);
+    } finally {
+      setGenericSearchLoading(false);
+    }
+  };
 
   const handleCreateRequestInline = async (book: Book) => {
     if (!userId) return;
@@ -331,7 +365,7 @@ export default function SearchScreen() {
               </>
             ) : (
               <>
-                <Text style={styles.profileName}>Seleziona Profilo</Text>
+                <Text style={styles.profileName}>Seleziona profilo per ricerca guidata</Text>
                 <Text style={styles.profileSchool}>Scegli per chi cercare i libri</Text>
               </>
             )}
@@ -339,6 +373,45 @@ export default function SearchScreen() {
         </View>
         <Ionicons name="chevron-down" size={24} color="#666" />
       </TouchableOpacity>
+
+      {/* Generic Search Box - Always visible */}
+      <View style={styles.genericSearchContainer}>
+        <Text style={styles.genericSearchLabel}>Oppure cerca per titolo o ISBN:</Text>
+        <View style={styles.genericSearchInputWrapper}>
+          <Ionicons name="search" size={20} color="#666" />
+          <TextInput
+            style={styles.genericSearchInput}
+            placeholder="Es: Matematica Verde o 9788808520234"
+            value={genericSearchQuery}
+            onChangeText={handleGenericSearch}
+            autoCapitalize="none"
+          />
+          {genericSearchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => { setGenericSearchQuery(''); setGenericResults([]); }}>
+              <Ionicons name="close-circle" size={20} color="#666" />
+            </TouchableOpacity>
+          )}
+        </View>
+        {genericSearchLoading && (
+          <ActivityIndicator size="small" color="#1a472a" style={{ marginTop: 8 }} />
+        )}
+      </View>
+
+      {/* Generic Search Results */}
+      {genericResults.length > 0 && (
+        <View style={styles.genericResultsContainer}>
+          <Text style={styles.genericResultsTitle}>
+            Risultati ricerca ({genericResults.length}):
+          </Text>
+          <FlatList
+            data={genericResults}
+            renderItem={renderBook}
+            keyExtractor={(item) => item.id || item.isbn}
+            style={{ maxHeight: 300 }}
+            showsVerticalScrollIndicator={true}
+          />
+        </View>
+      )}
 
       {/* Target Class Info */}
       {selectedChild && targetClasse && (
@@ -368,21 +441,8 @@ export default function SearchScreen() {
         </View>
       )}
 
-      {/* Active Searches Banner */}
-      {userRequests.length > 0 && (
-        <View style={styles.activeSearchBanner}>
-          <Ionicons name="radio" size={16} color="#1a472a" />
-          <Text style={styles.activeSearchText}>
-            Stai cercando {userRequests.length} libri
-          </Text>
-          <TouchableOpacity onPress={() => router.push('/(tabs)')}>
-            <Text style={styles.viewRadarLink}>Vedi Radar</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
       {/* Content */}
-      {!selectedChild ? (
+      {!selectedChild && genericResults.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Ionicons name="person-add" size={64} color="#ccc" />
           <Text style={styles.emptyText}>Seleziona un profilo</Text>
@@ -1148,5 +1208,51 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  // Generic Search styles
+  genericSearchContainer: {
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginTop: 12,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  genericSearchLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 10,
+  },
+  genericSearchInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 8,
+  },
+  genericSearchInput: {
+    flex: 1,
+    fontSize: 15,
+    color: '#333',
+  },
+  genericResultsContainer: {
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginTop: 8,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#4CAF50',
+    maxHeight: 350,
+  },
+  genericResultsTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#4CAF50',
+    marginBottom: 8,
   },
 });
