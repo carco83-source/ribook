@@ -372,16 +372,16 @@ export default function ProfileScreen() {
                   
                   return (
                     <View style={styles.partialTotalBoxExpanded}>
-                      {/* TOTALE NUOVI nella parte superiore - stesso stile di TOTALE IPOTETICO */}
+                      {/* TOTALE NUOVI - totale spesa libri nuovi da acquistare */}
                       <View style={styles.totalNuoviRow}>
                         <Ionicons name="book-outline" size={18} color="#1a472a" />
                         <Text style={styles.totalNuoviLabelBold}>TOTALE NUOVI:</Text>
                         <Text style={styles.totalNuoviValueBold}>€{costoNuoviParziale.toFixed(0)}</Text>
                       </View>
-                      {/* TOTALE IPOTETICO */}
+                      {/* TOTALE IPOTETICO - senza nome profilo */}
                       <View style={styles.partialTotalRow}>
                         <Ionicons name="calculator-outline" size={18} color="#1a472a" />
-                        <Text style={styles.partialTotalLabel}>TOTALE IPOTETICO ({child.nome_figlio?.toUpperCase()}):</Text>
+                        <Text style={styles.partialTotalLabel}>TOTALE IPOTETICO:</Text>
                         <Text style={[styles.partialTotalValue, spesaNettaParziale < 0 && { color: '#4CAF50' }]}>
                           €{Math.abs(spesaNettaParziale).toFixed(0)} {spesaNettaParziale < 0 ? '(guadagno)' : ''}
                         </Text>
