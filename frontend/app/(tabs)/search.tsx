@@ -243,7 +243,7 @@ export default function SearchScreen() {
           <Text style={styles.bookAuthor}>{getBookAuthor(item)}</Text>
           <View style={styles.bookMeta}>
             <View style={styles.metaBadge}>
-              <Text style={styles.metaText}>{getBookSubject(item)}</Text>
+              <Text style={styles.metaText}>{getBookSubject(item)} • ISBN: {item.isbn}</Text>
             </View>
           </View>
           <View style={styles.priceRow}>

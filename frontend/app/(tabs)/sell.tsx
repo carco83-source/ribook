@@ -957,7 +957,7 @@ export default function SellScreen() {
                         {item.titolo}
                       </Text>
                       <Text style={styles.bookOptionAuthor}>
-                        {item.disciplina}
+                        {item.disciplina} • ISBN: {item.isbn}
                       </Text>
                       <Text style={styles.bookOptionPrice}>
                         Prezzo suggerito: €{item.prezzo_suggerito?.toFixed(2) || ((item.prezzo_copertina || 0) * 0.5).toFixed(2)}
@@ -1029,7 +1029,7 @@ export default function SellScreen() {
                     <Text style={styles.selectedBookPrice}>€{selectedBook.prezzo_copertina?.toFixed(2) || '0.00'}</Text>
                   </View>
                   <Text style={styles.selectedBookAuthor}>
-                    {selectedBook.disciplina}
+                    {selectedBook.disciplina} • ISBN: {selectedBook.isbn}
                   </Text>
                 </View>
               )}

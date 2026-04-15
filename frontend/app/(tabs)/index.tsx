@@ -512,7 +512,7 @@ export default function RadarScreen() {
                         {book.titolo}
                       </Text>
                       <Text style={styles.sampleBookSubject} numberOfLines={1}>
-                        {book.disciplina}
+                        {book.disciplina} • ISBN: {book.isbn}
                       </Text>
                     </View>
                     <View style={{ alignItems: 'flex-end' }}>
@@ -550,7 +550,7 @@ export default function RadarScreen() {
                         {book.titolo || book.disciplina}
                       </Text>
                       <Text style={styles.sampleBookSubject} numberOfLines={1}>
-                        {book.disciplina}
+                        {book.disciplina} • ISBN: {book.isbn}
                       </Text>
                       <Text style={[styles.sampleBookSeller, { color: '#f44336' }]} numberOfLines={1}>
                         {book.status}
@@ -712,7 +712,7 @@ export default function RadarScreen() {
                         {book.titolo}
                       </Text>
                       <Text style={styles.sampleBookSubject} numberOfLines={1}>
-                        {book.disciplina}
+                        {book.disciplina} • ISBN: {book.isbn}
                       </Text>
                       {book.copie_usate_disponibili > 0 ? (
                         <Text style={{ fontSize: 10, color: '#4CAF50', fontWeight: 'bold' }}>
