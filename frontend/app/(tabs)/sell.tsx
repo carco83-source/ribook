@@ -173,6 +173,26 @@ export default function SellScreen() {
     return { condition: 'accettabile', score: avgDefects };
   };
 
+  // Funzione per calcolare il colore gradiente verde → giallo → rosso
+  const getGradientColor = (value: number): string => {
+    // value: 0-100, dove 0 = verde (buono), 100 = rosso (difettoso)
+    if (value <= 50) {
+      // Verde → Giallo (0-50)
+      const ratio = value / 50;
+      const r = Math.round(76 + (255 - 76) * ratio);  // 76 → 255
+      const g = Math.round(175 + (193 - 175) * ratio); // 175 → 193
+      const b = Math.round(80 - 80 * ratio);           // 80 → 0
+      return `rgb(${r}, ${g}, ${b})`;
+    } else {
+      // Giallo → Rosso (50-100)
+      const ratio = (value - 50) / 50;
+      const r = 255;
+      const g = Math.round(193 - 193 * ratio);  // 193 → 0
+      const b = 0;
+      return `rgb(${r}, ${g}, ${b})`;
+    }
+  };
+
   // Calcola forbice di prezzi basata sulla condizione
   const calculatePriceRange = () => {
     const prezzoCopertina = selectedBook?.prezzo_copertina || 0;
@@ -1153,22 +1173,27 @@ export default function SellScreen() {
                   <View style={styles.sliderHeader}>
                     <Ionicons name="pencil" size={18} color={isNewBook ? "#ccc" : "#666"} />
                     <Text style={[styles.sliderLabel, isNewBook && styles.disabledText]}>Scritte (penna/matita)</Text>
-                    <Text style={[styles.sliderValue, { color: `rgb(${Math.round(hasWritings * 2.55)}, ${Math.round(255 - hasWritings * 2.55)}, 0)` }]}>
+                    <Text style={[styles.sliderValue, { color: getGradientColor(hasWritings) }]}>
                       {hasWritings}%
                     </Text>
                   </View>
-                  <Slider
-                    style={styles.slider}
-                    minimumValue={0}
-                    maximumValue={100}
-                    step={5}
-                    value={hasWritings}
-                    onValueChange={(val) => !isNewBook && setHasWritings(val)}
-                    minimumTrackTintColor={`rgb(${Math.round(hasWritings * 2.55)}, ${Math.round(255 - hasWritings * 2.55)}, 0)`}
-                    maximumTrackTintColor="#e0e0e0"
-                    thumbTintColor={isNewBook ? "#ccc" : "#1a472a"}
-                    disabled={isNewBook}
-                  />
+                  {/* Custom Gradient Track */}
+                  <View style={styles.gradientSliderWrapper}>
+                    <View style={styles.gradientTrackBackground} />
+                    <View style={[styles.gradientTrackFill, { width: `${hasWritings}%`, backgroundColor: getGradientColor(hasWritings) }]} />
+                    <Slider
+                      style={styles.gradientSlider}
+                      minimumValue={0}
+                      maximumValue={100}
+                      step={5}
+                      value={hasWritings}
+                      onValueChange={(val) => !isNewBook && setHasWritings(val)}
+                      minimumTrackTintColor="transparent"
+                      maximumTrackTintColor="transparent"
+                      thumbTintColor={isNewBook ? "#ccc" : getGradientColor(hasWritings)}
+                      disabled={isNewBook}
+                    />
+                  </View>
                 </View>
 
                 {/* Slider Evidenziature */}
@@ -1176,22 +1201,27 @@ export default function SellScreen() {
                   <View style={styles.sliderHeader}>
                     <Ionicons name="color-fill" size={18} color={isNewBook ? "#ccc" : "#666"} />
                     <Text style={[styles.sliderLabel, isNewBook && styles.disabledText]}>Evidenziature</Text>
-                    <Text style={[styles.sliderValue, { color: `rgb(${Math.round(hasHighlights * 2.55)}, ${Math.round(255 - hasHighlights * 2.55)}, 0)` }]}>
+                    <Text style={[styles.sliderValue, { color: getGradientColor(hasHighlights) }]}>
                       {hasHighlights}%
                     </Text>
                   </View>
-                  <Slider
-                    style={styles.slider}
-                    minimumValue={0}
-                    maximumValue={100}
-                    step={5}
-                    value={hasHighlights}
-                    onValueChange={(val) => !isNewBook && setHasHighlights(val)}
-                    minimumTrackTintColor={`rgb(${Math.round(hasHighlights * 2.55)}, ${Math.round(255 - hasHighlights * 2.55)}, 0)`}
-                    maximumTrackTintColor="#e0e0e0"
-                    thumbTintColor={isNewBook ? "#ccc" : "#1a472a"}
-                    disabled={isNewBook}
-                  />
+                  {/* Custom Gradient Track */}
+                  <View style={styles.gradientSliderWrapper}>
+                    <View style={styles.gradientTrackBackground} />
+                    <View style={[styles.gradientTrackFill, { width: `${hasHighlights}%`, backgroundColor: getGradientColor(hasHighlights) }]} />
+                    <Slider
+                      style={styles.gradientSlider}
+                      minimumValue={0}
+                      maximumValue={100}
+                      step={5}
+                      value={hasHighlights}
+                      onValueChange={(val) => !isNewBook && setHasHighlights(val)}
+                      minimumTrackTintColor="transparent"
+                      maximumTrackTintColor="transparent"
+                      thumbTintColor={isNewBook ? "#ccc" : getGradientColor(hasHighlights)}
+                      disabled={isNewBook}
+                    />
+                  </View>
                 </View>
 
                 {/* Slider Pieghe/Orecchie */}
@@ -1199,22 +1229,27 @@ export default function SellScreen() {
                   <View style={styles.sliderHeader}>
                     <Ionicons name="document" size={18} color={isNewBook ? "#ccc" : "#666"} />
                     <Text style={[styles.sliderLabel, isNewBook && styles.disabledText]}>Orecchie/Pieghe</Text>
-                    <Text style={[styles.sliderValue, { color: `rgb(${Math.round(hasFolds * 2.55)}, ${Math.round(255 - hasFolds * 2.55)}, 0)` }]}>
+                    <Text style={[styles.sliderValue, { color: getGradientColor(hasFolds) }]}>
                       {hasFolds}%
                     </Text>
                   </View>
-                  <Slider
-                    style={styles.slider}
-                    minimumValue={0}
-                    maximumValue={100}
-                    step={5}
-                    value={hasFolds}
-                    onValueChange={(val) => !isNewBook && setHasFolds(val)}
-                    minimumTrackTintColor={`rgb(${Math.round(hasFolds * 2.55)}, ${Math.round(255 - hasFolds * 2.55)}, 0)`}
-                    maximumTrackTintColor="#e0e0e0"
-                    thumbTintColor={isNewBook ? "#ccc" : "#1a472a"}
-                    disabled={isNewBook}
-                  />
+                  {/* Custom Gradient Track */}
+                  <View style={styles.gradientSliderWrapper}>
+                    <View style={styles.gradientTrackBackground} />
+                    <View style={[styles.gradientTrackFill, { width: `${hasFolds}%`, backgroundColor: getGradientColor(hasFolds) }]} />
+                    <Slider
+                      style={styles.gradientSlider}
+                      minimumValue={0}
+                      maximumValue={100}
+                      step={5}
+                      value={hasFolds}
+                      onValueChange={(val) => !isNewBook && setHasFolds(val)}
+                      minimumTrackTintColor="transparent"
+                      maximumTrackTintColor="transparent"
+                      thumbTintColor={isNewBook ? "#ccc" : getGradientColor(hasFolds)}
+                      disabled={isNewBook}
+                    />
+                  </View>
                 </View>
 
                 {/* Slider Copertina */}
@@ -1222,22 +1257,27 @@ export default function SellScreen() {
                   <View style={styles.sliderHeader}>
                     <Ionicons name="book" size={18} color={isNewBook ? "#ccc" : "#666"} />
                     <Text style={[styles.sliderLabel, isNewBook && styles.disabledText]}>Condizioni copertina</Text>
-                    <Text style={[styles.sliderValue, { color: `rgb(${Math.round(coverCondition * 2.55)}, ${Math.round(255 - coverCondition * 2.55)}, 0)` }]}>
+                    <Text style={[styles.sliderValue, { color: getGradientColor(coverCondition) }]}>
                       {coverCondition}%
                     </Text>
                   </View>
-                  <Slider
-                    style={styles.slider}
-                    minimumValue={0}
-                    maximumValue={100}
-                    step={5}
-                    value={coverCondition}
-                    onValueChange={(val) => !isNewBook && setCoverCondition(val)}
-                    minimumTrackTintColor={`rgb(${Math.round(coverCondition * 2.55)}, ${Math.round(255 - coverCondition * 2.55)}, 0)`}
-                    maximumTrackTintColor="#e0e0e0"
-                    thumbTintColor={isNewBook ? "#ccc" : "#1a472a"}
-                    disabled={isNewBook}
-                  />
+                  {/* Custom Gradient Track */}
+                  <View style={styles.gradientSliderWrapper}>
+                    <View style={styles.gradientTrackBackground} />
+                    <View style={[styles.gradientTrackFill, { width: `${coverCondition}%`, backgroundColor: getGradientColor(coverCondition) }]} />
+                    <Slider
+                      style={styles.gradientSlider}
+                      minimumValue={0}
+                      maximumValue={100}
+                      step={5}
+                      value={coverCondition}
+                      onValueChange={(val) => !isNewBook && setCoverCondition(val)}
+                      minimumTrackTintColor="transparent"
+                      maximumTrackTintColor="transparent"
+                      thumbTintColor={isNewBook ? "#ccc" : getGradientColor(coverCondition)}
+                      disabled={isNewBook}
+                    />
+                  </View>
                 </View>
               </View>
 
@@ -1932,6 +1972,33 @@ const styles = StyleSheet.create({
   slider: {
     width: '100%',
     height: 40,
+  },
+  // Gradient Slider styles
+  gradientSliderWrapper: {
+    position: 'relative',
+    height: 40,
+    justifyContent: 'center',
+  },
+  gradientTrackBackground: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: 12,
+    backgroundColor: '#e0e0e0',
+    borderRadius: 6,
+  },
+  gradientTrackFill: {
+    position: 'absolute',
+    left: 0,
+    height: 12,
+    borderRadius: 6,
+    minWidth: 12,
+  },
+  gradientSlider: {
+    position: 'absolute',
+    width: '100%',
+    height: 40,
+    zIndex: 10,
   },
   // Price Range styles
   priceRangeContainer: {
