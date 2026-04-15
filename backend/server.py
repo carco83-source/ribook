@@ -2580,23 +2580,26 @@ async def get_child_compatibility(user_id: str, child_id: str):
     my_books = []
     my_books_consigliati = []
     
-    # CASO SPECIALE: Prima Media (1ª classe primo grado)
-    # In 1ª media TUTTI i libri vanno acquistati, non ci sono "consigliati"
-    # perché non si hanno libri dall'anno precedente
-    is_prima_media = (child_tipo == "primo_grado" and child_classe == 1)
+    # CASO SPECIALE: Prima Media (1ª classe primo grado) o Prima Superiore (1ª classe secondo grado)
+    # In 1ª media/superiore TUTTI i libri obbligatori vanno acquistati
+    # I libri consigliati (Ap) rimangono consigliati anche in prima
+    is_prima_classe = (child_classe == 1)
     
     for libro in all_my_books:
-        if is_prima_media:
-            # In 1ª media: TUTTI i libri vanno nella lista obbligatori
+        # I libri CONSIGLIATI (Ap) restano sempre consigliati, anche in prima classe
+        if libro.get('consigliato') == True:
+            my_books_consigliati.append(libro)
+        elif is_prima_classe:
+            # In 1ª classe: TUTTI i libri NON consigliati vanno nella lista obbligatori
+            # (inclusi i volumi unici che normalmente sarebbero "no")
             my_books.append(libro)
         else:
             # Per tutte le altre classi:
             # I libri obbligatori (da_acquistare=True) vanno sempre in my_books
-            # I volumi unici obbligatori vanno comunque conteggiati nel costo totale
             if libro.get('da_acquistare', True) == True:
                 my_books.append(libro)
             elif libro.get('is_volume_unico'):
-                # Volume unico consigliato - va nei consigliati
+                # Volume unico NON consigliato in classi successive - va nei consigliati
                 my_books_consigliati.append(libro)
             elif is_continuation_from_previous(libro, all_libri_prec):
                 # È marcato come consigliato MA è continuazione di una serie → DA ACQUISTARE
@@ -2604,8 +2607,8 @@ async def get_child_compatibility(user_id: str, child_id: str):
             else:
                 my_books_consigliati.append(libro)
     
-    # In 1ª media non ci sono consigliati, tutti i volumi unici vanno acquistati
-    if is_prima_media:
+    # In 1ª classe non ci sono volumi unici extra, sono già inclusi in my_books
+    if is_prima_classe:
         my_volumi_unici = []  # Già inclusi in my_books
     else:
         # Volumi unici obbligatori - già inclusi in my_books
