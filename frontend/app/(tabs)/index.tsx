@@ -16,6 +16,19 @@ import axios from 'axios';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
+// Helper function per convertire numeri in parole italiane
+const getClasseLabel = (classe: number | string): string => {
+  const classeNum = typeof classe === 'string' ? parseInt(classe) : classe;
+  const nomiClassi: { [key: number]: string } = {
+    1: 'PRIMA',
+    2: 'SECONDA', 
+    3: 'TERZA',
+    4: 'QUARTA',
+    5: 'QUINTA',
+  };
+  return nomiClassi[classeNum] || `${classeNum}ª`;
+};
+
 interface CartData {
   total_confirmed: number;
   total_pending: number;
@@ -348,7 +361,7 @@ export default function RadarScreen() {
                 <View style={[styles.bookFlowColumnHeaderCompact, { backgroundColor: '#2196F3' }]}>
                   <Text style={styles.bookFlowColumnHeaderTextCompact}>
                     {compatibility.vendere?.classe_destinazione 
-                      ? `${compatibility.vendere.classe_destinazione}ª ${tipoLabel}` 
+                      ? getClasseLabel(compatibility.vendere.classe_destinazione)
                       : 'N/A'}
                   </Text>
                 </View>
@@ -367,13 +380,15 @@ export default function RadarScreen() {
                 )}
               </View>
 
-              {/* CENTER - TU */}
+              {/* CENTER - TU (con iniziale del nome) */}
               <View style={styles.bookFlowColumnNew}>
                 <View style={[styles.bookFlowColumnHeaderCompact, { backgroundColor: '#1a472a' }]}>
-                  <Text style={styles.bookFlowColumnHeaderTextCompact}>{child?.classe}ª {tipoLabel}</Text>
+                  <Text style={styles.bookFlowColumnHeaderTextCompact}>{getClasseLabel(child?.classe)}</Text>
                 </View>
                 <View style={styles.bookFlowColumnBody}>
-                  <Ionicons name="book" size={28} color="#FF9800" />
+                  <View style={styles.bookFlowCenterBadge}>
+                    <Text style={styles.bookFlowCenterClass}>{child?.nome_figlio?.charAt(0) || '?'}</Text>
+                  </View>
                   <Text style={[styles.bookFlowColumnAction, { color: '#FF9800' }]}>NUOVI</Text>
                   <Text style={[styles.bookFlowColumnNumber, { color: '#FF9800' }]}>
                     {compatibility.nuovi?.totale || 0}
@@ -390,7 +405,7 @@ export default function RadarScreen() {
                 <View style={[styles.bookFlowColumnHeaderCompact, { backgroundColor: '#4CAF50' }]}>
                   <Text style={styles.bookFlowColumnHeaderTextCompact}>
                     {compatibility.comprare?.classe_origine 
-                      ? `${compatibility.comprare.classe_origine}ª ${tipoLabel}` 
+                      ? getClasseLabel(compatibility.comprare.classe_origine)
                       : 'N/A'}
                   </Text>
                 </View>
@@ -1377,6 +1392,19 @@ const styles = StyleSheet.create({
   bookFlowYouText: {
     color: '#fff',
     fontSize: 14,
+    fontWeight: 'bold',
+  },
+  bookFlowCenterBadge: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#FF9800',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bookFlowCenterClass: {
+    color: '#fff',
+    fontSize: 20,
     fontWeight: 'bold',
   },
   // Child Profile Tabs
