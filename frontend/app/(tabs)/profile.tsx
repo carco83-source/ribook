@@ -317,17 +317,15 @@ export default function ProfileScreen() {
                     )}
                   </View>
 
-                  {/* CENTER - TU (con iniziale del nome) */}
+                  {/* CENTER - Iniziale del nome nel header */}
                   <View style={styles.bookFlowColumn}>
                     <View style={[styles.bookFlowHeader, { backgroundColor: '#1a472a' }]}>
                       <Text style={styles.bookFlowHeaderClass}>
-                        {getClasseLabel(child.classe)}
+                        {child.nome_figlio?.charAt(0) || '?'}
                       </Text>
                     </View>
                     <View style={styles.bookFlowBody}>
-                      <View style={styles.bookFlowCenterBadge}>
-                        <Text style={styles.bookFlowCenterClass}>{child.nome_figlio?.charAt(0) || '?'}</Text>
-                      </View>
+                      <Ionicons name="book" size={28} color="#FF9800" />
                       <Text style={[styles.bookFlowAction, { color: '#FF9800' }]}>NUOVI</Text>
                       <Text style={[styles.bookFlowNumber, { color: '#FF9800' }]}>
                         {compatibility.nuovi?.totale || 0}
@@ -363,8 +361,16 @@ export default function ProfileScreen() {
                   </View>
                 </View>
                 
-                {/* TOTALE PARZIALE SPESA per questo profilo - con Totale Nuovi sopra */}
+                {/* TOTALE PARZIALE SPESA per questo profilo */}
                 {(() => {
+                  // Calcolo TOTALE NUOVI: spesa totale se TUTTI i libri fossero comprati nuovi
+                  const totaleLibriDaComprare = (compatibility.nuovi?.totale || 0) + (compatibility.comprare?.totale_usati || 0);
+                  const costoTuttiNuovi = compatibility.nuovi?.costo_totale || 0; // Già include il prezzo di tutti i libri nuovi
+                  // Per i libri usati, calcoliamo quanto costerebbero se fossero nuovi (stima: prezzo medio libro nuovo ~€20)
+                  const costoUsatiSeNuovi = (compatibility.comprare?.totale_usati || 0) * 20;
+                  const totaleSeTuttiNuovi = costoTuttiNuovi + costoUsatiSeNuovi;
+                  
+                  // TOTALE IPOTETICO: con libri usati
                   const costoUsatiParziale = (compatibility.comprare?.totale_usati || 0) * 10; // €10 per libro usato
                   const costoNuoviParziale = compatibility.nuovi?.costo_totale || 0;
                   const ricavoParziale = (compatibility.vendere?.totale_vendibili || 0) * 8; // €8 ricavo per libro venduto
@@ -372,13 +378,13 @@ export default function ProfileScreen() {
                   
                   return (
                     <View style={styles.partialTotalBoxExpanded}>
-                      {/* TOTALE NUOVI - totale spesa libri nuovi da acquistare */}
+                      {/* TOTALE NUOVI - spesa se tutti i libri fossero comprati nuovi */}
                       <View style={styles.totalNuoviRow}>
                         <Ionicons name="book-outline" size={18} color="#1a472a" />
                         <Text style={styles.totalNuoviLabelBold}>TOTALE NUOVI:</Text>
-                        <Text style={styles.totalNuoviValueBold}>€{costoNuoviParziale.toFixed(0)}</Text>
+                        <Text style={styles.totalNuoviValueBold}>€{totaleSeTuttiNuovi.toFixed(0)}</Text>
                       </View>
-                      {/* TOTALE IPOTETICO - senza nome profilo */}
+                      {/* TOTALE IPOTETICO - con libri usati */}
                       <View style={styles.partialTotalRow}>
                         <Ionicons name="calculator-outline" size={18} color="#1a472a" />
                         <Text style={styles.partialTotalLabel}>TOTALE IPOTETICO:</Text>

@@ -380,15 +380,13 @@ export default function RadarScreen() {
                 )}
               </View>
 
-              {/* CENTER - TU (con iniziale del nome) */}
+              {/* CENTER - Iniziale del nome nel header */}
               <View style={styles.bookFlowColumnNew}>
                 <View style={[styles.bookFlowColumnHeaderCompact, { backgroundColor: '#1a472a' }]}>
-                  <Text style={styles.bookFlowColumnHeaderTextCompact}>{getClasseLabel(child?.classe)}</Text>
+                  <Text style={styles.bookFlowColumnHeaderTextCompact}>{child?.nome_figlio?.charAt(0) || '?'}</Text>
                 </View>
                 <View style={styles.bookFlowColumnBody}>
-                  <View style={styles.bookFlowCenterBadge}>
-                    <Text style={styles.bookFlowCenterClass}>{child?.nome_figlio?.charAt(0) || '?'}</Text>
-                  </View>
+                  <Ionicons name="book" size={28} color="#FF9800" />
                   <Text style={[styles.bookFlowColumnAction, { color: '#FF9800' }]}>NUOVI</Text>
                   <Text style={[styles.bookFlowColumnNumber, { color: '#FF9800' }]}>
                     {compatibility.nuovi?.totale || 0}
