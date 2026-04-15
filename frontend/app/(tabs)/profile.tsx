@@ -256,17 +256,21 @@ export default function ProfileScreen() {
             
             const isMedia = child.tipo_scuola === 'primo_grado';
             const tipoLabel = isMedia ? 'MEDIA' : 'SUP';
+            const tipoScuolaLabel = isMedia ? 'Scuola Media' : 'Scuola Superiore';
             
             return (
               <View key={child.id} style={styles.childBookFlowCard}>
-                {/* Child Header - Compatto su una riga */}
+                {/* Child Header - Con tutti i dati */}
                 <View style={styles.childHeader}>
                   <View style={styles.childNameBadge}>
                     <Ionicons name="person" size={16} color="#fff" />
                     <Text style={styles.childNameText}>{child.nome_figlio}</Text>
                   </View>
-                  <Text style={styles.childSchoolTextCompact} numberOfLines={1}>
-                    {child.scuola}, classe {child.classe}ª sezione {child.sezione}
+                  <Text style={styles.childSchoolText} numberOfLines={1}>
+                    {child.scuola}
+                  </Text>
+                  <Text style={styles.childDetailsText}>
+                    {child.classe}ª {child.sezione} - {tipoScuolaLabel}
                   </Text>
                 </View>
                 
@@ -274,8 +278,8 @@ export default function ProfileScreen() {
                 <View style={styles.bookFlowContainer}>
                   {/* LEFT - VENDI */}
                   <View style={styles.bookFlowColumn}>
-                    <View style={[styles.bookFlowHeaderCompact, { backgroundColor: '#2196F3' }]}>
-                      <Text style={styles.bookFlowHeaderClassCompact}>
+                    <View style={[styles.bookFlowHeader, { backgroundColor: '#2196F3' }]}>
+                      <Text style={styles.bookFlowHeaderClass}>
                         {compatibility.vendere?.classe_destinazione 
                           ? `${compatibility.vendere.classe_destinazione}ª ${tipoLabel}` 
                           : 'N/A'}
@@ -300,15 +304,17 @@ export default function ProfileScreen() {
                     )}
                   </View>
 
-                  {/* CENTER - NUOVI */}
+                  {/* CENTER - TU */}
                   <View style={styles.bookFlowColumn}>
-                    <View style={[styles.bookFlowHeaderCompact, { backgroundColor: '#1a472a' }]}>
-                      <Text style={styles.bookFlowHeaderClassCompact}>
+                    <View style={[styles.bookFlowHeader, { backgroundColor: '#1a472a' }]}>
+                      <Text style={styles.bookFlowHeaderClass}>
                         {child.classe}ª {tipoLabel}
                       </Text>
                     </View>
                     <View style={styles.bookFlowBody}>
-                      <Ionicons name="book" size={24} color="#FF9800" />
+                      <View style={styles.bookFlowCenterBadge}>
+                        <Text style={styles.bookFlowCenterClass}>{child.nome_figlio?.charAt(0) || '?'}</Text>
+                      </View>
                       <Text style={[styles.bookFlowAction, { color: '#FF9800' }]}>NUOVI</Text>
                       <Text style={[styles.bookFlowNumber, { color: '#FF9800' }]}>
                         {compatibility.nuovi?.totale || 0}
@@ -352,14 +358,7 @@ export default function ProfileScreen() {
                   const spesaNettaParziale = costoUsatiParziale + costoNuoviParziale - ricavoParziale;
                   
                   return (
-                    <View style={styles.partialTotalBoxExpanded}>
-                      {/* Totale Nuovi in alto */}
-                      <View style={styles.totalNuoviRow}>
-                        <Ionicons name="book" size={16} color="#FF9800" />
-                        <Text style={styles.totalNuoviLabel}>Totale nuovi:</Text>
-                        <Text style={styles.totalNuoviValue}>€{costoNuoviParziale.toFixed(0)}</Text>
-                      </View>
-                      {/* Totale Ipotetico */}
+                    <View style={styles.partialTotalBox}>
                       <View style={styles.partialTotalRow}>
                         <Ionicons name="calculator-outline" size={18} color="#1a472a" />
                         <Text style={styles.partialTotalLabel}>TOTALE IPOTETICO ({child.nome_figlio?.toUpperCase()}):</Text>
