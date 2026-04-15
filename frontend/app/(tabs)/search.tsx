@@ -317,19 +317,23 @@ export default function SearchScreen() {
               <Text style={styles.requestActiveText}>in attesa</Text>
             </View>
           ) : (
-            /* Caso 3: Nessuna copia + nessuna richiesta - mostra pulsante Crea */
+            /* Caso 3: Nessuna copia + nessuna richiesta - mostra pulsante quadrato */
             <TouchableOpacity
               style={[
-                styles.createRequestButton,
-                isCreating && styles.createRequestButtonDisabled,
+                styles.notifyButton,
+                isCreating && styles.notifyButtonDisabled,
               ]}
               onPress={() => handleCreateRequestInline(item)}
               disabled={isCreating}
             >
               {isCreating ? (
-                <ActivityIndicator size="small" color="#1a472a" />
+                <ActivityIndicator size="small" color="#fff" />
               ) : (
-                <Text style={styles.createRequestButtonText}>Crea richiesta</Text>
+                <>
+                  <Text style={styles.notifyButtonText}>avvisami</Text>
+                  <Text style={styles.notifyButtonText}>appena</Text>
+                  <Text style={styles.notifyButtonText}>disponibile</Text>
+                </>
               )}
             </TouchableOpacity>
           )}
@@ -905,6 +909,26 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     fontWeight: '500',
+  },
+  // Pulsante quadrato "Avvisami appena disponibile"
+  notifyButton: {
+    width: 70,
+    height: 70,
+    backgroundColor: '#FF9800',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 4,
+  },
+  notifyButtonDisabled: {
+    opacity: 0.6,
+  },
+  notifyButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 10,
+    textAlign: 'center',
+    lineHeight: 14,
   },
   // Richiesta attiva badge (R)
   requestActiveContainer: {
