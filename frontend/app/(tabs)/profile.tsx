@@ -266,7 +266,7 @@ export default function ProfileScreen() {
                     <Text style={styles.childNameText}>{child.nome_figlio}</Text>
                   </View>
                   <Text style={styles.childSchoolTextCompact} numberOfLines={1}>
-                    <Text style={{ fontWeight: 'bold' }}>{child.scuola}</Text> - {child.classe}ª {child.sezione}
+                    {child.scuola}, classe {child.classe}ª sezione {child.sezione}
                   </Text>
                 </View>
                 
