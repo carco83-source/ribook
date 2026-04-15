@@ -3263,13 +3263,24 @@ async def generate_books_pdf(user_id: str, child_id: str):
         # Logica "Da Acquistare" - USA IL CAMPO DAL DATABASE (come nel PDF MIUR)
         # Il campo da_acquistare nel DB indica se il libro va acquistato quest'anno
         da_acq_db = book.get('da_acquistare')
+        is_volume_unico = book.get('is_volume_unico', False)
+        cons_db = book.get('consigliato')
         
-        if da_acq_db is not None:
+        # Se il libro è CONSIGLIATO (Ap), il da_acquistare resta "No" perché non è obbligatorio
+        # La regola della prima classe si applica SOLO ai libri NON consigliati
+        if cons_db == True:
+            # Libro consigliato: da_acquistare = No (non obbligatorio)
+            da_acq = "No"
+        elif child_classe == 1 and is_volume_unico:
+            # REGOLA SPECIALE: Per la PRIMA classe (1° anno del ciclo), 
+            # TUTTI i volumi unici NON consigliati devono essere acquistati
+            da_acq = "Si"
+        elif da_acq_db is not None:
             # Usa il valore dal database (fonte: MIUR)
             da_acq = "Si" if da_acq_db == True else "No"
         else:
             # Fallback per vecchi dati senza il campo
-            if book.get('is_volume_unico'):
+            if is_volume_unico:
                 # MEDIE (primo_grado): volumi unici sono TRIENNALI (1-2-3)
                 # Solo chi fa la 1ª deve comprarli
                 if child_tipo == "primo_grado":
