@@ -868,7 +868,7 @@ export default function SellScreen() {
               <TextInput
                 style={styles.isbnInput}
                 placeholder="Es: 9788808520234"
-                placeholderTextColor="#999"
+                placeholderTextColor="#b0b0b0"
                 value={isbnInput}
                 onChangeText={(text) => {
                   setIsbnInput(text);
@@ -1288,6 +1288,7 @@ export default function SellScreen() {
                 value={notes}
                 onChangeText={setNotes}
                 placeholder="Es: Alcune pagine sottolineate a matita..."
+                placeholderTextColor="#b0b0b0"
                 multiline
                 numberOfLines={3}
               />

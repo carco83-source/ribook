@@ -382,6 +382,7 @@ export default function SearchScreen() {
           <TextInput
             style={styles.genericSearchInput}
             placeholder="Es: Matematica Verde o 9788808520234"
+            placeholderTextColor="#b0b0b0"
             value={genericSearchQuery}
             onChangeText={handleGenericSearch}
             autoCapitalize="none"
@@ -430,6 +431,7 @@ export default function SearchScreen() {
           <TextInput
             style={styles.searchInput}
             placeholder="Filtra per titolo, autore, materia..."
+            placeholderTextColor="#b0b0b0"
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
