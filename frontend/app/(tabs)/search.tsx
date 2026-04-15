@@ -389,6 +389,11 @@ export default function SearchScreen() {
             placeholderTextColor="#b0b0b0"
             value={genericSearchQuery}
             onChangeText={handleGenericSearch}
+            onFocus={() => {
+              // Quando si seleziona la barra di ricerca generica, annulla la ricerca per profilo
+              setSelectedChild(null);
+              setBooks([]);
+            }}
             autoCapitalize="none"
           />
           {genericSearchQuery.length > 0 && (
