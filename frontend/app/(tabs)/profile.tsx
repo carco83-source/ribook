@@ -363,7 +363,7 @@ export default function ProfileScreen() {
                     <View style={styles.partialTotalBox}>
                       <View style={styles.partialTotalRow}>
                         <Ionicons name="calculator-outline" size={18} color="#1a472a" />
-                        <Text style={styles.partialTotalLabel}>Totale parziale {child.nome_figlio}:</Text>
+                        <Text style={styles.partialTotalLabel}>TOTALE IPOTETICO ({child.nome_figlio?.toUpperCase()}):</Text>
                         <Text style={[styles.partialTotalValue, spesaNettaParziale < 0 && { color: '#4CAF50' }]}>
                           €{Math.abs(spesaNettaParziale).toFixed(0)} {spesaNettaParziale < 0 ? '(guadagno)' : ''}
                         </Text>
@@ -374,30 +374,6 @@ export default function ProfileScreen() {
                     </View>
                   );
                 })()}
-                
-                {/* LIBRI REALMENTE ACQUISTATI/VENDUTI per questo profilo */}
-                <View style={styles.realTransactionsBox}>
-                  <Text style={styles.realTransactionsTitle}>Transazioni reali {child.nome_figlio}</Text>
-                  <View style={styles.realTransactionsRow}>
-                    <View style={styles.realTransactionItem}>
-                      <Ionicons name="cart" size={16} color="#4CAF50" />
-                      <Text style={styles.realTransactionNumber}>{compatibility.libri_acquistati_reali || 0}</Text>
-                      <Text style={styles.realTransactionLabel}>acquistati</Text>
-                    </View>
-                    <View style={styles.realTransactionItem}>
-                      <Ionicons name="pricetag" size={16} color="#2196F3" />
-                      <Text style={styles.realTransactionNumber}>{compatibility.libri_venduti_reali || 0}</Text>
-                      <Text style={styles.realTransactionLabel}>venduti</Text>
-                    </View>
-                    <View style={styles.realTransactionItem}>
-                      <Ionicons name="swap-horizontal" size={16} color={((compatibility.guadagno_reale || 0) - (compatibility.spesa_reale || 0)) >= 0 ? "#4CAF50" : "#f44336"} />
-                      <Text style={[styles.realTransactionNumber, { color: ((compatibility.guadagno_reale || 0) - (compatibility.spesa_reale || 0)) >= 0 ? "#4CAF50" : "#f44336" }]}>
-                        {((compatibility.guadagno_reale || 0) - (compatibility.spesa_reale || 0)) >= 0 ? '+' : ''}€{((compatibility.guadagno_reale || 0) - (compatibility.spesa_reale || 0)).toFixed(0)}
-                      </Text>
-                      <Text style={styles.realTransactionLabel}>saldo</Text>
-                    </View>
-                  </View>
-                </View>
                 
                 {/* PDF Download Button */}
                 <TouchableOpacity
