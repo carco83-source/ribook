@@ -2462,13 +2462,15 @@ async def get_child_compatibility(user_id: str, child_id: str):
     # ========================================
     # FUNZIONE HELPER: VERIFICA POTENZIALE USATO
     # ========================================
-    async def is_potentially_available_used(isbn: str, current_class: int, tipo_scuola: str) -> bool:
+    async def is_potentially_available_used(isbn: str, current_class: int, tipo_scuola: str, titolo: str = "", disciplina: str = "", codice_scuola: str = "") -> bool:
         """
         Verifica se un libro è potenzialmente disponibile usato.
         Cerca nelle adozioni di TUTTE le scuole dello stesso tipo (primo/secondo grado)
-        se il libro è stato adottato in classi superiori (quindi qualcuno potrebbe venderlo).
+        se il libro (o uno della stessa serie) è stato adottato in classi superiori.
+        
+        Per libri annuali (vol. 1, 2, 3), cerca se la STESSA SERIE è adottata in classi superiori.
         """
-        if not isbn:
+        if not isbn and not titolo:
             return False
         
         # Classi superiori a quella corrente
@@ -2484,14 +2486,63 @@ async def get_child_compatibility(user_id: str, child_id: str):
         if not classi_superiori:
             return False
         
-        # Cerca nelle adozioni se questo ISBN è stato adottato in classi superiori
-        # Non filtra per scuola specifica - cerca in TUTTE le scuole dello stesso tipo
+        # Prima cerca per ISBN esatto
         count = await db.adozioni.count_documents({
             "classe": {"$in": classi_superiori},
             "libri.isbn": isbn
         })
         
-        return count > 0
+        if count > 0:
+            return True
+        
+        # Se non trova per ISBN, cerca per SERIE (stesso titolo base + stessa disciplina)
+        # Prima cerca nella STESSA SCUOLA, poi in tutte le scuole
+        if titolo and disciplina:
+            import re
+            # Rimuovi numeri di volume, parentesi, suffissi, ecc.
+            titolo_base = titolo.upper()
+            # Rimuovi parentesi e contenuto
+            titolo_base = re.sub(r'\s*\([^)]*\)', '', titolo_base)
+            # Rimuovi numeri di volume
+            titolo_base = re.sub(r'\s+(VOL\.?\s*)?[123](\s|$)', ' ', titolo_base)
+            titolo_base = re.sub(r'\s+VOLUME\s+[123]', ' ', titolo_base)
+            titolo_base = re.sub(r'\s+[123]°?\s+(ANNO|VOL)', ' ', titolo_base)
+            # Rimuovi "ARITMETICA/GEOMETRIA 1/2/3"
+            titolo_base = re.sub(r'\s+(ARITMETICA|GEOMETRIA|ALGEBRA)\s+[123]', r' \1', titolo_base)
+            titolo_base = titolo_base.strip()
+            
+            if titolo_base:
+                # PRIMA cerca nella stessa scuola (più probabile)
+                if codice_scuola:
+                    adozioni_stessa_scuola = await db.adozioni.find({
+                        "codice_scuola": codice_scuola,
+                        "classe": {"$in": classi_superiori}
+                    }).to_list(50)
+                    
+                    for adoz in adozioni_stessa_scuola:
+                        for libro in adoz.get('libri', []):
+                            if disciplina.upper() in libro.get('disciplina', '').upper():
+                                titolo_libro = libro.get('titolo', '').upper()
+                                titolo_libro = re.sub(r'\s*\([^)]*\)', '', titolo_libro)
+                                # Verifica se è la stessa serie
+                                if titolo_base[:12] in titolo_libro or titolo_libro[:12] in titolo_base:
+                                    return True
+                
+                # POI cerca in tutte le scuole
+                adozioni = await db.adozioni.find({
+                    "classe": {"$in": classi_superiori},
+                    "libri.disciplina": {"$regex": disciplina.upper()[:10], "$options": "i"}
+                }).to_list(200)
+                
+                for adoz in adozioni:
+                    for libro in adoz.get('libri', []):
+                        if disciplina.upper()[:10] in libro.get('disciplina', '').upper():
+                            titolo_libro = libro.get('titolo', '').upper()
+                            titolo_libro = re.sub(r'\s*\([^)]*\)', '', titolo_libro)
+                            if titolo_base[:12] in titolo_libro or titolo_libro[:12] in titolo_base:
+                                return True
+        
+        return False
     
     # ========================================
     # NUOVA LOGICA: USA COLLEZIONE ADOZIONI
@@ -2770,8 +2821,13 @@ async def get_child_compatibility(user_id: str, child_id: str):
             
             # Verifica se potenzialmente disponibile usato
             potenzialmente_usato = False
-            if not is_nuova_edizione and isbn:
-                potenzialmente_usato = await is_potentially_available_used(isbn, child_classe, child_tipo)
+            if not is_nuova_edizione and (isbn or my_book.get("titolo")):
+                potenzialmente_usato = await is_potentially_available_used(
+                    isbn, child_classe, child_tipo, 
+                    titolo=my_book.get("titolo", ""), 
+                    disciplina=disc,
+                    codice_scuola=child_codice_scuola
+                )
             
             if copie_disponibili > 0:
                 # Ci sono copie usate disponibili - va in "usato"
@@ -2853,8 +2909,13 @@ async def get_child_compatibility(user_id: str, child_id: str):
                 # NUOVA LOGICA: Verifica se il libro è potenzialmente disponibile usato
                 # (adottato in classi superiori in altre scuole dello stesso tipo)
                 potenzialmente_usato = False
-                if not is_nuova_edizione and isbn:
-                    potenzialmente_usato = await is_potentially_available_used(isbn, child_classe, child_tipo)
+                if not is_nuova_edizione and (isbn or my_book.get("titolo")):
+                    potenzialmente_usato = await is_potentially_available_used(
+                        isbn, child_classe, child_tipo,
+                        titolo=my_book.get("titolo", ""),
+                        disciplina=disc,
+                        codice_scuola=child_codice_scuola
+                    )
                 
                 if potenzialmente_usato:
                     # Va nella sezione USATO anche se edizione diversa dalla classe successiva
@@ -2897,8 +2958,12 @@ async def get_child_compatibility(user_id: str, child_id: str):
             
             # NUOVA LOGICA: Verifica se il libro è potenzialmente disponibile usato
             potenzialmente_usato = False
-            if not is_nuova_edizione and isbn:
-                potenzialmente_usato = await is_potentially_available_used(isbn, child_classe, child_tipo)
+            if not is_nuova_edizione and (isbn or my_book.get("titolo")):
+                potenzialmente_usato = await is_potentially_available_used(
+                    isbn, child_classe, child_tipo,
+                    titolo=my_book.get("titolo", ""),
+                    disciplina=disc
+                )
             
             if potenzialmente_usato:
                 # Va nella sezione USATO
