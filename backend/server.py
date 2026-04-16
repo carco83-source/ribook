@@ -3054,14 +3054,23 @@ async def get_child_compatibility(user_id: str, child_id: str):
     vendibili = []
     non_vendibili = []
     
-    for disc, book_prec in prec_books_disc.items():  # Itera sui libri della classe PRECEDENTE
-        if disc in my_books_disc:
-            my_book = my_books_disc[disc]  # Libro della classe attuale (per confronto)
+    for key_prec, book_prec in prec_books_disc.items():  # Itera sui libri della classe PRECEDENTE
+        disc_prec = book_prec.get("disciplina_originale", "")
+        
+        # Trova il libro corrispondente nella classe attuale cercando per disciplina
+        my_book = None
+        for key, mb in my_books_disc.items():
+            disc_my = mb.get("disciplina_originale", "")
+            if disc_prec and disc_my and disc_prec.upper()[:15] == disc_my.upper()[:15]:
+                my_book = mb
+                break
+        
+        if my_book:
             if same_series(book_prec, my_book):
                 # Il libro della classe precedente è vendibile alla classe successiva
                 vendibili.append({
                     "isbn": book_prec.get("isbn", ""),
-                    "disciplina": disc,
+                    "disciplina": disc_prec,
                     "titolo": book_prec["titolo"][:50],  # Titolo del libro della classe PRECEDENTE
                     "editore": book_prec["editore"],
                     "prezzo_consigliato": round(book_prec["prezzo"] * 0.5, 2),
@@ -3070,7 +3079,7 @@ async def get_child_compatibility(user_id: str, child_id: str):
             else:
                 # Edizione cambiata - il libro della classe precedente non è più compatibile
                 non_vendibili.append({
-                    "disciplina": disc,
+                    "disciplina": disc_prec,
                     "isbn": book_prec.get("isbn", ""),
                     "titolo_vecchio": book_prec["titolo"][:40],  # Libro che avevi (classe precedente)
                     "titolo_nuovo": my_book["titolo"][:40],  # Libro nuovo adottato (classe attuale)
