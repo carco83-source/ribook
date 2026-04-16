@@ -562,10 +562,22 @@ agent_communication:
 
 test_plan:
   current_focus:
-    - "Complete Multi-Step Purchase Flow"
+    - "Book Classification Logic for 1st Year Middle School (Carmen)"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
+
+  - task: "Book Classification Logic - 1st Year Middle School"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Fixed book classification logic for Carmen (1st year middle school). Updated is_same_book_in_higher_classes to check if book is the SAME in BOTH 2nd AND 3rd year for unique volumes. Added nuova_adozione flag handling. Books with nuova_adozione=True or different editions in 2nd/3rd year now correctly go to 'nuovi' array. Result: 6 books NEW (Italiano, Scienze, Scienze Motorie, Arte, Musica, Religione), 6 books USED (Inglese, Storia, Geografia, Matematica, Tecnologia, Francese)."
 
 agent_communication:
   - agent: "main"

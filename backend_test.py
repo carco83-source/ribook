@@ -1,349 +1,288 @@
 #!/usr/bin/env python3
 """
-Test per verificare l'allineamento tra endpoint books-to-sell e compatibility (Radar)
+Backend Test for Book Classification Logic - Carmen (1st Year Middle School)
+Testing endpoint: /api/profiles/{user_id}/children/{child_id}/compatibility
+
+Expected Results for Carmen:
+- LIBRI NUOVI (nuovi.libri): 6 books (ITALIANO, SCIENZE, SCIENZE MOTORIE, ARTE E IMMAGINE, MUSICA, RELIGIONE)
+- LIBRI USATI (comprare.libri_usati): 6 books (LINGUA INGLESE, STORIA, GEOGRAFIA, MATEMATICA, TECNOLOGIA, SECONDA LINGUA COMUNITARIA - FRANCESE)
 """
 
 import requests
 import json
-from typing import Dict, List, Any
+import sys
+import os
 
-# Configuration
-BASE_URL = "https://language-check-10.preview.emergentagent.com/api"
-USER_ID = "3b633bd5-12ae-4050-9393-9e842df662c5"  # George - carco83@gmail.com
+# Get backend URL from environment
+BACKEND_URL = os.environ.get('EXPO_PUBLIC_BACKEND_URL', 'https://language-check-10.preview.emergentagent.com')
+API_BASE = f"{BACKEND_URL}/api"
 
-def test_books_to_sell_radar_alignment():
-    """
-    Test principale per verificare che l'endpoint books-to-sell restituisca
-    ESATTAMENTE gli stessi libri che appaiono nel Radar sotto "Libri che [NOME] può vendere alla Xª"
-    """
+# Test data
+USER_ID = "58ac430d-da2a-4954-bb2f-feea6de1f30c"
+CHILD_ID = "66ff6294-5695-4a67-bf92-798643a50ef2"  # Carmen
+SCHOOL_CODE = "CZMM86001P"  # I.C. Casalinuovo
+CLASS = 1  # First year middle school
+
+def test_book_classification():
+    """Test the book classification logic for Carmen (1st year middle school)"""
+    
     print("=" * 80)
-    print("TEST ENDPOINT BOOKS-TO-SELL vs RADAR COMPATIBILITY")
+    print("TESTING BOOK CLASSIFICATION LOGIC FOR CARMEN (1ST YEAR MIDDLE SCHOOL)")
     print("=" * 80)
+    print(f"User ID: {USER_ID}")
+    print(f"Child ID: {CHILD_ID}")
+    print(f"School: {SCHOOL_CODE} (I.C. Casalinuovo)")
+    print(f"Class: {CLASS} (first year middle school)")
+    print()
     
-    # Step 1: Get user data to find child IDs
-    print(f"\n1. Recupero dati utente {USER_ID}...")
+    # Test the compatibility endpoint
+    url = f"{API_BASE}/profiles/{USER_ID}/children/{CHILD_ID}/compatibility"
+    print(f"Testing endpoint: {url}")
+    
     try:
-        response = requests.get(f"{BASE_URL}/users/{USER_ID}")
+        response = requests.get(url, timeout=30)
+        print(f"Response status: {response.status_code}")
+        
         if response.status_code != 200:
-            print(f"❌ ERRORE: Impossibile recuperare dati utente. Status: {response.status_code}")
-            print(f"Response: {response.text}")
+            print(f"❌ ERROR: Expected status 200, got {response.status_code}")
+            print(f"Response text: {response.text}")
             return False
         
-        user_data = response.json()
-        profili_figli = user_data.get("profili_figli", [])
+        data = response.json()
+        print("✅ API call successful")
+        print()
         
-        if not profili_figli:
-            print("❌ ERRORE: Nessun profilo figlio trovato")
+        # Verify response structure
+        required_keys = ['nuovi', 'comprare', 'child_name', 'child_classe']
+        missing_keys = [key for key in required_keys if key not in data]
+        if missing_keys:
+            print(f"❌ ERROR: Missing required keys: {missing_keys}")
             return False
         
-        print(f"✅ Trovati {len(profili_figli)} profili figli:")
-        for profilo in profili_figli:
-            nome = profilo.get("nome_figlio", "N/A")
-            classe = profilo.get("classe", "N/A")
-            tipo = profilo.get("tipo_scuola", "N/A")
-            child_id = profilo.get("id", "N/A")
-            print(f"   - {nome} ({classe}° {tipo}) - ID: {child_id}")
+        print("✅ Response structure valid")
+        print()
         
-    except Exception as e:
-        print(f"❌ ERRORE nella richiesta utente: {e}")
-        return False
-    
-    # Step 2: Find GESON (4° superiore)
-    geson_profile = None
-    for profilo in profili_figli:
-        nome = profilo.get("nome_figlio", "").upper()
-        classe = int(profilo.get("classe", 0))
-        tipo = profilo.get("tipo_scuola", "")
+        # Extract key data
+        nuovi = data.get('nuovi', {})
+        comprare = data.get('comprare', {})
+        child_name = data.get('child_name', '')
+        child_classe = data.get('child_classe', 0)
         
-        if "GESON" in nome and classe == 4 and tipo == "secondo_grado":
-            geson_profile = profilo
-            break
-    
-    if not geson_profile:
-        print("❌ ERRORE: Profilo GESON (4° superiore) non trovato")
-        print("Profili disponibili:")
-        for profilo in profili_figli:
-            nome = profilo.get("nome_figlio", "N/A")
-            classe = profilo.get("classe", "N/A")
-            tipo = profilo.get("tipo_scuola", "N/A")
-            print(f"   - {nome} ({classe}° {tipo})")
-        return False
-    
-    geson_id = geson_profile.get("id")
-    geson_nome = geson_profile.get("nome_figlio")
-    print(f"\n✅ Trovato profilo GESON: {geson_nome} (ID: {geson_id})")
-    
-    # Step 3: Test Compatibility endpoint (Radar)
-    print(f"\n2. Test endpoint Compatibility (Radar) per GESON...")
-    try:
-        response = requests.get(f"{BASE_URL}/profiles/{USER_ID}/children/{geson_id}/compatibility")
-        if response.status_code != 200:
-            print(f"❌ ERRORE: Compatibility endpoint failed. Status: {response.status_code}")
-            print(f"Response: {response.text}")
-            return False
+        print(f"Child Name: {child_name}")
+        print(f"Child Class: {child_classe}")
+        print()
         
-        compatibility_data = response.json()
-        vendere_section = compatibility_data.get("vendere", {})
-        libri_vendibili_radar = vendere_section.get("libri_vendibili", [])
+        # Test LIBRI NUOVI (should be 6 books)
+        print("TESTING LIBRI NUOVI:")
+        print("-" * 40)
         
-        print(f"✅ Compatibility endpoint OK")
-        print(f"   - Classe destinazione: {vendere_section.get('classe_destinazione', 'N/A')}")
-        print(f"   - Totale vendibili nel Radar: {len(libri_vendibili_radar)}")
+        nuovi_libri = nuovi.get('libri', [])
+        nuovi_totale = nuovi.get('totale', 0)
+        nuovi_costo = nuovi.get('costo_totale', 0)
         
-        if libri_vendibili_radar:
-            print("   - Libri vendibili nel Radar:")
-            for i, libro in enumerate(libri_vendibili_radar, 1):
-                titolo = libro.get("titolo", "N/A")
-                isbn = libro.get("isbn", "N/A")
-                disciplina = libro.get("disciplina", "N/A")
-                status = libro.get("status", "N/A")
-                print(f"     {i}. {titolo[:50]} (ISBN: {isbn}) - {disciplina} - {status}")
+        print(f"Total new books: {nuovi_totale}")
+        print(f"Expected: 6")
+        print(f"Total cost: €{nuovi_costo}")
+        print(f"Expected: around €172.60")
+        print()
+        
+        if nuovi_totale != 6:
+            print(f"❌ ERROR: Expected 6 new books, got {nuovi_totale}")
         else:
-            print("   - Nessun libro vendibile nel Radar")
+            print("✅ Correct number of new books")
         
-    except Exception as e:
-        print(f"❌ ERRORE nella richiesta compatibility: {e}")
-        return False
-    
-    # Step 4: Test Books-to-sell endpoint
-    print(f"\n3. Test endpoint Books-to-sell per GESON...")
-    try:
-        response = requests.get(f"{BASE_URL}/profiles/{USER_ID}/children/{geson_id}/books-to-sell")
-        if response.status_code != 200:
-            print(f"❌ ERRORE: Books-to-sell endpoint failed. Status: {response.status_code}")
-            print(f"Response: {response.text}")
-            return False
-        
-        books_to_sell_data = response.json()
-        books_to_sell = books_to_sell_data.get("books", [])
-        
-        print(f"✅ Books-to-sell endpoint OK")
-        print(f"   - Classe attuale: {books_to_sell_data.get('classe_attuale', 'N/A')}")
-        print(f"   - Classe destinazione: {books_to_sell_data.get('classe_destinazione', 'N/A')}")
-        print(f"   - Totale libri in books-to-sell: {len(books_to_sell)}")
-        print(f"   - Message: {books_to_sell_data.get('message', 'N/A')}")
-        
-        if books_to_sell:
-            print("   - Libri in books-to-sell:")
-            for i, libro in enumerate(books_to_sell, 1):
-                titolo = libro.get("titolo", "N/A")
-                isbn = libro.get("isbn", "N/A")
-                disciplina = libro.get("disciplina", "N/A")
-                status = libro.get("status", "N/A")
-                print(f"     {i}. {titolo[:50]} (ISBN: {isbn}) - {disciplina} - {status}")
+        if abs(nuovi_costo - 172.60) > 20:  # Allow some tolerance
+            print(f"⚠️  WARNING: Cost {nuovi_costo} differs significantly from expected 172.60")
         else:
-            print("   - Nessun libro in books-to-sell")
+            print("✅ Cost is within expected range")
         
-    except Exception as e:
-        print(f"❌ ERRORE nella richiesta books-to-sell: {e}")
-        return False
-    
-    # Step 5: Compare the results
-    print(f"\n4. CONFRONTO RISULTATI:")
-    print("=" * 50)
-    
-    # Extract ISBN lists for comparison
-    radar_isbns = set(libro.get("isbn", "") for libro in libri_vendibili_radar if libro.get("isbn"))
-    books_to_sell_isbns = set(libro.get("isbn", "") for libro in books_to_sell if libro.get("isbn"))
-    
-    # Extract title lists for comparison (in case ISBN is missing)
-    radar_titles = set(libro.get("titolo", "").strip().upper() for libro in libri_vendibili_radar)
-    books_to_sell_titles = set(libro.get("titolo", "").strip().upper() for libro in books_to_sell)
-    
-    print(f"📊 STATISTICHE:")
-    print(f"   - Radar (libri_vendibili): {len(libri_vendibili_radar)} libri")
-    print(f"   - Books-to-sell: {len(books_to_sell)} libri")
-    print(f"   - ISBN nel Radar: {len(radar_isbns)} ISBN")
-    print(f"   - ISBN in books-to-sell: {len(books_to_sell_isbns)} ISBN")
-    
-    # Check if books-to-sell is a subset of radar vendibili
-    missing_in_books_to_sell = radar_isbns - books_to_sell_isbns
-    extra_in_books_to_sell = books_to_sell_isbns - radar_isbns
-    
-    print(f"\n🔍 ANALISI ALLINEAMENTO:")
-    
-    if len(missing_in_books_to_sell) == 0 and len(extra_in_books_to_sell) == 0:
-        print("✅ PERFETTO ALLINEAMENTO: I libri in books-to-sell corrispondono ESATTAMENTE a quelli nel Radar")
-        alignment_score = 100
-    elif len(extra_in_books_to_sell) == 0:
-        print("✅ SUBSET CORRETTO: Books-to-sell è un sottoinsieme corretto del Radar")
-        print(f"   - Libri nel Radar ma non in books-to-sell: {len(missing_in_books_to_sell)}")
-        alignment_score = 90
-    else:
-        print("❌ DISALLINEAMENTO RILEVATO:")
-        alignment_score = 50
-    
-    if missing_in_books_to_sell:
-        print(f"\n📋 LIBRI NEL RADAR MA NON IN BOOKS-TO-SELL ({len(missing_in_books_to_sell)}):")
-        for isbn in missing_in_books_to_sell:
-            # Find the book details
-            for libro in libri_vendibili_radar:
-                if libro.get("isbn") == isbn:
-                    titolo = libro.get("titolo", "N/A")
-                    disciplina = libro.get("disciplina", "N/A")
-                    print(f"   - {titolo[:40]} (ISBN: {isbn}) - {disciplina}")
-                    break
-    
-    if extra_in_books_to_sell:
-        print(f"\n📋 LIBRI IN BOOKS-TO-SELL MA NON NEL RADAR ({len(extra_in_books_to_sell)}):")
-        for isbn in extra_in_books_to_sell:
-            # Find the book details
-            for libro in books_to_sell:
-                if libro.get("isbn") == isbn:
-                    titolo = libro.get("titolo", "N/A")
-                    disciplina = libro.get("disciplina", "N/A")
-                    print(f"   - {titolo[:40]} (ISBN: {isbn}) - {disciplina}")
-                    break
-    
-    # Step 6: Test with other children (MIMMO, LUIGINA)
-    print(f"\n5. TEST RAPIDO ALTRI PROFILI:")
-    print("=" * 40)
-    
-    for profilo in profili_figli:
-        nome = profilo.get("nome_figlio", "")
-        child_id = profilo.get("id")
+        print()
+        print("New books details:")
+        expected_new_subjects = {
+            'ITALIANO', 'SCIENZE', 'SCIENZE MOTORIE', 'ARTE E IMMAGINE', 'MUSICA', 'RELIGIONE'
+        }
+        found_subjects = set()
         
-        if nome.upper() in ["MIMMO", "LUIGINA"]:
-            print(f"\n🔍 Test rapido per {nome}:")
-            try:
-                # Test compatibility
-                comp_resp = requests.get(f"{BASE_URL}/profiles/{USER_ID}/children/{child_id}/compatibility")
-                if comp_resp.status_code == 200:
-                    comp_data = comp_resp.json()
-                    radar_vendibili = len(comp_data.get("vendere", {}).get("libri_vendibili", []))
-                    print(f"   - Radar vendibili: {radar_vendibili}")
-                else:
-                    print(f"   - Radar: ERRORE {comp_resp.status_code}")
-                    continue
-                
-                # Test books-to-sell
-                bts_resp = requests.get(f"{BASE_URL}/profiles/{USER_ID}/children/{child_id}/books-to-sell")
-                if bts_resp.status_code == 200:
-                    bts_data = bts_resp.json()
-                    bts_books = len(bts_data.get("books", []))
-                    print(f"   - Books-to-sell: {bts_books}")
-                    print(f"   - Allineamento: {'✅' if radar_vendibili == bts_books else '❌'}")
-                else:
-                    print(f"   - Books-to-sell: ERRORE {bts_resp.status_code}")
-                
-            except Exception as e:
-                print(f"   - ERRORE: {e}")
-    
-    # Final result
-    print(f"\n" + "=" * 80)
-    print(f"🎯 RISULTATO FINALE:")
-    print(f"   - Alignment Score: {alignment_score}%")
-    
-    if alignment_score >= 90:
-        print("✅ TEST SUPERATO: L'endpoint books-to-sell è correttamente allineato con il Radar")
-        return True
-    else:
-        print("❌ TEST FALLITO: Disallineamento rilevato tra books-to-sell e Radar")
-        return False
-
-def test_non_sellable_books_verification():
-    """
-    Test aggiuntivo per verificare che i libri NON vendibili (edizione cambiata)
-    NON appaiano in books-to-sell
-    """
-    print(f"\n" + "=" * 80)
-    print("TEST VERIFICA LIBRI NON VENDIBILI")
-    print("=" * 80)
-    
-    try:
-        # Get GESON profile again
-        response = requests.get(f"{BASE_URL}/users/{USER_ID}")
-        user_data = response.json()
-        profili_figli = user_data.get("profili_figli", [])
-        
-        geson_profile = None
-        for profilo in profili_figli:
-            nome = profilo.get("nome_figlio", "").upper()
-            classe = int(profilo.get("classe", 0))
-            tipo = profilo.get("tipo_scuola", "")
+        for i, libro in enumerate(nuovi_libri, 1):
+            disciplina = libro.get('disciplina', '').upper()
+            titolo = libro.get('titolo', '')
+            motivo = libro.get('motivo', '')
+            prezzo = libro.get('prezzo', 0)
             
-            if "GESON" in nome and classe == 4 and tipo == "secondo_grado":
-                geson_profile = profilo
-                break
+            print(f"  {i}. {disciplina}: {titolo[:50]} - €{prezzo}")
+            if motivo:
+                print(f"     Reason: {motivo}")
+            
+            found_subjects.add(disciplina)
         
-        if not geson_profile:
-            print("❌ Profilo GESON non trovato")
-            return False
+        print()
         
-        geson_id = geson_profile.get("id")
+        # Check if we have the expected subjects
+        missing_subjects = expected_new_subjects - found_subjects
+        extra_subjects = found_subjects - expected_new_subjects
         
-        # Get compatibility data
-        comp_resp = requests.get(f"{BASE_URL}/profiles/{USER_ID}/children/{geson_id}/compatibility")
-        comp_data = comp_resp.json()
+        if missing_subjects:
+            print(f"❌ ERROR: Missing expected subjects in new books: {missing_subjects}")
+        if extra_subjects:
+            print(f"⚠️  WARNING: Extra subjects in new books: {extra_subjects}")
+        if not missing_subjects and not extra_subjects:
+            print("✅ All expected subjects found in new books")
         
-        libri_non_vendibili = comp_data.get("vendere", {}).get("libri_non_vendibili", [])
+        print()
         
-        # Get books-to-sell data
-        bts_resp = requests.get(f"{BASE_URL}/profiles/{USER_ID}/children/{geson_id}/books-to-sell")
-        bts_data = bts_resp.json()
-        books_to_sell = bts_data.get("books", [])
+        # Test LIBRI USATI (should be 6 books)
+        print("TESTING LIBRI USATI:")
+        print("-" * 40)
         
-        print(f"📊 LIBRI NON VENDIBILI NEL RADAR: {len(libri_non_vendibili)}")
-        if libri_non_vendibili:
-            for libro in libri_non_vendibili:
-                titolo_vecchio = libro.get("titolo_vecchio", "N/A")
-                titolo_nuovo = libro.get("titolo_nuovo", "N/A")
-                status = libro.get("status", "N/A")
-                print(f"   - {titolo_vecchio} → {titolo_nuovo} ({status})")
+        usati_libri = comprare.get('libri_usati', [])
+        usati_totale = comprare.get('totale_usati', len(usati_libri))
         
-        # Check if any non-sellable books appear in books-to-sell
-        print(f"\n🔍 VERIFICA: I libri NON vendibili NON devono apparire in books-to-sell")
+        print(f"Total used books: {usati_totale}")
+        print(f"Expected: 6")
+        print()
         
-        # This is a logical check - if books are marked as non-sellable due to edition changes,
-        # they should not appear in the books-to-sell list
-        non_vendibili_titles = set()
-        for libro in libri_non_vendibili:
-            titolo_vecchio = libro.get("titolo_vecchio", "").strip().upper()
-            if titolo_vecchio:
-                non_vendibili_titles.add(titolo_vecchio)
+        if usati_totale != 6:
+            print(f"❌ ERROR: Expected 6 used books, got {usati_totale}")
+        else:
+            print("✅ Correct number of used books")
         
-        books_to_sell_titles = set()
-        for libro in books_to_sell:
-            titolo = libro.get("titolo", "").strip().upper()
-            if titolo:
-                books_to_sell_titles.add(titolo)
+        print()
+        print("Used books details:")
+        expected_used_subjects = {
+            'LINGUA INGLESE', 'STORIA', 'GEOGRAFIA', 'MATEMATICA', 'TECNOLOGIA', 
+            'SECONDA LINGUA COMUNITARIA - FRANCESE', 'FRANCESE'  # Allow both forms
+        }
+        found_used_subjects = set()
         
-        # Check for overlap (should be none)
-        overlap = non_vendibili_titles.intersection(books_to_sell_titles)
+        for i, libro in enumerate(usati_libri, 1):
+            disciplina = libro.get('disciplina', '').upper()
+            titolo = libro.get('titolo', '')
+            status = libro.get('status', '')
+            prezzo_nuovo = libro.get('prezzo_nuovo', 0)
+            prezzo_usato = libro.get('prezzo_usato', 0)
+            
+            print(f"  {i}. {disciplina}: {titolo[:50]}")
+            print(f"     Status: {status}, New: €{prezzo_nuovo}, Used: €{prezzo_usato}")
+            
+            found_used_subjects.add(disciplina)
         
-        if not overlap:
-            print("✅ CORRETTO: Nessun libro NON vendibile appare in books-to-sell")
+        print()
+        
+        # Check if we have the expected subjects (with some flexibility for French)
+        # Accept either "SECONDA LINGUA COMUNITARIA - FRANCESE" or "FRANCESE"
+        if 'FRANCESE' in found_used_subjects or 'SECONDA LINGUA COMUNITARIA - FRANCESE' in found_used_subjects:
+            expected_used_subjects.discard('SECONDA LINGUA COMUNITARIA - FRANCESE')
+            expected_used_subjects.discard('FRANCESE')
+            expected_used_subjects.add('FRANCESE')  # Normalize to FRANCESE
+            found_used_subjects.discard('SECONDA LINGUA COMUNITARIA - FRANCESE')
+            found_used_subjects.add('FRANCESE')
+        
+        missing_used_subjects = expected_used_subjects - found_used_subjects
+        extra_used_subjects = found_used_subjects - expected_used_subjects
+        
+        if missing_used_subjects:
+            print(f"❌ ERROR: Missing expected subjects in used books: {missing_used_subjects}")
+        if extra_used_subjects:
+            print(f"⚠️  WARNING: Extra subjects in used books: {extra_used_subjects}")
+        if not missing_used_subjects and not extra_used_subjects:
+            print("✅ All expected subjects found in used books")
+        
+        print()
+        
+        # Test specific criteria from the request
+        print("TESTING SPECIFIC CRITERIA:")
+        print("-" * 40)
+        
+        # Check for nuova_adozione books in new books
+        nuova_adozione_count = 0
+        for libro in nuovi_libri:
+            if libro.get('is_nuova_adozione') or 'nuova adozione' in libro.get('motivo', '').lower():
+                nuova_adozione_count += 1
+        
+        print(f"Books with 'nuova_adozione' in new books: {nuova_adozione_count}")
+        
+        # Check for volume unico books
+        volume_unico_new = 0
+        volume_unico_used = 0
+        
+        for libro in nuovi_libri:
+            if libro.get('is_volume_unico') or 'volume unico' in libro.get('motivo', '').lower():
+                volume_unico_new += 1
+                disciplina = libro.get('disciplina', '').upper()
+                print(f"  Volume unico in NEW: {disciplina}")
+        
+        for libro in usati_libri:
+            if libro.get('is_volume_unico'):
+                volume_unico_used += 1
+                disciplina = libro.get('disciplina', '').upper()
+                print(f"  Volume unico in USED: {disciplina}")
+        
+        print()
+        
+        # Summary
+        print("SUMMARY:")
+        print("-" * 40)
+        total_errors = 0
+        
+        if nuovi_totale == 6:
+            print("✅ Correct number of new books (6)")
+        else:
+            print(f"❌ Wrong number of new books: {nuovi_totale} (expected 6)")
+            total_errors += 1
+        
+        if usati_totale == 6:
+            print("✅ Correct number of used books (6)")
+        else:
+            print(f"❌ Wrong number of used books: {usati_totale} (expected 6)")
+            total_errors += 1
+        
+        if not missing_subjects:
+            print("✅ All expected subjects in new books")
+        else:
+            print(f"❌ Missing subjects in new books: {missing_subjects}")
+            total_errors += 1
+        
+        if not missing_used_subjects:
+            print("✅ All expected subjects in used books")
+        else:
+            print(f"❌ Missing subjects in used books: {missing_used_subjects}")
+            total_errors += 1
+        
+        print()
+        
+        if total_errors == 0:
+            print("🎉 ALL TESTS PASSED! Book classification logic is working correctly.")
             return True
         else:
-            print(f"❌ ERRORE: {len(overlap)} libri NON vendibili appaiono in books-to-sell:")
-            for titolo in overlap:
-                print(f"   - {titolo}")
+            print(f"❌ {total_errors} test(s) failed. Book classification logic needs fixes.")
             return False
         
+    except requests.exceptions.RequestException as e:
+        print(f"❌ ERROR: Request failed: {e}")
+        return False
+    except json.JSONDecodeError as e:
+        print(f"❌ ERROR: Invalid JSON response: {e}")
+        return False
     except Exception as e:
-        print(f"❌ ERRORE nel test libri non vendibili: {e}")
+        print(f"❌ ERROR: Unexpected error: {e}")
         return False
 
-if __name__ == "__main__":
-    print("🚀 AVVIO TEST BOOKS-TO-SELL vs RADAR ALIGNMENT")
-    print("User ID:", USER_ID)
-    print("Backend URL:", BASE_URL)
+def main():
+    """Main test function"""
+    print("Starting Book Classification Logic Test...")
+    print(f"Backend URL: {BACKEND_URL}")
+    print()
     
-    # Run main test
-    main_test_passed = test_books_to_sell_radar_alignment()
+    success = test_book_classification()
     
-    # Run additional verification
-    non_sellable_test_passed = test_non_sellable_books_verification()
-    
-    print(f"\n" + "=" * 80)
-    print("📋 RIEPILOGO FINALE:")
-    print(f"   - Test allineamento principale: {'✅ PASS' if main_test_passed else '❌ FAIL'}")
-    print(f"   - Test libri non vendibili: {'✅ PASS' if non_sellable_test_passed else '❌ FAIL'}")
-    
-    overall_success = main_test_passed and non_sellable_test_passed
-    print(f"   - Risultato complessivo: {'✅ TUTTI I TEST SUPERATI' if overall_success else '❌ ALCUNI TEST FALLITI'}")
-    
-    if overall_success:
-        print("\n🎉 L'endpoint books-to-sell è correttamente allineato con il Radar!")
+    print()
+    print("=" * 80)
+    if success:
+        print("✅ BOOK CLASSIFICATION TEST COMPLETED SUCCESSFULLY")
+        sys.exit(0)
     else:
-        print("\n⚠️  Sono stati rilevati problemi di allineamento che richiedono correzione.")
+        print("❌ BOOK CLASSIFICATION TEST FAILED")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()
