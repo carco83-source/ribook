@@ -3396,10 +3396,11 @@ async def get_child_compatibility(user_id: str, child_id: str):
             })
         
         # =====================================================
-        # LOGICA SEMPLIFICATA BASATA SU nuova_adozione (NUOVAADOZ)
+        # LOGICA BASATA SU nuova_adozione + VOLUMI UNICI
         # =====================================================
-        # - nuova_adozione=True (NUOVAADOZ=Si) → libro NON disponibile usato, solo NUOVO
-        # - nuova_adozione=False (NUOVAADOZ=No) → libro potenzialmente disponibile USATO
+        # - nuova_adozione=True → libro NON disponibile usato, solo NUOVO
+        # - nuova_adozione=False + Volume Unico → verifica se ciclo completato
+        # - nuova_adozione=False + Libro Annuale → potenzialmente USATO
         # =====================================================
         
         is_nuova_adozione = my_book.get("nuova_adozione", False)
@@ -3417,12 +3418,10 @@ async def get_child_compatibility(user_id: str, child_id: str):
                 "status": "available"
             })
         
-        # REGOLA PRINCIPALE: Se nuova_adozione=True → NON disponibile usato
+        # REGOLA 1: Se nuova_adozione=True → NON disponibile usato
         if is_nuova_adozione or is_nuova_edizione:
             # Libro NUOVO - non può essere comprato usato
             if copie_disponibili > 0:
-                # Paradosso: nuova adozione ma ci sono copie? Probabile errore dati
-                # Comunque offriamo l'usato se disponibile
                 comprare_usato.append({
                     "isbn": isbn,
                     "disciplina": disc,
@@ -3446,10 +3445,65 @@ async def get_child_compatibility(user_id: str, child_id: str):
                     "copie_usate_disponibili": 0,
                     "is_nuova_edizione": is_nuova_edizione,
                     "is_nuova_adozione": is_nuova_adozione,
+                    "is_volume_unico": is_volume_unico,
                     "motivo": motivo
                 })
+        
+        # REGOLA 2: Volume Unico con nuova_adozione=False
+        # Deve verificare se il ciclo è stato completato (libro adottato da 3+ anni per medie)
+        elif is_volume_unico:
+            # Per volumi unici, verifica se è LO STESSO libro nelle classi superiori
+            # e se il ciclo è stato completato
+            libro_originale = my_book.get("libri_multipli", [my_book])[0]
+            ciclo_completato = await is_same_book_in_higher_classes(
+                libro_originale, child_codice_scuola, disc, child_tipo, child_classe
+            )
+            
+            if copie_disponibili > 0:
+                comprare_usato.append({
+                    "isbn": isbn,
+                    "disciplina": disc,
+                    "titolo": my_book["titolo"][:50],
+                    "editore": my_book["editore"],
+                    "prezzo_nuovo": my_book["prezzo"],
+                    "prezzo_usato": round(my_book["prezzo"] * 0.5, 2),
+                    "risparmio": round(my_book["prezzo"] * 0.5, 2),
+                    "copie_disponibili": copie_disponibili,
+                    "status": "USATO DISPONIBILE",
+                    "is_volume_unico": True
+                })
+            elif ciclo_completato:
+                # Volume unico con ciclo completato - può essere trovato usato
+                comprare_usato.append({
+                    "isbn": isbn,
+                    "disciplina": disc,
+                    "titolo": my_book["titolo"][:50],
+                    "editore": my_book["editore"],
+                    "prezzo_nuovo": my_book["prezzo"],
+                    "prezzo_usato": round(my_book["prezzo"] * 0.5, 2),
+                    "risparmio": round(my_book["prezzo"] * 0.5, 2),
+                    "copie_disponibili": 0,
+                    "status": "CERCA USATO",
+                    "is_volume_unico": True,
+                    "motivo": "Volume unico triennale - ciclo già completato, cerca copie usate"
+                })
+            else:
+                # Volume unico ma ciclo NON completato - deve comprare NUOVO
+                comprare_nuovo.append({
+                    "isbn": isbn,
+                    "disciplina": disc,
+                    "titolo": my_book["titolo"],
+                    "editore": my_book["editore"],
+                    "prezzo": my_book["prezzo"],
+                    "copie_usate_disponibili": 0,
+                    "is_nuova_edizione": False,
+                    "is_nuova_adozione": False,
+                    "is_volume_unico": True,
+                    "motivo": "Volume unico - primo ciclo in corso, da comprare nuovo"
+                })
+        
+        # REGOLA 3: Libro Annuale con nuova_adozione=False → potenzialmente USATO
         else:
-            # nuova_adozione=False → libro già adottato in passato → POTENZIALMENTE USATO
             if copie_disponibili > 0:
                 comprare_usato.append({
                     "isbn": isbn,
@@ -3474,7 +3528,7 @@ async def get_child_compatibility(user_id: str, child_id: str):
                     "risparmio": round(my_book["prezzo"] * 0.5, 2),
                     "copie_disponibili": 0,
                     "status": "CERCA USATO",
-                    "motivo": "Libro confermato da anni precedenti - cerca copie usate"
+                    "motivo": "Libro annuale confermato - cerca copie usate"
                 })
     
     # Calcoli finali
