@@ -2315,9 +2315,7 @@ async def get_class_compatibility(user_id: str):
         "vendere": {
             "classe_destinazione": classe_precedente,
             "totale_vendibili": num_vendibili,
-            "totale_non_vendibili": num_non_vendibili,
-            "libri_vendibili": vendibili,
-            "libri_non_vendibili": non_vendibili
+            "libri": vendibili  # Solo libri vendibili nel radar
         },
         
         "comprare": {
@@ -3777,9 +3775,7 @@ async def get_child_compatibility(user_id: str, child_id: str):
         "vendere": {
             "classe_destinazione": classe_precedente,
             "totale_vendibili": num_vendibili,
-            "totale_non_vendibili": num_non_vendibili,
-            "libri_vendibili": vendibili,
-            "libri_non_vendibili": non_vendibili
+            "libri": vendibili
         },
         
         "comprare": {
