@@ -2614,11 +2614,24 @@ async def get_child_compatibility(user_id: str, child_id: str):
     
     async def is_same_book_in_higher_classes(libro: dict, codice_scuola: str, disciplina: str, tipo_scuola: str) -> bool:
         """
-        Per libri UNICI: verifica se è LO STESSO libro (stesso titolo base + editore) 
-        adottato in classi 2 e 3 della stessa scuola.
-        Se è diverso, il libro NON può essere comprato usato (nuova edizione).
+        Per libri UNICI TRIENNALI (scuole medie): verifica se è LO STESSO libro 
+        (stesso titolo base + editore) adottato in ENTRAMBE le classi 2 E 3 della stessa scuola.
+        
+        LOGICA CORRETTA:
+        - Per poter comprare USATO un volume unico, deve essere lo STESSO libro
+          in tutte e 3 le classi (1ª, 2ª, 3ª)
+        - Se cambia in 2ª OPPURE in 3ª → deve comprare NUOVO
+        - Chi finisce la 3ª può vendere il libro SOLO se è lo stesso anche in 1ª e 2ª
+        
+        Esempio pratico (Casalinuovo):
+        - Musica: "Prima la musica!" in 1ª e 2ª, ma "Bebop" in 3ª → NON può comprare usato
+        - Tecnologia: "Futura" in 1ª, 2ª e 3ª → PUÒ comprare usato
         """
         import re
+        
+        # Se il libro ha nuova_adozione=True, NON può essere comprato usato
+        if libro.get('nuova_adozione', False):
+            return False
         
         titolo = libro.get('titolo', '').upper()
         editore = libro.get('editore', '').upper()[:15]
@@ -2631,34 +2644,72 @@ async def get_child_compatibility(user_id: str, child_id: str):
         if not titolo_base:
             return False
         
-        # Cerca nelle classi 2 e 3 della stessa scuola
-        for classe in [2, 3]:
-            adoz = await db.adozioni.find_one({
-                'codice_scuola': codice_scuola,
-                'classe': classe
-            })
+        # Per scuole medie (primo_grado): verifica che sia lo STESSO libro SIA in 2ª CHE in 3ª
+        if tipo_scuola == "primo_grado":
+            same_in_class_2 = False
+            same_in_class_3 = False
             
-            if not adoz:
-                continue
-            
-            for libro_sup in adoz.get('libri', []):
-                # Cerca nella stessa disciplina
-                if disciplina.upper()[:15] not in libro_sup.get('disciplina', '').upper():
+            for classe in [2, 3]:
+                adoz = await db.adozioni.find_one({
+                    'codice_scuola': codice_scuola,
+                    'classe': classe
+                })
+                
+                if not adoz:
+                    # Se non c'è adozione per questa classe, considera come "diverso"
                     continue
                 
-                # Confronta titolo ed editore
-                titolo_sup = libro_sup.get('titolo', '').upper()
-                editore_sup = libro_sup.get('editore', '').upper()[:15]
+                for libro_sup in adoz.get('libri', []):
+                    # Cerca nella stessa disciplina E deve essere volume unico
+                    if disciplina.upper()[:15] not in libro_sup.get('disciplina', '').upper():
+                        continue
+                    if not libro_sup.get('is_volume_unico', False):
+                        continue
+                    
+                    # Confronta titolo ed editore
+                    titolo_sup = libro_sup.get('titolo', '').upper()
+                    editore_sup = libro_sup.get('editore', '').upper()[:15]
+                    
+                    titolo_sup_base = re.sub(r'\s*-\s*(VOLUME|VOL\.?|CONFEZIONE|EDIZIONE|ED\.).*', '', titolo_sup)
+                    titolo_sup_base = re.sub(r'\s*\([^)]*\)', '', titolo_sup_base)
+                    titolo_sup_base = titolo_sup_base.strip()[:25]
+                    
+                    # Verifica se è LO STESSO libro
+                    if titolo_base[:15] == titolo_sup_base[:15] and editore == editore_sup:
+                        if classe == 2:
+                            same_in_class_2 = True
+                        else:
+                            same_in_class_3 = True
+                        break
+            
+            # Può comprare usato SOLO se è lo stesso libro in ENTRAMBE le classi 2 e 3
+            return same_in_class_2 and same_in_class_3
+        else:
+            # Per superiori: logica esistente (verifica in una qualsiasi classe superiore)
+            for classe in [2, 3, 4, 5]:
+                adoz = await db.adozioni.find_one({
+                    'codice_scuola': codice_scuola,
+                    'classe': classe
+                })
                 
-                titolo_sup_base = re.sub(r'\s*-\s*(VOLUME|VOL\.?|CONFEZIONE|EDIZIONE|ED\.).*', '', titolo_sup)
-                titolo_sup_base = re.sub(r'\s*\([^)]*\)', '', titolo_sup_base)
-                titolo_sup_base = titolo_sup_base.strip()[:25]
+                if not adoz:
+                    continue
                 
-                # Verifica se è LO STESSO libro
-                if titolo_base[:15] == titolo_sup_base[:15] and editore == editore_sup:
-                    return True  # Stesso libro - può essere comprato usato
-        
-        return False  # Libro diverso - deve comprare nuovo
+                for libro_sup in adoz.get('libri', []):
+                    if disciplina.upper()[:15] not in libro_sup.get('disciplina', '').upper():
+                        continue
+                    
+                    titolo_sup = libro_sup.get('titolo', '').upper()
+                    editore_sup = libro_sup.get('editore', '').upper()[:15]
+                    
+                    titolo_sup_base = re.sub(r'\s*-\s*(VOLUME|VOL\.?|CONFEZIONE|EDIZIONE|ED\.).*', '', titolo_sup)
+                    titolo_sup_base = re.sub(r'\s*\([^)]*\)', '', titolo_sup_base)
+                    titolo_sup_base = titolo_sup_base.strip()[:25]
+                    
+                    if titolo_base[:15] == titolo_sup_base[:15] and editore == editore_sup:
+                        return True
+            
+            return False
     
     # ========================================
     # FUNZIONE HELPER: VERIFICA POTENZIALE USATO (legacy - mantenuta per compatibilità)
@@ -2946,7 +2997,9 @@ async def get_child_compatibility(user_id: str, child_id: str):
                         "autori": b.get("autori", ""),
                         "prezzo": b.get("prezzo_copertina", 0),
                         "titolo_base": get_series_name(b.get("titolo", "")),
-                        "libri_multipli": [b]  # Lista per tenere traccia di tutti i libri
+                        "libri_multipli": [b],  # Lista per tenere traccia di tutti i libri
+                        "is_volume_unico": b.get("is_volume_unico", False),
+                        "nuova_adozione": b.get("nuova_adozione", False)
                     }
                 elif merge_duplicates:
                     # C'è già un libro per questa disciplina - somma il prezzo
@@ -2955,6 +3008,11 @@ async def get_child_compatibility(user_id: str, child_id: str):
                     # Aggiorna titolo se necessario
                     if len(result[disc]["libri_multipli"]) > 1:
                         result[disc]["titolo"] = result[disc]["titolo"][:30] + f" + altri {len(result[disc]['libri_multipli'])-1}"
+                    # Se almeno uno dei libri è volume unico o nuova adozione, segna come tale
+                    if b.get("is_volume_unico", False):
+                        result[disc]["is_volume_unico"] = True
+                    if b.get("nuova_adozione", False):
+                        result[disc]["nuova_adozione"] = True
         return result
     
     my_books_disc = books_by_discipline(my_books)
@@ -3021,17 +3079,24 @@ async def get_child_compatibility(user_id: str, child_id: str):
             titolo_upper = my_book["titolo"].upper()
             is_nuova_edizione = "2025" in titolo_upper or "2026" in titolo_upper or "NUOVA EDIZIONE" in titolo_upper
             
+            # Verifica se il libro ha nuova_adozione=True (dal DB)
+            is_nuova_adozione = my_book.get("nuova_adozione", False)
+            
             # Verifica se il libro è un volume unico
             is_volume_unico = my_book.get("is_volume_unico", False) or my_book.get("libri_multipli", [{}])[0].get("is_volume_unico", False)
             
             # Per i volumi UNICI, verifica se è LO STESSO libro in 2ª e 3ª
             potenzialmente_usato = False
-            if is_nuova_edizione:
+            
+            # Se è nuova adozione O nuova edizione, NON può essere comprato usato
+            if is_nuova_edizione or is_nuova_adozione:
                 potenzialmente_usato = False
             elif is_volume_unico:
-                # Verifica se è LO STESSO libro (stesso titolo base + editore) in classi superiori
+                # Per volumi UNICI TRIENNALI: verifica se è LO STESSO libro in 2ª E 3ª
+                # Costruiamo un oggetto libro con i dati originali per il confronto
+                libro_originale = my_book.get("libri_multipli", [my_book])[0]
                 potenzialmente_usato = await is_same_book_in_higher_classes(
-                    my_book, child_codice_scuola, disc, child_tipo
+                    libro_originale, child_codice_scuola, disc, child_tipo
                 )
             else:
                 # Per libri ANNUALI, verifica se la stessa serie è adottata in classi superiori
@@ -3072,6 +3137,16 @@ async def get_child_compatibility(user_id: str, child_id: str):
                 })
             else:
                 # Nessuna copia usata e non potenzialmente disponibile - deve comprare nuovo
+                # Determina il motivo corretto
+                if is_nuova_adozione:
+                    motivo = "Nuova adozione - libro non disponibile usato"
+                elif is_nuova_edizione:
+                    motivo = "Nuova edizione 2025/2026 - da comprare nuovo"
+                elif is_volume_unico:
+                    motivo = "Volume unico con edizione diversa in 2ª o 3ª - da comprare nuovo"
+                else:
+                    motivo = "Prima classe - libro non adottato in classi superiori"
+                
                 comprare_nuovo.append({
                     "isbn": isbn,
                     "disciplina": disc,
@@ -3080,7 +3155,8 @@ async def get_child_compatibility(user_id: str, child_id: str):
                     "prezzo": my_book["prezzo"],
                     "copie_usate_disponibili": 0,
                     "is_nuova_edizione": is_nuova_edizione,
-                    "motivo": "Prima classe - libro non adottato in classi superiori"
+                    "is_nuova_adozione": is_nuova_adozione,
+                    "motivo": motivo
                 })
         elif disc in succ_books_disc:
             book_succ = succ_books_disc[disc]
