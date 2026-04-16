@@ -3090,6 +3090,7 @@ async def get_child_compatibility(user_id: str, child_id: str):
     # Separa i libri
     my_books = []
     my_books_consigliati = []
+    libri_gia_posseduti = []  # NUOVA LISTA per volumi unici già comprati in anni precedenti
     
     # MATERIE A DURATA FISSA 5 ANNI per le superiori
     MATERIE_5_ANNI_KEYWORDS = [
@@ -3148,8 +3149,11 @@ async def get_child_compatibility(user_id: str, child_id: str):
                 # - Altre materie: se il libro è consigliato O da_acquistare, va acquistato
                 # - Volumi unici NON quinquennali: inizio triennio, vanno acquistati
                 if is_volume_unico and is_materia_quinquennale:
-                    # Volume unico quinquennale - già comprato in 1ª, NON va acquistato
-                    pass  # Non lo aggiungo a nessuna lista - è già posseduto
+                    # Volume unico quinquennale - già comprato in 1ª, mostralo come posseduto
+                    libri_gia_posseduti.append({
+                        **libro,
+                        "motivo_possesso": "Volume unico quinquennale comprato in 1ª"
+                    })
                 elif libro.get('da_acquistare', True) == True or is_consigliato:
                     # Sia obbligatori che consigliati vanno acquistati
                     my_books.append(libro)
@@ -3161,15 +3165,24 @@ async def get_child_compatibility(user_id: str, child_id: str):
                 if is_volume_unico:
                     if is_materia_quinquennale:
                         # Volume unico quinquennale - già comprato in 1ª
-                        pass  # Già posseduto
+                        libri_gia_posseduti.append({
+                            **libro,
+                            "motivo_possesso": "Volume unico quinquennale comprato in 1ª"
+                        })
                     else:
                         # Volume unico NON quinquennale
                         if child_classe == 2:
                             # In 2ª - volume unico del biennio già comprato in 1ª
-                            pass  # Già posseduto
+                            libri_gia_posseduti.append({
+                                **libro,
+                                "motivo_possesso": "Volume unico biennale comprato in 1ª"
+                            })
                         else:
                             # In 4ª/5ª - volume unico del triennio già comprato in 3ª
-                            pass  # Già posseduto
+                            libri_gia_posseduti.append({
+                                **libro,
+                                "motivo_possesso": "Volume unico triennale comprato in 3ª"
+                            })
                 elif libro.get('da_acquistare', True) == True or is_consigliato:
                     # Libri annuali (non volumi unici): vanno acquistati
                     my_books.append(libro)
@@ -3848,6 +3861,13 @@ async def get_child_compatibility(user_id: str, child_id: str):
             "libri_da_comprare": libri_consigliati,
             "libri_da_vendere": libri_consigliati_vendibili,
             "nota": "Questi libri sono indicati come 'consigliati' o 'da non acquistare' dal MIUR, ma in pratica spesso servono."
+        },
+        
+        # NUOVA SEZIONE: Libri già posseduti (volumi unici comprati negli anni precedenti)
+        "libri_gia_posseduti": {
+            "totale": len(libri_gia_posseduti),
+            "libri": libri_gia_posseduti,
+            "nota": "Volumi unici già acquistati negli anni precedenti - non vanno ricomprati."
         },
         
         # NUOVA SEZIONE: Tetto di spesa ministeriale
