@@ -3131,47 +3131,51 @@ async def get_child_compatibility(user_id: str, child_id: str):
                 else:
                     my_books.append(libro)
         else:
-            # SUPERIORI: logica aggiornata per materie quinquennali
+            # SUPERIORI: logica aggiornata
+            # REGOLA IMPORTANTE: Alle superiori i libri "consigliati" (specialmente volumi unici) 
+            # sono in realtà DA ACQUISTARE - le scuole usano questo trucco per eludere il tetto di spesa
             disciplina = libro.get('disciplina', '').upper()
             is_volume_unico = libro.get('is_volume_unico', False)
             is_materia_quinquennale = is_materia_5_anni(disciplina)
+            is_consigliato = libro.get('consigliato') == True
             
-            if libro.get('consigliato') == True:
-                my_books_consigliati.append(libro)
-            elif is_prima_classe:
-                # In prima superiore, TUTTI i libri vanno acquistati
+            if is_prima_classe:
+                # In prima superiore, TUTTI i libri vanno acquistati (inclusi consigliati)
                 my_books.append(libro)
             elif child_classe == 3:
                 # In terza superiore:
-                # - Materie quinquennali: libro già comprato in 1ª, non va acquistato
-                # - Altre materie con volume unico: inizio nuovo ciclo triennale, va acquistato
-                # - Libri annuali: vanno acquistati
+                # - Materie quinquennali (Religione, Sc. Motorie, Ed. Civica, Grammatica): già comprate in 1ª
+                # - Altre materie: se il libro è consigliato O da_acquistare, va acquistato
+                # - Volumi unici NON quinquennali: inizio triennio, vanno acquistati
                 if is_volume_unico and is_materia_quinquennale:
-                    # Volume unico quinquennale - già comprato in 1ª
-                    my_books_consigliati.append(libro)  # Lo metto nei consigliati come "già posseduto"
-                elif libro.get('da_acquistare', True) == True:
-                    my_books.append(libro)
-                elif is_volume_unico:
-                    # Volume unico NON quinquennale in 3ª - inizio triennio, va acquistato
+                    # Volume unico quinquennale - già comprato in 1ª, NON va acquistato
+                    pass  # Non lo aggiungo a nessuna lista - è già posseduto
+                elif libro.get('da_acquistare', True) == True or is_consigliato:
+                    # Sia obbligatori che consigliati vanno acquistati
                     my_books.append(libro)
                 elif is_continuation_from_previous(libro, all_libri_prec):
                     my_books.append(libro)
-                else:
-                    my_books_consigliati.append(libro)
+                # else: libro non da acquistare e non consigliato - ignoriamo
             else:
-                # Classi 2, 4, 5: non si comprano volumi unici (già comprati)
-                if libro.get('da_acquistare', True) == True:
-                    if is_volume_unico:
-                        # Volume unico in 2ª/4ª/5ª - già comprato nella classe iniziale del ciclo
-                        my_books_consigliati.append(libro)
+                # Classi 2, 4, 5
+                if is_volume_unico:
+                    if is_materia_quinquennale:
+                        # Volume unico quinquennale - già comprato in 1ª
+                        pass  # Già posseduto
                     else:
-                        my_books.append(libro)
-                elif is_volume_unico:
-                    my_books_consigliati.append(libro)
+                        # Volume unico NON quinquennale
+                        if child_classe == 2:
+                            # In 2ª - volume unico del biennio già comprato in 1ª
+                            pass  # Già posseduto
+                        else:
+                            # In 4ª/5ª - volume unico del triennio già comprato in 3ª
+                            pass  # Già posseduto
+                elif libro.get('da_acquistare', True) == True or is_consigliato:
+                    # Libri annuali (non volumi unici): vanno acquistati
+                    my_books.append(libro)
                 elif is_continuation_from_previous(libro, all_libri_prec):
                     my_books.append(libro)
-                else:
-                    my_books_consigliati.append(libro)
+                # else: ignoriamo
     
     # In 1ª classe non ci sono volumi unici extra, sono già inclusi in my_books
     if is_prima_classe:
