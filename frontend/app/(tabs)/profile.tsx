@@ -363,14 +363,11 @@ export default function ProfileScreen() {
                 
                 {/* TOTALE PARZIALE SPESA per questo profilo */}
                 {(() => {
-                  // Calcolo TOTALE NUOVI: spesa totale se TUTTI i libri fossero comprati nuovi
-                  const totaleLibriDaComprare = (compatibility.nuovi?.totale || 0) + (compatibility.comprare?.totale_usati || 0);
-                  const costoTuttiNuovi = compatibility.nuovi?.costo_totale || 0; // Già include il prezzo di tutti i libri nuovi
-                  // Per i libri usati, calcoliamo quanto costerebbero se fossero nuovi (stima: prezzo medio libro nuovo ~€20)
-                  const costoUsatiSeNuovi = (compatibility.comprare?.totale_usati || 0) * 20;
-                  const totaleSeTuttiNuovi = costoTuttiNuovi + costoUsatiSeNuovi;
+                  // TOTALE NUOVI: usa il valore dal Radar (costo_obbligatori = spesa se tutti nuovi)
+                  // Questo è il costo totale dei libri obbligatori calcolato dal backend
+                  const totaleSeTuttiNuovi = compatibility.tetto_spesa?.costo_obbligatori || 0;
                   
-                  // TOTALE IPOTETICO: con libri usati
+                  // TOTALE IPOTETICO: con libri usati (risparmio usando usati)
                   const costoUsatiParziale = (compatibility.comprare?.totale_usati || 0) * 10; // €10 per libro usato
                   const costoNuoviParziale = compatibility.nuovi?.costo_totale || 0;
                   const ricavoParziale = (compatibility.vendere?.totale_vendibili || 0) * 8; // €8 ricavo per libro venduto
@@ -382,7 +379,7 @@ export default function ProfileScreen() {
                       <View style={styles.totalNuoviRow}>
                         <Ionicons name="book-outline" size={18} color="#1a472a" />
                         <Text style={styles.totalNuoviLabelBold}>TOTALE NUOVI:</Text>
-                        <Text style={styles.totalNuoviValueBold}>€{totaleSeTuttiNuovi.toFixed(0)}</Text>
+                        <Text style={styles.totalNuoviValueBold}>€{totaleSeTuttiNuovi.toFixed(2)}</Text>
                       </View>
                       {/* TOTALE IPOTETICO - con libri usati */}
                       <View style={styles.partialTotalRow}>
