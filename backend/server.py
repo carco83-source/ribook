@@ -2616,20 +2616,32 @@ async def get_child_compatibility(user_id: str, child_id: str):
         """
         Per libri UNICI TRIENNALI (scuole medie): verifica se il libro può essere trovato USATO.
         
-        LOGICA CORRETTA BASATA SULL'ANNO DI ADOZIONE:
-        Un volume unico può essere comprato usato SOLO SE:
-        1. È lo STESSO libro in 1ª, 2ª e 3ª (stesso titolo + editore)
-        2. Il libro NON è al suo primo ciclo triennale (verificato tramite nuova_adozione)
+        LOGICA BASATA SULL'ANNO DI PUBBLICAZIONE (prioritaria) O NUOVA_ADOZIONE:
         
-        Per determinare l'anno di adozione:
-        - Se nuova_adozione=True in 3ª → 1° anno del ciclo → NON disponibile usato
-        - Se nuova_adozione=True in 2ª (ma non in 3ª) → 2° anno → NON disponibile usato  
-        - Se nuova_adozione=True solo in 1ª → 3° anno → Chi finisce 3ª ora ha un libro diverso
-        - Se nuova_adozione=False ovunque → 4°+ anno → DISPONIBILE usato
+        1. Se abbiamo anno_pubblicazione:
+           - Pubblicato 2022 o prima → 4°+ anno → DISPONIBILE usato
+           - Pubblicato 2023 → 3° anno (primo ciclo in corso) → NON disponibile
+           - Pubblicato 2024-2025 → 1-2° anno → NON disponibile
         
-        Chi finisce la 3ª quest'anno può vendere il libro SOLO se lo aveva già quando ha iniziato.
+        2. Se non abbiamo anno_pubblicazione, usiamo nuova_adozione:
+           - Se nuova_adozione=True in 3ª → NON disponibile usato
+           - Se nuova_adozione=True in 2ª → NON disponibile usato  
+           - Se nuova_adozione=False ovunque → probabilmente DISPONIBILE usato
+        
+        3. Deve essere LO STESSO libro in 1ª, 2ª e 3ª (stesso titolo + editore)
         """
         import re
+        
+        # PRIORITÀ 1: Controllo anno di pubblicazione (se disponibile)
+        anno_pubblicazione = libro.get('anno_pubblicazione')
+        if anno_pubblicazione:
+            # Anno scolastico 2025-2026: libri pubblicati nel 2022 o prima hanno completato almeno un ciclo
+            if anno_pubblicazione <= 2022:
+                # Libro vecchio, ma dobbiamo ancora verificare che sia lo stesso in 2ª e 3ª
+                pass  # Continua con la verifica del titolo
+            else:
+                # Libro pubblicato 2023 o dopo: primo ciclo in corso, NON disponibile usato
+                return False
         
         # Se il libro di 1ª ha nuova_adozione=True, NON può essere comprato usato
         if libro.get('nuova_adozione', False):
