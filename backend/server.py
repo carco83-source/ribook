@@ -3395,50 +3395,34 @@ async def get_child_compatibility(user_id: str, child_id: str):
                 "status": "available"
             })
         
-        # Verifica se è una nuova edizione 2025/2026
+        # =====================================================
+        # LOGICA SEMPLIFICATA BASATA SU nuova_adozione (NUOVAADOZ)
+        # =====================================================
+        # - nuova_adozione=True (NUOVAADOZ=Si) → libro NON disponibile usato, solo NUOVO
+        # - nuova_adozione=False (NUOVAADOZ=No) → libro potenzialmente disponibile USATO
+        # =====================================================
+        
+        is_nuova_adozione = my_book.get("nuova_adozione", False)
+        is_volume_unico = my_book.get("is_volume_unico", False) or my_book.get("libri_multipli", [{}])[0].get("is_volume_unico", False)
+        
+        # Verifica se è una nuova edizione dal titolo (backup)
         titolo_upper = my_book["titolo"].upper()
         is_nuova_edizione = "2025" in titolo_upper or "2026" in titolo_upper or "NUOVA EDIZIONE" in titolo_upper
         
-        if is_prima_classe:
-            # PRIMA CLASSE: verifica se il libro è potenzialmente disponibile usato
-            # Per libri UNICI: deve essere LO STESSO libro adottato in 2ª e 3ª
-            # Per libri ANNUALI: verifica se la stessa serie è adottata in classi superiori
-            
-            # Verifica se è una nuova edizione 2025/2026
-            titolo_upper = my_book["titolo"].upper()
-            is_nuova_edizione = "2025" in titolo_upper or "2026" in titolo_upper or "NUOVA EDIZIONE" in titolo_upper
-            
-            # Verifica se il libro ha nuova_adozione=True (dal DB)
-            is_nuova_adozione = my_book.get("nuova_adozione", False)
-            
-            # Verifica se il libro è un volume unico
-            is_volume_unico = my_book.get("is_volume_unico", False) or my_book.get("libri_multipli", [{}])[0].get("is_volume_unico", False)
-            
-            # Per i volumi UNICI, verifica se è LO STESSO libro in 2ª e 3ª
-            potenzialmente_usato = False
-            
-            # Se è nuova adozione O nuova edizione, NON può essere comprato usato
-            if is_nuova_edizione or is_nuova_adozione:
-                potenzialmente_usato = False
-            elif is_volume_unico:
-                # Per volumi UNICI: verifica se è LO STESSO libro nelle classi del ciclo
-                # Costruiamo un oggetto libro con i dati originali per il confronto
-                libro_originale = my_book.get("libri_multipli", [my_book])[0]
-                potenzialmente_usato = await is_same_book_in_higher_classes(
-                    libro_originale, child_codice_scuola, disc, child_tipo, child_classe
-                )
-            else:
-                # Per libri ANNUALI, verifica se la stessa serie è adottata in classi superiori
-                if isbn or my_book.get("titolo"):
-                    potenzialmente_usato = await is_potentially_available_used(
-                        isbn, child_classe, child_tipo, 
-                        titolo=my_book.get("titolo", ""), 
-                        disciplina=disc,
-                        codice_scuola=child_codice_scuola
-                    )
-            
+        # Conta copie usate disponibili
+        copie_disponibili = 0
+        if isbn:
+            copie_disponibili = await db.listings.count_documents({
+                "book_isbn": isbn,
+                "status": "available"
+            })
+        
+        # REGOLA PRINCIPALE: Se nuova_adozione=True → NON disponibile usato
+        if is_nuova_adozione or is_nuova_edizione:
+            # Libro NUOVO - non può essere comprato usato
             if copie_disponibili > 0:
-                # Ci sono copie usate disponibili - va in "usato"
+                # Paradosso: nuova adozione ma ci sono copie? Probabile errore dati
+                # Comunque offriamo l'usato se disponibile
                 comprare_usato.append({
                     "isbn": isbn,
                     "disciplina": disc,
@@ -3448,34 +3432,11 @@ async def get_child_compatibility(user_id: str, child_id: str):
                     "prezzo_usato": round(my_book["prezzo"] * 0.5, 2),
                     "risparmio": round(my_book["prezzo"] * 0.5, 2),
                     "copie_disponibili": copie_disponibili,
-                    "status": "USATO DISPONIBILE"
-                })
-            elif potenzialmente_usato:
-                # Potenzialmente disponibile usato (adottato in classi superiori)
-                comprare_usato.append({
-                    "isbn": isbn,
-                    "disciplina": disc,
-                    "titolo": my_book["titolo"][:50],
-                    "editore": my_book["editore"],
-                    "prezzo_nuovo": my_book["prezzo"],
-                    "prezzo_usato": round(my_book["prezzo"] * 0.5, 2),
-                    "risparmio": round(my_book["prezzo"] * 0.5, 2),
-                    "copie_disponibili": 0,
-                    "status": "POTENZIALMENTE DISPONIBILE",
-                    "motivo": "Libro adottato anche in classi superiori - potrebbe essere disponibile usato"
+                    "status": "USATO DISPONIBILE",
+                    "nota": "Nuova adozione ma copie disponibili"
                 })
             else:
-                # Nessuna copia usata e non potenzialmente disponibile - deve comprare nuovo
-                # Determina il motivo corretto
-                if is_nuova_adozione:
-                    motivo = "Nuova adozione - libro non disponibile usato"
-                elif is_nuova_edizione:
-                    motivo = "Nuova edizione 2025/2026 - da comprare nuovo"
-                elif is_volume_unico:
-                    motivo = "Volume unico con edizione diversa in 2ª o 3ª - da comprare nuovo"
-                else:
-                    motivo = "Prima classe - libro non adottato in classi superiori"
-                
+                motivo = "Nuova adozione 2025/2026" if is_nuova_adozione else "Nuova edizione"
                 comprare_nuovo.append({
                     "isbn": isbn,
                     "disciplina": disc,
@@ -3487,105 +3448,9 @@ async def get_child_compatibility(user_id: str, child_id: str):
                     "is_nuova_adozione": is_nuova_adozione,
                     "motivo": motivo
                 })
-        elif disc in succ_books_disc:
-            book_succ = succ_books_disc[disc]
-            if same_series(my_book, book_succ):
-                # Conta le copie disponibili per questo ISBN
-                isbn = my_book.get("isbn", "")
-                copie_disponibili = 0
-                if isbn:
-                    copie_disponibili = await db.listings.count_documents({
-                        "book_isbn": isbn,
-                        "status": "available"
-                    })
-                
-                comprare_usato.append({
-                    "isbn": isbn,
-                    "disciplina": disc,
-                    "titolo": my_book["titolo"][:50],
-                    "editore": my_book["editore"],
-                    "prezzo_nuovo": my_book["prezzo"],
-                    "prezzo_usato": round(my_book["prezzo"] * 0.5, 2),
-                    "risparmio": round(my_book["prezzo"] * 0.5, 2),
-                    "copie_disponibili": copie_disponibili,
-                    "status": "USATO DISPONIBILE" if copie_disponibili > 0 else "IN ATTESA"
-                })
-            else:
-                # Edizione diversa - verifica se qualcuno vende comunque questo libro
-                # O SE È POTENZIALMENTE DISPONIBILE USATO IN ALTRE SCUOLE
-                isbn = my_book.get("isbn", "")
-                copie_disponibili = 0
-                if isbn:
-                    copie_disponibili = await db.listings.count_documents({
-                        "book_isbn": isbn,
-                        "status": "available"
-                    })
-                
-                # Verifica se è una nuova edizione 2025/2026
-                titolo_upper = my_book["titolo"].upper()
-                is_nuova_edizione = "2025" in titolo_upper or "2026" in titolo_upper or "NUOVA EDIZIONE" in titolo_upper
-                
-                # NUOVA LOGICA: Verifica se il libro è potenzialmente disponibile usato
-                # (adottato in classi superiori in altre scuole dello stesso tipo)
-                potenzialmente_usato = False
-                if not is_nuova_edizione and (isbn or my_book.get("titolo")):
-                    potenzialmente_usato = await is_potentially_available_used(
-                        isbn, child_classe, child_tipo,
-                        titolo=my_book.get("titolo", ""),
-                        disciplina=disc,
-                        codice_scuola=child_codice_scuola
-                    )
-                
-                if potenzialmente_usato:
-                    # Va nella sezione USATO anche se edizione diversa dalla classe successiva
-                    comprare_usato.append({
-                        "isbn": isbn,
-                        "disciplina": disc,
-                        "titolo": my_book["titolo"][:50],
-                        "editore": my_book["editore"],
-                        "prezzo_nuovo": my_book["prezzo"],
-                        "prezzo_usato": round(my_book["prezzo"] * 0.5, 2),
-                        "risparmio": round(my_book["prezzo"] * 0.5, 2),
-                        "copie_disponibili": copie_disponibili,
-                        "status": "USATO DISPONIBILE" if copie_disponibili > 0 else "POTENZIALMENTE DISPONIBILE",
-                        "motivo": "Libro adottato in altre classi/scuole - potrebbe essere disponibile usato"
-                    })
-                else:
-                    comprare_nuovo.append({
-                        "isbn": isbn,
-                        "disciplina": disc,
-                        "titolo": my_book["titolo"],  # Titolo completo
-                        "editore": my_book["editore"],
-                        "prezzo": my_book["prezzo"],
-                        "copie_usate_disponibili": copie_disponibili,
-                        "is_nuova_edizione": is_nuova_edizione,
-                        "motivo": "Nuova edizione 2025 - da comprare nuovo" if is_nuova_edizione else f"Edizione diversa dalla {classe_successiva}ª"
-                    })
         else:
-            # Materia non presente nella classe successiva o fine ciclo
-            isbn = my_book.get("isbn", "")
-            copie_disponibili = 0
-            if isbn:
-                copie_disponibili = await db.listings.count_documents({
-                    "book_isbn": isbn,
-                    "status": "available"
-                })
-            
-            # Verifica se è una nuova edizione 2025/2026
-            titolo_upper = my_book["titolo"].upper()
-            is_nuova_edizione = "2025" in titolo_upper or "2026" in titolo_upper or "NUOVA EDIZIONE" in titolo_upper
-            
-            # NUOVA LOGICA: Verifica se il libro è potenzialmente disponibile usato
-            potenzialmente_usato = False
-            if not is_nuova_edizione and (isbn or my_book.get("titolo")):
-                potenzialmente_usato = await is_potentially_available_used(
-                    isbn, child_classe, child_tipo,
-                    titolo=my_book.get("titolo", ""),
-                    disciplina=disc
-                )
-            
-            if potenzialmente_usato:
-                # Va nella sezione USATO
+            # nuova_adozione=False → libro già adottato in passato → POTENZIALMENTE USATO
+            if copie_disponibili > 0:
                 comprare_usato.append({
                     "isbn": isbn,
                     "disciplina": disc,
@@ -3595,19 +3460,21 @@ async def get_child_compatibility(user_id: str, child_id: str):
                     "prezzo_usato": round(my_book["prezzo"] * 0.5, 2),
                     "risparmio": round(my_book["prezzo"] * 0.5, 2),
                     "copie_disponibili": copie_disponibili,
-                    "status": "USATO DISPONIBILE" if copie_disponibili > 0 else "POTENZIALMENTE DISPONIBILE",
-                    "motivo": "Libro adottato in altre classi/scuole - potrebbe essere disponibile usato"
+                    "status": "USATO DISPONIBILE"
                 })
             else:
-                comprare_nuovo.append({
+                # Nessuna copia in vendita ma potenzialmente disponibile
+                comprare_usato.append({
                     "isbn": isbn,
                     "disciplina": disc,
-                    "titolo": my_book["titolo"],  # Titolo completo
+                    "titolo": my_book["titolo"][:50],
                     "editore": my_book["editore"],
-                    "prezzo": my_book["prezzo"],
-                    "copie_usate_disponibili": copie_disponibili,
-                    "is_nuova_edizione": is_nuova_edizione,
-                    "motivo": "Nuova edizione 2025 - da comprare nuovo" if is_nuova_edizione else (f"Materia non in {classe_successiva}ª" if classe_successiva else "Fine ciclo - materia da usare quest'anno")
+                    "prezzo_nuovo": my_book["prezzo"],
+                    "prezzo_usato": round(my_book["prezzo"] * 0.5, 2),
+                    "risparmio": round(my_book["prezzo"] * 0.5, 2),
+                    "copie_disponibili": 0,
+                    "status": "CERCA USATO",
+                    "motivo": "Libro confermato da anni precedenti - cerca copie usate"
                 })
     
     # Calcoli finali
