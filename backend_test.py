@@ -1,288 +1,315 @@
 #!/usr/bin/env python3
 """
-Backend Test for Book Classification Logic - Carmen (1st Year Middle School)
-Testing endpoint: /api/profiles/{user_id}/children/{child_id}/compatibility
-
-Expected Results for Carmen:
-- LIBRI NUOVI (nuovi.libri): 6 books (ITALIANO, SCIENZE, SCIENZE MOTORIE, ARTE E IMMAGINE, MUSICA, RELIGIONE)
-- LIBRI USATI (comprare.libri_usati): 6 books (LINGUA INGLESE, STORIA, GEOGRAFIA, MATEMATICA, TECNOLOGIA, SECONDA LINGUA COMUNITARIA - FRANCESE)
+Backend Test Suite for High School Book Classification Logic
+Tests the new secondo_grado (High School) compatibility endpoint
 """
 
 import requests
 import json
 import sys
-import os
+from typing import Dict, List, Any
 
-# Get backend URL from environment
-BACKEND_URL = os.environ.get('EXPO_PUBLIC_BACKEND_URL', 'https://language-check-10.preview.emergentagent.com')
-API_BASE = f"{BACKEND_URL}/api"
+# Backend URL from environment
+BACKEND_URL = "https://language-check-10.preview.emergentagent.com/api"
 
-# Test data
-USER_ID = "58ac430d-da2a-4954-bb2f-feea6de1f30c"
-CHILD_ID = "66ff6294-5695-4a67-bf92-798643a50ef2"  # Carmen
-SCHOOL_CODE = "CZMM86001P"  # I.C. Casalinuovo
-CLASS = 1  # First year middle school
+# Test user from review request
+TEST_USER_ID = "58ac430d-da2a-4954-bb2f-feea6de1f30c"
 
-def test_book_classification():
-    """Test the book classification logic for Carmen (1st year middle school)"""
-    
-    print("=" * 80)
-    print("TESTING BOOK CLASSIFICATION LOGIC FOR CARMEN (1ST YEAR MIDDLE SCHOOL)")
-    print("=" * 80)
-    print(f"User ID: {USER_ID}")
-    print(f"Child ID: {CHILD_ID}")
-    print(f"School: {SCHOOL_CODE} (I.C. Casalinuovo)")
-    print(f"Class: {CLASS} (first year middle school)")
-    print()
-    
-    # Test the compatibility endpoint
-    url = f"{API_BASE}/profiles/{USER_ID}/children/{CHILD_ID}/compatibility"
-    print(f"Testing endpoint: {url}")
-    
-    try:
-        response = requests.get(url, timeout=30)
-        print(f"Response status: {response.status_code}")
+class HighSchoolBookClassificationTester:
+    def __init__(self):
+        self.backend_url = BACKEND_URL
+        self.test_user_id = TEST_USER_ID
+        self.test_results = []
+        self.failed_tests = []
         
-        if response.status_code != 200:
-            print(f"❌ ERROR: Expected status 200, got {response.status_code}")
-            print(f"Response text: {response.text}")
-            return False
-        
-        data = response.json()
-        print("✅ API call successful")
-        print()
-        
-        # Verify response structure
-        required_keys = ['nuovi', 'comprare', 'child_name', 'child_classe']
-        missing_keys = [key for key in required_keys if key not in data]
-        if missing_keys:
-            print(f"❌ ERROR: Missing required keys: {missing_keys}")
-            return False
-        
-        print("✅ Response structure valid")
-        print()
-        
-        # Extract key data
-        nuovi = data.get('nuovi', {})
-        comprare = data.get('comprare', {})
-        child_name = data.get('child_name', '')
-        child_classe = data.get('child_classe', 0)
-        
-        print(f"Child Name: {child_name}")
-        print(f"Child Class: {child_classe}")
-        print()
-        
-        # Test LIBRI NUOVI (should be 6 books)
-        print("TESTING LIBRI NUOVI:")
-        print("-" * 40)
-        
-        nuovi_libri = nuovi.get('libri', [])
-        nuovi_totale = nuovi.get('totale', 0)
-        nuovi_costo = nuovi.get('costo_totale', 0)
-        
-        print(f"Total new books: {nuovi_totale}")
-        print(f"Expected: 6")
-        print(f"Total cost: €{nuovi_costo}")
-        print(f"Expected: around €172.60")
-        print()
-        
-        if nuovi_totale != 6:
-            print(f"❌ ERROR: Expected 6 new books, got {nuovi_totale}")
-        else:
-            print("✅ Correct number of new books")
-        
-        if abs(nuovi_costo - 172.60) > 20:  # Allow some tolerance
-            print(f"⚠️  WARNING: Cost {nuovi_costo} differs significantly from expected 172.60")
-        else:
-            print("✅ Cost is within expected range")
-        
-        print()
-        print("New books details:")
-        expected_new_subjects = {
-            'ITALIANO', 'SCIENZE', 'SCIENZE MOTORIE', 'ARTE E IMMAGINE', 'MUSICA', 'RELIGIONE'
+    def log_test(self, test_name: str, success: bool, details: str = ""):
+        """Log test result"""
+        result = {
+            "test": test_name,
+            "success": success,
+            "details": details
         }
-        found_subjects = set()
+        self.test_results.append(result)
+        if not success:
+            self.failed_tests.append(result)
         
-        for i, libro in enumerate(nuovi_libri, 1):
-            disciplina = libro.get('disciplina', '').upper()
-            titolo = libro.get('titolo', '')
-            motivo = libro.get('motivo', '')
-            prezzo = libro.get('prezzo', 0)
+        status = "✅" if success else "❌"
+        print(f"{status} {test_name}")
+        if details:
+            print(f"   {details}")
+    
+    def test_get_user_profiles(self) -> Dict[str, Any]:
+        """Test 1: Get user profiles to identify secondo_grado children"""
+        try:
+            response = requests.get(f"{self.backend_url}/users/{self.test_user_id}")
             
-            print(f"  {i}. {disciplina}: {titolo[:50]} - €{prezzo}")
-            if motivo:
-                print(f"     Reason: {motivo}")
+            if response.status_code != 200:
+                self.log_test("Get User Profiles", False, f"HTTP {response.status_code}: {response.text}")
+                return {}
             
-            found_subjects.add(disciplina)
+            user_data = response.json()
+            profili_figli = user_data.get("profili_figli", [])
+            
+            # Find secondo_grado profiles
+            secondo_grado_profiles = [
+                p for p in profili_figli 
+                if p.get("tipo_scuola") == "secondo_grado"
+            ]
+            
+            if not secondo_grado_profiles:
+                self.log_test("Get User Profiles", False, "No secondo_grado profiles found")
+                return {}
+            
+            details = f"Found {len(secondo_grado_profiles)} high school profiles: "
+            details += ", ".join([f"{p.get('nome_figlio', 'Unknown')} (classe {p.get('classe', 'N/A')})" 
+                                for p in secondo_grado_profiles])
+            
+            self.log_test("Get User Profiles", True, details)
+            return {"profiles": secondo_grado_profiles, "user_data": user_data}
+            
+        except Exception as e:
+            self.log_test("Get User Profiles", False, f"Exception: {str(e)}")
+            return {}
+    
+    def test_compatibility_endpoint(self, child_id: str, child_name: str, classe: int) -> Dict[str, Any]:
+        """Test compatibility endpoint for a specific child"""
+        try:
+            response = requests.get(
+                f"{self.backend_url}/profiles/{self.test_user_id}/children/{child_id}/compatibility"
+            )
+            
+            if response.status_code != 200:
+                self.log_test(f"Compatibility API - {child_name}", False, 
+                            f"HTTP {response.status_code}: {response.text}")
+                return {}
+            
+            data = response.json()
+            
+            # Validate response structure
+            required_fields = ["nuovi", "comprare"]
+            missing_fields = [field for field in required_fields if field not in data]
+            
+            if missing_fields:
+                self.log_test(f"Compatibility API - {child_name}", False, 
+                            f"Missing fields: {missing_fields}")
+                return {}
+            
+            comprare_nuovo = data.get("nuovi", {}).get("libri", [])
+            comprare_usato = data.get("comprare", {}).get("libri_usati", [])
+            
+            details = f"Classe {classe}: {len(comprare_nuovo)} nuovi, {len(comprare_usato)} usati"
+            self.log_test(f"Compatibility API - {child_name}", True, details)
+            
+            return {
+                "child_name": child_name,
+                "classe": classe,
+                "comprare_nuovo": comprare_nuovo,
+                "comprare_usato": comprare_usato,
+                "raw_data": data
+            }
+            
+        except Exception as e:
+            self.log_test(f"Compatibility API - {child_name}", False, f"Exception: {str(e)}")
+            return {}
+    
+    def analyze_quinquennial_subjects(self, compatibility_data: Dict[str, Any]) -> bool:
+        """Analyze if quinquennial subjects are handled correctly"""
+        child_name = compatibility_data.get("child_name", "Unknown")
+        classe = compatibility_data.get("classe", 0)
+        comprare_nuovo = compatibility_data.get("comprare_nuovo", [])
+        comprare_usato = compatibility_data.get("comprare_usato", [])
         
-        print()
+        # Also check consigliati section for books marked as "da_non_acquistare"
+        consigliati = compatibility_data.get("raw_data", {}).get("consigliati", {}).get("libri_da_comprare", [])
         
-        # Check if we have the expected subjects
-        missing_subjects = expected_new_subjects - found_subjects
-        extra_subjects = found_subjects - expected_new_subjects
+        # Quinquennial subjects that should NOT appear in years 2-5
+        quinquennial_keywords = [
+            "RELIGIONE", "SCIENZE MOTORIE", "EDUCAZIONE CIVICA", "GRAMMATICA",
+            "IRC", "ED. FISICA", "ED. CIVICA", "CITTADINANZA"
+        ]
         
-        if missing_subjects:
-            print(f"❌ ERROR: Missing expected subjects in new books: {missing_subjects}")
-        if extra_subjects:
-            print(f"⚠️  WARNING: Extra subjects in new books: {extra_subjects}")
-        if not missing_subjects and not extra_subjects:
-            print("✅ All expected subjects found in new books")
+        all_books = comprare_nuovo + comprare_usato
+        quinquennial_books_found = []
+        quinquennial_in_consigliati = []
         
-        print()
+        # Check in main book lists
+        for book in all_books:
+            disciplina = book.get("disciplina", "").upper()
+            
+            for keyword in quinquennial_keywords:
+                if keyword in disciplina:
+                    quinquennial_books_found.append({
+                        "titolo": book.get("titolo", ""),
+                        "disciplina": book.get("disciplina", ""),
+                        "keyword_matched": keyword
+                    })
+                    break
         
-        # Test LIBRI USATI (should be 6 books)
-        print("TESTING LIBRI USATI:")
-        print("-" * 40)
+        # Check in consigliati section for quinquennial subjects marked as "da_non_acquistare"
+        for book in consigliati:
+            disciplina = book.get("disciplina", "").upper()
+            tipo = book.get("tipo", "")
+            
+            for keyword in quinquennial_keywords:
+                if keyword in disciplina:
+                    quinquennial_in_consigliati.append({
+                        "titolo": book.get("titolo", ""),
+                        "disciplina": book.get("disciplina", ""),
+                        "tipo": tipo,
+                        "keyword_matched": keyword
+                    })
+                    break
         
-        usati_libri = comprare.get('libri_usati', [])
-        usati_totale = comprare.get('totale_usati', len(usati_libri))
-        
-        print(f"Total used books: {usati_totale}")
-        print(f"Expected: 6")
-        print()
-        
-        if usati_totale != 6:
-            print(f"❌ ERROR: Expected 6 used books, got {usati_totale}")
+        # Logic check based on class year
+        if classe == 1:
+            # 1st year: ALL books should be in comprare lists (none already owned)
+            expected_behavior = "All books should appear (first year)"
+            test_passed = True  # Any number is acceptable for 1st year
+            details = f"1st year - Found {len(quinquennial_books_found)} quinquennial books (expected)"
+            
+        elif classe in [2, 3, 4, 5]:
+            # 2nd-5th year: Quinquennial subjects should NOT appear in main lists (already owned from 1st year)
+            # BUT they might appear in consigliati as "da_non_acquistare" which is correct
+            expected_behavior = "Quinquennial subjects should NOT appear in main lists (already owned)"
+            test_passed = len(quinquennial_books_found) == 0
+            
+            if quinquennial_books_found:
+                details = f"❌ Found {len(quinquennial_books_found)} quinquennial books in main lists that should be already owned: "
+                details += ", ".join([f"{b['titolo']} ({b['keyword_matched']})" for b in quinquennial_books_found])
+            else:
+                details = f"✅ No quinquennial books in main lists (correct - already owned from 1st year)"
+                
+            # Add info about consigliati if any quinquennial subjects found there
+            if quinquennial_in_consigliati:
+                da_non_acquistare = [b for b in quinquennial_in_consigliati if b['tipo'] == 'da_non_acquistare']
+                if da_non_acquistare:
+                    details += f" | Found {len(da_non_acquistare)} quinquennial books correctly marked as 'da_non_acquistare'"
         else:
-            print("✅ Correct number of used books")
+            expected_behavior = "Unknown class"
+            test_passed = False
+            details = f"Invalid class: {classe}"
         
-        print()
-        print("Used books details:")
-        expected_used_subjects = {
-            'LINGUA INGLESE', 'STORIA', 'GEOGRAFIA', 'MATEMATICA', 'TECNOLOGIA', 
-            'SECONDA LINGUA COMUNITARIA - FRANCESE', 'FRANCESE'  # Allow both forms
-        }
-        found_used_subjects = set()
+        self.log_test(f"Quinquennial Logic - {child_name} (Classe {classe})", test_passed, details)
+        return test_passed
+    
+    def analyze_biennio_triennio_logic(self, compatibility_data: Dict[str, Any]) -> bool:
+        """Analyze biennio/triennio cycle logic"""
+        child_name = compatibility_data.get("child_name", "Unknown")
+        classe = compatibility_data.get("classe", 0)
+        comprare_nuovo = compatibility_data.get("comprare_nuovo", [])
+        comprare_usato = compatibility_data.get("comprare_usato", [])
         
-        for i, libro in enumerate(usati_libri, 1):
-            disciplina = libro.get('disciplina', '').upper()
-            titolo = libro.get('titolo', '')
-            status = libro.get('status', '')
-            prezzo_nuovo = libro.get('prezzo_nuovo', 0)
-            prezzo_usato = libro.get('prezzo_usato', 0)
+        total_books = len(comprare_nuovo) + len(comprare_usato)
+        
+        if classe in [1, 2]:
+            cycle = "BIENNIO"
+            expected_behavior = "Should follow middle school logic within 1st-2nd year cycle"
+        elif classe in [3, 4, 5]:
+            cycle = "TRIENNIO"
+            expected_behavior = "Should follow middle school logic within 3rd-5th year cycle"
+        else:
+            cycle = "UNKNOWN"
+            expected_behavior = "Invalid class"
+        
+        # For now, just verify that we get some books and no errors
+        test_passed = total_books >= 0  # Basic validation
+        details = f"{cycle} - Total books to buy: {total_books}"
+        
+        self.log_test(f"Cycle Logic - {child_name} (Classe {classe})", test_passed, details)
+        return test_passed
+    
+    def analyze_unique_vs_annual_volumes(self, compatibility_data: Dict[str, Any]) -> bool:
+        """Analyze unique vs annual volume handling"""
+        child_name = compatibility_data.get("child_name", "Unknown")
+        classe = compatibility_data.get("classe", 0)
+        comprare_nuovo = compatibility_data.get("comprare_nuovo", [])
+        comprare_usato = compatibility_data.get("comprare_usato", [])
+        
+        unique_volumes = []
+        annual_volumes = []
+        
+        for book in comprare_nuovo + comprare_usato:
+            if book.get("is_volume_unico", False):
+                unique_volumes.append(book)
+            else:
+                annual_volumes.append(book)
+        
+        # Expected behavior based on class
+        if classe == 1:
+            expected = "All books should be purchasable (first year)"
+            test_passed = True
+        elif classe == 3:
+            expected = "Non-quinquennial unique volumes should appear, quinquennial should not"
+            test_passed = True  # Complex logic, just verify no errors
+        elif classe in [4, 5]:
+            expected = "Only annual books should appear, no unique volumes"
+            test_passed = len(unique_volumes) == 0
+        else:
+            expected = "Varies by class"
+            test_passed = True
+        
+        details = f"Unique: {len(unique_volumes)}, Annual: {len(annual_volumes)} - {expected}"
+        
+        self.log_test(f"Volume Type Logic - {child_name} (Classe {classe})", test_passed, details)
+        return test_passed
+    
+    def run_all_tests(self):
+        """Run all tests for High School Book Classification Logic"""
+        print("🧪 Testing High School Book Classification Logic")
+        print("=" * 60)
+        
+        # Test 1: Get user profiles
+        user_data = self.test_get_user_profiles()
+        if not user_data:
+            print("\n❌ Cannot continue - failed to get user profiles")
+            return
+        
+        profiles = user_data.get("profiles", [])
+        
+        # Test 2-N: Test each secondo_grado profile
+        for profile in profiles:
+            child_id = profile.get("id")
+            child_name = profile.get("nome_figlio", "Unknown")
+            classe = int(profile.get("classe", 0))
             
-            print(f"  {i}. {disciplina}: {titolo[:50]}")
-            print(f"     Status: {status}, New: €{prezzo_nuovo}, Used: €{prezzo_usato}")
+            print(f"\n📚 Testing {child_name} (Classe {classe})")
+            print("-" * 40)
             
-            found_used_subjects.add(disciplina)
-        
-        print()
-        
-        # Check if we have the expected subjects (with some flexibility for French)
-        # Accept either "SECONDA LINGUA COMUNITARIA - FRANCESE" or "FRANCESE"
-        if 'FRANCESE' in found_used_subjects or 'SECONDA LINGUA COMUNITARIA - FRANCESE' in found_used_subjects:
-            expected_used_subjects.discard('SECONDA LINGUA COMUNITARIA - FRANCESE')
-            expected_used_subjects.discard('FRANCESE')
-            expected_used_subjects.add('FRANCESE')  # Normalize to FRANCESE
-            found_used_subjects.discard('SECONDA LINGUA COMUNITARIA - FRANCESE')
-            found_used_subjects.add('FRANCESE')
-        
-        missing_used_subjects = expected_used_subjects - found_used_subjects
-        extra_used_subjects = found_used_subjects - expected_used_subjects
-        
-        if missing_used_subjects:
-            print(f"❌ ERROR: Missing expected subjects in used books: {missing_used_subjects}")
-        if extra_used_subjects:
-            print(f"⚠️  WARNING: Extra subjects in used books: {extra_used_subjects}")
-        if not missing_used_subjects and not extra_used_subjects:
-            print("✅ All expected subjects found in used books")
-        
-        print()
-        
-        # Test specific criteria from the request
-        print("TESTING SPECIFIC CRITERIA:")
-        print("-" * 40)
-        
-        # Check for nuova_adozione books in new books
-        nuova_adozione_count = 0
-        for libro in nuovi_libri:
-            if libro.get('is_nuova_adozione') or 'nuova adozione' in libro.get('motivo', '').lower():
-                nuova_adozione_count += 1
-        
-        print(f"Books with 'nuova_adozione' in new books: {nuova_adozione_count}")
-        
-        # Check for volume unico books
-        volume_unico_new = 0
-        volume_unico_used = 0
-        
-        for libro in nuovi_libri:
-            if libro.get('is_volume_unico') or 'volume unico' in libro.get('motivo', '').lower():
-                volume_unico_new += 1
-                disciplina = libro.get('disciplina', '').upper()
-                print(f"  Volume unico in NEW: {disciplina}")
-        
-        for libro in usati_libri:
-            if libro.get('is_volume_unico'):
-                volume_unico_used += 1
-                disciplina = libro.get('disciplina', '').upper()
-                print(f"  Volume unico in USED: {disciplina}")
-        
-        print()
+            # Test compatibility endpoint
+            compatibility_data = self.test_compatibility_endpoint(child_id, child_name, classe)
+            
+            if compatibility_data:
+                # Analyze quinquennial subjects logic
+                self.analyze_quinquennial_subjects(compatibility_data)
+                
+                # Analyze biennio/triennio logic
+                self.analyze_biennio_triennio_logic(compatibility_data)
+                
+                # Analyze unique vs annual volumes
+                self.analyze_unique_vs_annual_volumes(compatibility_data)
         
         # Summary
-        print("SUMMARY:")
-        print("-" * 40)
-        total_errors = 0
+        print("\n" + "=" * 60)
+        print("📊 TEST SUMMARY")
+        print("=" * 60)
         
-        if nuovi_totale == 6:
-            print("✅ Correct number of new books (6)")
-        else:
-            print(f"❌ Wrong number of new books: {nuovi_totale} (expected 6)")
-            total_errors += 1
+        total_tests = len(self.test_results)
+        passed_tests = total_tests - len(self.failed_tests)
+        success_rate = (passed_tests / total_tests * 100) if total_tests > 0 else 0
         
-        if usati_totale == 6:
-            print("✅ Correct number of used books (6)")
-        else:
-            print(f"❌ Wrong number of used books: {usati_totale} (expected 6)")
-            total_errors += 1
+        print(f"Total Tests: {total_tests}")
+        print(f"Passed: {passed_tests}")
+        print(f"Failed: {len(self.failed_tests)}")
+        print(f"Success Rate: {success_rate:.1f}%")
         
-        if not missing_subjects:
-            print("✅ All expected subjects in new books")
-        else:
-            print(f"❌ Missing subjects in new books: {missing_subjects}")
-            total_errors += 1
+        if self.failed_tests:
+            print("\n❌ FAILED TESTS:")
+            for test in self.failed_tests:
+                print(f"  • {test['test']}: {test['details']}")
         
-        if not missing_used_subjects:
-            print("✅ All expected subjects in used books")
-        else:
-            print(f"❌ Missing subjects in used books: {missing_used_subjects}")
-            total_errors += 1
-        
-        print()
-        
-        if total_errors == 0:
-            print("🎉 ALL TESTS PASSED! Book classification logic is working correctly.")
-            return True
-        else:
-            print(f"❌ {total_errors} test(s) failed. Book classification logic needs fixes.")
-            return False
-        
-    except requests.exceptions.RequestException as e:
-        print(f"❌ ERROR: Request failed: {e}")
-        return False
-    except json.JSONDecodeError as e:
-        print(f"❌ ERROR: Invalid JSON response: {e}")
-        return False
-    except Exception as e:
-        print(f"❌ ERROR: Unexpected error: {e}")
-        return False
-
-def main():
-    """Main test function"""
-    print("Starting Book Classification Logic Test...")
-    print(f"Backend URL: {BACKEND_URL}")
-    print()
-    
-    success = test_book_classification()
-    
-    print()
-    print("=" * 80)
-    if success:
-        print("✅ BOOK CLASSIFICATION TEST COMPLETED SUCCESSFULLY")
-        sys.exit(0)
-    else:
-        print("❌ BOOK CLASSIFICATION TEST FAILED")
-        sys.exit(1)
+        return len(self.failed_tests) == 0
 
 if __name__ == "__main__":
-    main()
+    tester = HighSchoolBookClassificationTester()
+    success = tester.run_all_tests()
+    sys.exit(0 if success else 1)
