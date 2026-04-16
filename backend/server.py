@@ -2727,8 +2727,53 @@ async def get_child_compatibility(user_id: str, child_id: str):
     comprare_usato = []
     comprare_nuovo = []  # Questi sono libri che al momento non hanno copie usate disponibili
     
+    # LOGICA SPECIALE PER PRIMA MEDIA/SUPERIORE:
+    # In prima classe NON ci sono libri "usati" da comprare perché non c'è classe precedente
+    # Tutti i libri devono essere comprati NUOVI (a meno che non ci siano copie in vendita)
+    is_prima_classe = (child_classe == 1)
+    
     for disc, my_book in my_books_disc.items():
-        if disc in succ_books_disc:
+        isbn = my_book.get("isbn", "")
+        copie_disponibili = 0
+        if isbn:
+            copie_disponibili = await db.listings.count_documents({
+                "book_isbn": isbn,
+                "status": "available"
+            })
+        
+        # Verifica se è una nuova edizione 2025/2026
+        titolo_upper = my_book["titolo"].upper()
+        is_nuova_edizione = "2025" in titolo_upper or "2026" in titolo_upper or "NUOVA EDIZIONE" in titolo_upper
+        
+        if is_prima_classe:
+            # PRIMA CLASSE: tutti i libri vanno in "comprare_nuovo" a meno che 
+            # non ci siano già copie disponibili in vendita
+            if copie_disponibili > 0:
+                # Ci sono copie usate disponibili - va in "usato"
+                comprare_usato.append({
+                    "isbn": isbn,
+                    "disciplina": disc,
+                    "titolo": my_book["titolo"][:50],
+                    "editore": my_book["editore"],
+                    "prezzo_nuovo": my_book["prezzo"],
+                    "prezzo_usato": round(my_book["prezzo"] * 0.5, 2),
+                    "risparmio": round(my_book["prezzo"] * 0.5, 2),
+                    "copie_disponibili": copie_disponibili,
+                    "status": "USATO DISPONIBILE"
+                })
+            else:
+                # Nessuna copia usata - deve comprare nuovo
+                comprare_nuovo.append({
+                    "isbn": isbn,
+                    "disciplina": disc,
+                    "titolo": my_book["titolo"],
+                    "editore": my_book["editore"],
+                    "prezzo": my_book["prezzo"],
+                    "copie_usate_disponibili": 0,
+                    "is_nuova_edizione": is_nuova_edizione,
+                    "motivo": "Prima classe - nessuna copia usata disponibile"
+                })
+        elif disc in succ_books_disc:
             book_succ = succ_books_disc[disc]
             if same_series(my_book, book_succ):
                 # Conta le copie disponibili per questo ISBN
