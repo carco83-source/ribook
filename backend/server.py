@@ -2460,7 +2460,208 @@ async def get_child_compatibility(user_id: str, child_id: str):
     classe_successiva = child_classe + 1 if child_classe < cycle_max else None
     
     # ========================================
-    # FUNZIONE HELPER: VERIFICA POTENZIALE USATO
+    # LOGICA COMPLETA LIBRI - SCUOLA MEDIA INFERIORE
+    # ========================================
+    
+    def normalize_for_comparison(text: str) -> str:
+        """Normalizza un testo per il confronto (rimuove spazi extra, maiuscolo)"""
+        if not text:
+            return ""
+        import re
+        text = text.upper().strip()
+        text = re.sub(r'\s+', ' ', text)
+        return text
+    
+    def get_libro_base_info(libro: dict) -> dict:
+        """Estrae le informazioni base di un libro per il confronto"""
+        import re
+        titolo = normalize_for_comparison(libro.get('titolo', ''))
+        # Rimuovi numeri di volume dal titolo per confronto
+        titolo_base = re.sub(r'\s+(VOL\.?\s*)?[123](\s|$)', ' ', titolo)
+        titolo_base = re.sub(r'\s+VOLUME\s+[123]', ' ', titolo_base)
+        titolo_base = re.sub(r'\s+(ARITMETICA|GEOMETRIA)\s+[123]', r' \1', titolo_base)
+        titolo_base = re.sub(r'\s*\([^)]*\)', '', titolo_base)  # Rimuovi parentesi
+        titolo_base = titolo_base.strip()[:40]  # Primi 40 caratteri
+        
+        return {
+            'titolo_base': titolo_base,
+            'autori': normalize_for_comparison(libro.get('autori', '')),
+            'editore': normalize_for_comparison(libro.get('editore', '')),
+            'edizione': normalize_for_comparison(str(libro.get('edizione', ''))),
+        }
+    
+    def libri_sono_stesso_ciclo(libro1: dict, libro2: dict) -> bool:
+        """
+        Verifica se due libri appartengono allo stesso ciclo editoriale.
+        Stessi: titolo base, autori, editore, edizione
+        """
+        info1 = get_libro_base_info(libro1)
+        info2 = get_libro_base_info(libro2)
+        
+        # Confronta titolo base (primi 20 caratteri per flessibilità)
+        if info1['titolo_base'][:20] != info2['titolo_base'][:20]:
+            return False
+        
+        # Confronta editore (richiesto)
+        if info1['editore'][:15] != info2['editore'][:15]:
+            return False
+        
+        # Autori e edizione sono opzionali ma se presenti devono corrispondere
+        if info1['autori'] and info2['autori']:
+            if info1['autori'][:20] != info2['autori'][:20]:
+                return False
+        
+        return True
+    
+    async def classifica_libro(libro: dict, classe_corrente: int, codice_scuola: str, disciplina: str) -> dict:
+        """
+        Classifica un libro secondo la logica:
+        - UNICO: stesso libro in tutte e 3 le classi
+        - ANNUALE_COMPATIBILE: stesso ciclo editoriale, cambia volume
+        - ANNUALE_NON_COMPATIBILE: nuova edizione, libro diverso
+        
+        Ritorna: {
+            "tipo": "unico" | "annuale_compatibile" | "annuale_non_compatibile",
+            "stato": "da_acquistare" | "gia_posseduto",
+            "acquistabile_usato": bool,
+            "vendibile": bool
+        }
+        """
+        is_volume_unico = libro.get('is_volume_unico', False)
+        
+        # CASO 1: LIBRO UNICO (già marcato nel DB o rilevato)
+        if is_volume_unico:
+            if classe_corrente == 1:
+                # Prima media: deve acquistare, può comprare usato da chi ha finito 3ª
+                return {
+                    "tipo": "unico",
+                    "stato": "da_acquistare",
+                    "acquistabile_usato": True,  # Da chi ha finito la 3ª
+                    "vendibile": False  # Non può vendere, lo userà per 3 anni
+                }
+            else:
+                # Seconda o terza: già posseduto
+                return {
+                    "tipo": "unico",
+                    "stato": "gia_posseduto",
+                    "acquistabile_usato": False,
+                    "vendibile": classe_corrente == 3  # Solo dopo la 3ª può vendere
+                }
+        
+        # CASO 2: LIBRO ANNUALE - verifica se compatibile
+        # Cerca lo stesso libro nelle altre classi della stessa scuola
+        libri_altre_classi = []
+        for classe in [1, 2, 3]:
+            if classe == classe_corrente:
+                continue
+            adoz = await db.adozioni.find_one({
+                'codice_scuola': codice_scuola,
+                'classe': classe
+            })
+            if adoz:
+                for l in adoz.get('libri', []):
+                    if disciplina.upper() in l.get('disciplina', '').upper():
+                        libri_altre_classi.append({'classe': classe, 'libro': l})
+        
+        # Verifica compatibilità con libri delle altre classi
+        ha_libro_compatibile = False
+        for item in libri_altre_classi:
+            if libri_sono_stesso_ciclo(libro, item['libro']):
+                ha_libro_compatibile = True
+                break
+        
+        if ha_libro_compatibile:
+            # ANNUALE COMPATIBILE - stesso ciclo editoriale
+            return {
+                "tipo": "annuale_compatibile",
+                "stato": "da_acquistare",
+                "acquistabile_usato": True,  # Volume precedente da studenti anno prima
+                "vendibile": True  # Può vendere a studenti anno dopo
+            }
+        else:
+            # ANNUALE NON COMPATIBILE - nuova edizione
+            return {
+                "tipo": "annuale_non_compatibile",
+                "stato": "da_acquistare",
+                "acquistabile_usato": False,  # Non disponibile usato
+                "vendibile": False  # Non vendibile
+            }
+    
+    async def libro_acquistabile_usato(libro: dict, classe_corrente: int, codice_scuola: str, disciplina: str) -> dict:
+        """
+        Determina se un libro è acquistabile usato e da chi.
+        Ritorna info sulla disponibilità usato.
+        """
+        classificazione = await classifica_libro(libro, classe_corrente, codice_scuola, disciplina)
+        
+        isbn = libro.get('isbn', '')
+        copie_disponibili = 0
+        if isbn:
+            copie_disponibili = await db.listings.count_documents({
+                "book_isbn": isbn,
+                "status": "available"
+            })
+        
+        return {
+            **classificazione,
+            "copie_disponibili": copie_disponibili,
+            "potenzialmente_disponibile": classificazione["acquistabile_usato"] and copie_disponibili == 0
+        }
+    
+    # ========================================
+    # FUNZIONE HELPER: VERIFICA SE STESSO LIBRO IN CLASSI SUPERIORI
+    # ========================================
+    
+    async def is_same_book_in_higher_classes(libro: dict, codice_scuola: str, disciplina: str, tipo_scuola: str) -> bool:
+        """
+        Per libri UNICI: verifica se è LO STESSO libro (stesso titolo base + editore) 
+        adottato in classi 2 e 3 della stessa scuola.
+        Se è diverso, il libro NON può essere comprato usato (nuova edizione).
+        """
+        import re
+        
+        titolo = libro.get('titolo', '').upper()
+        editore = libro.get('editore', '').upper()[:15]
+        
+        # Rimuovi suffissi dal titolo per confronto
+        titolo_base = re.sub(r'\s*-\s*(VOLUME|VOL\.?|CONFEZIONE|EDIZIONE|ED\.).*', '', titolo)
+        titolo_base = re.sub(r'\s*\([^)]*\)', '', titolo_base)
+        titolo_base = titolo_base.strip()[:25]
+        
+        if not titolo_base:
+            return False
+        
+        # Cerca nelle classi 2 e 3 della stessa scuola
+        for classe in [2, 3]:
+            adoz = await db.adozioni.find_one({
+                'codice_scuola': codice_scuola,
+                'classe': classe
+            })
+            
+            if not adoz:
+                continue
+            
+            for libro_sup in adoz.get('libri', []):
+                # Cerca nella stessa disciplina
+                if disciplina.upper()[:15] not in libro_sup.get('disciplina', '').upper():
+                    continue
+                
+                # Confronta titolo ed editore
+                titolo_sup = libro_sup.get('titolo', '').upper()
+                editore_sup = libro_sup.get('editore', '').upper()[:15]
+                
+                titolo_sup_base = re.sub(r'\s*-\s*(VOLUME|VOL\.?|CONFEZIONE|EDIZIONE|ED\.).*', '', titolo_sup)
+                titolo_sup_base = re.sub(r'\s*\([^)]*\)', '', titolo_sup_base)
+                titolo_sup_base = titolo_sup_base.strip()[:25]
+                
+                # Verifica se è LO STESSO libro
+                if titolo_base[:15] == titolo_sup_base[:15] and editore == editore_sup:
+                    return True  # Stesso libro - può essere comprato usato
+        
+        return False  # Libro diverso - deve comprare nuovo
+    
+    # ========================================
+    # FUNZIONE HELPER: VERIFICA POTENZIALE USATO (legacy - mantenuta per compatibilità)
     # ========================================
     async def is_potentially_available_used(isbn: str, current_class: int, tipo_scuola: str, titolo: str = "", disciplina: str = "", codice_scuola: str = "") -> bool:
         """
@@ -2813,21 +3014,34 @@ async def get_child_compatibility(user_id: str, child_id: str):
         
         if is_prima_classe:
             # PRIMA CLASSE: verifica se il libro è potenzialmente disponibile usato
-            # (adottato in classi 2 o 3 dello stesso tipo di scuola)
+            # Per libri UNICI: deve essere LO STESSO libro adottato in 2ª e 3ª
+            # Per libri ANNUALI: verifica se la stessa serie è adottata in classi superiori
             
             # Verifica se è una nuova edizione 2025/2026
             titolo_upper = my_book["titolo"].upper()
             is_nuova_edizione = "2025" in titolo_upper or "2026" in titolo_upper or "NUOVA EDIZIONE" in titolo_upper
             
-            # Verifica se potenzialmente disponibile usato
+            # Verifica se il libro è un volume unico
+            is_volume_unico = my_book.get("is_volume_unico", False) or my_book.get("libri_multipli", [{}])[0].get("is_volume_unico", False)
+            
+            # Per i volumi UNICI, verifica se è LO STESSO libro in 2ª e 3ª
             potenzialmente_usato = False
-            if not is_nuova_edizione and (isbn or my_book.get("titolo")):
-                potenzialmente_usato = await is_potentially_available_used(
-                    isbn, child_classe, child_tipo, 
-                    titolo=my_book.get("titolo", ""), 
-                    disciplina=disc,
-                    codice_scuola=child_codice_scuola
+            if is_nuova_edizione:
+                potenzialmente_usato = False
+            elif is_volume_unico:
+                # Verifica se è LO STESSO libro (stesso titolo base + editore) in classi superiori
+                potenzialmente_usato = await is_same_book_in_higher_classes(
+                    my_book, child_codice_scuola, disc, child_tipo
                 )
+            else:
+                # Per libri ANNUALI, verifica se la stessa serie è adottata in classi superiori
+                if isbn or my_book.get("titolo"):
+                    potenzialmente_usato = await is_potentially_available_used(
+                        isbn, child_classe, child_tipo, 
+                        titolo=my_book.get("titolo", ""), 
+                        disciplina=disc,
+                        codice_scuola=child_codice_scuola
+                    )
             
             if copie_disponibili > 0:
                 # Ci sono copie usate disponibili - va in "usato"
