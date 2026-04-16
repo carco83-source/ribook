@@ -2580,32 +2580,47 @@ async def get_child_compatibility(user_id: str, child_id: str):
     my_books = []
     my_books_consigliati = []
     
-    # CASO SPECIALE: Prima Media (1ª classe primo grado) o Prima Superiore (1ª classe secondo grado)
-    # In 1ª media/superiore TUTTI i libri obbligatori vanno acquistati
-    # I libri consigliati (Ap) rimangono consigliati anche in prima
+    # CASO SPECIALE per SCUOLE MEDIE INFERIORI (primo_grado):
+    # I libri CONSIGLIATI vanno trattati come OBBLIGATORI
+    # Quindi per primo_grado, tutti i libri (consigliati + obbligatori) vanno in my_books
+    
+    # Per prima classe, TUTTI i libri vanno acquistati
     is_prima_classe = (child_classe == 1)
+    is_scuola_media = (child_tipo == "primo_grado")
     
     for libro in all_my_books:
-        # I libri CONSIGLIATI (Ap) restano sempre consigliati, anche in prima classe
-        if libro.get('consigliato') == True:
-            my_books_consigliati.append(libro)
-        elif is_prima_classe:
-            # In 1ª classe: TUTTI i libri NON consigliati vanno nella lista obbligatori
-            # (inclusi i volumi unici che normalmente sarebbero "no")
-            my_books.append(libro)
-        else:
-            # Per tutte le altre classi:
-            # I libri obbligatori (da_acquistare=True) vanno sempre in my_books
-            if libro.get('da_acquistare', True) == True:
-                my_books.append(libro)
-            elif libro.get('is_volume_unico'):
-                # Volume unico NON consigliato in classi successive - va nei consigliati
-                my_books_consigliati.append(libro)
-            elif is_continuation_from_previous(libro, all_libri_prec):
-                # È marcato come consigliato MA è continuazione di una serie → DA ACQUISTARE
+        if is_scuola_media:
+            # SCUOLA MEDIA: i consigliati vanno trattati come obbligatori
+            if is_prima_classe:
+                # Prima media: TUTTI i libri vanno acquistati
                 my_books.append(libro)
             else:
+                # Seconda/terza media: solo libri ANNUALI (non volumi unici)
+                if libro.get('da_acquistare', True) == True or libro.get('consigliato') == True:
+                    # Sia obbligatori che consigliati vanno in my_books
+                    if not libro.get('is_volume_unico'):
+                        my_books.append(libro)
+                    # I volumi unici non vanno acquistati in 2ª/3ª
+                elif libro.get('is_volume_unico'):
+                    # Volume unico in 2ª/3ª - già comprato
+                    pass
+                else:
+                    my_books.append(libro)
+        else:
+            # SUPERIORI: logica originale
+            if libro.get('consigliato') == True:
                 my_books_consigliati.append(libro)
+            elif is_prima_classe:
+                my_books.append(libro)
+            else:
+                if libro.get('da_acquistare', True) == True:
+                    my_books.append(libro)
+                elif libro.get('is_volume_unico'):
+                    my_books_consigliati.append(libro)
+                elif is_continuation_from_previous(libro, all_libri_prec):
+                    my_books.append(libro)
+                else:
+                    my_books_consigliati.append(libro)
     
     # In 1ª classe non ci sono volumi unici extra, sono già inclusi in my_books
     if is_prima_classe:
@@ -2746,8 +2761,18 @@ async def get_child_compatibility(user_id: str, child_id: str):
         is_nuova_edizione = "2025" in titolo_upper or "2026" in titolo_upper or "NUOVA EDIZIONE" in titolo_upper
         
         if is_prima_classe:
-            # PRIMA CLASSE: tutti i libri vanno in "comprare_nuovo" a meno che 
-            # non ci siano già copie disponibili in vendita
+            # PRIMA CLASSE: verifica se il libro è potenzialmente disponibile usato
+            # (adottato in classi 2 o 3 dello stesso tipo di scuola)
+            
+            # Verifica se è una nuova edizione 2025/2026
+            titolo_upper = my_book["titolo"].upper()
+            is_nuova_edizione = "2025" in titolo_upper or "2026" in titolo_upper or "NUOVA EDIZIONE" in titolo_upper
+            
+            # Verifica se potenzialmente disponibile usato
+            potenzialmente_usato = False
+            if not is_nuova_edizione and isbn:
+                potenzialmente_usato = await is_potentially_available_used(isbn, child_classe, child_tipo)
+            
             if copie_disponibili > 0:
                 # Ci sono copie usate disponibili - va in "usato"
                 comprare_usato.append({
@@ -2761,8 +2786,22 @@ async def get_child_compatibility(user_id: str, child_id: str):
                     "copie_disponibili": copie_disponibili,
                     "status": "USATO DISPONIBILE"
                 })
+            elif potenzialmente_usato:
+                # Potenzialmente disponibile usato (adottato in classi superiori)
+                comprare_usato.append({
+                    "isbn": isbn,
+                    "disciplina": disc,
+                    "titolo": my_book["titolo"][:50],
+                    "editore": my_book["editore"],
+                    "prezzo_nuovo": my_book["prezzo"],
+                    "prezzo_usato": round(my_book["prezzo"] * 0.5, 2),
+                    "risparmio": round(my_book["prezzo"] * 0.5, 2),
+                    "copie_disponibili": 0,
+                    "status": "POTENZIALMENTE DISPONIBILE",
+                    "motivo": "Libro adottato anche in classi superiori - potrebbe essere disponibile usato"
+                })
             else:
-                # Nessuna copia usata - deve comprare nuovo
+                # Nessuna copia usata e non potenzialmente disponibile - deve comprare nuovo
                 comprare_nuovo.append({
                     "isbn": isbn,
                     "disciplina": disc,
@@ -2771,7 +2810,7 @@ async def get_child_compatibility(user_id: str, child_id: str):
                     "prezzo": my_book["prezzo"],
                     "copie_usate_disponibili": 0,
                     "is_nuova_edizione": is_nuova_edizione,
-                    "motivo": "Prima classe - nessuna copia usata disponibile"
+                    "motivo": "Prima classe - libro non adottato in classi superiori"
                 })
         elif disc in succ_books_disc:
             book_succ = succ_books_disc[disc]
