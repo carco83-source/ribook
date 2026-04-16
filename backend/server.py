@@ -2614,22 +2614,24 @@ async def get_child_compatibility(user_id: str, child_id: str):
     
     async def is_same_book_in_higher_classes(libro: dict, codice_scuola: str, disciplina: str, tipo_scuola: str) -> bool:
         """
-        Per libri UNICI TRIENNALI (scuole medie): verifica se è LO STESSO libro 
-        (stesso titolo base + editore) adottato in ENTRAMBE le classi 2 E 3 della stessa scuola.
+        Per libri UNICI TRIENNALI (scuole medie): verifica se il libro può essere trovato USATO.
         
-        LOGICA CORRETTA:
-        - Per poter comprare USATO un volume unico, deve essere lo STESSO libro
-          in tutte e 3 le classi (1ª, 2ª, 3ª)
-        - Se cambia in 2ª OPPURE in 3ª → deve comprare NUOVO
-        - Chi finisce la 3ª può vendere il libro SOLO se è lo stesso anche in 1ª e 2ª
+        LOGICA CORRETTA BASATA SULL'ANNO DI ADOZIONE:
+        Un volume unico può essere comprato usato SOLO SE:
+        1. È lo STESSO libro in 1ª, 2ª e 3ª (stesso titolo + editore)
+        2. Il libro NON è al suo primo ciclo triennale (verificato tramite nuova_adozione)
         
-        Esempio pratico (Casalinuovo):
-        - Musica: "Prima la musica!" in 1ª e 2ª, ma "Bebop" in 3ª → NON può comprare usato
-        - Tecnologia: "Futura" in 1ª, 2ª e 3ª → PUÒ comprare usato
+        Per determinare l'anno di adozione:
+        - Se nuova_adozione=True in 3ª → 1° anno del ciclo → NON disponibile usato
+        - Se nuova_adozione=True in 2ª (ma non in 3ª) → 2° anno → NON disponibile usato  
+        - Se nuova_adozione=True solo in 1ª → 3° anno → Chi finisce 3ª ora ha un libro diverso
+        - Se nuova_adozione=False ovunque → 4°+ anno → DISPONIBILE usato
+        
+        Chi finisce la 3ª quest'anno può vendere il libro SOLO se lo aveva già quando ha iniziato.
         """
         import re
         
-        # Se il libro ha nuova_adozione=True, NON può essere comprato usato
+        # Se il libro di 1ª ha nuova_adozione=True, NON può essere comprato usato
         if libro.get('nuova_adozione', False):
             return False
         
@@ -2644,10 +2646,12 @@ async def get_child_compatibility(user_id: str, child_id: str):
         if not titolo_base:
             return False
         
-        # Per scuole medie (primo_grado): verifica che sia lo STESSO libro SIA in 2ª CHE in 3ª
+        # Per scuole medie (primo_grado)
         if tipo_scuola == "primo_grado":
             same_in_class_2 = False
             same_in_class_3 = False
+            nuova_adozione_in_2 = False
+            nuova_adozione_in_3 = False
             
             for classe in [2, 3]:
                 adoz = await db.adozioni.find_one({
@@ -2656,7 +2660,6 @@ async def get_child_compatibility(user_id: str, child_id: str):
                 })
                 
                 if not adoz:
-                    # Se non c'è adozione per questa classe, considera come "diverso"
                     continue
                 
                 for libro_sup in adoz.get('libri', []):
@@ -2678,11 +2681,22 @@ async def get_child_compatibility(user_id: str, child_id: str):
                     if titolo_base[:15] == titolo_sup_base[:15] and editore == editore_sup:
                         if classe == 2:
                             same_in_class_2 = True
+                            nuova_adozione_in_2 = libro_sup.get('nuova_adozione', False)
                         else:
                             same_in_class_3 = True
+                            nuova_adozione_in_3 = libro_sup.get('nuova_adozione', False)
                         break
             
+            # Se il libro in 3ª ha nuova_adozione=True → è al 1° anno → NON disponibile
+            if nuova_adozione_in_3:
+                return False
+            
+            # Se il libro in 2ª ha nuova_adozione=True → è al 2° anno → NON disponibile
+            if nuova_adozione_in_2:
+                return False
+            
             # Può comprare usato SOLO se è lo stesso libro in ENTRAMBE le classi 2 e 3
+            # E non è una nuova adozione in nessuna delle classi superiori
             return same_in_class_2 and same_in_class_3
         else:
             # Per superiori: logica esistente (verifica in una qualsiasi classe superiore)
@@ -2697,6 +2711,10 @@ async def get_child_compatibility(user_id: str, child_id: str):
                 
                 for libro_sup in adoz.get('libri', []):
                     if disciplina.upper()[:15] not in libro_sup.get('disciplina', '').upper():
+                        continue
+                    
+                    # Se il libro in classe superiore è nuova_adozione, non è disponibile usato
+                    if libro_sup.get('nuova_adozione', False):
                         continue
                     
                     titolo_sup = libro_sup.get('titolo', '').upper()
