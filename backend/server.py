@@ -3202,6 +3202,7 @@ async def get_child_compatibility(user_id: str, child_id: str):
     
     # Carica libri della classe SUCCESSIVA (stessa sezione) - per calcolare cosa posso COMPRARE USATO
     libri_succ = []
+    all_libri_succ = []  # Inizializza anche all_libri_succ
     if classe_successiva:
         all_libri_succ = await get_books_from_adozioni(child_codice_scuola, classe_successiva, child_sezione)
         libri_succ = [b for b in all_libri_succ if not b.get('is_volume_unico')]
@@ -3279,11 +3280,13 @@ async def get_child_compatibility(user_id: str, child_id: str):
     # Calcola vendere - con ISBN
     # LOGICA CORRETTA: i libri VENDIBILI sono quelli della CLASSE PRECEDENTE (che lo studente ha già usato)
     # Confrontiamo con la classe attuale per verificare compatibilità serie/edizione
+    # SUPERIORI: un volume unico NON è vendibile se serve ancora nella classe successiva
     vendibili = []
     non_vendibili = []
     
     for key_prec, book_prec in prec_books_disc.items():  # Itera sui libri della classe PRECEDENTE
         disc_prec = book_prec.get("disciplina_originale", "")
+        is_volume_unico_prec = book_prec.get("is_volume_unico", False)
         
         # Trova il libro corrispondente nella classe attuale cercando per disciplina
         my_book = None
@@ -3292,6 +3295,35 @@ async def get_child_compatibility(user_id: str, child_id: str):
             if disc_prec and disc_my and disc_prec.upper()[:15] == disc_my.upper()[:15]:
                 my_book = mb
                 break
+        
+        # SUPERIORI: Verifica se il volume unico serve ancora nella classe SUCCESSIVA
+        # Se sì, NON è vendibile perché lo studente lo userà ancora
+        if child_tipo == "secondo_grado" and is_volume_unico_prec and classe_successiva:
+            # Cerca se lo stesso libro è usato nella classe successiva
+            libro_in_succ = False
+            for libro_succ in all_libri_succ if classe_successiva else []:
+                if libro_succ.get('disciplina', '').upper()[:15] == disc_prec.upper()[:15]:
+                    if libro_succ.get('is_volume_unico', False):
+                        # Verifica se è LO STESSO libro
+                        titolo_prec = book_prec.get("titolo", "").upper()[:25]
+                        titolo_succ = libro_succ.get("titolo", "").upper()[:25]
+                        editore_prec = book_prec.get("editore", "").upper()[:15]
+                        editore_succ = libro_succ.get("editore", "").upper()[:15]
+                        if titolo_prec[:15] == titolo_succ[:15] and editore_prec == editore_succ:
+                            libro_in_succ = True
+                            break
+            
+            if libro_in_succ:
+                # Il volume unico serve ancora l'anno prossimo - NON VENDIBILE
+                non_vendibili.append({
+                    "disciplina": disc_prec,
+                    "isbn": book_prec.get("isbn", ""),
+                    "titolo_vecchio": book_prec["titolo"][:40],
+                    "titolo_nuovo": "",
+                    "status": "SERVE ANCORA",
+                    "motivo": f"Volume unico che serve anche in {classe_successiva}ª"
+                })
+                continue  # Passa al prossimo libro
         
         if my_book:
             if same_series(book_prec, my_book):
@@ -3312,6 +3344,21 @@ async def get_child_compatibility(user_id: str, child_id: str):
                     "titolo_vecchio": book_prec["titolo"][:40],  # Libro che avevi (classe precedente)
                     "titolo_nuovo": my_book["titolo"][:40],  # Libro nuovo adottato (classe attuale)
                     "status": "EDIZIONE CAMBIATA"
+                })
+        else:
+            # La materia non esiste nella classe attuale - il libro potrebbe essere vendibile
+            # se altri studenti della stessa classe (entranti) lo useranno
+            # Per superiori: verifica se il libro è ancora adottato per la classe precedente
+            if child_tipo == "secondo_grado" and is_volume_unico_prec:
+                # Volume unico che non serve più in questa classe - VENDIBILE
+                vendibili.append({
+                    "isbn": book_prec.get("isbn", ""),
+                    "disciplina": disc_prec,
+                    "titolo": book_prec["titolo"][:50],
+                    "editore": book_prec["editore"],
+                    "prezzo_consigliato": round(book_prec["prezzo"] * 0.5, 2),
+                    "status": "VENDIBILE",
+                    "motivo": "Materia terminata - vendibile a studenti entranti"
                 })
     
     # Calcola comprare - con conteggio copie disponibili
