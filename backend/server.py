@@ -2983,36 +2983,35 @@ async def get_child_compatibility(user_id: str, child_id: str):
                 "tipo": "volume_unico"
             })
     
-    # Organizza per disciplina (NOTA: se ci sono più libri per la stessa disciplina, li unisce)
-    def books_by_discipline(books, merge_duplicates=True):
+    # Organizza per disciplina - NON unisce libri diversi della stessa disciplina
+    # Usa ISBN come chiave primaria per distinguere libri diversi
+    def books_by_discipline(books, merge_duplicates=False):
         result = {}
         for b in books:
             disc = b.get("disciplina", "").strip().upper()
-            if disc:
-                if disc not in result:
-                    result[disc] = {
-                        "isbn": b.get("isbn", ""),
-                        "titolo": b.get("titolo", ""),
-                        "editore": b.get("editore", "").strip().upper(),
-                        "autori": b.get("autori", ""),
-                        "prezzo": b.get("prezzo_copertina", 0),
-                        "titolo_base": get_series_name(b.get("titolo", "")),
-                        "libri_multipli": [b],  # Lista per tenere traccia di tutti i libri
-                        "is_volume_unico": b.get("is_volume_unico", False),
-                        "nuova_adozione": b.get("nuova_adozione", False)
-                    }
-                elif merge_duplicates:
-                    # C'è già un libro per questa disciplina - somma il prezzo
-                    result[disc]["prezzo"] += b.get("prezzo_copertina", 0)
-                    result[disc]["libri_multipli"].append(b)
-                    # Aggiorna titolo se necessario
-                    if len(result[disc]["libri_multipli"]) > 1:
-                        result[disc]["titolo"] = result[disc]["titolo"][:30] + f" + altri {len(result[disc]['libri_multipli'])-1}"
-                    # Se almeno uno dei libri è volume unico o nuova adozione, segna come tale
-                    if b.get("is_volume_unico", False):
-                        result[disc]["is_volume_unico"] = True
-                    if b.get("nuova_adozione", False):
-                        result[disc]["nuova_adozione"] = True
+            isbn = b.get("isbn", "")
+            titolo = b.get("titolo", "")
+            
+            # Usa ISBN come chiave primaria se disponibile, altrimenti disciplina + titolo
+            if isbn:
+                key = isbn
+            else:
+                titolo_key = titolo.upper()[:20].replace(" ", "_") if titolo else "UNKNOWN"
+                key = f"{disc}_{titolo_key}"
+            
+            if key and key not in result:
+                result[key] = {
+                    "isbn": isbn,
+                    "titolo": titolo,
+                    "editore": b.get("editore", "").strip().upper(),
+                    "autori": b.get("autori", ""),
+                    "prezzo": b.get("prezzo_copertina", 0),
+                    "titolo_base": get_series_name(titolo),
+                    "libri_multipli": [b],
+                    "is_volume_unico": b.get("is_volume_unico", False),
+                    "nuova_adozione": b.get("nuova_adozione", False),
+                    "disciplina_originale": disc  # Mantiene la disciplina originale
+                }
         return result
     
     my_books_disc = books_by_discipline(my_books)
@@ -3057,8 +3056,11 @@ async def get_child_compatibility(user_id: str, child_id: str):
     # Tutti i libri devono essere comprati NUOVI (a meno che non ci siano copie in vendita)
     is_prima_classe = (child_classe == 1)
     
-    for disc, my_book in my_books_disc.items():
+    for disc_key, my_book in my_books_disc.items():
         isbn = my_book.get("isbn", "")
+        # Usa la disciplina originale per i risultati
+        disc = my_book.get("disciplina_originale", disc_key.split("_")[0])
+        
         copie_disponibili = 0
         if isbn:
             copie_disponibili = await db.listings.count_documents({
