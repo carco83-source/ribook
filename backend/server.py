@@ -2456,7 +2456,9 @@ async def get_child_compatibility(user_id: str, child_id: str):
                 return (3, 5, "triennio")
     
     cycle_min, cycle_max, cycle_name = get_cycle_info(child_classe, child_tipo)
-    classe_precedente = child_classe - 1 if child_classe > cycle_min else None
+    # Per vendibili: lo studente può vendere i libri dell'anno precedente
+    # Anche se è il primo anno del ciclo (es. 3° superiore), può vendere libri del 2° ai nuovi 2°
+    classe_precedente = child_classe - 1 if child_classe > 1 else None
     classe_successiva = child_classe + 1 if child_classe < cycle_max else None
     
     # ========================================
@@ -3287,83 +3289,92 @@ async def get_child_compatibility(user_id: str, child_id: str):
         return result
     
     my_books_disc = books_by_discipline(my_books)
-    prec_books_disc = books_by_discipline(libri_prec)
+    # Per i vendibili, usa TUTTI i libri della classe precedente (non solo annuali)
+    prec_books_disc = books_by_discipline(all_libri_prec)
     succ_books_disc = books_by_discipline(libri_succ)
     
     # Calcola vendere - con ISBN
-    # LOGICA CORRETTA: i libri VENDIBILI sono quelli della CLASSE PRECEDENTE (che lo studente ha già usato)
-    # Confrontiamo con la classe attuale per verificare compatibilità serie/edizione
-    # SUPERIORI: un volume unico NON è vendibile se serve ancora nella classe successiva
+    # LOGICA VENDIBILI: i libri che lo studente ha usato l'anno scorso e può vendere
+    # Per SUPERIORI con cambio ciclo (2°→3°): i libri del biennio si vendono ai nuovi 2°
+    # Per libri che continuano: si vendono ai nuovi studenti della stessa classe
     vendibili = []
     non_vendibili = []
+    
+    # Carica TUTTI i libri della classe attuale (non solo quelli da comprare)
+    all_my_books_full = await get_books_from_adozioni(child_codice_scuola, child_classe, child_sezione)
+    all_my_books_disc = {}
+    for b in all_my_books_full:
+        disc = b.get('disciplina', '')
+        if disc:
+            all_my_books_disc[disc.upper()[:15]] = b
     
     for key_prec, book_prec in prec_books_disc.items():  # Itera sui libri della classe PRECEDENTE
         disc_prec = book_prec.get("disciplina_originale", "")
         is_volume_unico_prec = book_prec.get("is_volume_unico", False)
         
-        # Trova il libro corrispondente nella classe attuale cercando per disciplina
-        my_book = None
-        for key, mb in my_books_disc.items():
-            disc_my = mb.get("disciplina_originale", "")
-            if disc_prec and disc_my and disc_prec.upper()[:15] == disc_my.upper()[:15]:
-                my_book = mb
-                break
+        # Trova il libro corrispondente nella classe attuale (TUTTI i libri, non solo da comprare)
+        my_book_full = all_my_books_disc.get(disc_prec.upper()[:15])
         
-        # SUPERIORI: Verifica se il volume unico serve ancora nella classe SUCCESSIVA
-        # Se sì, NON è vendibile perché lo studente lo userà ancora
-        if child_tipo == "secondo_grado" and is_volume_unico_prec and classe_successiva:
-            # Cerca se lo stesso libro è usato nella classe successiva
-            libro_in_succ = False
-            for libro_succ in all_libri_succ if classe_successiva else []:
-                if libro_succ.get('disciplina', '').upper()[:15] == disc_prec.upper()[:15]:
-                    if libro_succ.get('is_volume_unico', False):
-                        # Verifica se è LO STESSO libro
-                        titolo_prec = book_prec.get("titolo", "").upper()[:25]
-                        titolo_succ = libro_succ.get("titolo", "").upper()[:25]
-                        editore_prec = book_prec.get("editore", "").upper()[:15]
-                        editore_succ = libro_succ.get("editore", "").upper()[:15]
-                        if titolo_prec[:15] == titolo_succ[:15] and editore_prec == editore_succ:
-                            libro_in_succ = True
-                            break
+        # CASO 1: La materia esiste anche nella classe attuale → libro serve ancora → NON VENDIBILE
+        if my_book_full:
+            # Il libro serve ANCORA quest'anno → NON VENDIBILE
+            # Verifica se è lo stesso libro o uno diverso
+            isbn_prec = book_prec.get("isbn", "")
+            isbn_curr = my_book_full.get("isbn", "")
             
-            if libro_in_succ:
-                # Il volume unico serve ancora l'anno prossimo - NON VENDIBILE
+            if isbn_prec == isbn_curr:
+                # Stesso libro in entrambe le classi → NON VENDIBILE (serve ancora)
                 non_vendibili.append({
                     "disciplina": disc_prec,
                     "isbn": book_prec.get("isbn", ""),
                     "titolo_vecchio": book_prec["titolo"][:40],
                     "titolo_nuovo": "",
                     "status": "SERVE ANCORA",
-                    "motivo": f"Volume unico che serve anche in {classe_successiva}ª"
-                })
-                continue  # Passa al prossimo libro
-        
-        if my_book:
-            if same_series(book_prec, my_book):
-                # Il libro della classe precedente è vendibile alla classe successiva
-                vendibili.append({
-                    "isbn": book_prec.get("isbn", ""),
-                    "disciplina": disc_prec,
-                    "titolo": book_prec["titolo"][:50],  # Titolo del libro della classe PRECEDENTE
-                    "editore": book_prec["editore"],
-                    "prezzo_consigliato": round(book_prec["prezzo"] * 0.5, 2),
-                    "status": "VENDIBILE"
+                    "motivo": f"Libro usato anche in {child_classe}ª"
                 })
             else:
-                # Edizione cambiata - il libro della classe precedente non è più compatibile
+                # Libro diverso nella classe attuale → edizione cambiata
+                # Il vecchio libro potrebbe essere vendibile ai nuovi studenti della classe precedente
                 non_vendibili.append({
                     "disciplina": disc_prec,
                     "isbn": book_prec.get("isbn", ""),
-                    "titolo_vecchio": book_prec["titolo"][:40],  # Libro che avevi (classe precedente)
-                    "titolo_nuovo": my_book["titolo"][:40],  # Libro nuovo adottato (classe attuale)
+                    "titolo_vecchio": book_prec["titolo"][:40],
+                    "titolo_nuovo": my_book_full.get("titolo", "")[:40],
                     "status": "EDIZIONE CAMBIATA"
                 })
         else:
-            # La materia non esiste nella classe attuale - il libro potrebbe essere vendibile
-            # se altri studenti della stessa classe (entranti) lo useranno
-            # Per superiori: verifica se il libro è ancora adottato per la classe precedente
-            if child_tipo == "secondo_grado" and is_volume_unico_prec:
-                # Volume unico che non serve più in questa classe - VENDIBILE
+            # CASO 2: La materia NON esiste nella classe attuale (cambio ciclo o materia terminata)
+            # Il libro è VENDIBILE ai nuovi studenti della classe precedente
+            
+            # Verifica se il libro è ancora adottato per la classe precedente (nuovi studenti)
+            # Cerca la stessa sezione per consistenza
+            adoz_prec = await db.adozioni.find_one({
+                'codice_scuola': child_codice_scuola,
+                'classe': classe_precedente,
+                'sezione': child_sezione
+            })
+            
+            # Se non trova con sezione specifica, cerca qualsiasi sezione
+            if not adoz_prec:
+                adoz_prec = await db.adozioni.find_one({
+                    'codice_scuola': child_codice_scuola,
+                    'classe': classe_precedente
+                })
+            
+            libro_ancora_adottato = False
+            if adoz_prec:
+                for libro_adoz in adoz_prec.get('libri', []):
+                    if libro_adoz.get('isbn') == book_prec.get('isbn'):
+                        libro_ancora_adottato = True
+                        break
+                    # Controllo anche per titolo/editore simile
+                    if disc_prec.upper()[:15] in libro_adoz.get('disciplina', '').upper():
+                        titolo_adoz = libro_adoz.get('titolo', '').upper()
+                        if book_prec.get('titolo', '').upper()[:20] in titolo_adoz or titolo_adoz[:20] in book_prec.get('titolo', '').upper():
+                            libro_ancora_adottato = True
+                            break
+            
+            if libro_ancora_adottato:
                 vendibili.append({
                     "isbn": book_prec.get("isbn", ""),
                     "disciplina": disc_prec,
@@ -3371,7 +3382,17 @@ async def get_child_compatibility(user_id: str, child_id: str):
                     "editore": book_prec["editore"],
                     "prezzo_consigliato": round(book_prec["prezzo"] * 0.5, 2),
                     "status": "VENDIBILE",
-                    "motivo": "Materia terminata - vendibile a studenti entranti"
+                    "vendi_a": f"Studenti entranti in {classe_precedente}ª",
+                    "motivo": "Materia terminata per te, ma ancora adottata per i nuovi studenti"
+                })
+            else:
+                # Libro non più adottato - non vendibile
+                non_vendibili.append({
+                    "disciplina": disc_prec,
+                    "isbn": book_prec.get("isbn", ""),
+                    "titolo_vecchio": book_prec["titolo"][:40],
+                    "titolo_nuovo": "",
+                    "status": "NON PIÙ ADOTTATO"
                 })
     
     # Calcola comprare - con conteggio copie disponibili
