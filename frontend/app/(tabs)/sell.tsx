@@ -106,9 +106,9 @@ export default function SellScreen() {
   // Flag per conferma possesso fascicoli
   const [hasFascicoli, setHasFascicoli] = useState(false);
   
-  // Funzione per contare i fascicoli CARTACEI dal titolo
+  // Funzione per contare i fascicoli CARTACEI AGGIUNTIVI dal titolo (oltre al libro principale)
   const countFascicoliCartacei = (titolo: string): number => {
-    if (!titolo || !titolo.includes('+')) return 1; // Solo il libro principale
+    if (!titolo || !titolo.includes('+')) return 0; // Nessun fascicolo aggiuntivo
     
     const DIGITALI = [
       'EBOOK', 'E-BOOK', 'EBK', 'EASY EBOOK', 'EASY EB', 'EASY BOOK',
@@ -122,7 +122,7 @@ export default function SellScreen() {
     ];
     
     const parti = titolo.split('+');
-    let fascicoliCartacei = 1; // Il libro principale
+    let fascicoliCartacei = 0; // Conta solo gli EXTRA (non il libro principale)
     
     for (let i = 1; i < parti.length; i++) {
       const parte = parti[i].trim().toUpperCase();
@@ -134,6 +134,11 @@ export default function SellScreen() {
     }
     
     return fascicoliCartacei;
+  };
+  
+  // Conta totale fascicoli (libro + extra cartacei)
+  const getTotaleFascicoli = (titolo: string): number => {
+    return 1 + countFascicoliCartacei(titolo); // 1 = libro principale
   };
   
   // Prezzo selezionato dalla forbice
@@ -1099,27 +1104,55 @@ export default function SellScreen() {
                   borderLeftWidth: 3,
                   borderLeftColor: '#4CAF50'
                 }}>
-                  <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#2E7D32', marginBottom: 8 }}>
-                    📦 IN POSSESSO DEI {countFascicoliCartacei(selectedBook.titolo)} FASCICOLI CARTACEI
-                  </Text>
-                  
-                  <TouchableOpacity
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      paddingVertical: 8,
-                    }}
-                    onPress={() => setHasFascicoli(!hasFascicoli)}
-                  >
-                    <Ionicons 
-                      name={hasFascicoli ? "checkbox" : "square-outline"} 
-                      size={24} 
-                      color={hasFascicoli ? "#4CAF50" : "#666"} 
-                    />
-                    <Text style={{ marginLeft: 8, fontSize: 13, color: '#333' }}>
-                      Conferma per procedere
-                    </Text>
-                  </TouchableOpacity>
+                  {countFascicoliCartacei(selectedBook.titolo) > 0 ? (
+                    <>
+                      <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#2E7D32', marginBottom: 8 }}>
+                        📦 IN POSSESSO DEI {getTotaleFascicoli(selectedBook.titolo)} FASCICOLI CARTACEI
+                      </Text>
+                      
+                      <TouchableOpacity
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          paddingVertical: 8,
+                        }}
+                        onPress={() => setHasFascicoli(!hasFascicoli)}
+                      >
+                        <Ionicons 
+                          name={hasFascicoli ? "checkbox" : "square-outline"} 
+                          size={24} 
+                          color={hasFascicoli ? "#4CAF50" : "#666"} 
+                        />
+                        <Text style={{ marginLeft: 8, fontSize: 13, color: '#333' }}>
+                          Conferma per procedere
+                        </Text>
+                      </TouchableOpacity>
+                    </>
+                  ) : (
+                    <>
+                      <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#2E7D32', marginBottom: 8 }}>
+                        📖 LIBRO SPROVVISTO DI FASCICOLI CARTACEI
+                      </Text>
+                      
+                      <TouchableOpacity
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          paddingVertical: 8,
+                        }}
+                        onPress={() => setHasFascicoli(!hasFascicoli)}
+                      >
+                        <Ionicons 
+                          name={hasFascicoli ? "checkbox" : "square-outline"} 
+                          size={24} 
+                          color={hasFascicoli ? "#4CAF50" : "#666"} 
+                        />
+                        <Text style={{ marginLeft: 8, fontSize: 13, color: '#333' }}>
+                          Conferma per procedere
+                        </Text>
+                      </TouchableOpacity>
+                    </>
+                  )}
                 </View>
               )}
 
@@ -1142,15 +1175,15 @@ export default function SellScreen() {
                   />
                   <Text style={styles.photoReqText}>2. Pagina con più usura (la peggiore)</Text>
                 </View>
-                {/* Terza foto per fascicoli - solo se flag attivo e >1 fascicolo */}
-                {hasFascicoli && selectedBook && countFascicoliCartacei(selectedBook.titolo) > 1 && (
+                {/* Terza foto per fascicoli - solo se flag attivo e >1 fascicolo cartaceo */}
+                {hasFascicoli && selectedBook && countFascicoliCartacei(selectedBook.titolo) > 0 && (
                   <View style={[styles.photoReqItem, listingPhotos.length >= 3 && styles.photoReqItemDone]}>
                     <Ionicons 
                       name={listingPhotos.length >= 3 ? "checkmark-circle" : "ellipse-outline"} 
                       size={18} 
                       color={listingPhotos.length >= 3 ? "#4CAF50" : "#999"} 
                     />
-                    <Text style={styles.photoReqText}>3. Tutti i {countFascicoliCartacei(selectedBook.titolo)} fascicoli insieme</Text>
+                    <Text style={styles.photoReqText}>3. Tutti i {getTotaleFascicoli(selectedBook.titolo)} fascicoli insieme</Text>
                   </View>
                 )}
               </View>
@@ -1177,9 +1210,9 @@ export default function SellScreen() {
                 ))}
                 {/* Mostra pulsanti per caricare foto se: 
                     - meno di 2 foto (obbligatorie)
-                    - OPPURE meno di 3 foto E flag attivo E >1 fascicolo */}
+                    - OPPURE meno di 3 foto E flag attivo E ci sono fascicoli cartacei extra */}
                 {(listingPhotos.length < 2 || 
-                  (hasFascicoli && selectedBook && countFascicoliCartacei(selectedBook.titolo) > 1 && listingPhotos.length < 3)) && (
+                  (hasFascicoli && selectedBook && countFascicoliCartacei(selectedBook.titolo) > 0 && listingPhotos.length < 3)) && (
                   <View style={styles.addPhotoButtons}>
                     <TouchableOpacity style={styles.addPhotoBtn} onPress={takePhoto}>
                       <Ionicons name="camera" size={24} color="#1a472a" />
@@ -1198,9 +1231,9 @@ export default function SellScreen() {
                 </Text>
               )}
               {/* Warning per terza foto fascicoli */}
-              {hasFascicoli && selectedBook && countFascicoliCartacei(selectedBook.titolo) > 1 && listingPhotos.length === 2 && (
+              {hasFascicoli && selectedBook && countFascicoliCartacei(selectedBook.titolo) > 0 && listingPhotos.length === 2 && (
                 <Text style={[styles.photoWarning, { color: '#FF9800' }]}>
-                  Carica la 3ª foto con tutti i {countFascicoliCartacei(selectedBook.titolo)} fascicoli insieme
+                  Carica la 3ª foto con tutti i {getTotaleFascicoli(selectedBook.titolo)} fascicoli insieme
                 </Text>
               )}
 
