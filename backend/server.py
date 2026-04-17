@@ -3669,33 +3669,42 @@ async def get_child_compatibility(user_id: str, child_id: str):
                         })
     
     # =====================================================
-    # FILTRA: Rimuovi dai libri acquistabili quelli già in possesso
+    # FILTRO ESCLUSIVO: Ogni libro in UNA SOLA sezione
+    # Priorità: 1. Vendibili, 2. Acquistabili Usati, 3. Ancora in Uso, 4. Nuovi
     # =====================================================
+    
+    # Step 1: Raccogli tutti gli ISBN dei vendibili (priorità massima)
+    isbn_vendibili = {v.get('isbn') for v in vendibili if v.get('isbn')}
+    
+    # Step 2: Filtra "ancora in uso" per escludere vendibili
+    non_vendibili_ancora_in_uso = [
+        nv for nv in non_vendibili_ancora_in_uso 
+        if nv.get('isbn') not in isbn_vendibili
+    ]
     isbn_ancora_in_uso = {nv.get('isbn') for nv in non_vendibili_ancora_in_uso if nv.get('isbn')}
     
+    # Step 3: Filtra acquistabili usati per escludere vendibili e ancora in uso
     comprare_usato_filtrato = [
         libro for libro in comprare_usato 
-        if libro.get('isbn') not in isbn_ancora_in_uso
+        if libro.get('isbn') not in isbn_vendibili and libro.get('isbn') not in isbn_ancora_in_uso
     ]
+    isbn_acquistabili_usati = {l.get('isbn') for l in comprare_usato_filtrato if l.get('isbn')}
+    
+    # Step 4: Filtra nuovi per escludere vendibili, ancora in uso, e acquistabili usati
     comprare_nuovo_filtrato = [
         libro for libro in comprare_nuovo 
-        if libro.get('isbn') not in isbn_ancora_in_uso
-    ]
-    
-    # FILTRA: Rimuovi dai vendibili quelli che sono "ANCORA IN USO"
-    # (Non puoi vendere un libro che ti serve ancora!)
-    vendibili_filtrato = [
-        libro for libro in vendibili 
-        if libro.get('isbn') not in isbn_ancora_in_uso
+        if libro.get('isbn') not in isbn_vendibili 
+        and libro.get('isbn') not in isbn_ancora_in_uso
+        and libro.get('isbn') not in isbn_acquistabili_usati
     ]
     
     # Sostituisci le liste originali
     comprare_usato = comprare_usato_filtrato
     comprare_nuovo = comprare_nuovo_filtrato
-    vendibili = vendibili_filtrato
+    # vendibili rimane invariato (ha priorità massima)
     
     num_vendibili = len(vendibili)
-    num_non_vendibili = len(non_vendibili_ancora_in_uso)  # Solo quelli ancora in uso
+    num_non_vendibili = len(non_vendibili_ancora_in_uso)
     num_usato = len(comprare_usato)
     num_nuovo = len(comprare_nuovo)
     risparmio = sum(l["risparmio"] for l in comprare_usato)
