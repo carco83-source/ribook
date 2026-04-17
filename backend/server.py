@@ -3576,6 +3576,44 @@ async def get_child_compatibility(user_id: str, child_id: str):
                 "motivo": "Volume unico triennale appena acquistato - lo userai per 3 anni"
             })
     
+    # AGGIUNGI: Volumi unici triennali della classe ATTUALE che lo studente ha già
+    # (comprati in 1° anno, ora li usa in 2° o 3°)
+    # Questi sono volumi unici che appaiono nella classe attuale ma NON sono da comprare
+    # perché lo studente li ha già
+    if child_classe > 1:
+        # Per ogni volume unico della classe attuale che NON è nei libri da comprare
+        isbn_da_comprare = set()
+        for libro in comprare_nuovo:
+            if libro.get('isbn'):
+                isbn_da_comprare.add(libro.get('isbn'))
+        for libro in comprare_usato:
+            if libro.get('isbn'):
+                isbn_da_comprare.add(libro.get('isbn'))
+        
+        # Controlla tutti i libri della classe attuale
+        for libro in all_my_books:
+            if libro.get('is_volume_unico'):
+                isbn = libro.get('isbn', '')
+                disc = libro.get('disciplina', '')
+                
+                # Se è un volume unico che NON è nei libri da comprare, lo studente lo ha già
+                if isbn and isbn not in isbn_da_comprare:
+                    # Verifica se non è già nella lista
+                    gia_incluso = any(nv.get('isbn') == isbn for nv in non_vendibili_ancora_in_uso)
+                    
+                    if not gia_incluso:
+                        # Determina quando è stato comprato
+                        anno_acquisto = 1 if child_classe == 2 else (1 if child_classe == 3 and child_tipo == "primo_grado" else child_classe - 1)
+                        
+                        non_vendibili_ancora_in_uso.append({
+                            "disciplina": disc,
+                            "isbn": isbn,
+                            "titolo_vecchio": libro.get('titolo', '')[:40],
+                            "titolo_nuovo": "",
+                            "status": f"COMPRATO IN {anno_acquisto}ª",
+                            "motivo": f"Volume unico triennale comprato in {anno_acquisto}ª - lo usi ancora"
+                        })
+    
     num_vendibili = len(vendibili)
     num_non_vendibili = len(non_vendibili_ancora_in_uso)  # Solo quelli ancora in uso
     num_usato = len(comprare_usato)
