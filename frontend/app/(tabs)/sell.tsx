@@ -1092,14 +1092,14 @@ export default function SellScreen() {
               {/* Sezione Fascicoli Cartacei */}
               {selectedBook && (
                 <View style={{ 
-                  backgroundColor: '#FFF8E1', 
+                  backgroundColor: '#E8F5E9', 
                   padding: 12, 
                   borderRadius: 8, 
                   marginBottom: 16,
                   borderLeftWidth: 3,
-                  borderLeftColor: '#FF9800'
+                  borderLeftColor: '#4CAF50'
                 }}>
-                  <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#E65100', marginBottom: 8 }}>
+                  <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#2E7D32', marginBottom: 8 }}>
                     📦 IN POSSESSO DEI {countFascicoliCartacei(selectedBook.titolo)} FASCICOLI CARTACEI
                   </Text>
                   
@@ -1116,16 +1116,10 @@ export default function SellScreen() {
                       size={24} 
                       color={hasFascicoli ? "#4CAF50" : "#666"} 
                     />
-                    <Text style={{ marginLeft: 8, fontSize: 13, color: '#333', flex: 1 }}>
-                      Confermo di possedere tutti i {countFascicoliCartacei(selectedBook.titolo)} fascicoli cartacei previsti
+                    <Text style={{ marginLeft: 8, fontSize: 13, color: '#333' }}>
+                      Conferma per procedere
                     </Text>
                   </TouchableOpacity>
-                  
-                  {!hasFascicoli && (
-                    <Text style={{ fontSize: 11, color: '#f44336', fontStyle: 'italic', marginTop: 4 }}>
-                      ⚠️ Devi confermare il possesso dei fascicoli per procedere
-                    </Text>
-                  )}
                 </View>
               )}
 
