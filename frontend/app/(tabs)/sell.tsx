@@ -1445,7 +1445,11 @@ export default function SellScreen() {
                 
                 <View style={styles.priceOptionsContainer}>
                   {priceRange.prices.map((priceOpt, index) => {
-                    const buyerPrice = (priceOpt.price * 1.17).toFixed(2); // +17% commissione
+                    // Commissioni: 12% App + 5% Libraio = 17%
+                    // Commissione Stripe: 1.5% + 0.25€
+                    const stripeCommission = (priceOpt.price * 0.015) + 0.25;
+                    const buyerPrice = (priceOpt.price + stripeCommission).toFixed(2);
+                    const sellerEarnings = (priceOpt.price * 0.83).toFixed(2); // Venditore riceve 83% (100% - 17%)
                     return (
                       <TouchableOpacity
                         key={index}
@@ -1475,10 +1479,10 @@ export default function SellScreen() {
                             styles.priceOptionValue,
                             selectedPriceOption === priceOpt.price && styles.priceOptionValueSelected
                           ]}>
-                            €{priceOpt.price.toFixed(2)}
+                            Tu ricevi: €{sellerEarnings}
                           </Text>
                           <Text style={styles.priceOptionBuyerCost}>
-                            Costo acquirente: €{buyerPrice}
+                            Acquirente paga: €{buyerPrice}
                           </Text>
                         </View>
                       </TouchableOpacity>
@@ -1486,14 +1490,45 @@ export default function SellScreen() {
                   })}
                 </View>
 
-                {selectedPriceOption !== null && (
-                  <View style={styles.selectedPriceInfo}>
-                    <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
-                    <Text style={styles.selectedPriceText}>
-                      Prezzo selezionato: €{selectedPriceOption.toFixed(2)}
-                    </Text>
-                  </View>
-                )}
+                {selectedPriceOption !== null && (() => {
+                  const stripeComm = (selectedPriceOption * 0.015) + 0.25;
+                  const finalBuyerPrice = (selectedPriceOption + stripeComm).toFixed(2);
+                  const sellerNet = (selectedPriceOption * 0.83).toFixed(2);
+                  return (
+                    <View style={styles.selectedPriceSummary}>
+                      <View style={styles.summaryRow}>
+                        <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+                        <Text style={styles.summaryLabel}>Riepilogo commissioni:</Text>
+                      </View>
+                      <View style={styles.commissionBreakdown}>
+                        <View style={styles.commissionRow}>
+                          <Text style={styles.commissionLabel}>Prezzo base:</Text>
+                          <Text style={styles.commissionValue}>€{selectedPriceOption.toFixed(2)}</Text>
+                        </View>
+                        <View style={styles.commissionRow}>
+                          <Text style={styles.commissionLabel}>Commissione App (12%):</Text>
+                          <Text style={styles.commissionValue}>-€{(selectedPriceOption * 0.12).toFixed(2)}</Text>
+                        </View>
+                        <View style={styles.commissionRow}>
+                          <Text style={styles.commissionLabel}>Commissione Libraio (5%):</Text>
+                          <Text style={styles.commissionValue}>-€{(selectedPriceOption * 0.05).toFixed(2)}</Text>
+                        </View>
+                        <View style={styles.commissionRow}>
+                          <Text style={styles.commissionLabel}>Commissione Stripe:</Text>
+                          <Text style={styles.commissionValue}>+€{stripeComm.toFixed(2)}</Text>
+                        </View>
+                        <View style={[styles.commissionRow, styles.commissionTotal]}>
+                          <Text style={styles.totalLabel}>Tu riceverai:</Text>
+                          <Text style={styles.totalValueGreen}>€{sellerNet}</Text>
+                        </View>
+                        <View style={[styles.commissionRow, styles.commissionTotal]}>
+                          <Text style={styles.totalLabel}>L'acquirente pagherà:</Text>
+                          <Text style={styles.totalValueBlue}>€{finalBuyerPrice}</Text>
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })()}
                 
                 {selectedBook && selectedBook.prezzo_copertina && (
                   <Text style={styles.originalPriceHint}>
@@ -2230,6 +2265,65 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#4CAF50',
+  },
+  // Commission breakdown summary
+  selectedPriceSummary: {
+    marginTop: 16,
+    padding: 16,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  summaryLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#333',
+  },
+  commissionBreakdown: {
+    gap: 8,
+  },
+  commissionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  commissionLabel: {
+    fontSize: 13,
+    color: '#666',
+  },
+  commissionValue: {
+    fontSize: 13,
+    color: '#666',
+    fontWeight: '500',
+  },
+  commissionTotal: {
+    borderTopWidth: 1,
+    borderTopColor: '#ddd',
+    paddingTop: 10,
+    marginTop: 6,
+  },
+  totalLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#333',
+  },
+  totalValueGreen: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#4CAF50',
+  },
+  totalValueBlue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#2196F3',
   },
   // Condition section header
   conditionSectionHeader: {
