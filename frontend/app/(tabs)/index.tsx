@@ -509,7 +509,7 @@ export default function RadarScreen() {
             {compatibility.vendere?.libri_vendibili && compatibility.vendere.libri_vendibili.length > 0 && (
               <View style={styles.classCard}>
                 <Text style={styles.sectionTitleBlue}>
-                  LIBRI CHE {child?.nome_figlio?.toUpperCase()} PUÒ VENDERE ALLA {compatibility.vendere?.classe_destinazione}ª
+                  LIBRI VENDIBILI ({compatibility.vendere.libri_vendibili.length})
                 </Text>
                 {compatibility.vendere.libri_vendibili.map((book: any, idx: number) => (
                   <View key={idx} style={styles.sampleBookItem}>
@@ -540,34 +540,6 @@ export default function RadarScreen() {
                   <Text style={styles.viewSellersButtonText}>Vendi questi libri</Text>
                   <Ionicons name="arrow-forward" size={14} color="#fff" />
                 </TouchableOpacity>
-              </View>
-            )}
-
-            {/* Libri NON Vendibili (ancora in uso) */}
-            {compatibility.vendere?.libri_non_vendibili && compatibility.vendere.libri_non_vendibili.length > 0 && (
-              <View style={[styles.classCard, { borderLeftColor: '#FF9800', borderLeftWidth: 3 }]}>
-                <Text style={[styles.sectionTitleRed, { color: '#E65100' }]}>
-                  LIBRI NON VENDIBILI (ANCORA IN USO)
-                </Text>
-                <Text style={{ fontSize: 11, color: '#E65100', marginBottom: 8, fontStyle: 'italic' }}>
-                  Volumi unici che userai ancora quest'anno
-                </Text>
-                {compatibility.vendere.libri_non_vendibili.map((book: any, idx: number) => (
-                  <View key={idx} style={styles.sampleBookItem}>
-                    <View style={styles.sampleBookInfo}>
-                      <Text style={styles.sampleBookTitle} numberOfLines={2}>
-                        {book.titolo_vecchio || book.disciplina}
-                      </Text>
-                      <Text style={styles.sampleBookSubject} numberOfLines={1}>
-                        {book.disciplina} • ISBN: {book.isbn}
-                      </Text>
-                      <Text style={[styles.sampleBookSeller, { color: '#E65100' }]} numberOfLines={1}>
-                        {book.status}
-                      </Text>
-                    </View>
-                    <Ionicons name="book" size={20} color="#FF9800" />
-                  </View>
-                ))}
               </View>
             )}
 
@@ -634,7 +606,29 @@ export default function RadarScreen() {
               );
             })()}
 
-            {/* Libri di nuova adozione o ancora non reperiti */}
+            {/* Libri NON Vendibili (ancora in uso) */}
+            {compatibility.vendere?.libri_non_vendibili && compatibility.vendere.libri_non_vendibili.length > 0 && (
+              <View style={[styles.classCard, { borderLeftColor: '#FF9800', borderLeftWidth: 3 }]}>
+                <Text style={[styles.sectionTitleRed, { color: '#E65100' }]}>
+                  LIBRI NON VENDIBILI - ANCORA IN USO ({compatibility.vendere.libri_non_vendibili.length})
+                </Text>
+                {compatibility.vendere.libri_non_vendibili.map((book: any, idx: number) => (
+                  <View key={idx} style={styles.sampleBookItem}>
+                    <View style={styles.sampleBookInfo}>
+                      <Text style={styles.sampleBookTitle} numberOfLines={1}>
+                        {book.titolo_vecchio || book.disciplina}
+                      </Text>
+                      <Text style={styles.sampleBookSubject} numberOfLines={1}>
+                        {book.disciplina} • {book.status}
+                      </Text>
+                    </View>
+                    <Ionicons name="book" size={20} color="#FF9800" />
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {/* Libri di nuova adozione da acquistare */}
             {(() => {
               // Filtra solo libri senza copie usate disponibili O nuove edizioni
               const libriNonReperibili = (compatibility.nuovi?.libri || []).filter(
@@ -646,10 +640,7 @@ export default function RadarScreen() {
               return (
                 <View style={styles.classCard}>
                   <Text style={styles.sectionTitleOrange}>
-                    LIBRI DI NUOVA ADOZIONE O ANCORA NON REPERITI
-                  </Text>
-                  <Text style={{ fontSize: 11, color: '#666', marginBottom: 12, fontStyle: 'italic' }}>
-                    Al momento da acquistare nuovi
+                    LIBRI DI NUOVA ADOZIONE DA ACQUISTARE ({libriNonReperibili.length})
                   </Text>
                   {libriNonReperibili.map((book: any, idx: number) => (
                     <TouchableOpacity 
