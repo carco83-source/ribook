@@ -103,6 +103,39 @@ export default function SellScreen() {
   // Libro Nuovo flag
   const [isNewBook, setIsNewBook] = useState(false);
   
+  // Flag per conferma possesso fascicoli
+  const [hasFascicoli, setHasFascicoli] = useState(false);
+  
+  // Funzione per contare i fascicoli CARTACEI dal titolo
+  const countFascicoliCartacei = (titolo: string): number => {
+    if (!titolo || !titolo.includes('+')) return 1; // Solo il libro principale
+    
+    const DIGITALI = [
+      'EBOOK', 'E-BOOK', 'EBK', 'EASY EBOOK', 'EASY EB', 'EASY BOOK',
+      'DIGITALE', 'DIGITAL', 'DIGIT', 'ONLINE', 'OPENBOOK', 'OPENSCHOOL',
+      'ITE', 'ITEPL', 'MYAPP', 'MIOBOOK', 'SCUOLABOOK', 'HUBSCUOLA',
+      'ACTIVEBOOK', 'INTERACTIVE', 'BOOKTAB', 'BSMART', 'ZAINO DIGITALE',
+      'DIDASTORE', 'MYLAB', 'EZONE', 'RISORSE ONLINE', 'ESPANSIONE ONLINE',
+      'CONTENUTI DIGITALI', 'LIBRO DIGITALE', 'VERSIONE DIGITALE',
+      'W/DIG', 'STUDIAFACILE', 'LIMPARAFACILE', 'FLIPPED CLASSROOM',
+      'VIDEO TUTORIAL', 'LICENZA ONLINE', 'CON EBOOK', 'CONT DIGIT'
+    ];
+    
+    const parti = titolo.split('+');
+    let fascicoliCartacei = 1; // Il libro principale
+    
+    for (let i = 1; i < parti.length; i++) {
+      const parte = parti[i].trim().toUpperCase();
+      // Se NON è digitale, è un fascicolo cartaceo
+      const isDigitale = DIGITALI.some(kw => parte.includes(kw));
+      if (!isDigitale && parte.length > 1) {
+        fascicoliCartacei++;
+      }
+    }
+    
+    return fascicoliCartacei;
+  };
+  
   // Prezzo selezionato dalla forbice
   const [selectedPriceOption, setSelectedPriceOption] = useState<number | null>(null);
 
@@ -346,6 +379,7 @@ export default function SellScreen() {
     setIsNewBook(false);
     setNotes('');
     setSelectedPriceOption(null);
+    setHasFascicoli(false);  // Reset flag fascicoli
     
     setShowListingForm(true);
   };
@@ -1055,7 +1089,47 @@ export default function SellScreen() {
                 </View>
               )}
 
-              {/* Photos Section - 2 MANDATORY PHOTOS */}
+              {/* Sezione Fascicoli Cartacei */}
+              {selectedBook && (
+                <View style={{ 
+                  backgroundColor: '#FFF8E1', 
+                  padding: 12, 
+                  borderRadius: 8, 
+                  marginBottom: 16,
+                  borderLeftWidth: 3,
+                  borderLeftColor: '#FF9800'
+                }}>
+                  <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#E65100', marginBottom: 8 }}>
+                    📦 IN POSSESSO DEI {countFascicoliCartacei(selectedBook.titolo)} FASCICOLI CARTACEI
+                  </Text>
+                  
+                  <TouchableOpacity
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingVertical: 8,
+                    }}
+                    onPress={() => setHasFascicoli(!hasFascicoli)}
+                  >
+                    <Ionicons 
+                      name={hasFascicoli ? "checkbox" : "square-outline"} 
+                      size={24} 
+                      color={hasFascicoli ? "#4CAF50" : "#666"} 
+                    />
+                    <Text style={{ marginLeft: 8, fontSize: 13, color: '#333', flex: 1 }}>
+                      Confermo di possedere tutti i {countFascicoliCartacei(selectedBook.titolo)} fascicoli cartacei previsti
+                    </Text>
+                  </TouchableOpacity>
+                  
+                  {!hasFascicoli && (
+                    <Text style={{ fontSize: 11, color: '#f44336', fontStyle: 'italic', marginTop: 4 }}>
+                      ⚠️ Devi confermare il possesso dei fascicoli per procedere
+                    </Text>
+                  )}
+                </View>
+              )}
+
+              {/* Photos Section - 2 MANDATORY PHOTOS + 1 OPTIONAL FOR FASCICOLI */}
               <Text style={styles.formLabel}>Foto del libro (2 obbligatorie) *</Text>
               <View style={styles.photoRequirements}>
                 <View style={[styles.photoReqItem, listingPhotos.length >= 1 && styles.photoReqItemDone]}>
@@ -1074,6 +1148,17 @@ export default function SellScreen() {
                   />
                   <Text style={styles.photoReqText}>2. Pagina con più usura (la peggiore)</Text>
                 </View>
+                {/* Terza foto per fascicoli - solo se flag attivo e >1 fascicolo */}
+                {hasFascicoli && selectedBook && countFascicoliCartacei(selectedBook.titolo) > 1 && (
+                  <View style={[styles.photoReqItem, listingPhotos.length >= 3 && styles.photoReqItemDone]}>
+                    <Ionicons 
+                      name={listingPhotos.length >= 3 ? "checkmark-circle" : "ellipse-outline"} 
+                      size={18} 
+                      color={listingPhotos.length >= 3 ? "#4CAF50" : "#999"} 
+                    />
+                    <Text style={styles.photoReqText}>3. Tutti i {countFascicoliCartacei(selectedBook.titolo)} fascicoli insieme</Text>
+                  </View>
+                )}
               </View>
               
               <View style={styles.photosGrid}>
@@ -1085,7 +1170,7 @@ export default function SellScreen() {
                     />
                     <View style={styles.photoLabel}>
                       <Text style={styles.photoLabelText}>
-                        {index === 0 ? 'Copertine' : index === 1 ? 'Pagina peggiore' : `Foto ${index + 1}`}
+                        {index === 0 ? 'Copertine' : index === 1 ? 'Pagina peggiore' : 'Fascicoli'}
                       </Text>
                     </View>
                     <TouchableOpacity
@@ -1096,7 +1181,11 @@ export default function SellScreen() {
                     </TouchableOpacity>
                   </View>
                 ))}
-                {listingPhotos.length < 2 && (
+                {/* Mostra pulsanti per caricare foto se: 
+                    - meno di 2 foto (obbligatorie)
+                    - OPPURE meno di 3 foto E flag attivo E >1 fascicolo */}
+                {(listingPhotos.length < 2 || 
+                  (hasFascicoli && selectedBook && countFascicoliCartacei(selectedBook.titolo) > 1 && listingPhotos.length < 3)) && (
                   <View style={styles.addPhotoButtons}>
                     <TouchableOpacity style={styles.addPhotoBtn} onPress={takePhoto}>
                       <Ionicons name="camera" size={24} color="#1a472a" />
@@ -1112,6 +1201,12 @@ export default function SellScreen() {
               {listingPhotos.length < 2 && (
                 <Text style={styles.photoWarning}>
                   Devi caricare almeno 2 foto per continuare
+                </Text>
+              )}
+              {/* Warning per terza foto fascicoli */}
+              {hasFascicoli && selectedBook && countFascicoliCartacei(selectedBook.titolo) > 1 && listingPhotos.length === 2 && (
+                <Text style={[styles.photoWarning, { color: '#FF9800' }]}>
+                  Carica la 3ª foto con tutti i {countFascicoliCartacei(selectedBook.titolo)} fascicoli insieme
                 </Text>
               )}
 
@@ -1443,9 +1538,12 @@ export default function SellScreen() {
 
               {/* Submit */}
               <TouchableOpacity
-                style={[styles.submitButton, creatingListing && styles.submitButtonDisabled]}
+                style={[
+                  styles.submitButton, 
+                  (creatingListing || !hasFascicoli || listingPhotos.length < 2) && styles.submitButtonDisabled
+                ]}
                 onPress={createListing}
-                disabled={creatingListing}
+                disabled={creatingListing || !hasFascicoli || listingPhotos.length < 2}
               >
                 {creatingListing ? (
                   <ActivityIndicator color="#fff" />
@@ -1456,6 +1554,13 @@ export default function SellScreen() {
                   </>
                 )}
               </TouchableOpacity>
+              
+              {/* Warning se non può pubblicare */}
+              {!hasFascicoli && (
+                <Text style={{ textAlign: 'center', color: '#f44336', fontSize: 12, marginTop: 8 }}>
+                  ⚠️ Conferma il possesso dei fascicoli per pubblicare
+                </Text>
+              )}
             </ScrollView>
           </View>
         </View>
