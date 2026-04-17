@@ -3294,6 +3294,7 @@ async def get_child_compatibility(user_id: str, child_id: str):
                     "libri_multipli": [b],
                     "is_volume_unico": b.get("is_volume_unico", False),
                     "nuova_adozione": b.get("nuova_adozione", False),
+                    "da_acquistare": b.get("da_acquistare", True),  # IMPORTANTE per volumi unici
                     "disciplina_originale": disc  # Mantiene la disciplina originale
                 }
         return result
@@ -3338,6 +3339,23 @@ async def get_child_compatibility(user_id: str, child_id: str):
         is_volume_unico_prec = book_prec.get("is_volume_unico", False)
         isbn_prec = book_prec.get("isbn", "")
         titolo_prec = book_prec.get("titolo", "")
+        
+        # =====================================================
+        # STEP 0: Se il libro aveva da_acquistare=False nell'anno precedente,
+        # significa che è un VOLUME UNICO che lo studente già possedeva.
+        # NON può essere venduto perché serve ancora per il ciclo scolastico!
+        # =====================================================
+        if not book_prec.get("da_acquistare", True):
+            # Volume unico - lo studente lo usa ancora, NON VENDIBILE
+            non_vendibili.append({
+                "disciplina": disc_prec,
+                "isbn": isbn_prec,
+                "titolo_vecchio": titolo_prec[:40],
+                "titolo_nuovo": "",
+                "status": "SERVE ANCORA",
+                "motivo": f"Volume unico usato nel triennio"
+            })
+            continue
         
         # =====================================================
         # STEP 1: Verifica se è un volume unico che SERVE ANCORA
