@@ -3008,11 +3008,20 @@ async def get_child_compatibility(user_id: str, child_id: str):
     # NUOVA LOGICA: USA COLLEZIONE ADOZIONI
     # ========================================
     
-    async def get_books_from_adozioni(codice_scuola: str, classe: int, sezione: str) -> list:
+    async def get_books_from_adozioni(codice_scuola: str, classe: int, sezione: str, anno_scolastico: str = "2025/2026") -> list:
         """Recupera libri dalla collezione adozioni per una specifica combinazione.
-        Se la sezione non esiste, usa la prima sezione disponibile (fallback)."""
+        Se la sezione non esiste, usa la prima sezione disponibile (fallback).
+        
+        anno_scolastico: "2025/2026" (corrente) o "2024/2025" (storico)
+        """
+        # Scegli la collezione in base all'anno scolastico
+        if anno_scolastico == "2024/2025":
+            collection = db.adozioni_2024_2025
+        else:
+            collection = db.adozioni
+        
         # Prima prova con la sezione esatta
-        adozione = await db.adozioni.find_one({
+        adozione = await collection.find_one({
             "codice_scuola": codice_scuola,
             "classe": classe,
             "sezione": sezione.upper()
@@ -3021,7 +3030,7 @@ async def get_child_compatibility(user_id: str, child_id: str):
             return adozione.get('libri', [])
         
         # FALLBACK: Se la sezione non esiste, usa qualsiasi sezione disponibile per quella classe
-        adozione_fallback = await db.adozioni.find_one({
+        adozione_fallback = await collection.find_one({
             "codice_scuola": codice_scuola,
             "classe": classe
         })
@@ -3030,8 +3039,8 @@ async def get_child_compatibility(user_id: str, child_id: str):
         
         return []
     
-    # Carica libri della MIA classe/sezione
-    all_my_books = await get_books_from_adozioni(child_codice_scuola, child_classe, child_sezione)
+    # Carica libri della MIA classe/sezione (anno corrente 2025/2026)
+    all_my_books = await get_books_from_adozioni(child_codice_scuola, child_classe, child_sezione, "2025/2026")
     
     # Separa libri in categorie:
     # 1. Libri da acquistare obbligatori (da_acquistare=True) - NON volumi unici
@@ -3039,9 +3048,12 @@ async def get_child_compatibility(user_id: str, child_id: str):
     # 3. Volumi unici obbligatori
     
     # Prima carica libri classe precedente per verificare continuità serie
+    # IMPORTANTE: Usa i dati dell'anno scorso (2024/2025) per sapere cosa aveva lo studente
     all_libri_prec = []
     if classe_precedente:
-        all_libri_prec = await get_books_from_adozioni(child_codice_scuola, classe_precedente, child_sezione)
+        # Per i libri VENDIBILI: lo studente vende ciò che aveva l'anno scorso (2024/2025)
+        # nella sua classe PRECEDENTE (es. era in 2ª l'anno scorso, ora è in 3ª)
+        all_libri_prec = await get_books_from_adozioni(child_codice_scuola, classe_precedente, child_sezione, "2024/2025")
     
     # Funzione per verificare se un libro "consigliato" è in realtà da acquistare
     # perché è la continuazione di una serie dalla classe precedente
