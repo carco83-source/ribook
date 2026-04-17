@@ -606,6 +606,7 @@ export default function SellScreen() {
       Alert.alert('Successo!', 'Annuncio creato con successo');
       setShowListingForm(false);
       setSelectedBook(null);
+      setShowBookPicker(true); // Torna alla lista libri
       loadData();
     } catch (error: any) {
       Alert.alert('Errore', error.response?.data?.detail || 'Impossibile creare annuncio');
