@@ -543,26 +543,29 @@ export default function RadarScreen() {
               </View>
             )}
 
-            {/* Libri NON Vendibili (edizione cambiata) */}
+            {/* Libri NON Vendibili (ancora in uso) */}
             {compatibility.vendere?.libri_non_vendibili && compatibility.vendere.libri_non_vendibili.length > 0 && (
-              <View style={[styles.classCard, { borderLeftColor: '#f44336', borderLeftWidth: 3 }]}>
-                <Text style={styles.sectionTitleRed}>
-                  LIBRI NON VENDIBILI (EDIZIONE CAMBIATA)
+              <View style={[styles.classCard, { borderLeftColor: '#FF9800', borderLeftWidth: 3 }]}>
+                <Text style={[styles.sectionTitleRed, { color: '#E65100' }]}>
+                  LIBRI NON VENDIBILI (ANCORA IN USO)
+                </Text>
+                <Text style={{ fontSize: 11, color: '#E65100', marginBottom: 8, fontStyle: 'italic' }}>
+                  Volumi unici che userai ancora quest'anno
                 </Text>
                 {compatibility.vendere.libri_non_vendibili.map((book: any, idx: number) => (
                   <View key={idx} style={styles.sampleBookItem}>
                     <View style={styles.sampleBookInfo}>
                       <Text style={styles.sampleBookTitle} numberOfLines={2}>
-                        {book.titolo || book.disciplina}
+                        {book.titolo_vecchio || book.disciplina}
                       </Text>
                       <Text style={styles.sampleBookSubject} numberOfLines={1}>
                         {book.disciplina} • ISBN: {book.isbn}
                       </Text>
-                      <Text style={[styles.sampleBookSeller, { color: '#f44336' }]} numberOfLines={1}>
+                      <Text style={[styles.sampleBookSeller, { color: '#E65100' }]} numberOfLines={1}>
                         {book.status}
                       </Text>
                     </View>
-                    <Ionicons name="close-circle" size={20} color="#f44336" />
+                    <Ionicons name="book" size={20} color="#FF9800" />
                   </View>
                 ))}
               </View>
