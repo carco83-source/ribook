@@ -3563,6 +3563,19 @@ async def get_child_compatibility(user_id: str, child_id: str):
     # I libri con "EDIZIONE CAMBIATA" o "NON PIÙ ADOTTATO" non sono rilevanti
     non_vendibili_ancora_in_uso = [nv for nv in non_vendibili if nv.get("status") == "SERVE ANCORA"]
     
+    # AGGIUNGI: Volumi unici triennali di NUOVA ADOZIONE (appena comprati, userai per 3 anni)
+    # Questi sono i libri in comprare_nuovo che sono volumi unici
+    for libro_nuovo in comprare_nuovo:
+        if libro_nuovo.get("is_volume_unico"):
+            non_vendibili_ancora_in_uso.append({
+                "disciplina": libro_nuovo.get("disciplina", ""),
+                "isbn": libro_nuovo.get("isbn", ""),
+                "titolo_vecchio": libro_nuovo.get("titolo", "")[:40],
+                "titolo_nuovo": "",
+                "status": "NUOVA ADOZIONE",
+                "motivo": "Volume unico triennale appena acquistato - lo userai per 3 anni"
+            })
+    
     num_vendibili = len(vendibili)
     num_non_vendibili = len(non_vendibili_ancora_in_uso)  # Solo quelli ancora in uso
     num_usato = len(comprare_usato)
