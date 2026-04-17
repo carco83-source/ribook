@@ -1069,13 +1069,19 @@ export default function SellScreen() {
         visible={showListingForm}
         transparent={true}
         animationType="slide"
-        onRequestClose={() => setShowListingForm(false)}
+        onRequestClose={() => {
+          setShowListingForm(false);
+          setShowBookPicker(true); // Torna alla lista libri
+        }}
       >
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { maxHeight: '95%' }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Dettagli Annuncio</Text>
-              <TouchableOpacity onPress={() => setShowListingForm(false)}>
+              <TouchableOpacity onPress={() => {
+                setShowListingForm(false);
+                setShowBookPicker(true); // Torna alla lista libri
+              }}>
                 <Ionicons name="close" size={24} color="#333" />
               </TouchableOpacity>
             </View>
