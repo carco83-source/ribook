@@ -37,6 +37,7 @@ export const SCUOLE_SECONDO_GRADO: School[] = [
   { id: 'sg_3', codice: 'CZPS02201D', nome: 'Liceo Scientifico L. Siciliani', tipo: 'secondo_grado' },
   { id: 'sg_4', codice: 'CZSL02201A', nome: 'Liceo Artistico di Catanzaro', tipo: 'secondo_grado' },
   { id: 'sg_5', codice: 'CZPM02201E', nome: 'Liceo Linguistico G. De Nobili', tipo: 'secondo_grado' },
+  { id: 'sg_13', codice: 'CZPM00101D', nome: 'Liceo Magistrale Fermi', tipo: 'secondo_grado' },
   
   // Istituti Tecnici
   { id: 'sg_6', codice: 'CZTF010008', nome: 'ITIS E. Scalfaro', tipo: 'secondo_grado' },
