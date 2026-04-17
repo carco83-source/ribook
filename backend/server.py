@@ -3559,8 +3559,12 @@ async def get_child_compatibility(user_id: str, child_id: str):
                 })
     
     # Calcoli finali
+    # FILTRA: nei non_vendibili mostra SOLO quelli che "SERVE ANCORA"
+    # I libri con "EDIZIONE CAMBIATA" o "NON PIÙ ADOTTATO" non sono rilevanti
+    non_vendibili_ancora_in_uso = [nv for nv in non_vendibili if nv.get("status") == "SERVE ANCORA"]
+    
     num_vendibili = len(vendibili)
-    num_non_vendibili = len(non_vendibili)
+    num_non_vendibili = len(non_vendibili_ancora_in_uso)  # Solo quelli ancora in uso
     num_usato = len(comprare_usato)
     num_nuovo = len(comprare_nuovo)
     risparmio = sum(l["risparmio"] for l in comprare_usato)
@@ -3786,7 +3790,7 @@ async def get_child_compatibility(user_id: str, child_id: str):
             "totale_non_vendibili": num_non_vendibili,
             "libri": vendibili,
             "libri_vendibili": vendibili,  # Alias per compatibilità frontend
-            "libri_non_vendibili": non_vendibili  # Lista libri non vendibili
+            "libri_non_vendibili": non_vendibili_ancora_in_uso  # Solo libri ancora in uso
         },
         
         "comprare": {
