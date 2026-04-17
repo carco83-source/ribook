@@ -749,8 +749,9 @@ export default function SellScreen() {
                 childProfiles.map((child) => {
                   const isMedia = child.tipo_scuola === 'primo_grado';
                   const childClasse = parseInt(child.classe);
-                  const minClasse = isMedia ? 1 : (childClasse <= 2 ? 1 : 3);
-                  const canSell = childClasse > minClasse;
+                  // Solo 1° media e 1° superiore NON possono vendere
+                  // Tutti gli altri (2° media, 3° media, 2°-5° superiore) possono vendere
+                  const canSell = childClasse > 1;
 
                   return (
                     <TouchableOpacity
@@ -771,7 +772,7 @@ export default function SellScreen() {
                         </Text>
                         {canSell ? (
                           <Text style={styles.childOptionHint}>
-                            → Vendi libri della {childClasse - 1}ª
+                            → Vendi libri alle classi precedenti
                           </Text>
                         ) : (
                           <Text style={[styles.childOptionHint, { color: '#f44336' }]}>
