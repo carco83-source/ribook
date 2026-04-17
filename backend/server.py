@@ -4448,12 +4448,26 @@ async def get_books_to_sell(user_id: str, child_id: str):
     # Crea mappa ISBN per confronto veloce
     isbn_compratori = {b.get("isbn"): b for b in libri_compratori if b.get("isbn")}
     
+    # IMPORTANTE: Crea mappa ISBN dei libri della CLASSE ATTUALE dello studente
+    # per escludere i volumi unici che servono ancora
+    isbn_classe_attuale = {b.get("isbn"): b for b in libri_attuali if b.get("isbn")}
+    
     for b in libri_precedente:
         isbn = b.get("isbn", "")
         if not isbn:
             continue
         
-        # Se lo stesso ISBN è adottato per i nuovi studenti → VENDIBILE
+        # =====================================================
+        # STEP 1: Verifica se è un volume unico che SERVE ANCORA
+        # (stesso ISBN usato nella classe attuale dello studente)
+        # =====================================================
+        if isbn in isbn_classe_attuale:
+            # Lo stesso ISBN è adottato anche nella classe attuale → SERVE ANCORA, NON VENDIBILE
+            continue
+        
+        # =====================================================
+        # STEP 2: Se lo stesso ISBN è adottato per i nuovi studenti → VENDIBILE
+        # =====================================================
         if isbn in isbn_compratori:
             vendibili.append({
                 "id": isbn,
