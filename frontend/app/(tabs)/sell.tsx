@@ -1496,34 +1496,16 @@ export default function SellScreen() {
                   const sellerNet = (selectedPriceOption * 0.83).toFixed(2);
                   return (
                     <View style={styles.selectedPriceSummary}>
-                      <View style={styles.summaryRow}>
-                        <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
-                        <Text style={styles.summaryLabel}>Riepilogo commissioni:</Text>
-                      </View>
-                      <View style={styles.commissionBreakdown}>
-                        <View style={styles.commissionRow}>
-                          <Text style={styles.commissionLabel}>Prezzo base:</Text>
-                          <Text style={styles.commissionValue}>€{selectedPriceOption.toFixed(2)}</Text>
+                      <View style={styles.summaryFinal}>
+                        <View style={styles.summaryFinalRow}>
+                          <Ionicons name="checkmark-circle" size={18} color="#4CAF50" />
+                          <Text style={styles.summaryFinalLabel}>Tu riceverai:</Text>
+                          <Text style={styles.summaryFinalGreen}>€{sellerNet}</Text>
                         </View>
-                        <View style={styles.commissionRow}>
-                          <Text style={styles.commissionLabel}>Commissione App (12%):</Text>
-                          <Text style={styles.commissionValue}>-€{(selectedPriceOption * 0.12).toFixed(2)}</Text>
-                        </View>
-                        <View style={styles.commissionRow}>
-                          <Text style={styles.commissionLabel}>Commissione Libraio (5%):</Text>
-                          <Text style={styles.commissionValue}>-€{(selectedPriceOption * 0.05).toFixed(2)}</Text>
-                        </View>
-                        <View style={styles.commissionRow}>
-                          <Text style={styles.commissionLabel}>Commissione Stripe:</Text>
-                          <Text style={styles.commissionValue}>+€{stripeComm.toFixed(2)}</Text>
-                        </View>
-                        <View style={[styles.commissionRow, styles.commissionTotal]}>
-                          <Text style={styles.totalLabel}>Tu riceverai:</Text>
-                          <Text style={styles.totalValueGreen}>€{sellerNet}</Text>
-                        </View>
-                        <View style={[styles.commissionRow, styles.commissionTotal]}>
-                          <Text style={styles.totalLabel}>L'acquirente pagherà:</Text>
-                          <Text style={styles.totalValueBlue}>€{finalBuyerPrice}</Text>
+                        <View style={styles.summaryFinalRow}>
+                          <Ionicons name="cart" size={18} color="#2196F3" />
+                          <Text style={styles.summaryFinalLabel}>Acquirente paga:</Text>
+                          <Text style={styles.summaryFinalBlue}>€{finalBuyerPrice}</Text>
                         </View>
                       </View>
                     </View>
@@ -2321,6 +2303,30 @@ const styles = StyleSheet.create({
     color: '#4CAF50',
   },
   totalValueBlue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#2196F3',
+  },
+  // Simplified summary
+  summaryFinal: {
+    gap: 8,
+  },
+  summaryFinalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  summaryFinalLabel: {
+    fontSize: 14,
+    color: '#333',
+    flex: 1,
+  },
+  summaryFinalGreen: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#4CAF50',
+  },
+  summaryFinalBlue: {
     fontSize: 16,
     fontWeight: '700',
     color: '#2196F3',
