@@ -4458,6 +4458,15 @@ async def get_books_to_sell(user_id: str, child_id: str):
             continue
         
         # =====================================================
+        # STEP 0: Se il libro aveva da_acquistare=False nell'anno precedente,
+        # significa che è un VOLUME UNICO che lo studente già possedeva.
+        # NON può essere venduto perché serve ancora per il ciclo scolastico!
+        # =====================================================
+        if not b.get("da_acquistare", True):
+            # Volume unico - lo studente lo usa ancora, NON VENDIBILE
+            continue
+        
+        # =====================================================
         # STEP 1: Verifica se è un volume unico che SERVE ANCORA
         # (stesso ISBN usato nella classe attuale dello studente)
         # =====================================================
