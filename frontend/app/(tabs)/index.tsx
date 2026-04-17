@@ -602,6 +602,15 @@ export default function RadarScreen() {
                       </TouchableOpacity>
                     );
                   })}
+                  {/* Pulsante Cerca questi libri */}
+                  <TouchableOpacity
+                    style={[styles.viewSellersButton, { backgroundColor: '#4CAF50', marginTop: 12 }]}
+                    onPress={() => router.push('/(tabs)/search')}
+                  >
+                    <Ionicons name="search" size={18} color="#fff" />
+                    <Text style={styles.viewSellersButtonText}>Cerca questi libri</Text>
+                    <Ionicons name="arrow-forward" size={14} color="#fff" />
+                  </TouchableOpacity>
                 </View>
               );
             })()}
