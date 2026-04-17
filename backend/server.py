@@ -3368,7 +3368,7 @@ async def get_child_compatibility(user_id: str, child_id: str):
                 "editore": book_prec.get("editore", ""),
                 "prezzo_consigliato": round(book_prec.get("prezzo", 0) * 0.5, 2),
                 "status": "VENDIBILE",
-                "vendi_a": f"Studenti entranti in {classe_precedente}ª",
+                "vendi_a": "Classi precedenti",
                 "motivo": "Libro ancora adottato per i nuovi studenti"
             })
             continue
@@ -3619,6 +3619,80 @@ async def get_child_compatibility(user_id: str, child_id: str):
                             "status": f"COMPRATO IN {anno_acquisto}ª",
                             "motivo": f"Volume unico comprato in {anno_acquisto}ª - lo usi ancora"
                         })
+    
+    # =====================================================
+    # AGGIUNGI LIBRI VENDIBILI: Libri comprati in 1ª anno
+    # che in 2ª/3ª hanno da_acquistare=False e consigliato=False
+    # Questi libri erano da comprare in 1ª, quindi chi è in 2ª/3ª può venderli ai 1ª
+    # =====================================================
+    if child_classe >= 2 and child_tipo == "secondo_grado":
+        # Per ogni libro della classe ATTUALE con da_acquistare=False e consigliato=False
+        # (NON volume unico) → questo libro era da comprare l'anno prima
+        
+        for libro in all_my_books:
+            da_acquistare = libro.get('da_acquistare', True)
+            consigliato = libro.get('consigliato', False)
+            is_vu = libro.get('is_volume_unico', False)
+            isbn = libro.get('isbn', '')
+            disc = libro.get('disciplina', '')
+            
+            # Se da_acquistare=False E consigliato=False E non è volume unico
+            # → Era da comprare in una classe precedente
+            if not da_acquistare and not consigliato and not is_vu and isbn:
+                # Verifica se non è già nei vendibili
+                gia_vendibile = any(v.get('isbn') == isbn for v in vendibili)
+                
+                if not gia_vendibile:
+                    # Trova la classe in cui era da comprare
+                    # Cerca nelle adozioni delle classi precedenti
+                    classe_acquisto = None
+                    for classe_check in range(child_classe - 1, 0, -1):
+                        libri_classe = await get_books_from_adozioni(child_codice_scuola, classe_check, child_sezione, "2025/2026")
+                        for l in libri_classe:
+                            if l.get('isbn') == isbn and l.get('da_acquistare', False):
+                                classe_acquisto = classe_check
+                                break
+                        if classe_acquisto:
+                            break
+                    
+                    # Se era da comprare in una classe precedente, è vendibile a quella classe
+                    if classe_acquisto:
+                        vendibili.append({
+                            "isbn": isbn,
+                            "disciplina": disc,
+                            "titolo": libro.get('titolo', '')[:50],
+                            "editore": libro.get('editore', ''),
+                            "prezzo_consigliato": round(libro.get('prezzo', libro.get('prezzo_copertina', 0)) * 0.5, 2),
+                            "status": "VENDIBILE",
+                            "vendi_a": "Classi precedenti",
+                            "motivo": f"Libro comprato in {classe_acquisto}ª - vendibile ai nuovi {classe_acquisto}ª"
+                        })
+    
+    # =====================================================
+    # FILTRA: Rimuovi dai libri acquistabili quelli già in possesso
+    # =====================================================
+    isbn_ancora_in_uso = {nv.get('isbn') for nv in non_vendibili_ancora_in_uso if nv.get('isbn')}
+    
+    comprare_usato_filtrato = [
+        libro for libro in comprare_usato 
+        if libro.get('isbn') not in isbn_ancora_in_uso
+    ]
+    comprare_nuovo_filtrato = [
+        libro for libro in comprare_nuovo 
+        if libro.get('isbn') not in isbn_ancora_in_uso
+    ]
+    
+    # FILTRA: Rimuovi dai vendibili quelli che sono "ANCORA IN USO"
+    # (Non puoi vendere un libro che ti serve ancora!)
+    vendibili_filtrato = [
+        libro for libro in vendibili 
+        if libro.get('isbn') not in isbn_ancora_in_uso
+    ]
+    
+    # Sostituisci le liste originali
+    comprare_usato = comprare_usato_filtrato
+    comprare_nuovo = comprare_nuovo_filtrato
+    vendibili = vendibili_filtrato
     
     num_vendibili = len(vendibili)
     num_non_vendibili = len(non_vendibili_ancora_in_uso)  # Solo quelli ancora in uso
