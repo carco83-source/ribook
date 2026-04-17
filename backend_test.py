@@ -1,315 +1,329 @@
 #!/usr/bin/env python3
 """
-Backend Test Suite for High School Book Classification Logic
-Tests the new secondo_grado (High School) compatibility endpoint
+Backend Testing for ScambiaLibri - Radar View and Cart Duplicate Prevention
+Testing the fixes for:
+1. Radar View Missing Data - compatibility endpoint vendere structure
+2. Cart Duplicate Orders - order creation duplicate prevention
 """
 
 import requests
 import json
 import sys
-from typing import Dict, List, Any
+import os
+from datetime import datetime
 
-# Backend URL from environment
-BACKEND_URL = "https://language-check-10.preview.emergentagent.com/api"
+# Get backend URL from environment
+BACKEND_URL = os.environ.get('EXPO_PUBLIC_BACKEND_URL', 'https://language-check-10.preview.emergentagent.com')
+API_BASE = f"{BACKEND_URL}/api"
 
-# Test user from review request
+# Test credentials from review request
 TEST_USER_ID = "58ac430d-da2a-4954-bb2f-feea6de1f30c"
+TEST_CHILDREN = {
+    "goja": "bb7aaaf8-1ab2-40a9-9709-ef84da7eb54d",  # Goja, 3° Scalfaro
+    "carmen": "66ff6294-5695-4a67-bf92-798643a50ef2",  # Carmen, 1° media
+    "george": "george-profile-001",  # George, 2° media
+    "aldo": "bde1f85a-511c-43eb-a310-4c004ea4f298"  # Aldo, 3° Liceo
+}
 
-class HighSchoolBookClassificationTester:
+class TestResults:
     def __init__(self):
-        self.backend_url = BACKEND_URL
-        self.test_user_id = TEST_USER_ID
-        self.test_results = []
-        self.failed_tests = []
+        self.total_tests = 0
+        self.passed_tests = 0
+        self.failed_tests = 0
+        self.results = []
+    
+    def add_result(self, test_name, passed, details=""):
+        self.total_tests += 1
+        if passed:
+            self.passed_tests += 1
+            status = "✅ PASS"
+        else:
+            self.failed_tests += 1
+            status = "❌ FAIL"
         
-    def log_test(self, test_name: str, success: bool, details: str = ""):
-        """Log test result"""
-        result = {
-            "test": test_name,
-            "success": success,
-            "details": details
-        }
-        self.test_results.append(result)
-        if not success:
-            self.failed_tests.append(result)
-        
-        status = "✅" if success else "❌"
-        print(f"{status} {test_name}")
+        result = f"{status} - {test_name}"
         if details:
-            print(f"   {details}")
+            result += f" | {details}"
+        
+        self.results.append(result)
+        print(result)
     
-    def test_get_user_profiles(self) -> Dict[str, Any]:
-        """Test 1: Get user profiles to identify secondo_grado children"""
+    def print_summary(self):
+        print(f"\n{'='*60}")
+        print(f"TEST SUMMARY")
+        print(f"{'='*60}")
+        print(f"Total Tests: {self.total_tests}")
+        print(f"Passed: {self.passed_tests}")
+        print(f"Failed: {self.failed_tests}")
+        print(f"Success Rate: {(self.passed_tests/self.total_tests*100):.1f}%")
+        print(f"{'='*60}")
+
+def test_compatibility_endpoint_vendere_structure():
+    """Test 1: Compatibility endpoint returns correct vendere structure"""
+    print(f"\n🔍 TEST 1: Compatibility endpoint vendere structure for Goja")
+    
+    url = f"{API_BASE}/profiles/{TEST_USER_ID}/children/{TEST_CHILDREN['goja']}/compatibility"
+    
+    try:
+        response = requests.get(url, timeout=30)
+        
+        if response.status_code != 200:
+            return False, f"HTTP {response.status_code}: {response.text}"
+        
+        data = response.json()
+        
+        # Check if vendere object exists
+        if "vendere" not in data:
+            return False, "Missing 'vendere' object in response"
+        
+        vendere = data["vendere"]
+        
+        # Check required fields in vendere
+        required_fields = ["libri_vendibili", "libri_non_vendibili", "totale_non_vendibili"]
+        missing_fields = []
+        
+        for field in required_fields:
+            if field not in vendere:
+                missing_fields.append(field)
+        
+        if missing_fields:
+            return False, f"Missing fields in vendere: {missing_fields}"
+        
+        # Check libri_gia_posseduti
+        if "libri_gia_posseduti" not in data:
+            return False, "Missing 'libri_gia_posseduti' object in response"
+        
+        libri_gia_posseduti = data["libri_gia_posseduti"]
+        if "libri" not in libri_gia_posseduti:
+            return False, "Missing 'libri' in libri_gia_posseduti"
+        
+        # Verify data types
+        if not isinstance(vendere["libri_vendibili"], list):
+            return False, "libri_vendibili should be a list"
+        
+        if not isinstance(vendere["libri_non_vendibili"], list):
+            return False, "libri_non_vendibili should be a list"
+        
+        if not isinstance(vendere["totale_non_vendibili"], (int, float)):
+            return False, "totale_non_vendibili should be a number"
+        
+        if not isinstance(libri_gia_posseduti["libri"], list):
+            return False, "libri_gia_posseduti.libri should be a list"
+        
+        # Check that we have 3 items in libri_gia_posseduti (volumi quinquennali)
+        if len(libri_gia_posseduti["libri"]) != 3:
+            return False, f"Expected 3 items in libri_gia_posseduti, got {len(libri_gia_posseduti['libri'])}"
+        
+        details = f"vendere.libri_vendibili: {len(vendere['libri_vendibili'])}, libri_non_vendibili: {len(vendere['libri_non_vendibili'])}, totale_non_vendibili: {vendere['totale_non_vendibili']}, libri_gia_posseduti: {len(libri_gia_posseduti['libri'])}"
+        
+        return True, details
+        
+    except requests.exceptions.RequestException as e:
+        return False, f"Request failed: {str(e)}"
+    except json.JSONDecodeError as e:
+        return False, f"Invalid JSON response: {str(e)}"
+    except Exception as e:
+        return False, f"Unexpected error: {str(e)}"
+
+def test_compatibility_endpoint_first_year():
+    """Test 2: Compatibility endpoint for 1st year student (Carmen)"""
+    print(f"\n🔍 TEST 2: Compatibility endpoint for Carmen (1st year)")
+    
+    url = f"{API_BASE}/profiles/{TEST_USER_ID}/children/{TEST_CHILDREN['carmen']}/compatibility"
+    
+    try:
+        response = requests.get(url, timeout=30)
+        
+        if response.status_code != 200:
+            return False, f"HTTP {response.status_code}: {response.text}"
+        
+        data = response.json()
+        
+        # Check vendere structure
+        if "vendere" not in data:
+            return False, "Missing 'vendere' object in response"
+        
+        vendere = data["vendere"]
+        
+        # For 1st year student, totale_vendibili should be 0 (no books to sell)
+        if "totale_vendibili" not in vendere:
+            return False, "Missing 'totale_vendibili' in vendere"
+        
+        if vendere["totale_vendibili"] != 0:
+            return False, f"Expected totale_vendibili=0 for 1st year, got {vendere['totale_vendibili']}"
+        
+        # Check libri_gia_posseduti
+        if "libri_gia_posseduti" not in data:
+            return False, "Missing 'libri_gia_posseduti' object in response"
+        
+        libri_gia_posseduti = data["libri_gia_posseduti"]
+        
+        if "totale" not in libri_gia_posseduti:
+            return False, "Missing 'totale' in libri_gia_posseduti"
+        
+        # For 1st year student, totale should be 0 (no books already owned)
+        if libri_gia_posseduti["totale"] != 0:
+            return False, f"Expected libri_gia_posseduti.totale=0 for 1st year, got {libri_gia_posseduti['totale']}"
+        
+        details = f"totale_vendibili: {vendere['totale_vendibili']}, libri_gia_posseduti.totale: {libri_gia_posseduti['totale']}"
+        
+        return True, details
+        
+    except requests.exceptions.RequestException as e:
+        return False, f"Request failed: {str(e)}"
+    except json.JSONDecodeError as e:
+        return False, f"Invalid JSON response: {str(e)}"
+    except Exception as e:
+        return False, f"Unexpected error: {str(e)}"
+
+def test_duplicate_order_prevention():
+    """Test 3: Duplicate order prevention"""
+    print(f"\n🔍 TEST 3: Duplicate order prevention")
+    
+    # First get an available listing
+    listings_url = f"{API_BASE}/listings?status=available"
+    
+    try:
+        response = requests.get(listings_url, timeout=30)
+        
+        if response.status_code != 200:
+            return False, f"Failed to get listings: HTTP {response.status_code}"
+        
+        listings = response.json()
+        
+        if not listings or len(listings) == 0:
+            return False, "No available listings found for testing"
+        
+        # Find a listing that's not from our test user (to avoid self-purchase error)
+        test_buyer_id = "b513ee73-48da-4c3a-8e38-12cfe4b9e49e"
+        available_listing = None
+        
+        for listing in listings:
+            if listing.get("seller_id") != test_buyer_id:
+                available_listing = listing
+                break
+        
+        if not available_listing:
+            return False, "No suitable listings found (all belong to test user)"
+        
+        listing_id = available_listing.get("id")
+        
+        if not listing_id:
+            return False, "Listing missing ID field"
+        
+        # Try to create first order
+        order_url = f"{API_BASE}/orders/create?user_id={test_buyer_id}&listing_id={listing_id}&bookstore_id=21d774b1-2fbe-4b21-ae5b-94d158df2f72"
+        
+        response1 = requests.post(order_url, timeout=30)
+        
+        if response1.status_code not in [200, 201]:
+            return False, f"First order creation failed: HTTP {response1.status_code}: {response1.text}"
+        
+        # Try to create second order for the same listing (should fail)
+        response2 = requests.post(order_url, timeout=30)
+        
+        if response2.status_code == 200 or response2.status_code == 201:
+            return False, "Second order creation should have failed but succeeded"
+        
+        # Check if error message indicates duplicate prevention
+        error_text = response2.text.lower()
+        if ("già un ordine attivo" in error_text or 
+            "già stato riservato" in error_text or 
+            "già riservato" in error_text or
+            "annuncio non disponibile" in error_text):
+            return True, f"Duplicate order correctly prevented: {response2.status_code} - {response2.text}"
+        else:
+            return False, f"Unexpected error message: {response2.text}"
+        
+    except requests.exceptions.RequestException as e:
+        return False, f"Request failed: {str(e)}"
+    except json.JSONDecodeError as e:
+        return False, f"Invalid JSON response: {str(e)}"
+    except Exception as e:
+        return False, f"Unexpected error: {str(e)}"
+
+def test_all_profiles_compatibility():
+    """Test 4: Verify all profiles have valid compatibility data"""
+    print(f"\n🔍 TEST 4: All profiles compatibility data")
+    
+    results = []
+    
+    for name, child_id in TEST_CHILDREN.items():
+        url = f"{API_BASE}/profiles/{TEST_USER_ID}/children/{child_id}/compatibility"
+        
         try:
-            response = requests.get(f"{self.backend_url}/users/{self.test_user_id}")
+            response = requests.get(url, timeout=30)
             
             if response.status_code != 200:
-                self.log_test("Get User Profiles", False, f"HTTP {response.status_code}: {response.text}")
-                return {}
-            
-            user_data = response.json()
-            profili_figli = user_data.get("profili_figli", [])
-            
-            # Find secondo_grado profiles
-            secondo_grado_profiles = [
-                p for p in profili_figli 
-                if p.get("tipo_scuola") == "secondo_grado"
-            ]
-            
-            if not secondo_grado_profiles:
-                self.log_test("Get User Profiles", False, "No secondo_grado profiles found")
-                return {}
-            
-            details = f"Found {len(secondo_grado_profiles)} high school profiles: "
-            details += ", ".join([f"{p.get('nome_figlio', 'Unknown')} (classe {p.get('classe', 'N/A')})" 
-                                for p in secondo_grado_profiles])
-            
-            self.log_test("Get User Profiles", True, details)
-            return {"profiles": secondo_grado_profiles, "user_data": user_data}
-            
-        except Exception as e:
-            self.log_test("Get User Profiles", False, f"Exception: {str(e)}")
-            return {}
-    
-    def test_compatibility_endpoint(self, child_id: str, child_name: str, classe: int) -> Dict[str, Any]:
-        """Test compatibility endpoint for a specific child"""
-        try:
-            response = requests.get(
-                f"{self.backend_url}/profiles/{self.test_user_id}/children/{child_id}/compatibility"
-            )
-            
-            if response.status_code != 200:
-                self.log_test(f"Compatibility API - {child_name}", False, 
-                            f"HTTP {response.status_code}: {response.text}")
-                return {}
+                results.append(f"{name}: HTTP {response.status_code}")
+                continue
             
             data = response.json()
             
-            # Validate response structure
-            required_fields = ["nuovi", "comprare"]
-            missing_fields = [field for field in required_fields if field not in data]
+            # Basic structure checks
+            required_sections = ["vendere", "comprare", "nuovi", "libri_gia_posseduti"]
+            missing_sections = []
             
-            if missing_fields:
-                self.log_test(f"Compatibility API - {child_name}", False, 
-                            f"Missing fields: {missing_fields}")
-                return {}
+            for section in required_sections:
+                if section not in data:
+                    missing_sections.append(section)
             
-            comprare_nuovo = data.get("nuovi", {}).get("libri", [])
-            comprare_usato = data.get("comprare", {}).get("libri_usati", [])
+            if missing_sections:
+                results.append(f"{name}: Missing sections {missing_sections}")
+                continue
             
-            details = f"Classe {classe}: {len(comprare_nuovo)} nuovi, {len(comprare_usato)} usati"
-            self.log_test(f"Compatibility API - {child_name}", True, details)
+            # Check vendere structure
+            vendere = data["vendere"]
+            required_vendere_fields = ["libri_vendibili", "libri_non_vendibili", "totale_non_vendibili"]
+            missing_vendere = [f for f in required_vendere_fields if f not in vendere]
             
-            return {
-                "child_name": child_name,
-                "classe": classe,
-                "comprare_nuovo": comprare_nuovo,
-                "comprare_usato": comprare_usato,
-                "raw_data": data
-            }
+            if missing_vendere:
+                results.append(f"{name}: Missing vendere fields {missing_vendere}")
+                continue
+            
+            results.append(f"{name}: ✅ Valid structure")
             
         except Exception as e:
-            self.log_test(f"Compatibility API - {child_name}", False, f"Exception: {str(e)}")
-            return {}
+            results.append(f"{name}: Error - {str(e)}")
     
-    def analyze_quinquennial_subjects(self, compatibility_data: Dict[str, Any]) -> bool:
-        """Analyze if quinquennial subjects are handled correctly"""
-        child_name = compatibility_data.get("child_name", "Unknown")
-        classe = compatibility_data.get("classe", 0)
-        comprare_nuovo = compatibility_data.get("comprare_nuovo", [])
-        comprare_usato = compatibility_data.get("comprare_usato", [])
-        
-        # Also check consigliati section for books marked as "da_non_acquistare"
-        consigliati = compatibility_data.get("raw_data", {}).get("consigliati", {}).get("libri_da_comprare", [])
-        
-        # Quinquennial subjects that should NOT appear in years 2-5
-        quinquennial_keywords = [
-            "RELIGIONE", "SCIENZE MOTORIE", "EDUCAZIONE CIVICA", "GRAMMATICA",
-            "IRC", "ED. FISICA", "ED. CIVICA", "CITTADINANZA"
-        ]
-        
-        all_books = comprare_nuovo + comprare_usato
-        quinquennial_books_found = []
-        quinquennial_in_consigliati = []
-        
-        # Check in main book lists
-        for book in all_books:
-            disciplina = book.get("disciplina", "").upper()
-            
-            for keyword in quinquennial_keywords:
-                if keyword in disciplina:
-                    quinquennial_books_found.append({
-                        "titolo": book.get("titolo", ""),
-                        "disciplina": book.get("disciplina", ""),
-                        "keyword_matched": keyword
-                    })
-                    break
-        
-        # Check in consigliati section for quinquennial subjects marked as "da_non_acquistare"
-        for book in consigliati:
-            disciplina = book.get("disciplina", "").upper()
-            tipo = book.get("tipo", "")
-            
-            for keyword in quinquennial_keywords:
-                if keyword in disciplina:
-                    quinquennial_in_consigliati.append({
-                        "titolo": book.get("titolo", ""),
-                        "disciplina": book.get("disciplina", ""),
-                        "tipo": tipo,
-                        "keyword_matched": keyword
-                    })
-                    break
-        
-        # Logic check based on class year
-        if classe == 1:
-            # 1st year: ALL books should be in comprare lists (none already owned)
-            expected_behavior = "All books should appear (first year)"
-            test_passed = True  # Any number is acceptable for 1st year
-            details = f"1st year - Found {len(quinquennial_books_found)} quinquennial books (expected)"
-            
-        elif classe in [2, 3, 4, 5]:
-            # 2nd-5th year: Quinquennial subjects should NOT appear in main lists (already owned from 1st year)
-            # BUT they might appear in consigliati as "da_non_acquistare" which is correct
-            expected_behavior = "Quinquennial subjects should NOT appear in main lists (already owned)"
-            test_passed = len(quinquennial_books_found) == 0
-            
-            if quinquennial_books_found:
-                details = f"❌ Found {len(quinquennial_books_found)} quinquennial books in main lists that should be already owned: "
-                details += ", ".join([f"{b['titolo']} ({b['keyword_matched']})" for b in quinquennial_books_found])
-            else:
-                details = f"✅ No quinquennial books in main lists (correct - already owned from 1st year)"
-                
-            # Add info about consigliati if any quinquennial subjects found there
-            if quinquennial_in_consigliati:
-                da_non_acquistare = [b for b in quinquennial_in_consigliati if b['tipo'] == 'da_non_acquistare']
-                if da_non_acquistare:
-                    details += f" | Found {len(da_non_acquistare)} quinquennial books correctly marked as 'da_non_acquistare'"
-        else:
-            expected_behavior = "Unknown class"
-            test_passed = False
-            details = f"Invalid class: {classe}"
-        
-        self.log_test(f"Quinquennial Logic - {child_name} (Classe {classe})", test_passed, details)
-        return test_passed
+    # Check if all profiles passed
+    failed_profiles = [r for r in results if "✅" not in r]
     
-    def analyze_biennio_triennio_logic(self, compatibility_data: Dict[str, Any]) -> bool:
-        """Analyze biennio/triennio cycle logic"""
-        child_name = compatibility_data.get("child_name", "Unknown")
-        classe = compatibility_data.get("classe", 0)
-        comprare_nuovo = compatibility_data.get("comprare_nuovo", [])
-        comprare_usato = compatibility_data.get("comprare_usato", [])
-        
-        total_books = len(comprare_nuovo) + len(comprare_usato)
-        
-        if classe in [1, 2]:
-            cycle = "BIENNIO"
-            expected_behavior = "Should follow middle school logic within 1st-2nd year cycle"
-        elif classe in [3, 4, 5]:
-            cycle = "TRIENNIO"
-            expected_behavior = "Should follow middle school logic within 3rd-5th year cycle"
-        else:
-            cycle = "UNKNOWN"
-            expected_behavior = "Invalid class"
-        
-        # For now, just verify that we get some books and no errors
-        test_passed = total_books >= 0  # Basic validation
-        details = f"{cycle} - Total books to buy: {total_books}"
-        
-        self.log_test(f"Cycle Logic - {child_name} (Classe {classe})", test_passed, details)
-        return test_passed
+    if failed_profiles:
+        return False, f"Failed profiles: {'; '.join(failed_profiles)}"
+    else:
+        return True, f"All profiles valid: {'; '.join(results)}"
+
+def main():
+    """Run all tests"""
+    print("🚀 Starting ScambiaLibri Backend Testing - Radar View & Cart Duplicate Prevention")
+    print(f"Backend URL: {API_BASE}")
+    print(f"Test User ID: {TEST_USER_ID}")
     
-    def analyze_unique_vs_annual_volumes(self, compatibility_data: Dict[str, Any]) -> bool:
-        """Analyze unique vs annual volume handling"""
-        child_name = compatibility_data.get("child_name", "Unknown")
-        classe = compatibility_data.get("classe", 0)
-        comprare_nuovo = compatibility_data.get("comprare_nuovo", [])
-        comprare_usato = compatibility_data.get("comprare_usato", [])
-        
-        unique_volumes = []
-        annual_volumes = []
-        
-        for book in comprare_nuovo + comprare_usato:
-            if book.get("is_volume_unico", False):
-                unique_volumes.append(book)
-            else:
-                annual_volumes.append(book)
-        
-        # Expected behavior based on class
-        if classe == 1:
-            expected = "All books should be purchasable (first year)"
-            test_passed = True
-        elif classe == 3:
-            expected = "Non-quinquennial unique volumes should appear, quinquennial should not"
-            test_passed = True  # Complex logic, just verify no errors
-        elif classe in [4, 5]:
-            expected = "Only annual books should appear, no unique volumes"
-            test_passed = len(unique_volumes) == 0
-        else:
-            expected = "Varies by class"
-            test_passed = True
-        
-        details = f"Unique: {len(unique_volumes)}, Annual: {len(annual_volumes)} - {expected}"
-        
-        self.log_test(f"Volume Type Logic - {child_name} (Classe {classe})", test_passed, details)
-        return test_passed
+    results = TestResults()
     
-    def run_all_tests(self):
-        """Run all tests for High School Book Classification Logic"""
-        print("🧪 Testing High School Book Classification Logic")
-        print("=" * 60)
-        
-        # Test 1: Get user profiles
-        user_data = self.test_get_user_profiles()
-        if not user_data:
-            print("\n❌ Cannot continue - failed to get user profiles")
-            return
-        
-        profiles = user_data.get("profiles", [])
-        
-        # Test 2-N: Test each secondo_grado profile
-        for profile in profiles:
-            child_id = profile.get("id")
-            child_name = profile.get("nome_figlio", "Unknown")
-            classe = int(profile.get("classe", 0))
-            
-            print(f"\n📚 Testing {child_name} (Classe {classe})")
-            print("-" * 40)
-            
-            # Test compatibility endpoint
-            compatibility_data = self.test_compatibility_endpoint(child_id, child_name, classe)
-            
-            if compatibility_data:
-                # Analyze quinquennial subjects logic
-                self.analyze_quinquennial_subjects(compatibility_data)
-                
-                # Analyze biennio/triennio logic
-                self.analyze_biennio_triennio_logic(compatibility_data)
-                
-                # Analyze unique vs annual volumes
-                self.analyze_unique_vs_annual_volumes(compatibility_data)
-        
-        # Summary
-        print("\n" + "=" * 60)
-        print("📊 TEST SUMMARY")
-        print("=" * 60)
-        
-        total_tests = len(self.test_results)
-        passed_tests = total_tests - len(self.failed_tests)
-        success_rate = (passed_tests / total_tests * 100) if total_tests > 0 else 0
-        
-        print(f"Total Tests: {total_tests}")
-        print(f"Passed: {passed_tests}")
-        print(f"Failed: {len(self.failed_tests)}")
-        print(f"Success Rate: {success_rate:.1f}%")
-        
-        if self.failed_tests:
-            print("\n❌ FAILED TESTS:")
-            for test in self.failed_tests:
-                print(f"  • {test['test']}: {test['details']}")
-        
-        return len(self.failed_tests) == 0
+    # Test 1: Compatibility endpoint vendere structure
+    passed, details = test_compatibility_endpoint_vendere_structure()
+    results.add_result("Compatibility endpoint vendere structure (Goja)", passed, details)
+    
+    # Test 2: Compatibility endpoint for 1st year student
+    passed, details = test_compatibility_endpoint_first_year()
+    results.add_result("Compatibility endpoint 1st year (Carmen)", passed, details)
+    
+    # Test 3: Duplicate order prevention
+    passed, details = test_duplicate_order_prevention()
+    results.add_result("Duplicate order prevention", passed, details)
+    
+    # Test 4: All profiles compatibility
+    passed, details = test_all_profiles_compatibility()
+    results.add_result("All profiles compatibility data", passed, details)
+    
+    # Print summary
+    results.print_summary()
+    
+    # Return exit code based on results
+    return 0 if results.failed_tests == 0 else 1
 
 if __name__ == "__main__":
-    tester = HighSchoolBookClassificationTester()
-    success = tester.run_all_tests()
-    sys.exit(0 if success else 1)
+    exit_code = main()
+    sys.exit(exit_code)

@@ -3775,7 +3775,10 @@ async def get_child_compatibility(user_id: str, child_id: str):
         "vendere": {
             "classe_destinazione": classe_precedente,
             "totale_vendibili": num_vendibili,
-            "libri": vendibili
+            "totale_non_vendibili": num_non_vendibili,
+            "libri": vendibili,
+            "libri_vendibili": vendibili,  # Alias per compatibilità frontend
+            "libri_non_vendibili": non_vendibili  # Lista libri non vendibili
         },
         
         "comprare": {
@@ -5135,6 +5138,23 @@ async def create_order(
     # Non puoi comprare i tuoi libri
     if listing.get("seller_id") == user_id:
         raise HTTPException(status_code=400, detail="Non puoi acquistare i tuoi libri")
+    
+    # ==========================================
+    # CHECK ORDINI DUPLICATI - Evita doppi ordini
+    # ==========================================
+    existing_order = await db.orders.find_one({
+        "listing_id": actual_listing_id,
+        "status": {"$nin": ["cancelled", "refunded", "rejected", "completed"]}
+    })
+    if existing_order:
+        # Se l'ordine esistente è dello stesso acquirente, restituisci info
+        if existing_order.get("buyer_id") == user_id:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Hai già un ordine attivo per questo libro (ordine #{existing_order.get('order_code')})"
+            )
+        else:
+            raise HTTPException(status_code=400, detail="Questo libro è già stato riservato da un altro utente")
     
     # Verifica cartolibreria
     bookstore = await db.bookstores.find_one({"id": actual_bookstore_id})
