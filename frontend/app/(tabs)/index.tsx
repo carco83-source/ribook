@@ -373,11 +373,6 @@ export default function RadarScreen() {
                   </Text>
                   <Text style={styles.bookFlowColumnLabel}>libri</Text>
                 </View>
-                {(compatibility.vendere?.totale_non_vendibili || 0) > 0 && (
-                  <Text style={[styles.bookFlowColumnHint, { color: '#f44336' }]}>
-                    {compatibility.vendere?.totale_non_vendibili} ed. cambiate
-                  </Text>
-                )}
               </View>
 
               {/* CENTER - Iniziale del nome nel header */}
