@@ -3563,21 +3563,13 @@ async def get_child_compatibility(user_id: str, child_id: str):
     # I libri con "EDIZIONE CAMBIATA" o "NON PIÙ ADOTTATO" non sono rilevanti
     non_vendibili_ancora_in_uso = [nv for nv in non_vendibili if nv.get("status") == "SERVE ANCORA"]
     
-    # AGGIUNGI: Volumi unici triennali di NUOVA ADOZIONE (appena comprati, userai per 3 anni)
-    # Questi sono i libri in comprare_nuovo che sono volumi unici
-    for libro_nuovo in comprare_nuovo:
-        if libro_nuovo.get("is_volume_unico"):
-            non_vendibili_ancora_in_uso.append({
-                "disciplina": libro_nuovo.get("disciplina", ""),
-                "isbn": libro_nuovo.get("isbn", ""),
-                "titolo_vecchio": libro_nuovo.get("titolo", "")[:40],
-                "titolo_nuovo": "",
-                "status": "NUOVA ADOZIONE",
-                "motivo": "Volume unico triennale appena acquistato - lo userai per 3 anni"
-            })
+    # NOTA: I volumi unici di NUOVA ADOZIONE NON vanno in "ANCORA IN USO"
+    # perché sono libri che lo studente deve ancora comprare.
+    # Vanno mostrati solo nella sezione "NUOVI DA COMPRARE".
+    # La sezione "ANCORA IN USO" contiene SOLO i libri che lo studente HA GIÀ.
     
     # AGGIUNGI: Volumi unici triennali della classe ATTUALE che lo studente ha già
-    # (comprati in 1° anno, ora li usa in 2° o 3°)
+    # (comprati in anni precedenti, ora li usa ancora)
     # Questi sono volumi unici che appaiono nella classe attuale ma NON sono da comprare
     # perché lo studente li ha già
     if child_classe > 1:
@@ -3602,8 +3594,22 @@ async def get_child_compatibility(user_id: str, child_id: str):
                     gia_incluso = any(nv.get('isbn') == isbn for nv in non_vendibili_ancora_in_uso)
                     
                     if not gia_incluso:
-                        # Determina quando è stato comprato
-                        anno_acquisto = 1 if child_classe == 2 else (1 if child_classe == 3 and child_tipo == "primo_grado" else child_classe - 1)
+                        # Determina quando è stato comprato in base al tipo di scuola
+                        if child_tipo == "primo_grado":
+                            # Medie: volumi unici comprati in 1ª
+                            anno_acquisto = 1
+                        else:
+                            # Superiori: volumi unici quinquennali in 1ª, triennali in 3ª
+                            # Verifica se è un volume quinquennale (Religione, Scienze Motorie, Ed. Civica)
+                            disc_upper = disc.upper()
+                            is_quinquennale = any(kw in disc_upper for kw in ['RELIGIONE', 'MOTORIE', 'CIVICA', 'GRAMMATICA'])
+                            
+                            if is_quinquennale:
+                                anno_acquisto = 1  # Comprato in 1ª
+                            elif child_classe >= 3:
+                                anno_acquisto = 3  # Comprato in 3ª (triennio)
+                            else:
+                                anno_acquisto = 1  # Comprato in 1ª (biennio)
                         
                         non_vendibili_ancora_in_uso.append({
                             "disciplina": disc,
@@ -3611,7 +3617,7 @@ async def get_child_compatibility(user_id: str, child_id: str):
                             "titolo_vecchio": libro.get('titolo', '')[:40],
                             "titolo_nuovo": "",
                             "status": f"COMPRATO IN {anno_acquisto}ª",
-                            "motivo": f"Volume unico triennale comprato in {anno_acquisto}ª - lo usi ancora"
+                            "motivo": f"Volume unico comprato in {anno_acquisto}ª - lo usi ancora"
                         })
     
     num_vendibili = len(vendibili)

@@ -693,33 +693,7 @@ export default function RadarScreen() {
               );
             })()}
 
-            {/* Libri GIÀ POSSEDUTI - Volumi unici comprati negli anni precedenti */}
-            {compatibility.libri_gia_posseduti?.libri && compatibility.libri_gia_posseduti.libri.length > 0 && (
-              <View style={[styles.classCard, { borderLeftColor: '#00BCD4', borderLeftWidth: 3 }]}>
-                <Text style={[styles.sectionTitlePurple, { color: '#00838F' }]}>
-                  📚 LIBRI GIÀ IN TUO POSSESSO ({compatibility.libri_gia_posseduti.totale})
-                </Text>
-                <Text style={{ fontSize: 11, color: '#00838F', marginBottom: 12, fontStyle: 'italic' }}>
-                  {compatibility.libri_gia_posseduti.nota || "Volumi unici già acquistati negli anni precedenti - non vanno ricomprati"}
-                </Text>
-                {compatibility.libri_gia_posseduti.libri.map((book: any, idx: number) => (
-                  <View key={idx} style={styles.sampleBookItem}>
-                    <View style={styles.sampleBookInfo}>
-                      <Text style={styles.sampleBookTitle} numberOfLines={2}>
-                        {book.titolo}
-                      </Text>
-                      <Text style={styles.sampleBookSubject} numberOfLines={1}>
-                        {book.disciplina} • ISBN: {book.isbn}
-                      </Text>
-                      <Text style={{ fontSize: 10, color: '#00838F', fontWeight: 'bold' }}>
-                        ✓ {book.motivo_possesso || 'Già acquistato'}
-                      </Text>
-                    </View>
-                    <Ionicons name="checkmark-circle" size={20} color="#00BCD4" />
-                  </View>
-                ))}
-              </View>
-            )}
+            {/* RIMOSSA: Sezione "LIBRI GIÀ IN TUO POSSESSO" - ridondante con "ANCORA IN USO" */}
 
             {/* Testi Consigliati o Da Non Acquistare */}
             {compatibility.consigliati?.libri_da_comprare && compatibility.consigliati.libri_da_comprare.length > 0 && (
