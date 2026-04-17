@@ -1129,29 +1129,9 @@ export default function SellScreen() {
                       </TouchableOpacity>
                     </>
                   ) : (
-                    <>
-                      <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#2E7D32', marginBottom: 8 }}>
-                        📖 LIBRO SPROVVISTO DI FASCICOLI CARTACEI
-                      </Text>
-                      
-                      <TouchableOpacity
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          paddingVertical: 8,
-                        }}
-                        onPress={() => setHasFascicoli(!hasFascicoli)}
-                      >
-                        <Ionicons 
-                          name={hasFascicoli ? "checkbox" : "square-outline"} 
-                          size={24} 
-                          color={hasFascicoli ? "#4CAF50" : "#666"} 
-                        />
-                        <Text style={{ marginLeft: 8, fontSize: 13, color: '#333' }}>
-                          Conferma per procedere
-                        </Text>
-                      </TouchableOpacity>
-                    </>
+                    <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#2E7D32' }}>
+                      📖 NON SONO PREVISTI FASCICOLI PER QUESTO LIBRO
+                    </Text>
                   )}
                 </View>
               )}
@@ -1567,10 +1547,14 @@ export default function SellScreen() {
               <TouchableOpacity
                 style={[
                   styles.submitButton, 
-                  (creatingListing || !hasFascicoli || listingPhotos.length < 2) && styles.submitButtonDisabled
+                  (creatingListing || 
+                   (selectedBook && countFascicoliCartacei(selectedBook.titolo) > 0 && !hasFascicoli) || 
+                   listingPhotos.length < 2) && styles.submitButtonDisabled
                 ]}
                 onPress={createListing}
-                disabled={creatingListing || !hasFascicoli || listingPhotos.length < 2}
+                disabled={creatingListing || 
+                  (selectedBook && countFascicoliCartacei(selectedBook.titolo) > 0 && !hasFascicoli) || 
+                  listingPhotos.length < 2}
               >
                 {creatingListing ? (
                   <ActivityIndicator color="#fff" />
@@ -1583,7 +1567,7 @@ export default function SellScreen() {
               </TouchableOpacity>
               
               {/* Warning se non può pubblicare */}
-              {!hasFascicoli && (
+              {selectedBook && countFascicoliCartacei(selectedBook.titolo) > 0 && !hasFascicoli && (
                 <Text style={{ textAlign: 'center', color: '#f44336', fontSize: 12, marginTop: 8 }}>
                   ⚠️ Conferma il possesso dei fascicoli per pubblicare
                 </Text>
