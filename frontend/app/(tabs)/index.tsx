@@ -732,62 +732,6 @@ export default function RadarScreen() {
         ))}
       </ScrollView>
 
-      {/* Testi Consigliati o Da Non Acquistare */}
-            {compatibility.consigliati?.libri_da_comprare && compatibility.consigliati.libri_da_comprare.length > 0 && (
-              <View style={styles.classCard}>
-                <Text style={styles.sectionTitlePurple}>
-                  NON DA ACQUISTARE - GIÀ IN POSSESSO O FACOLTATIVI
-                </Text>
-                <Text style={{ fontSize: 11, color: '#9C27B0', marginBottom: 12, fontStyle: 'italic', fontWeight: 'bold' }}>
-                  Questi libri NON vanno acquistati: sono già in tuo possesso o sono facoltativi
-                </Text>
-                {compatibility.consigliati.libri_da_comprare.map((book: any, idx: number) => (
-                  <TouchableOpacity 
-                    key={idx} 
-                    style={[
-                      styles.sampleBookItem,
-                      book.copie_usate_disponibili > 0 && styles.sampleBookItemClickable
-                    ]}
-                    onPress={() => {
-                      // SEMPRE cliccabile se ci sono copie usate - anche per chi l'ha perso/rovinato
-                      if (book.copie_usate_disponibili > 0 && book.isbn) {
-                        router.push(`/book-sellers/${book.isbn}`);
-                      }
-                    }}
-                  >
-                    <View style={styles.sampleBookInfo}>
-                      <Text style={styles.sampleBookTitle} numberOfLines={2}>
-                        {book.titolo}
-                      </Text>
-                      <Text style={styles.sampleBookSubject} numberOfLines={1}>
-                        {book.disciplina} • ISBN: {book.isbn}
-                      </Text>
-                      {book.copie_usate_disponibili > 0 ? (
-                        <Text style={{ fontSize: 10, color: '#4CAF50', fontWeight: 'bold' }}>
-                          ✅ {book.copie_usate_disponibili} copie usate disponibili - Tocca per acquistare
-                        </Text>
-                      ) : (
-                        <Text style={{ fontSize: 10, color: '#999' }}>
-                          Nessuna copia usata al momento
-                        </Text>
-                      )}
-                    </View>
-                    <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={[styles.sampleBookPrice, { color: '#9C27B0' }]}>
-                        €{book.prezzo?.toFixed(2)}
-                      </Text>
-                      {book.copie_usate_disponibili > 0 && (
-                        <Ionicons name="chevron-forward" size={16} color="#4CAF50" />
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-          </View>
-        );
-      })()}
-
       {/* Empty state if no profile selected */}
       {childProfiles.length === 0 && (
         <View style={styles.emptyBooksSection}>
@@ -806,7 +750,7 @@ export default function RadarScreen() {
           </TouchableOpacity>
         </View>
       )}
-    </ScrollView>
+    </View>
   );
 }
 

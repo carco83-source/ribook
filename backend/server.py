@@ -4194,7 +4194,14 @@ async def get_child_analysis_v2(user_id: str, child_id: str):
             non_vendibili = non_vendibili_list
     
     # ================================================
-    # 4. CALCOLI FINALI
+    # 4. RIMOZIONE DUPLICATI TRA GIÀ POSSEDUTI E NON VENDIBILI
+    # ================================================
+    # I libri già posseduti non devono apparire anche in non_vendibili
+    isbn_gia_posseduti = set(l.get("isbn") for l in gia_posseduti if l.get("isbn"))
+    non_vendibili_filtrati = [l for l in non_vendibili if l.get("isbn") not in isbn_gia_posseduti]
+    
+    # ================================================
+    # 5. CALCOLI FINALI
     # ================================================
     costo_nuovi = sum(l.get("prezzo_copertina", 0) for l in da_comprare_nuovi)
     costo_usati = sum(l.get("prezzo_usato", 0) for l in da_comprare_usati)
@@ -4252,14 +4259,14 @@ async def get_child_analysis_v2(user_id: str, child_id: str):
         "vendere": {
             "classe_destinazione": classe_prec,
             "totale_vendibili": len(vendibili),
-            "totale_non_vendibili": len(non_vendibili),
+            "totale_non_vendibili": len(non_vendibili_filtrati),
             "libri": vendibili,
             "libri_vendibili": vendibili,  # Alias per frontend
-            "libri_non_vendibili": non_vendibili,  # Alias per frontend
+            "libri_non_vendibili": non_vendibili_filtrati,  # Alias per frontend (senza duplicati)
             "potenziale_guadagno": round(potenziale_vendita, 2),
             "non_vendibili": {
-                "totale": len(non_vendibili),
-                "libri": non_vendibili
+                "totale": len(non_vendibili_filtrati),
+                "libri": non_vendibili_filtrati
             }
         },
         
@@ -4272,7 +4279,7 @@ async def get_child_analysis_v2(user_id: str, child_id: str):
             "da_comprare_usati": len(da_comprare_usati),
             "gia_posseduti": len(gia_posseduti),
             "vendibili": len(vendibili),
-            "non_vendibili": len(non_vendibili),
+            "non_vendibili": len(non_vendibili_filtrati),
             "costo_totale_nuovi": round(costo_nuovi, 2),
             "costo_totale_usati": round(costo_usati, 2),
             "risparmio_stimato": round(risparmio_usati, 2),
