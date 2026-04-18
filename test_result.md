@@ -228,6 +228,30 @@ backend:
         agent: "testing"
         comment: "Complete escrow payment flow tested successfully. All 9 test cases passed (100% success rate): 1) GET /api/listings - retrieved available listings, 2) GET /api/bookstores - retrieved bookstores, 3) POST /api/orders/create - created order with status pending_payment, 4) POST /api/orders/{id}/pay - payment successful with status paid_escrow, 5) GET /api/orders/user/{user_id}?role=buyer - retrieved user orders, 6) GET /api/orders/{id} - retrieved order details with status history, 7) POST /api/orders/{id}/deliver-to-bookstore - seller delivery confirmation successful, 8) POST /api/orders/{id}/ready-for-pickup - bookstore ready confirmation with 2-day escrow deadline, 9) POST /api/orders/{id}/confirm-pickup - buyer pickup confirmation completed transaction. Notifications working correctly for both buyer and seller. Listing status properly updated from available -> reserved -> sold. Fixed minor issue with listing status field compatibility (stato vs status). All commission calculations, escrow deadlines, and state transitions working as expected."
 
+  - task: "Book Logic Module (book_logic.py) - Classificazione libri acquisto/vendita"
+    implemented: true
+    working: true
+    file: "/app/backend/book_logic.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Nuovo modulo book_logic.py con logica semplificata per SCUOLE MEDIE: tutti i volumi UNICI si comprano SOLO in 1ª e durano 3 anni (indipendentemente da da_acquistare/consigliato_raw), solo ANNUALI si comprano in 2ª/3ª. Testato con George (2ª media): Religione correttamente classificata come GIÀ POSSEDUTO (volume unico triennale). 7 volumi unici già posseduti, 7 annuali da comprare usati."
+
+  - task: "Book Analysis Endpoint V2 - /api/profiles/{user_id}/children/{child_id}/analysis"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Nuovo endpoint che usa book_logic.py per calcolare: libri da comprare (NUOVO/USATO/GIÀ POSSEDUTO), libri vendibili e non vendibili. Integra la nuova logica per medie vs superiori. Testato con curl per George - restituisce correttamente 7 gia_posseduti (unici), 7 usati (annuali), 0 nuovi."
+
 frontend:
   - task: "Welcome Screen"
     implemented: true

@@ -16,6 +16,16 @@ import hashlib
 import base64
 import io
 
+# Book logic module for complex classification
+from book_logic import (
+    get_ciclo_info,
+    calcola_stato_acquisto,
+    calcola_vendibili,
+    get_scuole_catanzaro,
+    SCUOLE_MEDIE_CATANZARO,
+    SCUOLE_SUPERIORI_CATANZARO
+)
+
 # PDF generation
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -4043,6 +4053,205 @@ async def get_child_compatibility(user_id: str, child_id: str):
             "costo_nuovi": round(costo_nuovi, 2),
             "costo_consigliati": round(sum(l.get("prezzo", 0) for l in libri_consigliati), 2),
             "ciclo_info": f"{'Scuola Media' if child_tipo == 'primo_grado' else 'Superiore'} - {cycle_name.capitalize()}"
+        }
+    }
+
+
+@api_router.get("/profiles/{user_id}/children/{child_id}/analysis")
+async def get_child_analysis_v2(user_id: str, child_id: str):
+    """
+    NUOVO ENDPOINT: Analisi libri usando book_logic.py
+    
+    Calcola:
+    - Libri DA COMPRARE (NUOVO, USATO, GIÀ POSSEDUTO)
+    - Libri VENDIBILI
+    - Libri NON VENDIBILI (ancora in uso)
+    
+    Usa la nuova logica centralizzata che considera:
+    - Cicli Biennio/Triennio
+    - Cross-school search nelle 21 scuole di Catanzaro
+    - consigliato_raw='AP' 
+    - Volumi unici vs annuali
+    """
+    # Trova utente e profilo figlio
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+    
+    profili_figli = user.get("profili_figli", [])
+    child_profile = next((p for p in profili_figli if p.get("id") == child_id), None)
+    
+    if not child_profile:
+        raise HTTPException(status_code=404, detail="Profilo figlio non trovato")
+    
+    # Dati profilo
+    child_classe = int(child_profile.get("classe", 1))
+    child_tipo = child_profile.get("tipo_scuola", "primo_grado")
+    child_codice_scuola = child_profile.get("codice_scuola", "")
+    child_sezione = child_profile.get("sezione", "A").upper()
+    child_nome = child_profile.get("nome_figlio", "Figlio")
+    child_scuola = child_profile.get("scuola", "")
+    
+    if not child_codice_scuola:
+        return {
+            "error": "Codice scuola non configurato",
+            "child_name": child_nome,
+            "child_classe": child_classe
+        }
+    
+    # Usa book_logic.py per ottenere info ciclo
+    ciclo_info = get_ciclo_info(child_tipo, child_classe)
+    
+    # ================================================
+    # 1. CARICA LIBRI DELLA CLASSE CORRENTE (2025/2026)
+    # ================================================
+    adozione_corrente = await db.adozioni.find_one({
+        "codice_scuola": child_codice_scuola,
+        "classe": child_classe,
+        "sezione": child_sezione
+    })
+    
+    if not adozione_corrente:
+        # Fallback: cerca qualsiasi sezione
+        adozione_corrente = await db.adozioni.find_one({
+            "codice_scuola": child_codice_scuola,
+            "classe": child_classe
+        })
+    
+    libri_correnti = adozione_corrente.get("libri", []) if adozione_corrente else []
+    
+    # ================================================
+    # 2. CLASSIFICA OGNI LIBRO (DA COMPRARE)
+    # ================================================
+    da_comprare_nuovi = []
+    da_comprare_usati = []
+    gia_posseduti = []
+    
+    for libro in libri_correnti:
+        stato, motivo, copie = await calcola_stato_acquisto(
+            db, libro, child_classe, child_tipo, child_codice_scuola, child_sezione
+        )
+        
+        isbn = libro.get("isbn", "")
+        titolo = libro.get("titolo", "")[:60]
+        disciplina = libro.get("disciplina", "")
+        prezzo = libro.get("prezzo_copertina", 0)
+        consigliato_raw = libro.get("consigliato_raw", "NO")
+        
+        libro_info = {
+            "isbn": isbn,
+            "titolo": titolo,
+            "disciplina": disciplina,
+            "editore": libro.get("editore", ""),
+            "autori": libro.get("autori", ""),
+            "prezzo_copertina": prezzo,
+            "is_volume_unico": libro.get("is_volume_unico", False),
+            "nuova_adozione": libro.get("nuova_adozione", False),
+            "da_acquistare": libro.get("da_acquistare", True),
+            "consigliato_raw": consigliato_raw,
+            "stato": stato,
+            "motivo": motivo,
+            "copie_disponibili": copie
+        }
+        
+        if stato == "GIA_POSSEDUTO":
+            gia_posseduti.append(libro_info)
+        elif stato == "USATO":
+            libro_info["prezzo_usato"] = round(prezzo * 0.5, 2)
+            libro_info["risparmio"] = round(prezzo * 0.5, 2)
+            da_comprare_usati.append(libro_info)
+        else:  # NUOVO
+            da_comprare_nuovi.append(libro_info)
+    
+    # ================================================
+    # 3. CALCOLA LIBRI VENDIBILI
+    # ================================================
+    # Carica libri dell'anno precedente (2024/2025) per la classe precedente
+    classe_prec = child_classe - 1 if child_classe > ciclo_info.get("classe_min", 1) else None
+    
+    vendibili = []
+    non_vendibili = []
+    
+    if classe_prec:
+        adozione_prec = await db.adozioni_2024_2025.find_one({
+            "codice_scuola": child_codice_scuola,
+            "classe": classe_prec
+        })
+        
+        if not adozione_prec:
+            adozione_prec = await db.adozioni_2024_2025.find_one({
+                "codice_scuola": child_codice_scuola,
+                "classe": classe_prec
+            })
+        
+        libri_storici = adozione_prec.get("libri", []) if adozione_prec else []
+        
+        if libri_storici:
+            vendibili_list, non_vendibili_list = await calcola_vendibili(
+                db, libri_storici, child_classe, child_tipo, child_codice_scuola, child_sezione
+            )
+            vendibili = vendibili_list
+            non_vendibili = non_vendibili_list
+    
+    # ================================================
+    # 4. CALCOLI FINALI
+    # ================================================
+    costo_nuovi = sum(l.get("prezzo_copertina", 0) for l in da_comprare_nuovi)
+    costo_usati = sum(l.get("prezzo_usato", 0) for l in da_comprare_usati)
+    risparmio_usati = sum(l.get("risparmio", 0) for l in da_comprare_usati)
+    
+    # Potenziale guadagno dalla vendita
+    potenziale_vendita = sum(v.get("prezzo_copertina", 0) * 0.5 for v in vendibili)
+    
+    return {
+        "child_id": child_id,
+        "child_name": child_nome,
+        "child_classe": child_classe,
+        "scuola": child_scuola,
+        "codice_scuola": child_codice_scuola,
+        "sezione": child_sezione,
+        "tipo_scuola": child_tipo,
+        "ciclo": ciclo_info.get("ciclo", ""),
+        
+        "comprare": {
+            "nuovi": {
+                "totale": len(da_comprare_nuovi),
+                "costo": round(costo_nuovi, 2),
+                "libri": da_comprare_nuovi
+            },
+            "usati": {
+                "totale": len(da_comprare_usati),
+                "costo": round(costo_usati, 2),
+                "risparmio": round(risparmio_usati, 2),
+                "libri": da_comprare_usati
+            },
+            "gia_posseduti": {
+                "totale": len(gia_posseduti),
+                "libri": gia_posseduti
+            }
+        },
+        
+        "vendere": {
+            "classe_destinazione": classe_prec,
+            "totale_vendibili": len(vendibili),
+            "potenziale_guadagno": round(potenziale_vendita, 2),
+            "libri": vendibili,
+            "non_vendibili": {
+                "totale": len(non_vendibili),
+                "libri": non_vendibili
+            }
+        },
+        
+        "summary": {
+            "totale_libri": len(libri_correnti),
+            "da_comprare_nuovi": len(da_comprare_nuovi),
+            "da_comprare_usati": len(da_comprare_usati),
+            "gia_posseduti": len(gia_posseduti),
+            "vendibili": len(vendibili),
+            "costo_totale_nuovi": round(costo_nuovi, 2),
+            "costo_totale_usati": round(costo_usati, 2),
+            "risparmio_stimato": round(risparmio_usati, 2),
+            "potenziale_vendita": round(potenziale_vendita, 2)
         }
     }
 
