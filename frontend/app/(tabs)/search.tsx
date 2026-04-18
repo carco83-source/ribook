@@ -273,13 +273,14 @@ export default function SearchScreen() {
     return (
       <View style={styles.bookCard}>
         <View style={styles.bookInfo}>
-          <Text style={styles.bookTitle} numberOfLines={2}>{item.titolo}</Text>
+          <Text style={styles.bookTitle}>{item.titolo}</Text>
           <Text style={styles.bookAuthor}>{getBookAuthor(item)}</Text>
           <View style={styles.bookMeta}>
             <View style={styles.metaBadge}>
-              <Text style={styles.metaText}>{getBookSubject(item)} • ISBN: {item.isbn}</Text>
+              <Text style={styles.metaText}>{getBookSubject(item)}</Text>
             </View>
           </View>
+          <Text style={styles.isbnText}>ISBN: {item.isbn}</Text>
           <View style={styles.priceRow}>
             <Text style={styles.bookPrice}>
               Nuovo: €{getBookPrice(item).toFixed(2)}
@@ -837,6 +838,12 @@ const styles = StyleSheet.create({
   metaText: {
     fontSize: 11,
     color: '#666',
+  },
+  isbnText: {
+    fontSize: 11,
+    color: '#888',
+    marginBottom: 6,
+    fontFamily: 'monospace',
   },
   priceRow: {
     flexDirection: 'row',

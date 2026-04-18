@@ -678,7 +678,8 @@ export default function SellScreen() {
             <Text style={styles.listingPrice}>€{item.prezzo_vendita.toFixed(2)}</Text>
           </View>
 
-          <Text style={styles.listingTitle} numberOfLines={2}>{item.book_titolo}</Text>
+          <Text style={styles.listingTitle}>{item.book_titolo}</Text>
+          <Text style={styles.isbnText}>ISBN: {item.book_isbn}</Text>
 
           <View style={styles.listingMeta}>
             <View style={[styles.conditionBadge, { borderColor: condConfig.color }]}>
@@ -1014,11 +1015,14 @@ export default function SellScreen() {
                     onPress={() => selectBookToSell(item)}
                   >
                     <View style={styles.bookOptionInfo}>
-                      <Text style={styles.bookOptionTitle} numberOfLines={2}>
+                      <Text style={styles.bookOptionTitle}>
                         {item.titolo}
                       </Text>
                       <Text style={styles.bookOptionAuthor}>
-                        {item.disciplina} • ISBN: {item.isbn}
+                        {item.disciplina}
+                      </Text>
+                      <Text style={styles.isbnText}>
+                        ISBN: {item.isbn}
                       </Text>
                       <Text style={styles.bookOptionPrice}>
                         Prezzo suggerito: €{item.prezzo_suggerito?.toFixed(2) || ((item.prezzo_copertina || 0) * 0.5).toFixed(2)}
@@ -1690,7 +1694,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#333',
+    marginBottom: 4,
+  },
+  isbnText: {
+    fontSize: 11,
+    color: '#888',
     marginBottom: 8,
+    fontFamily: 'monospace',
   },
   listingMeta: {
     flexDirection: 'row',

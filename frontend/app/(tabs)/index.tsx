@@ -519,11 +519,14 @@ export default function RadarScreen() {
                 {compatibility.vendere.libri_vendibili.map((book: any, idx: number) => (
                   <View key={idx} style={styles.sampleBookItem}>
                     <View style={styles.sampleBookInfo}>
-                      <Text style={styles.sampleBookTitle} numberOfLines={2}>
+                      <Text style={styles.sampleBookTitle}>
                         {book.titolo}
                       </Text>
-                      <Text style={styles.sampleBookSubject} numberOfLines={1}>
-                        {book.disciplina} • ISBN: {book.isbn}
+                      <Text style={styles.sampleBookSubject}>
+                        {book.disciplina}
+                      </Text>
+                      <Text style={styles.isbnText}>
+                        ISBN: {book.isbn}
                       </Text>
                     </View>
                     <View style={{ alignItems: 'flex-end' }}>
@@ -581,11 +584,14 @@ export default function RadarScreen() {
                         disabled={copie === 0}
                       >
                         <View style={styles.sampleBookInfo}>
-                          <Text style={styles.sampleBookTitle} numberOfLines={2}>
+                          <Text style={styles.sampleBookTitle}>
                             {book.titolo}
                           </Text>
-                          <Text style={styles.sampleBookSubject} numberOfLines={1}>
-                            {book.disciplina} • ISBN: {book.isbn}
+                          <Text style={styles.sampleBookSubject}>
+                            {book.disciplina}
+                          </Text>
+                          <Text style={styles.isbnText}>
+                            ISBN: {book.isbn}
                           </Text>
                         </View>
                         <View style={{ alignItems: 'flex-end', flexDirection: 'row', gap: 8 }}>
@@ -629,11 +635,14 @@ export default function RadarScreen() {
                 {compatibility.vendere.libri_non_vendibili.map((book: any, idx: number) => (
                   <View key={idx} style={styles.sampleBookItem}>
                     <View style={styles.sampleBookInfo}>
-                      <Text style={styles.sampleBookTitle} numberOfLines={1}>
-                        {book.titolo_vecchio || book.disciplina}
+                      <Text style={styles.sampleBookTitle}>
+                        {book.titolo || book.titolo_vecchio || book.disciplina}
                       </Text>
-                      <Text style={styles.sampleBookSubject} numberOfLines={1}>
-                        {book.disciplina} • ISBN: {book.isbn}
+                      <Text style={styles.sampleBookSubject}>
+                        {book.disciplina}
+                      </Text>
+                      <Text style={styles.isbnText}>
+                        ISBN: {book.isbn}
                       </Text>
                       <Text style={{ fontSize: 10, color: '#FF9800' }}>
                         {book.status}: {book.motivo}
@@ -657,11 +666,14 @@ export default function RadarScreen() {
                 {compatibility.libri_gia_posseduti.map((book: any, idx: number) => (
                   <View key={idx} style={styles.sampleBookItem}>
                     <View style={styles.sampleBookInfo}>
-                      <Text style={styles.sampleBookTitle} numberOfLines={1}>
-                        {book.titolo?.substring(0, 50) || book.disciplina}
+                      <Text style={styles.sampleBookTitle}>
+                        {book.titolo || book.disciplina}
                       </Text>
-                      <Text style={styles.sampleBookSubject} numberOfLines={1}>
-                        {book.disciplina} • ISBN: {book.isbn}
+                      <Text style={styles.sampleBookSubject}>
+                        {book.disciplina}
+                      </Text>
+                      <Text style={styles.isbnText}>
+                        ISBN: {book.isbn}
                       </Text>
                       <Text style={{ fontSize: 10, color: '#9C27B0' }}>
                         {book.motivo || 'Volume unico già acquistato'}
@@ -704,11 +716,14 @@ export default function RadarScreen() {
                       }}
                     >
                       <View style={styles.sampleBookInfo}>
-                        <Text style={styles.sampleBookTitle} numberOfLines={2}>
+                        <Text style={styles.sampleBookTitle}>
                           {book.titolo}
                         </Text>
-                        <Text style={styles.sampleBookSubject} numberOfLines={1}>
-                          {book.disciplina} • ISBN: {book.isbn}
+                        <Text style={styles.sampleBookSubject}>
+                          {book.disciplina}
+                        </Text>
+                        <Text style={styles.isbnText}>
+                          ISBN: {book.isbn}
                         </Text>
                         {book.is_nuova_edizione && (
                           <Text style={{ fontSize: 10, color: '#f44336', fontWeight: 'bold' }}>
@@ -1291,6 +1306,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#666',
     marginTop: 2,
+  },
+  isbnText: {
+    fontSize: 11,
+    color: '#888',
+    marginTop: 2,
+    fontFamily: 'monospace',
   },
   sampleBookSeller: {
     fontSize: 11,
