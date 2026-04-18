@@ -628,10 +628,31 @@ export default function RadarScreen() {
 
             {/* SEZIONE UNIFICATA: LIBRI NON VENDIBILI GIÀ IN TUO POSSESSO - ANCORA IN USO */}
             {(() => {
-              // Combina libri non vendibili + libri già posseduti
+              // Combina libri non vendibili + libri già posseduti, rimuovendo duplicati per ISBN
               const libriNonVendibili = compatibility.vendere?.libri_non_vendibili || [];
               const libriGiaPosseduti = compatibility.libri_gia_posseduti || [];
-              const tuttiLibriInUso = [...libriNonVendibili, ...libriGiaPosseduti];
+              
+              // Rimuovi duplicati usando ISBN come chiave
+              const isbnVisti = new Set();
+              const tuttiLibriInUso: any[] = [];
+              
+              // Prima aggiungi i già posseduti (priorità)
+              for (const libro of libriGiaPosseduti) {
+                const isbn = libro.isbn || libro.titolo;
+                if (!isbnVisti.has(isbn)) {
+                  isbnVisti.add(isbn);
+                  tuttiLibriInUso.push(libro);
+                }
+              }
+              
+              // Poi aggiungi i non vendibili (solo se non già presenti)
+              for (const libro of libriNonVendibili) {
+                const isbn = libro.isbn || libro.titolo;
+                if (!isbnVisti.has(isbn)) {
+                  isbnVisti.add(isbn);
+                  tuttiLibriInUso.push(libro);
+                }
+              }
               
               if (tuttiLibriInUso.length === 0) return null;
               
@@ -666,33 +687,22 @@ export default function RadarScreen() {
               );
             })()}
 
-            {/* Libri di nuova adozione da acquistare */}
+            {/* Libri NUOVI da acquistare (non trovabili usati) */}
             {(() => {
-              // Filtra solo libri senza copie usate disponibili O nuove edizioni
-              const libriNonReperibili = (compatibility.nuovi?.libri || []).filter(
-                (book: any) => book.copie_usate_disponibili === 0 || book.is_nuova_edizione
-              );
+              const libriNuovi = compatibility.nuovi?.libri || [];
               
-              if (libriNonReperibili.length === 0) return null;
+              if (libriNuovi.length === 0) return null;
               
               return (
-                <View style={styles.classCard}>
-                  <Text style={styles.sectionTitleOrange}>
-                    LIBRI DI NUOVA ADOZIONE DA ACQUISTARE ({libriNonReperibili.length})
+                <View style={[styles.classCard, { borderLeftColor: '#F44336', borderLeftWidth: 3 }]}>
+                  <Text style={styles.sectionTitleRed}>
+                    LIBRI NUOVI DA ACQUISTARE ({libriNuovi.length})
                   </Text>
-                  {libriNonReperibili.map((book: any, idx: number) => (
-                    <TouchableOpacity 
-                      key={idx} 
-                      style={[
-                        styles.sampleBookItem,
-                        book.copie_usate_disponibili > 0 && styles.sampleBookItemClickable
-                      ]}
-                      onPress={() => {
-                        if (book.copie_usate_disponibili > 0 && book.isbn) {
-                          router.push(`/book-sellers/${book.isbn}`);
-                        }
-                      }}
-                    >
+                  <Text style={{ fontSize: 11, color: '#D32F2F', marginBottom: 12, fontStyle: 'italic' }}>
+                    Non disponibili usati - da comprare nuovi
+                  </Text>
+                  {libriNuovi.map((book: any, idx: number) => (
+                    <View key={idx} style={styles.sampleBookItem}>
                       <View style={styles.sampleBookInfo}>
                         <Text style={styles.sampleBookTitle}>
                           {book.titolo}
@@ -703,31 +713,26 @@ export default function RadarScreen() {
                         <Text style={styles.isbnText}>
                           ISBN: {book.isbn}
                         </Text>
-                        {book.is_nuova_edizione && (
-                          <Text style={{ fontSize: 10, color: '#f44336', fontWeight: 'bold' }}>
-                            NUOVA EDIZIONE 2025 - Solo nuovo
-                          </Text>
-                        )}
-                        {!book.is_nuova_edizione && (
-                          <Text style={{ fontSize: 10, color: '#999' }}>
-                            Nessuna copia usata al momento
-                          </Text>
-                        )}
-                      </View>
-                      <View style={{ alignItems: 'flex-end' }}>
-                        <Text style={[styles.sampleBookPrice, { color: '#FF9800' }]}>
-                          €{book.prezzo?.toFixed(2)}
+                        <Text style={{ fontSize: 10, color: '#F44336' }}>
+                          {book.motivo || 'Da acquistare nuovo'}
                         </Text>
                       </View>
-                    </TouchableOpacity>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={[styles.sampleBookPrice, { color: '#F44336' }]}>
+                          €{(book.prezzo_copertina || 0).toFixed(2)}
+                        </Text>
+                        <Text style={{ fontSize: 9, color: '#F44336' }}>nuovo</Text>
+                      </View>
+                    </View>
                   ))}
                 </View>
               );
             })()}
+          </View>
+        ))}
+      </ScrollView>
 
-            {/* RIMOSSA: Sezione "LIBRI GIÀ IN TUO POSSESSO" - ridondante con "ANCORA IN USO" */}
-
-            {/* Testi Consigliati o Da Non Acquistare */}
+      {/* Testi Consigliati o Da Non Acquistare */}
             {compatibility.consigliati?.libri_da_comprare && compatibility.consigliati.libri_da_comprare.length > 0 && (
               <View style={styles.classCard}>
                 <Text style={styles.sectionTitlePurple}>
