@@ -318,25 +318,11 @@ export default function SearchScreen() {
               <Text style={styles.requestActiveText}>in attesa</Text>
             </View>
           ) : (
-            /* Caso 3: Nessuna copia + nessuna richiesta - mostra pulsante quadrato */
-            <TouchableOpacity
-              style={[
-                styles.notifyButton,
-                isCreating && styles.notifyButtonDisabled,
-              ]}
-              onPress={() => handleCreateRequestInline(item)}
-              disabled={isCreating}
-            >
-              {isCreating ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <>
-                  <Text style={styles.notifyButtonText}>avvisami</Text>
-                  <Text style={styles.notifyButtonText}>appena</Text>
-                  <Text style={styles.notifyButtonText}>disponibile</Text>
-                </>
-              )}
-            </TouchableOpacity>
+            /* Caso 3: Nessuna copia - mostra indicatore */
+            <View style={styles.noCopiesContainer}>
+              <Ionicons name="alert-circle-outline" size={24} color="#999" />
+              <Text style={styles.noCopiesText}>0 copie</Text>
+            </View>
           )}
         </View>
       </View>
@@ -965,6 +951,15 @@ const styles = StyleSheet.create({
     color: '#FF9800',
     marginTop: 4,
     fontWeight: '600',
+  },
+  noCopiesContainer: {
+    alignItems: 'center',
+    padding: 8,
+  },
+  noCopiesText: {
+    fontSize: 11,
+    color: '#999',
+    marginTop: 4,
   },
   emptyContainer: {
     flex: 1,
