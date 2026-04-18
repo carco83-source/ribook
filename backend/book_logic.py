@@ -179,19 +179,49 @@ def trova_volume_successivo(libro: dict, libri_classe_succ: List[dict]) -> Optio
     return None
 
 
+# Codici delle 21 scuole del COMUNE di Catanzaro
+SCUOLE_MEDIE_CATANZARO = [
+    'CZMM86001P',  # I.C. Casalinuovo
+    'CZMM856013',  # I.C. Don Milani
+    'CZMM85201Q',  # I.C. Patari - Rodari
+    'CZMM86701D',  # I.C. Vivaldi
+    'CZMM85801P',  # I.C. Mater Domini (Lampasi)
+    'CZMM00300E',  # Convitto Nazionale Galluppi
+    'CZMM83903B',  # I.C. G. Sabatini (Caraffa)
+    'CZ1MBR5002',  # Scuola Maria Immacolata
+]
+
+SCUOLE_SUPERIORI_CATANZARO = [
+    'CZPC09000X',  # Liceo Classico P. Galluppi
+    'CZPS00101C',  # Liceo Scientifico E. Fermi
+    'CZPS02201D',  # Liceo Scientifico L. Siciliani
+    'CZSL02201A',  # Liceo Artistico di Catanzaro
+    'CZPM02201E',  # Liceo Linguistico G. De Nobili
+    'CZPM00101D',  # Liceo Magistrale Fermi
+    'CZTF010008',  # ITIS E. Scalfaro
+    'CZTD024011',  # ITCG Grimaldi - Pacioli
+    'CZTA021035',  # IST. Tecnico Agrario V. Emanuele II
+    'CZTE021011',  # IST. Tecnico B. Chimirri
+    'CZRI02401A',  # IPSIA G. Ferraris
+    'CZRC02401N',  # IPSCT Sorace Maresca
+    'CZTL02401B',  # IIS Petrucci-Ferraris-Maresca
+]
+
+
 async def get_scuole_catanzaro(db, tipo_scuola: str) -> List[str]:
     """
-    Restituisce i codici scuola di Catanzaro per tipo
+    Restituisce i codici delle scuole del COMUNE di Catanzaro per tipo
     
     Args:
-        tipo_scuola: 'primo_grado' (medie) o 'secondo_grado' (superiori)
+        tipo_scuola: 'primo_grado' (8 medie) o 'secondo_grado' (13 superiori)
     
     Returns:
-        Lista di codici scuola di Catanzaro (iniziano con CZ)
+        Lista di codici scuola del comune di Catanzaro
     """
-    all_scuole = await db.adozioni.distinct("codice_scuola", {"tipo_scuola": tipo_scuola})
-    # Filtra solo scuole di Catanzaro (codice inizia con CZ)
-    return [s for s in all_scuole if s.startswith('CZ')]
+    if tipo_scuola == "primo_grado":
+        return SCUOLE_MEDIE_CATANZARO
+    else:
+        return SCUOLE_SUPERIORI_CATANZARO
 
 
 async def libro_in_classe(db, isbn: str, codice_scuola: str, classe: int, 
