@@ -157,16 +157,26 @@ export default function RadarScreen() {
         console.log('Failed to load purchasable books');
       }
 
-      // Load compatibility for each child profile
+      // Load compatibility for each child profile (using new /analysis endpoint)
       const compatibilityData: {[key: string]: any} = {};
       for (const child of profili) {
         try {
+          // Usa il nuovo endpoint /analysis con logica semplificata per medie
           const compRes = await axios.get(
-            `${API_URL}/api/profiles/${storedUserId}/children/${child.id}/compatibility`
+            `${API_URL}/api/profiles/${storedUserId}/children/${child.id}/analysis`
           );
           compatibilityData[child.id] = compRes.data;
         } catch (e) {
-          console.log(`Failed to load compatibility for ${child.nome_figlio}`);
+          console.log(`Failed to load analysis for ${child.nome_figlio}`);
+          // Fallback al vecchio endpoint se il nuovo fallisce
+          try {
+            const fallbackRes = await axios.get(
+              `${API_URL}/api/profiles/${storedUserId}/children/${child.id}/compatibility`
+            );
+            compatibilityData[child.id] = fallbackRes.data;
+          } catch (e2) {
+            console.log(`Failed to load compatibility for ${child.nome_figlio}`);
+          }
         }
       }
       setChildrenCompatibility(compatibilityData);
@@ -630,6 +640,37 @@ export default function RadarScreen() {
                       </Text>
                     </View>
                     <Ionicons name="book" size={20} color="#FF9800" />
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {/* VOLUMI UNICI GIÀ POSSEDUTI (Scuole Medie) */}
+            {compatibility.libri_gia_posseduti && compatibility.libri_gia_posseduti.length > 0 && (
+              <View style={[styles.classCard, { borderLeftColor: '#9C27B0', borderLeftWidth: 3 }]}>
+                <Text style={[styles.sectionTitlePurple, { marginBottom: 4 }]}>
+                  GIÀ IN TUO POSSESSO ({compatibility.libri_gia_posseduti.length})
+                </Text>
+                <Text style={{ fontSize: 11, color: '#7B1FA2', marginBottom: 12, fontStyle: 'italic' }}>
+                  Volumi unici già acquistati - non richiedono nuovo acquisto
+                </Text>
+                {compatibility.libri_gia_posseduti.map((book: any, idx: number) => (
+                  <View key={idx} style={styles.sampleBookItem}>
+                    <View style={styles.sampleBookInfo}>
+                      <Text style={styles.sampleBookTitle} numberOfLines={1}>
+                        {book.titolo?.substring(0, 50) || book.disciplina}
+                      </Text>
+                      <Text style={styles.sampleBookSubject} numberOfLines={1}>
+                        {book.disciplina} • ISBN: {book.isbn}
+                      </Text>
+                      <Text style={{ fontSize: 10, color: '#9C27B0' }}>
+                        {book.motivo || 'Volume unico già acquistato'}
+                      </Text>
+                    </View>
+                    <View style={{ alignItems: 'center' }}>
+                      <Ionicons name="checkmark-circle" size={20} color="#9C27B0" />
+                      <Text style={{ fontSize: 9, color: '#9C27B0' }}>Posseduto</Text>
+                    </View>
                   </View>
                 ))}
               </View>

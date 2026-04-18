@@ -4203,17 +4203,27 @@ async def get_child_analysis_v2(user_id: str, child_id: str):
     # Potenziale guadagno dalla vendita
     potenziale_vendita = sum(v.get("prezzo_copertina", 0) * 0.5 for v in vendibili)
     
+    # Calcola classe origine per libri usati (classe successiva che può vendere)
+    classe_origine = child_classe + 1 if child_classe < ciclo_info.get("classe_max", 3) else None
+    
     return {
         "child_id": child_id,
         "child_name": child_nome,
         "child_classe": child_classe,
+        "child_scuola": child_scuola,  # Alias per compatibilità
         "scuola": child_scuola,
         "codice_scuola": child_codice_scuola,
         "sezione": child_sezione,
         "tipo_scuola": child_tipo,
         "ciclo": ciclo_info.get("ciclo", ""),
         
+        # COMPRARE - struttura compatibile con frontend
         "comprare": {
+            "classe_origine": classe_origine,
+            "totale_usati": len(da_comprare_usati),
+            "risparmio_totale": round(risparmio_usati, 2),
+            "libri_usati": da_comprare_usati,  # Alias per frontend
+            # Nuova struttura dettagliata
             "nuovi": {
                 "totale": len(da_comprare_nuovi),
                 "costo": round(costo_nuovi, 2),
@@ -4231,16 +4241,30 @@ async def get_child_analysis_v2(user_id: str, child_id: str):
             }
         },
         
+        # NUOVI - per compatibilità con frontend
+        "nuovi": {
+            "totale": len(da_comprare_nuovi),
+            "costo_totale": round(costo_nuovi, 2),
+            "libri": da_comprare_nuovi
+        },
+        
+        # VENDERE - struttura compatibile con frontend
         "vendere": {
             "classe_destinazione": classe_prec,
             "totale_vendibili": len(vendibili),
-            "potenziale_guadagno": round(potenziale_vendita, 2),
+            "totale_non_vendibili": len(non_vendibili),
             "libri": vendibili,
+            "libri_vendibili": vendibili,  # Alias per frontend
+            "libri_non_vendibili": non_vendibili,  # Alias per frontend
+            "potenziale_guadagno": round(potenziale_vendita, 2),
             "non_vendibili": {
                 "totale": len(non_vendibili),
                 "libri": non_vendibili
             }
         },
+        
+        # GIÀ POSSEDUTI - per compatibilità
+        "libri_gia_posseduti": gia_posseduti,
         
         "summary": {
             "totale_libri": len(libri_correnti),
@@ -4248,6 +4272,7 @@ async def get_child_analysis_v2(user_id: str, child_id: str):
             "da_comprare_usati": len(da_comprare_usati),
             "gia_posseduti": len(gia_posseduti),
             "vendibili": len(vendibili),
+            "non_vendibili": len(non_vendibili),
             "costo_totale_nuovi": round(costo_nuovi, 2),
             "costo_totale_usati": round(costo_usati, 2),
             "risparmio_stimato": round(risparmio_usati, 2),
