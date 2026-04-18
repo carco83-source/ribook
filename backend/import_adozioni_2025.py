@@ -80,8 +80,7 @@ async def import_adozioni():
             
             nuova_adoz = row.get('NUOVAADOZ', '').upper() == 'SI'
             da_acquist = row.get('DAACQUIST', '').upper() == 'SI'
-            consigliato_raw = row.get('CONSIGLIATO', 'No')
-            consigliato = consigliato_raw.upper() in ['AP', 'MO']  # AP=approfondimento, MO=monografia
+            consigliato_raw = row.get('CONSIGLIATO', 'No').strip().upper()  # 'NO', 'SI', 'AP'
             
             libro = {
                 "isbn": row.get('CODICEISBN', ''),
@@ -95,7 +94,7 @@ async def import_adozioni():
                 "is_volume_unico": is_volume_unico,
                 "nuova_adozione": nuova_adoz,
                 "da_acquistare": da_acquist,
-                "consigliato": consigliato,
+                "consigliato_raw": consigliato_raw,  # Valore originale: 'NO', 'SI', 'AP'
             }
             
             adozioni_grouped[key]["libri"].append(libro)
