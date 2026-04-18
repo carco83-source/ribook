@@ -187,10 +187,11 @@ async def get_scuole_catanzaro(db, tipo_scuola: str) -> List[str]:
         tipo_scuola: 'primo_grado' (medie) o 'secondo_grado' (superiori)
     
     Returns:
-        Lista di codici scuola
+        Lista di codici scuola di Catanzaro (iniziano con CZ)
     """
-    cursor = db.adozioni.distinct("codice_scuola", {"tipo_scuola": tipo_scuola})
-    return await cursor
+    all_scuole = await db.adozioni.distinct("codice_scuola", {"tipo_scuola": tipo_scuola})
+    # Filtra solo scuole di Catanzaro (codice inizia con CZ)
+    return [s for s in all_scuole if s.startswith('CZ')]
 
 
 async def libro_in_classe(db, isbn: str, codice_scuola: str, classe: int, 
@@ -400,14 +401,29 @@ async def calcola_vendibili(db, libri_storici: List[dict], classe: int, tipo_scu
     non_vendibili = []
     
     ciclo_info = get_ciclo_info(tipo_scuola, classe)
-    classi_precedenti = ciclo_info.get('classi_precedenti', [])
+    
+    # Per un 3° superiore, può vendere libri del biennio (1°-2°) ai nuovi 1° e 2°
+    # Per un 2° media, può vendere libri del 1° ai nuovi 1°
+    # etc.
+    
+    # Determina le classi a cui può vendere in base a dove ha comprato i libri
+    if tipo_scuola == "primo_grado":
+        # MEDIE: triennio unico
+        classi_vendita = list(range(1, classe))  # [1] per 2°, [1,2] per 3°
+    else:
+        # SUPERIORI: biennio + triennio
+        if classe <= 2:
+            # Biennio: può vendere al 1°
+            classi_vendita = list(range(1, classe))
+        elif classe == 3:
+            # 3° (inizio triennio): può vendere libri del biennio ai 1° e 2°
+            classi_vendita = [1, 2]
+        else:
+            # 4° e 5°: può vendere libri del triennio (3°-...) ai 3°+
+            classi_vendita = list(range(3, classe))
     
     # Carica libri della classe attuale per escludere quelli ancora in uso
     adozione_attuale = await db.adozioni.find_one({
-        "codice_scuola": codice_scuola,
-        "classe": classe,
-        "sezione": sezione
-    }) if sezione else await db.adozioni.find_one({
         "codice_scuola": codice_scuola,
         "classe": classe
     })
@@ -436,11 +452,12 @@ async def calcola_vendibili(db, libri_storici: List[dict], classe: int, tipo_scu
             })
             continue
         
-        # CASO 2-3: Verifica se richiesto in classi precedenti
+        # CASO 2-3: Verifica se richiesto nelle classi a cui può vendere
+        trovato = False
+        
         # Prima stessa scuola
-        trovato_stessa_scuola = False
-        for classe_prec in classi_precedenti:
-            risultato = await libro_in_classe(db, isbn, codice_scuola, classe_prec, "2025/2026")
+        for classe_target in classi_vendita:
+            risultato = await libro_in_classe(db, isbn, codice_scuola, classe_target, "2025/2026")
             if risultato:
                 vendibili.append({
                     "isbn": isbn,
@@ -449,42 +466,23 @@ async def calcola_vendibili(db, libri_storici: List[dict], classe: int, tipo_scu
                     "editore": libro.get('editore', ''),
                     "prezzo_copertina": libro.get('prezzo_copertina', 0),
                     "status": "VENDIBILE",
-                    "vendi_a": f"{classe_prec}ª stessa scuola",
+                    "vendi_a": f"{classe_target}ª stessa scuola",
                     "motivo": "Richiesto dai nuovi studenti"
                 })
-                trovato_stessa_scuola = True
+                trovato = True
                 break
         
-        if trovato_stessa_scuola:
+        if trovato:
             continue
         
         # Cross-scuola
-        risultati_cross = await cerca_isbn_in_classi(
-            db, isbn, tipo_scuola, classi_precedenti, "2025/2026", codice_scuola
-        )
-        
-        if risultati_cross:
-            prima_scuola = risultati_cross[0]
-            vendibili.append({
-                "isbn": isbn,
-                "titolo": libro.get('titolo', ''),
-                "disciplina": libro.get('disciplina', ''),
-                "editore": libro.get('editore', ''),
-                "prezzo_copertina": libro.get('prezzo_copertina', 0),
-                "status": "VENDIBILE",
-                "vendi_a": f"{prima_scuola['classe']}ª altra scuola",
-                "motivo": "Richiesto da altre scuole"
-            })
-            continue
-        
-        # Verifica anche se richiesto nella stessa classe (per volumi annuali)
-        risultato_stessa_classe = await libro_in_classe(db, isbn, codice_scuola, classe, "2025/2026")
-        if not risultato_stessa_classe:
-            # Cerca in altre scuole stessa classe
-            risultati_stessa_classe_cross = await cerca_isbn_in_classi(
-                db, isbn, tipo_scuola, [classe], "2025/2026", codice_scuola
+        for classe_target in classi_vendita:
+            risultati_cross = await cerca_isbn_in_classi(
+                db, isbn, tipo_scuola, [classe_target], "2025/2026", codice_scuola
             )
-            if risultati_stessa_classe_cross:
+            
+            if risultati_cross:
+                prima_scuola = risultati_cross[0]
                 vendibili.append({
                     "isbn": isbn,
                     "titolo": libro.get('titolo', ''),
@@ -492,10 +490,14 @@ async def calcola_vendibili(db, libri_storici: List[dict], classe: int, tipo_scu
                     "editore": libro.get('editore', ''),
                     "prezzo_copertina": libro.get('prezzo_copertina', 0),
                     "status": "VENDIBILE",
-                    "vendi_a": f"{classe}ª altra scuola",
+                    "vendi_a": f"{prima_scuola['classe']}ª altra scuola",
                     "motivo": "Richiesto da altre scuole"
                 })
-                continue
+                trovato = True
+                break
+        
+        if trovato:
+            continue
         
         # CASO 4: Non richiesto da nessuno
         non_vendibili.append({
