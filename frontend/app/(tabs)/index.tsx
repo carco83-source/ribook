@@ -626,67 +626,45 @@ export default function RadarScreen() {
               );
             })()}
 
-            {/* Libri NON Vendibili (ancora in uso) */}
-            {compatibility.vendere?.libri_non_vendibili && compatibility.vendere.libri_non_vendibili.length > 0 && (
-              <View style={[styles.classCard, { borderLeftColor: '#FF9800', borderLeftWidth: 3 }]}>
-                <Text style={[styles.sectionTitleRed, { color: '#E65100' }]}>
-                  LIBRI NON VENDIBILI - ANCORA IN USO ({compatibility.vendere.libri_non_vendibili.length})
-                </Text>
-                {compatibility.vendere.libri_non_vendibili.map((book: any, idx: number) => (
-                  <View key={idx} style={styles.sampleBookItem}>
-                    <View style={styles.sampleBookInfo}>
-                      <Text style={styles.sampleBookTitle}>
-                        {book.titolo || book.titolo_vecchio || book.disciplina}
-                      </Text>
-                      <Text style={styles.sampleBookSubject}>
-                        {book.disciplina}
-                      </Text>
-                      <Text style={styles.isbnText}>
-                        ISBN: {book.isbn}
-                      </Text>
-                      <Text style={{ fontSize: 10, color: '#FF9800' }}>
-                        {book.status}: {book.motivo}
-                      </Text>
+            {/* SEZIONE UNIFICATA: LIBRI NON VENDIBILI GIÀ IN TUO POSSESSO - ANCORA IN USO */}
+            {(() => {
+              // Combina libri non vendibili + libri già posseduti
+              const libriNonVendibili = compatibility.vendere?.libri_non_vendibili || [];
+              const libriGiaPosseduti = compatibility.libri_gia_posseduti || [];
+              const tuttiLibriInUso = [...libriNonVendibili, ...libriGiaPosseduti];
+              
+              if (tuttiLibriInUso.length === 0) return null;
+              
+              return (
+                <View style={[styles.classCard, { borderLeftColor: '#9C27B0', borderLeftWidth: 3 }]}>
+                  <Text style={[styles.sectionTitlePurple, { marginBottom: 8 }]}>
+                    LIBRI NON VENDIBILI GIÀ IN TUO POSSESSO - ANCORA IN USO ({tuttiLibriInUso.length})
+                  </Text>
+                  {tuttiLibriInUso.map((book: any, idx: number) => (
+                    <View key={idx} style={styles.sampleBookItem}>
+                      <View style={styles.sampleBookInfo}>
+                        <Text style={styles.sampleBookTitle}>
+                          {book.titolo || book.titolo_vecchio || book.disciplina}
+                        </Text>
+                        <Text style={styles.sampleBookSubject}>
+                          {book.disciplina}
+                        </Text>
+                        <Text style={styles.isbnText}>
+                          ISBN: {book.isbn}
+                        </Text>
+                        <Text style={{ fontSize: 10, color: '#9C27B0' }}>
+                          {book.motivo || book.status || 'Già in tuo possesso'}
+                        </Text>
+                      </View>
+                      <View style={{ alignItems: 'center' }}>
+                        <Ionicons name="checkmark-circle" size={20} color="#9C27B0" />
+                        <Text style={{ fontSize: 9, color: '#9C27B0' }}>In uso</Text>
+                      </View>
                     </View>
-                    <Ionicons name="book" size={20} color="#FF9800" />
-                  </View>
-                ))}
-              </View>
-            )}
-
-            {/* VOLUMI UNICI GIÀ POSSEDUTI (Scuole Medie) */}
-            {compatibility.libri_gia_posseduti && compatibility.libri_gia_posseduti.length > 0 && (
-              <View style={[styles.classCard, { borderLeftColor: '#9C27B0', borderLeftWidth: 3 }]}>
-                <Text style={[styles.sectionTitlePurple, { marginBottom: 4 }]}>
-                  GIÀ IN TUO POSSESSO ({compatibility.libri_gia_posseduti.length})
-                </Text>
-                <Text style={{ fontSize: 11, color: '#7B1FA2', marginBottom: 12, fontStyle: 'italic' }}>
-                  Volumi unici già acquistati - non richiedono nuovo acquisto
-                </Text>
-                {compatibility.libri_gia_posseduti.map((book: any, idx: number) => (
-                  <View key={idx} style={styles.sampleBookItem}>
-                    <View style={styles.sampleBookInfo}>
-                      <Text style={styles.sampleBookTitle}>
-                        {book.titolo || book.disciplina}
-                      </Text>
-                      <Text style={styles.sampleBookSubject}>
-                        {book.disciplina}
-                      </Text>
-                      <Text style={styles.isbnText}>
-                        ISBN: {book.isbn}
-                      </Text>
-                      <Text style={{ fontSize: 10, color: '#9C27B0' }}>
-                        {book.motivo || 'Volume unico già acquistato'}
-                      </Text>
-                    </View>
-                    <View style={{ alignItems: 'center' }}>
-                      <Ionicons name="checkmark-circle" size={20} color="#9C27B0" />
-                      <Text style={{ fontSize: 9, color: '#9C27B0' }}>Posseduto</Text>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            )}
+                  ))}
+                </View>
+              );
+            })()}
 
             {/* Libri di nuova adozione da acquistare */}
             {(() => {
