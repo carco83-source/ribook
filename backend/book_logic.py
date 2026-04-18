@@ -319,6 +319,11 @@ async def calcola_stato_acquisto(db, libro: dict, classe: int, tipo_scuola: str,
     """
     Calcola lo stato di acquisto di un libro
     
+    LOGICA:
+    - USATO ACQUISTABILE: lo stesso ISBN era nella lista della stessa classe l'anno scorso
+    - GIÀ POSSEDUTO: da_acquistare=NO e consigliato_raw != 'AP'
+    - NUOVO: nuova_adozione o non esisteva l'anno scorso
+    
     Returns:
         (stato, motivo, copie_disponibili)
         stato: "NUOVO", "USATO", "GIA_POSSEDUTO"
@@ -327,7 +332,6 @@ async def calcola_stato_acquisto(db, libro: dict, classe: int, tipo_scuola: str,
     nuova_adozione = libro.get('nuova_adozione', False)
     da_acquistare = libro.get('da_acquistare', True)
     consigliato_raw = libro.get('consigliato_raw', 'NO').upper()
-    is_volume_unico = libro.get('is_volume_unico', False)
     
     # ========================================
     # ECCEZIONE 1: COPIE IN VENDITA → USATO
@@ -353,66 +357,86 @@ async def calcola_stato_acquisto(db, libro: dict, classe: int, tipo_scuola: str,
         return ("GIA_POSSEDUTO", "Già acquistato in anni precedenti", 0)
     
     # ========================================
-    # REGOLA 3-4: DA ACQUISTARE - Verifica USATO o NUOVO
+    # REGOLA 3: Verifica se USATO ACQUISTABILE
+    # Lo stesso ISBN era nella lista della stessa classe l'anno scorso?
     # ========================================
+    
+    # Cerca lo stesso ISBN nella stessa classe l'anno scorso (stessa scuola)
+    libro_anno_scorso = await libro_in_classe(db, isbn, codice_scuola, classe, "2024/2025")
+    
+    if libro_anno_scorso:
+        classe_succ = classe + 1
+        return ("USATO", f"I {classe_succ}° (ex {classe}°) possono venderlo", 0)
+    
+    # Cross-scuola: cerca in altre scuole se avevano lo stesso ISBN l'anno scorso
+    scuole = await get_scuole_catanzaro(db, tipo_scuola)
+    
+    for altra_scuola in scuole:
+        if altra_scuola == codice_scuola:
+            continue
+        
+        libro_altra_scuola = await libro_in_classe(db, isbn, altra_scuola, classe, "2024/2025")
+        if libro_altra_scuola:
+            return ("USATO", f"Disponibile da altra scuola", 0)
+    
+    # ========================================
+    # REGOLA 4: Non trovato usato → NUOVO
+    # ========================================
+    return ("NUOVO", "Non esistono copie usate", 0)
+
+
+async def libro_unico_serve_ancora(db, libro: dict, classe: int, tipo_scuola: str,
+                                    codice_scuola: str) -> Tuple[bool, str]:
+    """
+    Verifica se un libro UNICO serve ancora nella classe successiva.
+    
+    LOGICA per un 3° superiore con libro "Fisica Generale":
+    1. Controllo se nella 4° (2025/2026) c'è la materia "Fisica"
+    2. Se sì, controllo se nel 3° (2024/2025) c'era lo stesso ISBN
+    3. Se entrambi sì → serve ancora (i 4° lo useranno)
+    
+    Returns:
+        (serve_ancora, motivo)
+    """
+    isbn = libro.get('isbn', '')
+    disciplina = libro.get('disciplina', '').strip().upper()
+    
     ciclo_info = get_ciclo_info(tipo_scuola, classe)
-    classe_succ = ciclo_info.get('classe_successiva')
+    classe_succ = classe + 1
     
-    if is_volume_unico:
-        # --- VOLUME UNICO ---
-        # Verifica se la classe successiva lo ha ancora
-        if classe_succ:
-            in_classe_succ = await libro_in_classe(db, isbn, codice_scuola, classe_succ, "2025/2026")
-            
-            if in_classe_succ:
-                return ("NUOVO", f"I {classe_succ}° lo usano ancora", 0)
-            
-            # Verifica se la classe successiva lo aveva l'anno scorso
-            in_classe_succ_prec = await libro_in_classe(db, isbn, codice_scuola, classe_succ, "2024/2025")
-            
-            if in_classe_succ_prec:
-                return ("USATO", f"I {classe_succ}° dell'anno scorso possono venderlo", 0)
-        
-        # Cross-scuola
-        if classe_succ:
-            risultati_cross = await cerca_isbn_in_classi(
-                db, isbn, tipo_scuola, [classe_succ], "2024/2025", codice_scuola
-            )
-            if risultati_cross:
-                return ("USATO", "Disponibile da altra scuola", 0)
-        
-        # Se siamo all'ultima classe del ciclo, cerca negli ex-studenti
-        if classe == ciclo_info.get('classe_max'):
-            # Gli ex-studenti del ciclo precedente possono venderlo
-            risultati_ex = await cerca_isbn_in_classi(
-                db, isbn, tipo_scuola, [classe], "2024/2025"
-            )
-            if risultati_ex:
-                return ("USATO", "Ex-studenti possono venderlo", 0)
-        
-        return ("NUOVO", "Nessuno può venderlo", 0)
+    # Se siamo all'ultima classe del ciclo, non serve più
+    if classe >= ciclo_info.get('classe_max'):
+        return (False, "Fine ciclo - non serve più")
     
-    else:
-        # --- VOLUME ANNUALE ---
-        # Cerca il SEGUITO nella classe successiva
-        if classe_succ:
-            # Prima nella stessa scuola
-            adozione_succ = await db.adozioni.find_one({
-                "codice_scuola": codice_scuola,
-                "classe": classe_succ
-            })
-            
-            if adozione_succ:
-                seguito = trova_volume_successivo(libro, adozione_succ.get('libri', []))
-                if seguito:
-                    return ("USATO", f"I {classe_succ}° possono vendere questo volume", 0)
-            
-            # Cross-scuola
-            risultati_seguito = await cerca_seguito_volume(db, libro, tipo_scuola, classe_succ)
-            if risultati_seguito:
-                return ("USATO", "Volume precedente disponibile da altra scuola", 0)
-        
-        return ("NUOVO", "Seguito non trovato", 0)
+    # 1. Controllo se nella classe successiva (2025/2026) c'è la stessa materia
+    adozione_succ = await db.adozioni.find_one({
+        "codice_scuola": codice_scuola,
+        "classe": classe_succ
+    })
+    
+    if not adozione_succ:
+        return (False, "Classe successiva non trovata")
+    
+    # Cerca la materia nella classe successiva
+    materia_in_succ = False
+    for l in adozione_succ.get('libri', []):
+        disc_succ = l.get('disciplina', '').strip().upper()
+        if disc_succ and disciplina and disc_succ[:10] == disciplina[:10]:
+            materia_in_succ = True
+            break
+    
+    if not materia_in_succ:
+        return (False, f"Materia {disciplina[:15]} non presente in {classe_succ}°")
+    
+    # 2. Controllo se nella classe attuale l'anno scorso (2024/2025) c'era lo stesso ISBN
+    libro_anno_scorso = await libro_in_classe(db, isbn, codice_scuola, classe, "2024/2025")
+    
+    if libro_anno_scorso:
+        # Lo stesso libro era usato l'anno scorso per questa classe
+        # Significa che è un volume unico che dura più anni → serve ancora
+        return (True, f"Volume unico usato anche in {classe_succ}°")
+    
+    return (False, "Non era presente l'anno scorso")
 
 
 async def calcola_vendibili(db, libri_storici: List[dict], classe: int, tipo_scuola: str,
@@ -420,10 +444,11 @@ async def calcola_vendibili(db, libri_storici: List[dict], classe: int, tipo_scu
     """
     Calcola quali libri storici possono essere venduti
     
-    Args:
-        libri_storici: libri che lo studente ha comprato in anni precedenti
-        classe: classe attuale dello studente
-        
+    LOGICA:
+    - I libri che lo studente ha comprato in anni precedenti possono essere venduti
+      SE sono richiesti nelle liste delle classi precedenti (stesso ISBN per unici,
+      stesso titolo/autore/editore per annuali)
+    
     Returns:
         (vendibili, non_vendibili)
     """
@@ -432,27 +457,18 @@ async def calcola_vendibili(db, libri_storici: List[dict], classe: int, tipo_scu
     
     ciclo_info = get_ciclo_info(tipo_scuola, classe)
     
-    # Per un 3° superiore, può vendere libri del biennio (1°-2°) ai nuovi 1° e 2°
-    # Per un 2° media, può vendere libri del 1° ai nuovi 1°
-    # etc.
-    
-    # Determina le classi a cui può vendere in base a dove ha comprato i libri
+    # Determina le classi a cui può vendere (classi inferiori alla sua)
     if tipo_scuola == "primo_grado":
-        # MEDIE: triennio unico
         classi_vendita = list(range(1, classe))  # [1] per 2°, [1,2] per 3°
     else:
-        # SUPERIORI: biennio + triennio
         if classe <= 2:
-            # Biennio: può vendere al 1°
             classi_vendita = list(range(1, classe))
         elif classe == 3:
-            # 3° (inizio triennio): può vendere libri del biennio ai 1° e 2°
-            classi_vendita = [1, 2]
+            classi_vendita = [1, 2]  # Può vendere libri del biennio
         else:
-            # 4° e 5°: può vendere libri del triennio (3°-...) ai 3°+
             classi_vendita = list(range(3, classe))
     
-    # Carica libri della classe attuale per escludere quelli ancora in uso
+    # Carica libri della classe attuale per verificare se servono ancora (stesso ISBN)
     adozione_attuale = await db.adozioni.find_one({
         "codice_scuola": codice_scuola,
         "classe": classe
@@ -464,78 +480,164 @@ async def calcola_vendibili(db, libri_storici: List[dict], classe: int, tipo_scu
             if libro.get('isbn'):
                 isbn_attuali.add(libro.get('isbn'))
     
-    # Per ogni libro storico
+    # Per ogni libro storico (che lo studente ha comprato in anni precedenti)
     for libro in libri_storici:
         isbn = libro.get('isbn', '')
+        titolo = libro.get('titolo', '')
+        autori = libro.get('autori', '')
+        editore = libro.get('editore', '')
+        disciplina = libro.get('disciplina', '')
+        is_volume_unico = libro.get('is_volume_unico', False)
         
         if not isbn:
             continue
         
-        # CASO 1: Libro ancora in uso nella classe attuale
+        # =====================================================
+        # CASO 1: Libro ancora in uso nella classe attuale (stesso ISBN)
+        # =====================================================
         if isbn in isbn_attuali:
             non_vendibili.append({
                 "isbn": isbn,
-                "titolo": libro.get('titolo', ''),
-                "disciplina": libro.get('disciplina', ''),
+                "titolo": titolo,
+                "disciplina": disciplina,
                 "status": "SERVE ANCORA",
                 "motivo": f"Usato anche in {classe}ª"
             })
             continue
         
-        # CASO 2-3: Verifica se richiesto nelle classi a cui può vendere
-        trovato = False
-        
-        # Prima stessa scuola
-        for classe_target in classi_vendita:
-            risultato = await libro_in_classe(db, isbn, codice_scuola, classe_target, "2025/2026")
-            if risultato:
-                vendibili.append({
-                    "isbn": isbn,
-                    "titolo": libro.get('titolo', ''),
-                    "disciplina": libro.get('disciplina', ''),
-                    "editore": libro.get('editore', ''),
-                    "prezzo_copertina": libro.get('prezzo_copertina', 0),
-                    "status": "VENDIBILE",
-                    "vendi_a": f"{classe_target}ª stessa scuola",
-                    "motivo": "Richiesto dai nuovi studenti"
-                })
-                trovato = True
-                break
-        
-        if trovato:
-            continue
-        
-        # Cross-scuola
-        for classe_target in classi_vendita:
-            risultati_cross = await cerca_isbn_in_classi(
-                db, isbn, tipo_scuola, [classe_target], "2025/2026", codice_scuola
+        # =====================================================
+        # CASO 2: Libro UNICO - verifica se serve nella classe successiva
+        # =====================================================
+        if is_volume_unico:
+            serve_ancora, motivo = await libro_unico_serve_ancora(
+                db, libro, classe, tipo_scuola, codice_scuola
             )
             
-            if risultati_cross:
-                prima_scuola = risultati_cross[0]
-                vendibili.append({
+            if serve_ancora:
+                non_vendibili.append({
                     "isbn": isbn,
-                    "titolo": libro.get('titolo', ''),
-                    "disciplina": libro.get('disciplina', ''),
-                    "editore": libro.get('editore', ''),
-                    "prezzo_copertina": libro.get('prezzo_copertina', 0),
-                    "status": "VENDIBILE",
-                    "vendi_a": f"{prima_scuola['classe']}ª altra scuola",
-                    "motivo": "Richiesto da altre scuole"
+                    "titolo": titolo,
+                    "disciplina": disciplina,
+                    "status": "SERVE ANCORA",
+                    "motivo": motivo
                 })
-                trovato = True
-                break
+                continue
+        
+        # =====================================================
+        # CASO 3: Cerca se lo STESSO libro è richiesto nelle classi a cui vendere
+        # Per ANNUALI: cerca stesso ISBN nelle classi precedenti (nuovo anno)
+        # Per UNICI: cerca stesso ISBN nelle classi precedenti (nuovo anno)
+        # =====================================================
+        trovato = await cerca_libro_in_classi_precedenti(
+            db, isbn, tipo_scuola, classi_vendita, codice_scuola
+        )
         
         if trovato:
-            continue
-        
-        # CASO 4: Non richiesto da nessuno
-        non_vendibili.append({
-            "isbn": isbn,
-            "titolo": libro.get('titolo', ''),
-            "disciplina": libro.get('disciplina', ''),
-            "status": "NON VENDIBILE",
-            "motivo": "Edizione cambiata o non più adottato"
-        })
+            vendibili.append({
+                "isbn": isbn,
+                "titolo": titolo,
+                "disciplina": disciplina,
+                "editore": editore,
+                "prezzo_copertina": libro.get('prezzo_copertina', 0),
+                "status": "VENDIBILE",
+                "vendi_a": f"{trovato['classe']}ª {trovato['scuola']}",
+                "motivo": "Richiesto dai nuovi studenti"
+            })
+        else:
+            non_vendibili.append({
+                "isbn": isbn,
+                "titolo": titolo,
+                "disciplina": disciplina,
+                "status": "NON VENDIBILE",
+                "motivo": "Non più adottato o edizione cambiata"
+            })
     
     return vendibili, non_vendibili
+
+
+async def cerca_libro_in_classi_precedenti(db, isbn: str, tipo_scuola: str, 
+                                            classi: List[int], codice_scuola: str) -> Optional[dict]:
+    """
+    Cerca un ISBN nelle classi precedenti (stessa scuola + cross-scuola)
+    """
+    scuole = await get_scuole_catanzaro(db, tipo_scuola)
+    
+    # Prima stessa scuola
+    for classe_target in classi:
+        risultato = await libro_in_classe(db, isbn, codice_scuola, classe_target, "2025/2026")
+        if risultato:
+            return {"classe": classe_target, "scuola": "stessa scuola", "libro": risultato}
+    
+    # Poi altre scuole
+    for altra_scuola in scuole:
+        if altra_scuola == codice_scuola:
+            continue
+        for classe_target in classi:
+            risultato = await libro_in_classe(db, isbn, altra_scuola, classe_target, "2025/2026")
+            if risultato:
+                return {"classe": classe_target, "scuola": "altra scuola", "libro": risultato}
+    
+    return None
+
+
+async def cerca_volume_precedente_annuale(db, libro: dict, tipo_scuola: str,
+                                           classi: List[int], codice_scuola: str) -> Optional[dict]:
+    """
+    Per un libro ANNUALE, cerca nelle classi precedenti un libro con:
+    - Stesso titolo base (senza numero volume)
+    - Stesso autore
+    - Stesso editore
+    - Volume PRECEDENTE
+    
+    Es: Se ho "Storia Vol.2", cerca "Storia Vol.1" nelle classi 1°
+    """
+    titolo = libro.get('titolo', '')
+    autori = libro.get('autori', '').upper().strip()
+    editore = libro.get('editore', '').upper().strip()
+    
+    nome_base = estrai_nome_base_libro(titolo)
+    vol_attuale = estrai_numero_volume(titolo, libro.get('volume', ''))
+    
+    if not nome_base:
+        return None
+    
+    scuole = await get_scuole_catanzaro(db, tipo_scuola)
+    scuole_ordinate = [codice_scuola] + [s for s in scuole if s != codice_scuola]
+    
+    for scuola in scuole_ordinate:
+        for classe_target in classi:
+            adozione = await db.adozioni.find_one({
+                "codice_scuola": scuola,
+                "classe": classe_target
+            })
+            
+            if not adozione:
+                continue
+            
+            for libro_target in adozione.get('libri', []):
+                titolo_target = libro_target.get('titolo', '')
+                autori_target = libro_target.get('autori', '').upper().strip()
+                editore_target = libro_target.get('editore', '').upper().strip()
+                
+                # Stesso editore?
+                if editore and editore_target and editore[:10] != editore_target[:10]:
+                    continue
+                
+                # Stesso autore? (almeno prime lettere)
+                if autori and autori_target and autori[:15] != autori_target[:15]:
+                    continue
+                
+                # Stesso titolo base?
+                nome_base_target = estrai_nome_base_libro(titolo_target)
+                if nome_base != nome_base_target:
+                    continue
+                
+                # Volume precedente?
+                vol_target = estrai_numero_volume(titolo_target, libro_target.get('volume', ''))
+                
+                if vol_attuale is not None and vol_target is not None:
+                    if vol_target == vol_attuale - 1:
+                        tipo_scuola_label = "stessa scuola" if scuola == codice_scuola else "altra scuola"
+                        return {"classe": classe_target, "scuola": tipo_scuola_label, "libro": libro_target}
+    
+    return None
