@@ -606,20 +606,7 @@ export default function SearchScreen() {
                 <Text style={styles.noListingsTitle}>Nessun annuncio disponibile</Text>
                 <Text style={styles.noListingsSubtext}>
                   Al momento non ci sono venditori per questo libro.
-                  Puoi creare una richiesta e verrai notificato quando sarà disponibile.
                 </Text>
-                <TouchableOpacity
-                  style={styles.createRequestButtonModal}
-                  onPress={() => {
-                    if (selectedBook) {
-                      handleCreateRequestInline(selectedBook);
-                      setShowListingsModal(false);
-                    }
-                  }}
-                >
-                  <Ionicons name="notifications-outline" size={20} color="#fff" />
-                  <Text style={styles.createRequestButtonModalText}>Crea Richiesta</Text>
-                </TouchableOpacity>
               </View>
             )}
           </View>
