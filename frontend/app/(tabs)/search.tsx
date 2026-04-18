@@ -66,7 +66,6 @@ export default function SearchScreen() {
   const [filteredBooks, setFilteredBooks] = useState<Book[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingBooks, setLoadingBooks] = useState(false);
-  const [userRequests, setUserRequests] = useState<string[]>([]);
   const [userId, setUserId] = useState<string | null>(null);
   
   // Child profiles
@@ -117,16 +116,6 @@ export default function SearchScreen() {
         const userResponse = await axios.get(`${API_URL}/api/users/${storedUserId}`);
         const profili = userResponse.data.profili_figli || [];
         setChildProfiles(profili);
-
-        // Load user's requests
-        try {
-          const requestsResponse = await axios.get(
-            `${API_URL}/api/requests/user/${storedUserId}`
-          );
-          setUserRequests(requestsResponse.data.map((r: any) => r.book_id));
-        } catch (e) {
-          console.log('No requests found');
-        }
       }
     } catch (error) {
       console.error('Error loading data:', error);
@@ -168,9 +157,6 @@ export default function SearchScreen() {
     }
   };
 
-  // State per tracciare richieste in corso (per disabilitare il pulsante durante la creazione)
-  const [creatingRequest, setCreatingRequest] = useState<string | null>(null);
-
   // Funzione per ricerca generica per titolo/ISBN
   const handleGenericSearch = async (query: string) => {
     setGenericSearchQuery(query);
@@ -197,31 +183,6 @@ export default function SearchScreen() {
       setGenericResults([]);
     } finally {
       setGenericSearchLoading(false);
-    }
-  };
-
-  const handleCreateRequestInline = async (book: Book) => {
-    if (!userId) return;
-
-    // Check if already searching
-    if (userRequests.includes(book.id)) {
-      return;
-    }
-
-    setCreatingRequest(book.id);
-
-    try {
-      await axios.post(`${API_URL}/api/requests?user_id=${userId}`, {
-        book_id: book.id,
-      });
-
-      // Aggiorna lo stato locale immediatamente
-      setUserRequests([...userRequests, book.id]);
-    } catch (error) {
-      console.error('Error adding request:', error);
-      Alert.alert('Errore', 'Impossibile creare la richiesta');
-    } finally {
-      setCreatingRequest(null);
     }
   };
 
@@ -265,8 +226,6 @@ export default function SearchScreen() {
   };
 
   const renderBook = ({ item }: { item: Book }) => {
-    const isSearching = userRequests.includes(item.id);
-    const isCreating = creatingRequest === item.id;
     const copieDisponibili = item.copie_disponibili || 0;
     const hasAvailableCopies = copieDisponibili > 0;
 
@@ -293,7 +252,7 @@ export default function SearchScreen() {
 
         <View style={styles.bookActions}>
           {hasAvailableCopies ? (
-            /* Caso 1: Ci sono copie disponibili - mostra numero */
+            /* Ci sono copie disponibili - mostra numero */
             <TouchableOpacity
               style={styles.availableButton}
               onPress={() => {
@@ -309,16 +268,8 @@ export default function SearchScreen() {
                 disponibil{copieDisponibili === 1 ? 'e' : 'i'}
               </Text>
             </TouchableOpacity>
-          ) : isSearching ? (
-            /* Caso 2: Nessuna copia + richiesta attiva - mostra R */
-            <View style={styles.requestActiveContainer}>
-              <View style={styles.requestActiveBadge}>
-                <Text style={styles.requestActiveBadgeText}>R</Text>
-              </View>
-              <Text style={styles.requestActiveText}>in attesa</Text>
-            </View>
           ) : (
-            /* Caso 3: Nessuna copia - mostra indicatore */
+            /* Nessuna copia disponibile */
             <View style={styles.noCopiesContainer}>
               <Ionicons name="alert-circle-outline" size={24} color="#999" />
               <Text style={styles.noCopiesText}>0 copie</Text>
@@ -907,50 +858,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     fontWeight: '500',
-  },
-  // Pulsante quadrato "Avvisami appena disponibile"
-  notifyButton: {
-    width: 70,
-    height: 70,
-    backgroundColor: '#FF9800',
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 4,
-  },
-  notifyButtonDisabled: {
-    opacity: 0.6,
-  },
-  notifyButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 10,
-    textAlign: 'center',
-    lineHeight: 14,
-  },
-  // Richiesta attiva badge (R)
-  requestActiveContainer: {
-    alignItems: 'center',
-    padding: 8,
-  },
-  requestActiveBadge: {
-    backgroundColor: '#FF9800',
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  requestActiveBadgeText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  requestActiveText: {
-    fontSize: 11,
-    color: '#FF9800',
-    marginTop: 4,
-    fontWeight: '600',
   },
   noCopiesContainer: {
     alignItems: 'center',
