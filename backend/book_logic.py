@@ -320,8 +320,8 @@ async def calcola_stato_acquisto(db, libro: dict, classe: int, tipo_scuola: str,
     Calcola lo stato di acquisto di un libro
     
     LOGICA:
+    - GIÀ POSSEDUTO: da_acquistare=NO, oppure è un UNICO già comprato in anni precedenti
     - USATO ACQUISTABILE: lo stesso ISBN era nella lista della stessa classe l'anno scorso
-    - GIÀ POSSEDUTO: da_acquistare=NO e consigliato_raw != 'AP'
     - NUOVO: nuova_adozione o non esisteva l'anno scorso
     
     Returns:
@@ -332,32 +332,49 @@ async def calcola_stato_acquisto(db, libro: dict, classe: int, tipo_scuola: str,
     nuova_adozione = libro.get('nuova_adozione', False)
     da_acquistare = libro.get('da_acquistare', True)
     consigliato_raw = libro.get('consigliato_raw', 'NO').upper()
+    is_volume_unico = libro.get('is_volume_unico', False)
     
     # ========================================
     # ECCEZIONE 1: COPIE IN VENDITA → USATO
+    # (ma solo se non è già posseduto)
     # ========================================
     copie = await db.listings.count_documents({
         "book_isbn": isbn,
         "status": "available"
     })
     
-    if copie > 0:
-        return ("USATO", f"{copie} copie disponibili", copie)
-    
     # ========================================
-    # REGOLA 1: NUOVA ADOZIONE → NUOVO
-    # ========================================
-    if nuova_adozione:
-        return ("NUOVO", "Nuova adozione - non esiste usato", 0)
-    
-    # ========================================
-    # REGOLA 2: da_acquistare=NO + consigliato!=AP → GIÀ POSSEDUTO
+    # REGOLA 1: da_acquistare=NO + consigliato!=AP → GIÀ POSSEDUTO
     # ========================================
     if not da_acquistare and consigliato_raw not in ['AP', 'MO']:
         return ("GIA_POSSEDUTO", "Già acquistato in anni precedenti", 0)
     
     # ========================================
-    # REGOLA 3: Verifica se USATO ACQUISTABILE
+    # REGOLA 2: VOLUME UNICO - verifica se già comprato nel ciclo
+    # Per un 2° media, se il libro unico era nella lista 1° l'anno scorso
+    # con da_acquistare=SI, lo studente lo ha già → GIÀ POSSEDUTO
+    # ========================================
+    if is_volume_unico and classe > 1:
+        ciclo_info = get_ciclo_info(tipo_scuola, classe)
+        
+        # Controlla nelle classi precedenti del ciclo se lo studente ha comprato questo libro
+        for classe_prec in range(ciclo_info['classe_min'], classe):
+            libro_comprato = await libro_in_classe(db, isbn, codice_scuola, classe_prec, "2024/2025")
+            if libro_comprato and libro_comprato.get('da_acquistare', False):
+                return ("GIA_POSSEDUTO", f"Comprato in {classe_prec}° (volume unico)", 0)
+    
+    # ========================================
+    # REGOLA 3: NUOVA ADOZIONE → NUOVO
+    # ========================================
+    if nuova_adozione:
+        return ("NUOVO", "Nuova adozione - non esiste usato", 0)
+    
+    # Se ci sono copie in vendita → USATO
+    if copie > 0:
+        return ("USATO", f"{copie} copie disponibili", copie)
+    
+    # ========================================
+    # REGOLA 4: Verifica se USATO ACQUISTABILE
     # Lo stesso ISBN era nella lista della stessa classe l'anno scorso?
     # ========================================
     
@@ -380,7 +397,7 @@ async def calcola_stato_acquisto(db, libro: dict, classe: int, tipo_scuola: str,
             return ("USATO", f"Disponibile da altra scuola", 0)
     
     # ========================================
-    # REGOLA 4: Non trovato usato → NUOVO
+    # REGOLA 5: Non trovato usato → NUOVO
     # ========================================
     return ("NUOVO", "Non esistono copie usate", 0)
 
