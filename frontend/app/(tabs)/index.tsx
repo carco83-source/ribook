@@ -729,28 +729,10 @@ export default function RadarScreen() {
               );
             })()}
           </View>
-        ))}
-      </ScrollView>
+        );
+      })()}
 
-      {/* Empty state if no profile selected */}
-      {childProfiles.length === 0 && (
-        <View style={styles.emptyBooksSection}>
-          <Ionicons name="person-add-outline" size={48} color="#ccc" />
-          <Text style={styles.emptyText}>
-            Nessun profilo figlio configurato
-          </Text>
-          <Text style={styles.emptySubtext}>
-            Vai al tuo profilo per aggiungere i tuoi figli
-          </Text>
-          <TouchableOpacity
-            style={styles.viewSellersButton}
-            onPress={() => router.push('/(tabs)/profile')}
-          >
-            <Text style={styles.viewSellersButtonText}>Vai al Profilo</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-    </View>
+      </ScrollView>
   );
 }
 
