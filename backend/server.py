@@ -3343,18 +3343,34 @@ async def get_child_compatibility(user_id: str, child_id: str):
         # =====================================================
         # STEP 0: Se il libro aveva da_acquistare=False nell'anno precedente,
         # significa che è un VOLUME UNICO che lo studente già possedeva.
-        # NON può essere venduto perché serve ancora per il ciclo scolastico!
+        # Serve ancora SOLO SE lo stesso ISBN è presente nella classe attuale.
         # =====================================================
         if not book_prec.get("da_acquistare", True):
-            # Volume unico - lo studente lo usa ancora, NON VENDIBILE
-            non_vendibili.append({
-                "disciplina": disc_prec,
-                "isbn": isbn_prec,
-                "titolo_vecchio": titolo_prec[:40],
-                "titolo_nuovo": "",
-                "status": "SERVE ANCORA",
-                "motivo": f"Volume unico usato nel triennio"
-            })
+            # Controlla se lo stesso ISBN esiste nella classe attuale
+            if isbn_prec and isbn_prec in isbn_my_books:
+                non_vendibili.append({
+                    "disciplina": disc_prec,
+                    "isbn": isbn_prec,
+                    "titolo_vecchio": titolo_prec[:40],
+                    "titolo_nuovo": "",
+                    "status": "SERVE ANCORA",
+                    "motivo": f"Volume unico usato anche in {child_classe}ª"
+                })
+                continue
+            
+            # Lo stesso ISBN NON è nella classe attuale, può essere venduto
+            if isbn_prec and isbn_prec in isbn_nuovi_studenti:
+                vendibili.append({
+                    "isbn": isbn_prec,
+                    "disciplina": disc_prec,
+                    "titolo": titolo_prec[:50],
+                    "editore": book_prec.get("editore", ""),
+                    "prezzo_consigliato": round(book_prec.get("prezzo", 0) * 0.5, 2),
+                    "status": "VENDIBILE",
+                    "vendi_a": "Classi precedenti",
+                    "motivo": "Volume unico non più necessario"
+                })
+            # Se non è più adottato, semplicemente lo ignoriamo
             continue
         
         # =====================================================
@@ -4478,10 +4494,28 @@ async def get_books_to_sell(user_id: str, child_id: str):
         # =====================================================
         # STEP 0: Se il libro aveva da_acquistare=False nell'anno precedente,
         # significa che è un VOLUME UNICO che lo studente già possedeva.
-        # NON può essere venduto perché serve ancora per il ciclo scolastico!
+        # Serve ancora SOLO SE lo stesso ISBN è presente nella classe attuale.
         # =====================================================
         if not b.get("da_acquistare", True):
-            # Volume unico - lo studente lo usa ancora, NON VENDIBILE
+            # Controlla se lo stesso ISBN esiste nella classe attuale
+            if isbn in isbn_classe_attuale:
+                # Volume unico che serve ancora, NON VENDIBILE
+                continue
+            # Lo stesso ISBN NON è nella classe attuale, può essere venduto
+            if isbn in isbn_compratori:
+                vendibili.append({
+                    "id": isbn,
+                    "isbn": isbn,
+                    "titolo": b.get("titolo", ""),
+                    "autori": b.get("autori", ""),
+                    "disciplina": b.get("disciplina", ""),
+                    "editore": b.get("editore", ""),
+                    "prezzo_copertina": b.get("prezzo_copertina", b.get("prezzo", 0)),
+                    "prezzo_suggerito": round(b.get("prezzo_copertina", b.get("prezzo", 0)) * 0.5, 2),
+                    "classe_destinazione": classe_compratori,
+                    "tipo": "vendibile",
+                    "status": "VENDIBILE"
+                })
             continue
         
         # =====================================================

@@ -623,7 +623,10 @@ export default function RadarScreen() {
                         {book.titolo_vecchio || book.disciplina}
                       </Text>
                       <Text style={styles.sampleBookSubject} numberOfLines={1}>
-                        {book.disciplina} • {book.status}
+                        {book.disciplina} • ISBN: {book.isbn}
+                      </Text>
+                      <Text style={{ fontSize: 10, color: '#FF9800' }}>
+                        {book.status}: {book.motivo}
                       </Text>
                     </View>
                     <Ionicons name="book" size={20} color="#FF9800" />
