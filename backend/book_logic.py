@@ -357,33 +357,22 @@ async def calcola_stato_acquisto(db, libro: dict, classe: int, tipo_scuola: str,
         
         # ----------------------------------------------------------
         # VOLUMI UNICI: si comprano SOLO in 1ª, durano 3 anni
-        # USATO solo se chi ha finito 3ª l'anno scorso lo vende
+        # Per ora NON cerchiamo automaticamente nelle 3ª dell'anno scorso
+        # Chi vuole vendere userà "Vendi altri libri" manualmente
+        # Se ci sono copie caricate → USATO, altrimenti → NUOVO
         # ----------------------------------------------------------
         if is_volume_unico:
             if classe == 1:
                 # 1ª MEDIA: deve comprare il volume unico
-                # USATO solo da chi ha FINITO 3ª l'anno scorso
                 if nuova_adozione:
                     return ("NUOVO", "Nuova adozione - primo anno", 0)
                 
+                # Se ci sono copie caricate manualmente → USATO
                 if copie > 0:
                     return ("USATO", f"{copie} copie disponibili", copie)
                 
-                # Per UNICI: cerca se esisteva in 3ª l'anno scorso (chi ha finito può vendere)
-                libro_in_terza = await libro_in_classe(db, isbn, codice_scuola, 3, "2024/2025")
-                if libro_in_terza:
-                    return ("USATO", "Chi ha finito 3ª può venderlo", 0)
-                
-                # Cross-scuola: cerca in 3ª di altre scuole
-                scuole = await get_scuole_catanzaro(db, tipo_scuola)
-                for altra_scuola in scuole:
-                    if altra_scuola != codice_scuola:
-                        libro_altra = await libro_in_classe(db, isbn, altra_scuola, 3, "2024/2025")
-                        if libro_altra:
-                            return ("USATO", "Disponibile da altra scuola (ex 3ª)", 0)
-                
-                # Nessuno può venderlo → NUOVO
-                return ("NUOVO", "Volume unico - nessun ex 3ª lo vende", 0)
+                # Altrimenti → NUOVO (non cerchiamo automaticamente ex 3ª)
+                return ("NUOVO", "Volume unico triennale", 0)
             
             else:
                 # 2ª o 3ª MEDIA: volume unico GIÀ POSSEDUTO (comprato in 1ª)
