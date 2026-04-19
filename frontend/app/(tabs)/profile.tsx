@@ -91,16 +91,16 @@ export default function ProfileScreen() {
       const profili = response.data.profili_figli || [];
       setChildProfiles(profili);
 
-      // Load compatibility for each child profile
+      // Load analysis for each child profile (usa /analysis come il Radar)
       const compatibilityData: {[key: string]: any} = {};
       for (const child of profili) {
         try {
           const compRes = await axios.get(
-            `${API_URL}/api/profiles/${userId}/children/${child.id}/compatibility`
+            `${API_URL}/api/profiles/${userId}/children/${child.id}/analysis`
           );
           compatibilityData[child.id] = compRes.data;
         } catch (e) {
-          console.log(`Failed to load compatibility for ${child.nome_figlio}`);
+          console.log(`Failed to load analysis for ${child.nome_figlio}`);
         }
       }
       setChildrenCompatibility(compatibilityData);

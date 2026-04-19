@@ -486,6 +486,29 @@ async def calcola_stato_acquisto(db, libro: dict, classe: int, tipo_scuola: str,
                         return ("USATO", "Disponibile da altra scuola", 0)
         
         # ----------------------------------------------------------
+        # REGOLA 5B (ULTIMA CLASSE DEL CICLO): Per libri ANNUALI nell'ultima classe del ciclo
+        # Se stesso ISBN esiste nella stessa classe in altre sezioni/scuole,
+        # significa che il libro è ancora adottato e chi era in questa classe l'anno scorso
+        # (ora nella classe successiva del nuovo ciclo) potrebbe venderlo.
+        # Es: Matematica Vol.2 in 2ª → chi ora è in 3ª (ex 2ª) può vendere
+        # ----------------------------------------------------------
+        if classe == classe_max_ciclo and not is_volume_unico:
+            # Cerca se lo stesso ISBN è adottato nella stessa classe in altre sezioni
+            scuole = await get_scuole_catanzaro(db, tipo_scuola)
+            for scuola in scuole:
+                # Cerca in tutte le sezioni della stessa classe
+                adozioni = db.adozioni.find({
+                    "codice_scuola": scuola,
+                    "classe": classe,
+                    "tipo_scuola": tipo_scuola
+                })
+                async for adozione in adozioni:
+                    for l in adozione.get('libri', []):
+                        if l.get('isbn') == isbn:
+                            classe_venditore = classe + 1  # Chi era in questa classe ora è nella successiva
+                            return ("USATO", f"Ex {classe}° (ora {classe_venditore}°) possono venderlo", 0)
+        
+        # ----------------------------------------------------------
         # REGOLA 6: Non trovato usato → NUOVO
         # ----------------------------------------------------------
         return ("NUOVO", "Non esistono copie usate", 0)
