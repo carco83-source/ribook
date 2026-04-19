@@ -10,11 +10,17 @@ STRUTTURA CICLI:
   - BIENNIO (1°-2°): Volumi annuali 1, 2 | Volumi unici biennali
   - TRIENNIO (3°-4°-5°): Volumi annuali 1, 2, 3 | Volumi unici triennali
 
-LOGICA ACQUISTO:
+LOGICA ACQUISTO (INTRA-ANNO - usa solo dati 2025/2026):
 - nuova_adozione=TRUE → NUOVO
 - da_acquistare=NO + consigliato_raw=NO/SI → GIÀ POSSEDUTO
 - da_acquistare=NO + consigliato_raw=AP → DA ACQUISTARE (verifica USATO/NUOVO)
 - da_acquistare=SI → DA ACQUISTARE (verifica USATO/NUOVO)
+
+LOGICA USATO INTRA-ANNO (evita dati storici inaffidabili):
+- MEDIE: Confronta ISBN tra 1ª e 3ª dello stesso anno
+  Se stesso ISBN in entrambe → è triennale → ex 3ª possono vendere a 1ª
+- SUPERIORI BIENNIO: Confronta ISBN tra 1ª e 2ª dello stesso anno
+- SUPERIORI TRIENNIO: Confronta ISBN tra 3ª, 4ª, 5ª dello stesso anno
 
 LOGICA VENDITA:
 - Libro non in lista attuale + richiesto in classi precedenti → VENDIBILE
@@ -357,9 +363,10 @@ async def calcola_stato_acquisto(db, libro: dict, classe: int, tipo_scuola: str,
         
         # ----------------------------------------------------------
         # VOLUMI UNICI: si comprano SOLO in 1ª, durano 3 anni
-        # Per ora NON cerchiamo automaticamente nelle 3ª dell'anno scorso
-        # Chi vuole vendere userà "Vendi altri libri" manualmente
-        # Se ci sono copie caricate → USATO, altrimenti → NUOVO
+        # LOGICA INTRA-ANNO (evita dati storici inaffidabili):
+        # Confronto ISBN tra 1ª e 3ª DELLO STESSO ANNO 2025/2026
+        # Se lo stesso ISBN appare in entrambe → è triennale
+        # Chi esce dalla 3ª può venderlo a chi entra in 1ª
         # ----------------------------------------------------------
         if is_volume_unico:
             if classe == 1:
@@ -371,7 +378,22 @@ async def calcola_stato_acquisto(db, libro: dict, classe: int, tipo_scuola: str,
                 if copie > 0:
                     return ("USATO", f"{copie} copie disponibili", copie)
                 
-                # Altrimenti → NUOVO (non cerchiamo automaticamente ex 3ª)
+                # LOGICA INTRA-ANNO: verifica se stesso ISBN esiste in 3ª (2025/2026)
+                # Se sì → è un libro triennale, chi esce dalla 3ª può venderlo
+                libro_in_terza = await libro_in_classe(db, isbn, codice_scuola, 3, "2025/2026")
+                if libro_in_terza:
+                    # Libro triennale confermato - potenzialmente disponibile usato
+                    return ("USATO", "Triennale - ex 3ª possono vendere", 0)
+                
+                # Cross-scuola: cerca nelle altre medie di Catanzaro
+                scuole_medie = await get_scuole_catanzaro(db, tipo_scuola)
+                for altra_scuola in scuole_medie:
+                    if altra_scuola != codice_scuola:
+                        libro_altra_terza = await libro_in_classe(db, isbn, altra_scuola, 3, "2025/2026")
+                        if libro_altra_terza:
+                            return ("USATO", "Triennale - disponibile da altra scuola", 0)
+                
+                # Non trovato in nessuna 3ª → probabilmente nuovo o non triennale
                 return ("NUOVO", "Volume unico triennale", 0)
             
             else:
@@ -406,11 +428,13 @@ async def calcola_stato_acquisto(db, libro: dict, classe: int, tipo_scuola: str,
             return ("NUOVO", "Non esistono copie usate", 0)
     
     # ============================================================
-    # SCUOLA SUPERIORE (secondo_grado) - LOGICA COMPLESSA
+    # SCUOLA SUPERIORE (secondo_grado) - LOGICA INTRA-ANNO
+    # Per evitare dati storici inaffidabili, confrontiamo solo 2025/2026
     # ============================================================
     else:
         ciclo_info = get_ciclo_info(tipo_scuola, classe)
         classe_min_ciclo = ciclo_info.get('classe_min', 1)
+        classe_max_ciclo = ciclo_info.get('classe_max', 5)
         
         # ----------------------------------------------------------
         # REGOLA 1: VOLUME UNICO in classe > prima del ciclo → GIÀ POSSEDUTO
@@ -443,20 +467,23 @@ async def calcola_stato_acquisto(db, libro: dict, classe: int, tipo_scuola: str,
             return ("USATO", f"{copie} copie disponibili", copie)
         
         # ----------------------------------------------------------
-        # REGOLA 5: Cerca usato nella stessa classe anno scorso
+        # REGOLA 5 (INTRA-ANNO): Cerca se stesso ISBN esiste in classe superiore del ciclo
+        # BIENNIO (1-2): Se in 1ª cerco ISBN in 2ª → ex 2ª possono vendere
+        # TRIENNIO (3-4-5): Se in 3ª cerco ISBN in 4ª/5ª → possono vendere
         # ----------------------------------------------------------
-        libro_anno_scorso = await libro_in_classe(db, isbn, codice_scuola, classe, "2024/2025")
-        if libro_anno_scorso:
-            classe_succ = classe + 1
-            return ("USATO", f"I {classe_succ}° (ex {classe}°) possono venderlo", 0)
-        
-        # Cross-scuola
-        scuole = await get_scuole_catanzaro(db, tipo_scuola)
-        for altra_scuola in scuole:
-            if altra_scuola != codice_scuola:
-                libro_altra = await libro_in_classe(db, isbn, altra_scuola, classe, "2024/2025")
-                if libro_altra:
-                    return ("USATO", "Disponibile da altra scuola", 0)
+        classe_da_cercare = classe + 1
+        if classe_da_cercare <= classe_max_ciclo:
+            libro_classe_sup = await libro_in_classe(db, isbn, codice_scuola, classe_da_cercare, "2025/2026")
+            if libro_classe_sup:
+                return ("USATO", f"Ex {classe_da_cercare}° possono venderlo", 0)
+            
+            # Cross-scuola
+            scuole = await get_scuole_catanzaro(db, tipo_scuola)
+            for altra_scuola in scuole:
+                if altra_scuola != codice_scuola:
+                    libro_altra = await libro_in_classe(db, isbn, altra_scuola, classe_da_cercare, "2025/2026")
+                    if libro_altra:
+                        return ("USATO", "Disponibile da altra scuola", 0)
         
         # ----------------------------------------------------------
         # REGOLA 6: Non trovato usato → NUOVO
