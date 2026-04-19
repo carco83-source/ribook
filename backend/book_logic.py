@@ -583,6 +583,24 @@ async def calcola_vendibili(db, libri_storici: List[dict], classe: int, tipo_scu
             continue
         
         # =====================================================
+        # CASO 0: SCUOLA MEDIA - Volumi UNICI non vendibili finché nel ciclo
+        # I volumi unici comprati in 1ª durano 3 anni, si vendono solo DOPO la 3ª
+        # =====================================================
+        if tipo_scuola == "primo_grado" and is_volume_unico:
+            # Per scuole medie, i volumi unici NON sono mai vendibili
+            # perché lo studente li usa per tutto il ciclo (1ª-2ª-3ª)
+            # Solo chi ha FINITO la 3ª può venderli (ma quello sarà l'anno prossimo)
+            non_vendibili.append({
+                "isbn": isbn,
+                "titolo": titolo,
+                "disciplina": disciplina,
+                "is_volume_unico": True,
+                "status": "NON VENDIBILE",
+                "motivo": "Volume unico triennale - usato fino a 3ª"
+            })
+            continue
+        
+        # =====================================================
         # CASO 1: Libro ancora in uso nella classe attuale (stesso ISBN)
         # =====================================================
         if isbn in isbn_attuali:
@@ -590,6 +608,7 @@ async def calcola_vendibili(db, libri_storici: List[dict], classe: int, tipo_scu
                 "isbn": isbn,
                 "titolo": titolo,
                 "disciplina": disciplina,
+                "is_volume_unico": is_volume_unico,
                 "status": "SERVE ANCORA",
                 "motivo": f"Usato anche in {classe}ª"
             })
