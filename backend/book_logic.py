@@ -578,26 +578,9 @@ async def calcola_vendibili(db, libri_storici: List[dict], classe: int, tipo_scu
         editore = libro.get('editore', '')
         disciplina = libro.get('disciplina', '')
         is_volume_unico = libro.get('is_volume_unico', False)
+        prezzo = libro.get('prezzo_copertina', 0)
         
         if not isbn:
-            continue
-        
-        # =====================================================
-        # CASO 0: SCUOLA MEDIA - Volumi UNICI non vendibili finché nel ciclo
-        # I volumi unici comprati in 1ª durano 3 anni, si vendono solo DOPO la 3ª
-        # =====================================================
-        if tipo_scuola == "primo_grado" and is_volume_unico:
-            # Per scuole medie, i volumi unici NON sono mai vendibili
-            # perché lo studente li usa per tutto il ciclo (1ª-2ª-3ª)
-            # Solo chi ha FINITO la 3ª può venderli (ma quello sarà l'anno prossimo)
-            non_vendibili.append({
-                "isbn": isbn,
-                "titolo": titolo,
-                "disciplina": disciplina,
-                "is_volume_unico": True,
-                "status": "NON VENDIBILE",
-                "motivo": "Volume unico triennale - usato fino a 3ª"
-            })
             continue
         
         # =====================================================
@@ -612,6 +595,75 @@ async def calcola_vendibili(db, libri_storici: List[dict], classe: int, tipo_scu
                 "status": "SERVE ANCORA",
                 "motivo": f"Usato anche in {classe}ª"
             })
+            continue
+        
+        # =====================================================
+        # CASO 2: SCUOLA MEDIA - Verifica se il libro è richiesto in 1ª o 2ª
+        # Se lo stesso ISBN è nelle liste di 1ª o 2ª → VENDIBILE
+        # Altrimenti → NON VENDIBILE
+        # =====================================================
+        if tipo_scuola == "primo_grado":
+            # Cerca se lo stesso ISBN è richiesto in 1ª o 2ª (2025/2026)
+            libro_richiesto = False
+            classe_destinazione = None
+            
+            for cl in [1, 2]:
+                adozione_cl = await db.adozioni.find_one({
+                    "codice_scuola": codice_scuola,
+                    "classe": cl
+                })
+                if adozione_cl:
+                    for l in adozione_cl.get('libri', []):
+                        if l.get('isbn') == isbn:
+                            libro_richiesto = True
+                            classe_destinazione = cl
+                            break
+                if libro_richiesto:
+                    break
+            
+            # Cross-scuola: cerca anche in altre scuole medie di Catanzaro
+            if not libro_richiesto:
+                scuole = await get_scuole_catanzaro(db, tipo_scuola)
+                for altra_scuola in scuole:
+                    if altra_scuola == codice_scuola:
+                        continue
+                    for cl in [1, 2]:
+                        adozione_altra = await db.adozioni.find_one({
+                            "codice_scuola": altra_scuola,
+                            "classe": cl
+                        })
+                        if adozione_altra:
+                            for l in adozione_altra.get('libri', []):
+                                if l.get('isbn') == isbn:
+                                    libro_richiesto = True
+                                    classe_destinazione = cl
+                                    break
+                        if libro_richiesto:
+                            break
+                    if libro_richiesto:
+                        break
+            
+            if libro_richiesto:
+                vendibili.append({
+                    "isbn": isbn,
+                    "titolo": titolo,
+                    "disciplina": disciplina,
+                    "editore": editore,
+                    "prezzo_copertina": prezzo,
+                    "prezzo_consigliato": round(prezzo * 0.5, 2),
+                    "is_volume_unico": is_volume_unico,
+                    "status": "VENDIBILE",
+                    "motivo": f"Richiesto in {classe_destinazione}ª"
+                })
+            else:
+                non_vendibili.append({
+                    "isbn": isbn,
+                    "titolo": titolo,
+                    "disciplina": disciplina,
+                    "is_volume_unico": is_volume_unico,
+                    "status": "NON VENDIBILE",
+                    "motivo": "Non richiesto nelle liste attuali"
+                })
             continue
         
         # =====================================================
