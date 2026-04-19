@@ -10,22 +10,23 @@ STRUTTURA CICLI:
   - BIENNIO (1°-2°): Volumi annuali 1, 2 | Volumi unici biennali
   - TRIENNIO (3°-4°-5°): Volumi annuali 1, 2, 3 | Volumi unici triennali
 
-LOGICA ACQUISTO (INTRA-ANNO - usa solo dati 2025/2026):
+USO ISBN:
+- USA ISBN: per tutto (volumi unici, acquisti, copie disponibili)
+- NON USA ISBN: solo per determinare se un libro ANNUALE è VENDIBILE
+  (le edizioni cambiano da un anno all'altro, l'ISBN cambia)
+
+REGOLA ANNO PUBBLICAZIONE:
+- Volumi UNICI con anno_pubblicazione >= 2023 → NUOVO (primo ciclo)
+- Libri ANNUALI con anno_pubblicazione >= 2024 → NUOVO (troppo recente)
+
+LOGICA ACQUISTO:
 - nuova_adozione=TRUE → NUOVO
 - da_acquistare=NO + consigliato_raw=NO/SI → GIÀ POSSEDUTO
-- da_acquistare=NO + consigliato_raw=AP → DA ACQUISTARE (verifica USATO/NUOVO)
-- da_acquistare=SI → DA ACQUISTARE (verifica USATO/NUOVO)
-
-LOGICA USATO INTRA-ANNO (evita dati storici inaffidabili):
-- MEDIE: Confronta ISBN tra 1ª e 3ª dello stesso anno
-  Se stesso ISBN in entrambe → è triennale → ex 3ª possono vendere a 1ª
-- SUPERIORI BIENNIO: Confronta ISBN tra 1ª e 2ª dello stesso anno
-- SUPERIORI TRIENNIO: Confronta ISBN tra 3ª, 4ª, 5ª dello stesso anno
+- da_acquistare=SI → DA ACQUISTARE (verifica USATO/NUOVO con ISBN)
 
 LOGICA VENDITA:
-- Libro non in lista attuale + richiesto in classi precedenti → VENDIBILE
-- Libro ancora in lista attuale → ANCORA IN USO
-- Libro non richiesto da nessuno → NON VENDIBILE
+- VOLUMI UNICI: cerca stesso ISBN nelle classi precedenti
+- LIBRI ANNUALI: cerca stessa MATERIA (non ISBN) nelle classi precedenti
 """
 
 import re
@@ -384,10 +385,7 @@ async def calcola_stato_acquisto(db, libro: dict, classe: int, tipo_scuola: str,
         
         # ----------------------------------------------------------
         # VOLUMI UNICI: si comprano SOLO in 1ª, durano 3 anni
-        # LOGICA INTRA-ANNO (evita dati storici inaffidabili):
-        # Confronto ISBN tra 1ª e 3ª DELLO STESSO ANNO 2025/2026
-        # Se lo stesso ISBN appare in entrambe → è triennale
-        # Chi esce dalla 3ª può venderlo a chi entra in 1ª
+        # USA ISBN per verificare disponibilità usato
         # ----------------------------------------------------------
         if is_volume_unico:
             if classe == 1:
@@ -395,15 +393,13 @@ async def calcola_stato_acquisto(db, libro: dict, classe: int, tipo_scuola: str,
                 if nuova_adozione:
                     return ("NUOVO", "Nuova adozione - primo anno", 0)
                 
-                # Se ci sono copie caricate manualmente → USATO
+                # Se ci sono copie caricate con QUESTO ISBN → USATO
                 if copie > 0:
                     return ("USATO", f"{copie} copie disponibili", copie)
                 
-                # LOGICA INTRA-ANNO: verifica se stesso ISBN esiste in 3ª (2025/2026)
-                # Se sì → è un libro triennale, chi esce dalla 3ª può venderlo
+                # Verifica se stesso ISBN esiste in 3ª (chi può vendere)
                 libro_in_terza = await libro_in_classe(db, isbn, codice_scuola, 3, "2025/2026")
                 if libro_in_terza:
-                    # Libro triennale confermato - potenzialmente disponibile usato
                     return ("USATO", "Triennale - ex 3ª possono vendere", 0)
                 
                 # Cross-scuola: cerca nelle altre medie di Catanzaro
@@ -414,8 +410,8 @@ async def calcola_stato_acquisto(db, libro: dict, classe: int, tipo_scuola: str,
                         if libro_altra_terza:
                             return ("USATO", "Triennale - disponibile da altra scuola", 0)
                 
-                # Non trovato in nessuna 3ª → probabilmente nuovo o non triennale
-                return ("NUOVO", "Volume unico triennale", 0)
+                # Non trovato usato → NUOVO
+                return ("NUOVO", "Volume unico - non disponibile usato", 0)
             
             else:
                 # 2ª o 3ª MEDIA: volume unico GIÀ POSSEDUTO (comprato in 1ª)
@@ -667,11 +663,10 @@ async def calcola_vendibili(db, libri_storici: List[dict], classe: int, tipo_scu
         
         # =====================================================
         # CASO 2: SCUOLA MEDIA - Verifica se il libro è richiesto in 1ª o 2ª
-        # Se lo stesso ISBN è nelle liste di 1ª o 2ª → VENDIBILE
-        # Altrimenti → NON VENDIBILE
+        # VOLUMI UNICI: cerca stesso ISBN
+        # LIBRI ANNUALI: cerca stessa materia/titolo (le edizioni cambiano!)
         # =====================================================
         if tipo_scuola == "primo_grado":
-            # Cerca se lo stesso ISBN è richiesto in 1ª o 2ª (2025/2026)
             libro_richiesto = False
             classe_destinazione = None
             
@@ -682,10 +677,23 @@ async def calcola_vendibili(db, libri_storici: List[dict], classe: int, tipo_scu
                 })
                 if adozione_cl:
                     for l in adozione_cl.get('libri', []):
-                        if l.get('isbn') == isbn:
-                            libro_richiesto = True
-                            classe_destinazione = cl
-                            break
+                        if is_volume_unico:
+                            # VOLUME UNICO: cerca stesso ISBN
+                            if l.get('isbn') == isbn:
+                                libro_richiesto = True
+                                classe_destinazione = cl
+                                break
+                        else:
+                            # LIBRO ANNUALE: cerca stessa materia (edizioni cambiano!)
+                            # Confronta disciplina
+                            disc_l = l.get('disciplina', '').strip().upper()
+                            disc_libro = disciplina.strip().upper() if disciplina else ''
+                            if disc_l and disc_libro and disc_l[:15] == disc_libro[:15]:
+                                # Stessa materia trovata - verifico che sia annuale
+                                if not l.get('is_volume_unico', False):
+                                    libro_richiesto = True
+                                    classe_destinazione = cl
+                                    break
                 if libro_richiesto:
                     break
             
@@ -702,10 +710,21 @@ async def calcola_vendibili(db, libri_storici: List[dict], classe: int, tipo_scu
                         })
                         if adozione_altra:
                             for l in adozione_altra.get('libri', []):
-                                if l.get('isbn') == isbn:
-                                    libro_richiesto = True
-                                    classe_destinazione = cl
-                                    break
+                                if is_volume_unico:
+                                    # VOLUME UNICO: cerca stesso ISBN
+                                    if l.get('isbn') == isbn:
+                                        libro_richiesto = True
+                                        classe_destinazione = cl
+                                        break
+                                else:
+                                    # LIBRO ANNUALE: cerca stessa materia
+                                    disc_l = l.get('disciplina', '').strip().upper()
+                                    disc_libro = disciplina.strip().upper() if disciplina else ''
+                                    if disc_l and disc_libro and disc_l[:15] == disc_libro[:15]:
+                                        if not l.get('is_volume_unico', False):
+                                            libro_richiesto = True
+                                            classe_destinazione = cl
+                                            break
                         if libro_richiesto:
                             break
                     if libro_richiesto:
@@ -753,13 +772,20 @@ async def calcola_vendibili(db, libri_storici: List[dict], classe: int, tipo_scu
                 continue
         
         # =====================================================
-        # CASO 3: Cerca se lo STESSO libro è richiesto nelle classi a cui vendere
-        # Per ANNUALI: cerca stesso ISBN nelle classi precedenti (nuovo anno)
-        # Per UNICI: cerca stesso ISBN nelle classi precedenti (nuovo anno)
+        # CASO 3: Cerca se il libro è richiesto nelle classi a cui vendere
+        # VOLUMI UNICI: cerca stesso ISBN nelle classi precedenti (nuovo anno)
+        # LIBRI ANNUALI: cerca stessa materia (le edizioni cambiano!)
         # =====================================================
-        trovato = await cerca_libro_in_classi_precedenti(
-            db, isbn, tipo_scuola, classi_vendita, codice_scuola
-        )
+        if is_volume_unico:
+            # VOLUME UNICO: cerca stesso ISBN
+            trovato = await cerca_libro_in_classi_precedenti(
+                db, isbn, tipo_scuola, classi_vendita, codice_scuola
+            )
+        else:
+            # LIBRO ANNUALE: cerca stessa materia (non ISBN)
+            trovato = await cerca_materia_in_classi_precedenti(
+                db, disciplina, tipo_scuola, classi_vendita, codice_scuola
+            )
         
         if trovato:
             vendibili.append({
@@ -805,6 +831,53 @@ async def cerca_libro_in_classi_precedenti(db, isbn: str, tipo_scuola: str,
             risultato = await libro_in_classe(db, isbn, altra_scuola, classe_target, "2025/2026")
             if risultato:
                 return {"classe": classe_target, "scuola": "altra scuola", "libro": risultato}
+    
+    return None
+
+
+async def cerca_materia_in_classi_precedenti(db, disciplina: str, tipo_scuola: str,
+                                               classi: List[int], codice_scuola: str) -> Optional[dict]:
+    """
+    Cerca una MATERIA (non ISBN) nelle classi precedenti.
+    Usato per libri ANNUALI dove le edizioni cambiano ma la materia rimane.
+    
+    NON confronta ISBN perché le edizioni cambiano da un anno all'altro.
+    """
+    if not disciplina:
+        return None
+    
+    disciplina_upper = disciplina.strip().upper()[:15]  # Primi 15 caratteri
+    scuole = await get_scuole_catanzaro(db, tipo_scuola)
+    
+    # Prima stessa scuola
+    for classe_target in classi:
+        adozione = await db.adozioni.find_one({
+            "codice_scuola": codice_scuola,
+            "classe": classe_target
+        })
+        if adozione:
+            for libro in adozione.get('libri', []):
+                disc = libro.get('disciplina', '').strip().upper()[:15]
+                if disc and disc == disciplina_upper:
+                    # Trovato! La materia è ancora richiesta
+                    if not libro.get('is_volume_unico', False):
+                        return {"classe": classe_target, "scuola": "stessa scuola", "libro": libro}
+    
+    # Poi altre scuole
+    for altra_scuola in scuole:
+        if altra_scuola == codice_scuola:
+            continue
+        for classe_target in classi:
+            adozione = await db.adozioni.find_one({
+                "codice_scuola": altra_scuola,
+                "classe": classe_target
+            })
+            if adozione:
+                for libro in adozione.get('libri', []):
+                    disc = libro.get('disciplina', '').strip().upper()[:15]
+                    if disc and disc == disciplina_upper:
+                        if not libro.get('is_volume_unico', False):
+                            return {"classe": classe_target, "scuola": "altra scuola", "libro": libro}
     
     return None
 
