@@ -89,9 +89,10 @@ LIBRI_SUPERIORI = [
 
 async def create_test_data():
     client = AsyncIOMotorClient(os.getenv('MONGO_URL'))
-    db = client.school_books_marketplace
+    db_name = os.getenv('DB_NAME', 'scambialibri')
+    db = client[db_name]
     
-    print("🚀 Inizio creazione dati di test...")
+    print(f"🚀 Inizio creazione dati di test nel database '{db_name}'...")
     
     # Prima elimina dati esistenti di test (ma mantieni l'utente principale)
     await db.users.delete_many({"email": {"$regex": "@test.it$"}})
