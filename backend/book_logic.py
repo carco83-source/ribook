@@ -437,16 +437,39 @@ async def calcola_stato_acquisto(db, libro: dict, classe: int, tipo_scuola: str,
         classe_max_ciclo = ciclo_info.get('classe_max', 5)
         
         # ----------------------------------------------------------
-        # REGOLA 1: VOLUME UNICO in classe > prima del ciclo → GIÀ POSSEDUTO
+        # REGOLA 1: VOLUME UNICO in classe > prima del ciclo
+        # Verifica se esisteva nella 1ª (classe_min_ciclo)
+        # Se NON esisteva → è una NUOVA ADOZIONE mid-ciclo, deve comprare
+        # Se esisteva → GIÀ POSSEDUTO (comprato in 1ª)
         # ----------------------------------------------------------
         if is_volume_unico and classe > classe_min_ciclo:
-            # Verifica che non sia da_acquistare=True con consigliato_raw='AP'
-            # In quel caso è una nuova adozione anche se unico
+            # Verifica che non sia esplicitamente da_acquistare=True con consigliato_raw='AP'
             if da_acquistare and consigliato_raw == 'AP':
-                # Nuova adozione mid-ciclo, deve comprare
+                # Nuova adozione mid-ciclo esplicita, deve comprare
                 pass
             else:
-                return ("GIA_POSSEDUTO", f"Volume unico (comprato in {classe_min_ciclo}ª)", 0)
+                # Verifica se lo stesso ISBN esisteva nella 1ª (classe_min_ciclo)
+                # Se non esisteva, è una nuova adozione mid-ciclo
+                libro_in_prima = await libro_in_classe(db, isbn, codice_scuola, classe_min_ciclo, "2025/2026")
+                
+                if libro_in_prima:
+                    # Il libro esisteva nella 1ª → già posseduto
+                    return ("GIA_POSSEDUTO", f"Volume unico (comprato in {classe_min_ciclo}ª)", 0)
+                else:
+                    # Il libro NON esisteva nella 1ª → nuova adozione mid-ciclo
+                    # Deve essere acquistato (cerca usato o nuovo)
+                    if nuova_adozione:
+                        return ("NUOVO", "Nuova adozione mid-ciclo", 0)
+                    if copie > 0:
+                        return ("USATO", f"Nuova adozione mid-ciclo - {copie} copie", copie)
+                    # Cerca usato cross-scuola
+                    scuole = await get_scuole_catanzaro(db, tipo_scuola)
+                    for altra_scuola in scuole:
+                        if altra_scuola != codice_scuola:
+                            libro_altra_prima = await libro_in_classe(db, isbn, altra_scuola, classe_min_ciclo, "2025/2026")
+                            if libro_altra_prima:
+                                return ("USATO", "Nuova adozione - usato da altra scuola", 0)
+                    return ("NUOVO", "Nuova adozione mid-ciclo - non esiste usato", 0)
         
         # ----------------------------------------------------------
         # REGOLA 2: da_acquistare=NO + consigliato!=AP → GIÀ POSSEDUTO
