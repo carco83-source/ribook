@@ -4166,32 +4166,102 @@ async def get_child_analysis_v2(user_id: str, child_id: str):
     # ================================================
     # 3. CALCOLA LIBRI VENDIBILI
     # ================================================
-    # Carica libri dell'anno precedente (2024/2025) per la classe precedente
-    classe_prec = child_classe - 1 if child_classe > ciclo_info.get("classe_min", 1) else None
+    # LOGICA CORRETTA: I libri vendibili sono quelli GIÀ POSSEDUTI 
+    # che NON servono più nella classe attuale E sono richiesti nelle classi inferiori
+    # 
+    # Per Samuel in 3ª: può vendere i volumi unici che ha (HYPERTECH) se:
+    # - NON sono nella lista della 3ª attuale (ma HYPERTECH c'è ancora!)
+    # - SONO richiesti in 1ª o 2ª (per chi li deve comprare)
     
     vendibili = []
     non_vendibili = []
+    classe_prec = child_classe - 1 if child_classe > 1 else None
     
-    if classe_prec:
-        adozione_prec = await db.adozioni_2024_2025.find_one({
-            "codice_scuola": child_codice_scuola,
-            "classe": classe_prec
-        })
+    # Per scuole medie: i libri vendibili sono i GIÀ POSSEDUTI che non servono più
+    if child_tipo == "primo_grado":
+        for libro in gia_posseduti:
+            isbn = libro.get("isbn", "")
+            titolo = libro.get("titolo", "")
+            disciplina = libro.get("disciplina", "")
+            prezzo = libro.get("prezzo_copertina", 0)
+            is_volume_unico = libro.get("is_volume_unico", False)
+            
+            if not isbn:
+                continue
+            
+            # Controlla se è ancora nella lista della classe attuale
+            libro_serve_ancora = False
+            for l in libri_correnti:
+                if l.get("isbn") == isbn:
+                    libro_serve_ancora = True
+                    break
+            
+            if libro_serve_ancora:
+                # Il libro serve ancora, non vendibile
+                non_vendibili.append({
+                    "isbn": isbn,
+                    "titolo": titolo,
+                    "disciplina": disciplina,
+                    "is_volume_unico": is_volume_unico,
+                    "status": "SERVE ANCORA",
+                    "motivo": f"Usato anche in {child_classe}ª"
+                })
+            else:
+                # Il libro NON serve più, verifica se richiesto in classi inferiori
+                libro_richiesto = False
+                classe_destinazione = None
+                
+                for cl in range(1, child_classe):
+                    adozione_cl = await db.adozioni.find_one({
+                        "codice_scuola": child_codice_scuola,
+                        "classe": cl
+                    })
+                    if adozione_cl:
+                        for l in adozione_cl.get("libri", []):
+                            if l.get("isbn") == isbn:
+                                libro_richiesto = True
+                                classe_destinazione = cl
+                                break
+                    if libro_richiesto:
+                        break
+                
+                if libro_richiesto:
+                    vendibili.append({
+                        "isbn": isbn,
+                        "titolo": titolo,
+                        "disciplina": disciplina,
+                        "editore": libro.get("editore", ""),
+                        "prezzo_copertina": prezzo,
+                        "prezzo_consigliato": round(prezzo * 0.5, 2),
+                        "is_volume_unico": is_volume_unico,
+                        "status": "VENDIBILE",
+                        "motivo": f"Richiesto in {classe_destinazione}ª"
+                    })
+                else:
+                    non_vendibili.append({
+                        "isbn": isbn,
+                        "titolo": titolo,
+                        "disciplina": disciplina,
+                        "is_volume_unico": is_volume_unico,
+                        "status": "NON VENDIBILE",
+                        "motivo": "Non richiesto nelle classi inferiori"
+                    })
+    else:
+        # Per superiori: usa la logica esistente con libri storici
+        classe_prec = child_classe - 1 if child_classe > ciclo_info.get("classe_min", 1) else None
         
-        if not adozione_prec:
+        if classe_prec:
             adozione_prec = await db.adozioni_2024_2025.find_one({
                 "codice_scuola": child_codice_scuola,
                 "classe": classe_prec
             })
-        
-        libri_storici = adozione_prec.get("libri", []) if adozione_prec else []
-        
-        if libri_storici:
-            vendibili_list, non_vendibili_list = await calcola_vendibili(
-                db, libri_storici, child_classe, child_tipo, child_codice_scuola, child_sezione
-            )
-            vendibili = vendibili_list
-            non_vendibili = non_vendibili_list
+            
+            libri_storici = adozione_prec.get("libri", []) if adozione_prec else []
+            
+            if libri_storici:
+                vendibili, non_vendibili = await calcola_vendibili(
+                    db, libri_storici, child_classe, child_tipo, child_codice_scuola, child_sezione
+                )
     
     # ================================================
     # 4. RIMOZIONE DUPLICATI TRA GIÀ POSSEDUTI E NON VENDIBILI
