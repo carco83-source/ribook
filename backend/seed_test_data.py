@@ -1,6 +1,7 @@
 """
 Script per popolare il database con dati di test realistici.
 Crea 20 utenti con profili figli e 50+ libri in vendita.
+USA ISBN REALI dalle adozioni del database.
 """
 
 import asyncio
@@ -31,61 +32,47 @@ NOMI_FIGLI = [
     "Greta", "Gabriele", "Martina", "Pietro", "Sara", "Niccolò"
 ]
 
-# Scuole di Catanzaro
-SCUOLE_MEDIE = [
-    {"codice": "CZMM86001P", "nome": "I.C. Casalinuovo", "tipo": "primo_grado"},
-    {"codice": "CZMM856013", "nome": "I.C. Don Milani", "tipo": "primo_grado"},
-    {"codice": "CZMM85201Q", "nome": "I.C. Patari - Rodari", "tipo": "primo_grado"},
-    {"codice": "CZMM86701D", "nome": "I.C. Vivaldi", "tipo": "primo_grado"},
-]
-
-SCUOLE_SUPERIORI = [
-    {"codice": "CZPS00101C", "nome": "Liceo Scientifico E. Fermi", "tipo": "secondo_grado"},
-    {"codice": "CZPC09000X", "nome": "Liceo Classico P. Galluppi", "tipo": "secondo_grado"},
-    {"codice": "CZTF010008", "nome": "ITIS E. Scalfaro", "tipo": "secondo_grado"},
-    {"codice": "CZTA021035", "nome": "IST. Tecnico Agrario V. Emanuele II", "tipo": "secondo_grado"},
-]
-
 SEZIONI = ["A", "B", "C", "D", "E"]
 CONDIZIONI = ["come_nuovo", "ottime_condizioni", "buono", "buono", "ottime_condizioni"]
 
-# Libri realistici con ISBN
-LIBRI_MEDIE = [
-    {"isbn": "9788805079100", "titolo": "Matematica Oggi Vol. 1", "autori": "Sasso L.", "editore": "Petrini", "disciplina": "MATEMATICA", "prezzo": 25.50, "classe": 1},
-    {"isbn": "9788805079117", "titolo": "Matematica Oggi Vol. 2", "autori": "Sasso L.", "editore": "Petrini", "disciplina": "MATEMATICA", "prezzo": 26.00, "classe": 2},
-    {"isbn": "9788805079124", "titolo": "Matematica Oggi Vol. 3", "autori": "Sasso L.", "editore": "Petrini", "disciplina": "MATEMATICA", "prezzo": 26.50, "classe": 3},
-    {"isbn": "9788842112358", "titolo": "Epica e Mito", "autori": "Biglia P.", "editore": "Paravia", "disciplina": "ITALIANO", "prezzo": 18.90, "classe": 1},
-    {"isbn": "9788869103810", "titolo": "Tecnomedia Plus", "autori": "Paci G.", "editore": "Zanichelli", "disciplina": "TECNOLOGIA", "prezzo": 32.00, "classe": 1},
-    {"isbn": "9788808721013", "titolo": "Scienze Focus", "autori": "Leopardi L.", "editore": "DeAgostini", "disciplina": "SCIENZE", "prezzo": 24.50, "classe": 1},
-    {"isbn": "9788808721020", "titolo": "Scienze Focus Vol. 2", "autori": "Leopardi L.", "editore": "DeAgostini", "disciplina": "SCIENZE", "prezzo": 25.00, "classe": 2},
-    {"isbn": "9788839303486", "titolo": "Sulla Tua Parola", "autori": "Cassinotti C.", "editore": "Marietti", "disciplina": "RELIGIONE", "prezzo": 19.60, "classe": 1},
-    {"isbn": "9788808220011", "titolo": "Get Thinking", "autori": "AA.VV.", "editore": "Cambridge", "disciplina": "INGLESE", "prezzo": 28.50, "classe": 1},
-    {"isbn": "9788808220028", "titolo": "Get Thinking 2", "autori": "AA.VV.", "editore": "Cambridge", "disciplina": "INGLESE", "prezzo": 29.00, "classe": 2},
-    {"isbn": "9788839303967", "titolo": "Attivi! Sport e Sane Abitudini", "autori": "Chiesa E.", "editore": "Marietti", "disciplina": "SCIENZE MOTORIE", "prezzo": 22.85, "classe": 1},
-    {"isbn": "9788808799654", "titolo": "In Viaggio con la Storia Vol. 1", "autori": "Lunari M.", "editore": "Zanichelli", "disciplina": "STORIA", "prezzo": 28.30, "classe": 1},
-    {"isbn": "9788808799661", "titolo": "In Viaggio con la Storia Vol. 2", "autori": "Lunari M.", "editore": "Zanichelli", "disciplina": "STORIA", "prezzo": 29.00, "classe": 2},
-    {"isbn": "9788842115687", "titolo": "Geograficamente", "autori": "Bianchi S.", "editore": "DeAgostini", "disciplina": "GEOGRAFIA", "prezzo": 23.50, "classe": 1},
-    {"isbn": "9788805070114", "titolo": "Arte e Immagine", "autori": "Dorfles G.", "editore": "Atlas", "disciplina": "ARTE", "prezzo": 31.00, "classe": 1},
-]
-
-LIBRI_SUPERIORI = [
-    {"isbn": "9788805071012", "titolo": "Matematica.blu 1", "autori": "Bergamini M.", "editore": "Zanichelli", "disciplina": "MATEMATICA", "prezzo": 35.50, "classe": 1},
-    {"isbn": "9788805071029", "titolo": "Matematica.blu 2", "autori": "Bergamini M.", "editore": "Zanichelli", "disciplina": "MATEMATICA", "prezzo": 37.25, "classe": 2},
-    {"isbn": "9788805071234", "titolo": "Matematica.blu 3", "autori": "Bergamini M.", "editore": "Zanichelli", "disciplina": "MATEMATICA", "prezzo": 38.00, "classe": 3},
-    {"isbn": "9788808349156", "titolo": "Chimica Più Verde Vol. Unico", "autori": "Posca V.", "editore": "Zanichelli", "disciplina": "CHIMICA", "prezzo": 38.90, "classe": 1},
-    {"isbn": "9788808392022", "titolo": "Primo Comma Vol. B", "autori": "Faenza F.", "editore": "Zanichelli", "disciplina": "DIRITTO", "prezzo": 16.70, "classe": 2},
-    {"isbn": "9788808648488", "titolo": "Agraria Vol. Unico", "autori": "Sammarone S.", "editore": "Zanichelli", "disciplina": "DISEGNO", "prezzo": 28.90, "classe": 1},
-    {"isbn": "9788808720276", "titolo": "Fisica: Lezioni e Problemi Vol. U", "autori": "Ruffo G.", "editore": "Zanichelli", "disciplina": "FISICA", "prezzo": 40.60, "classe": 2},
-    {"isbn": "9788805079919", "titolo": "Promessi Sposi", "autori": "Manzoni A.", "editore": "SEI", "disciplina": "ITALIANO", "prezzo": 25.80, "classe": 2},
-    {"isbn": "9788849424737", "titolo": "Costruttori di Sogni", "autori": "Geroni N.", "editore": "Petrini", "disciplina": "ITALIANO", "prezzo": 22.45, "classe": 2},
-    {"isbn": "9788869106675", "titolo": "Le Parole Sono Idee", "autori": "Serianni L.", "editore": "Mondadori", "disciplina": "ITALIANO", "prezzo": 30.90, "classe": 1},
-    {"isbn": "9788858346303", "titolo": "Get Thinking Second Edition", "autori": "AA.VV.", "editore": "Cambridge", "disciplina": "INGLESE", "prezzo": 34.90, "classe": 1},
-    {"isbn": "9788848264754", "titolo": "Terra e Techne", "autori": "Lapadula M.", "editore": "Poseidonia", "disciplina": "TECNOLOGIA", "prezzo": 30.70, "classe": 1},
-    {"isbn": "9788837913793", "titolo": "Scienze Integrate", "autori": "Boccardi M.", "editore": "Cappelli", "disciplina": "SCIENZE", "prezzo": 25.00, "classe": 1},
-    {"isbn": "9788842112345", "titolo": "Lingua Latina 1", "autori": "Flocchini N.", "editore": "Bompiani", "disciplina": "LATINO", "prezzo": 32.00, "classe": 1},
-    {"isbn": "9788842112399", "titolo": "Greco Antico 1", "autori": "Campanini C.", "editore": "Sansoni", "disciplina": "GRECO", "prezzo": 35.00, "classe": 1},
-    {"isbn": "9788823356789", "titolo": "Economia Aziendale 1", "autori": "Astolfi E.", "editore": "Tramontana", "disciplina": "ECONOMIA", "prezzo": 28.50, "classe": 1},
-]
+async def get_libri_reali(db):
+    """Recupera libri REALI dalle adozioni del database"""
+    libri_per_scuola = {}
+    
+    async for adozione in db.adozioni.find({}):
+        codice = adozione.get('codice_scuola', '')
+        nome_scuola = adozione.get('nome_scuola', codice)
+        tipo = adozione.get('tipo_scuola', 'primo_grado')
+        classe = adozione.get('classe', 1)
+        
+        if codice not in libri_per_scuola:
+            libri_per_scuola[codice] = {
+                'nome': nome_scuola,
+                'tipo': tipo,
+                'libri': []
+            }
+        
+        for libro in adozione.get('libri', []):
+            isbn = libro.get('isbn')
+            if isbn and len(isbn) >= 10:
+                prezzo = libro.get('prezzo_copertina', 20)
+                if isinstance(prezzo, str):
+                    try:
+                        prezzo = float(prezzo.replace(',', '.').replace('€', '').strip())
+                    except:
+                        prezzo = 20.0
+                
+                libri_per_scuola[codice]['libri'].append({
+                    'isbn': isbn,
+                    'titolo': libro.get('titolo', 'N/A'),
+                    'autori': libro.get('autori', 'N/A'),
+                    'editore': libro.get('editore', 'N/A'),
+                    'disciplina': libro.get('disciplina', 'N/A'),
+                    'prezzo': prezzo,
+                    'classe': classe
+                })
+    
+    return libri_per_scuola
 
 async def create_test_data():
     client = AsyncIOMotorClient(os.getenv('MONGO_URL'))
@@ -94,7 +81,18 @@ async def create_test_data():
     
     print(f"🚀 Inizio creazione dati di test nel database '{db_name}'...")
     
-    # Prima elimina dati esistenti di test (ma mantieni l'utente principale)
+    # Prima recupera libri reali dal DB
+    print("📖 Recupero libri reali dalle adozioni...")
+    libri_per_scuola = await get_libri_reali(db)
+    scuole_con_libri = [k for k, v in libri_per_scuola.items() if len(v['libri']) > 3]
+    print(f"   Trovate {len(scuole_con_libri)} scuole con libri")
+    
+    if not scuole_con_libri:
+        print("❌ Nessuna scuola con libri trovata! Impossibile creare listings.")
+        client.close()
+        return
+    
+    # Elimina dati esistenti di test
     await db.users.delete_many({"email": {"$regex": "@test.it$"}})
     await db.profiles.delete_many({"user_id": {"$nin": ["58ac430d-da2a-4954-bb2f-feea6de1f30c"]}})
     await db.listings.delete_many({"seller_email": {"$regex": "@test.it$"}})
@@ -123,20 +121,22 @@ async def create_test_data():
         
         await db.users.insert_one(user)
         
-        # Crea 1-3 figli per utente
-        num_figli = random.randint(1, 3)
+        # Crea 1-2 figli per utente, associati a scuole con libri
+        num_figli = random.randint(1, 2)
         children = []
         
         for j in range(num_figli):
             child_id = str(uuid.uuid4())
             nome_figlio = random.choice(NOMI_FIGLI)
             
-            # Scegli scuola
-            if random.random() < 0.5:
-                scuola = random.choice(SCUOLE_MEDIE)
-                classe = random.randint(2, 3)  # 2-3 per avere libri da vendere
+            # Scegli una scuola che ha libri
+            codice_scuola = random.choice(scuole_con_libri)
+            scuola_info = libri_per_scuola[codice_scuola]
+            
+            # Classe 2-3 per medie, 2-5 per superiori (così hanno libri da vendere)
+            if scuola_info['tipo'] == 'primo_grado':
+                classe = random.randint(2, 3)
             else:
-                scuola = random.choice(SCUOLE_SUPERIORI)
                 classe = random.randint(2, 5)
             
             sezione = random.choice(SEZIONI)
@@ -144,9 +144,9 @@ async def create_test_data():
             child = {
                 "id": child_id,
                 "nome_figlio": nome_figlio,
-                "codice_scuola": scuola["codice"],
-                "nome_scuola": scuola["nome"],
-                "tipo_scuola": scuola["tipo"],
+                "codice_scuola": codice_scuola,
+                "nome_scuola": scuola_info['nome'],
+                "tipo_scuola": scuola_info['tipo'],
                 "classe": classe,
                 "sezione": sezione,
                 "anno_scolastico": "2025/2026"
@@ -159,12 +159,12 @@ async def create_test_data():
         }
         
         await db.profiles.insert_one(profile)
-        users_created.append({"user": user, "children": children})
+        users_created.append({"user": user, "children": children, "scuole": libri_per_scuola})
         print(f"  ✅ Utente {i+1}/20: {nome} {cognome} - {num_figli} figli")
     
-    print(f"\n📚 Creazione libri in vendita...")
+    print(f"\n📚 Creazione libri in vendita con ISBN REALI...")
     
-    # Crea 55 listings
+    # Crea 55 listings con ISBN REALI
     listing_count = 0
     target_listings = 55
     
@@ -179,24 +179,28 @@ async def create_test_data():
             if listing_count >= target_listings:
                 break
             
-            # Seleziona libri in base al tipo di scuola
-            if child["tipo_scuola"] == "primo_grado":
-                libri_disponibili = [l for l in LIBRI_MEDIE if l["classe"] < child["classe"]]
-            else:
-                libri_disponibili = [l for l in LIBRI_SUPERIORI if l["classe"] < child["classe"]]
+            codice_scuola = child["codice_scuola"]
+            scuola_libri = libri_per_scuola.get(codice_scuola, {}).get('libri', [])
             
-            if not libri_disponibili:
+            # Filtra libri di classi precedenti (che potrebbero vendere)
+            libri_vendibili = [l for l in scuola_libri if l['classe'] < child['classe']]
+            
+            if not libri_vendibili:
+                # Fallback: usa qualsiasi libro della scuola
+                libri_vendibili = scuola_libri[:10]
+            
+            if not libri_vendibili:
                 continue
             
             # 2-4 libri per figlio
-            num_libri = min(random.randint(2, 4), len(libri_disponibili))
-            libri_selezionati = random.sample(libri_disponibili, num_libri)
+            num_libri = min(random.randint(2, 4), len(libri_vendibili))
+            libri_selezionati = random.sample(libri_vendibili, num_libri)
             
             for libro in libri_selezionati:
                 if listing_count >= target_listings:
                     break
                 
-                prezzo_vendita = round(libro["prezzo"] * random.uniform(0.4, 0.6), 2)
+                prezzo_vendita = round(libro['prezzo'] * random.uniform(0.4, 0.6), 2)
                 
                 listing = {
                     "id": str(uuid.uuid4()),
@@ -238,7 +242,17 @@ async def create_test_data():
     
     print(f"\n✅ Completato!")
     print(f"   - {len(users_created)} utenti creati")
-    print(f"   - {listing_count} libri in vendita")
+    print(f"   - {listing_count} libri in vendita (con ISBN REALI)")
+    
+    # Verifica ISBN comuni
+    isbn_listings = set(l['book_isbn'] for l in all_listings)
+    isbn_adozioni = set()
+    async for adozione in db.adozioni.find({}):
+        for l in adozione.get('libri', []):
+            isbn_adozioni.add(l.get('isbn'))
+    
+    comuni = isbn_listings.intersection(isbn_adozioni)
+    print(f"   - {len(comuni)} ISBN in comune con le adozioni ✅")
     
     # Statistiche
     print(f"\n📊 Statistiche per scuola:")
@@ -247,17 +261,8 @@ async def create_test_data():
         scuola = listing.get('school_name', 'N/A')
         scuole_stats[scuola] = scuole_stats.get(scuola, 0) + 1
     
-    for scuola, count in sorted(scuole_stats.items(), key=lambda x: -x[1]):
-        print(f"   - {scuola}: {count} libri")
-    
-    print(f"\n📖 Statistiche per materia:")
-    materie_stats = {}
-    for listing in all_listings:
-        materia = listing.get('book_subject', 'N/A')
-        materie_stats[materia] = materie_stats.get(materia, 0) + 1
-    
-    for materia, count in sorted(materie_stats.items(), key=lambda x: -x[1]):
-        print(f"   - {materia}: {count} libri")
+    for scuola, count in sorted(scuole_stats.items(), key=lambda x: -x[1])[:10]:
+        print(f"   - {scuola[:40]}: {count} libri")
     
     client.close()
 
