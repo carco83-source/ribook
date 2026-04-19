@@ -366,8 +366,12 @@ export default function RadarScreen() {
 
             {/* Three Column Layout */}
             <View style={styles.bookFlowThreeColumns}>
-              {/* LEFT - VENDI */}
-              <View style={styles.bookFlowColumnNew}>
+              {/* LEFT - VENDI (Cliccabile → vai a Sell Tab) */}
+              <TouchableOpacity 
+                style={styles.bookFlowColumnNew}
+                onPress={() => router.push('/(tabs)/sell')}
+                activeOpacity={0.7}
+              >
                 <View style={[styles.bookFlowColumnHeaderCompact, { backgroundColor: '#2196F3' }]}>
                   <Text style={styles.bookFlowColumnHeaderTextCompact}>
                     {compatibility.vendere?.classe_destinazione 
@@ -383,7 +387,7 @@ export default function RadarScreen() {
                   </Text>
                   <Text style={styles.bookFlowColumnLabel}>libri</Text>
                 </View>
-              </View>
+              </TouchableOpacity>
 
               {/* CENTER - Iniziale del nome nel header */}
               <View style={styles.bookFlowColumnNew}>
@@ -403,8 +407,12 @@ export default function RadarScreen() {
                 </Text>
               </View>
 
-              {/* RIGHT - COMPRA */}
-              <View style={styles.bookFlowColumnNew}>
+              {/* RIGHT - COMPRA (Cliccabile → vai a Search Tab) */}
+              <TouchableOpacity 
+                style={styles.bookFlowColumnNew}
+                onPress={() => router.push('/(tabs)/search')}
+                activeOpacity={0.7}
+              >
                 <View style={[styles.bookFlowColumnHeaderCompact, { backgroundColor: '#4CAF50' }]}>
                   <Text style={styles.bookFlowColumnHeaderTextCompact}>
                     {compatibility.comprare?.classe_origine 
@@ -425,7 +433,7 @@ export default function RadarScreen() {
                     ? `Risparmio €${compatibility.comprare.risparmio_totale.toFixed(0)}`
                     : 'Fine ciclo'}
                 </Text>
-              </View>
+              </TouchableOpacity>
             </View>
 
             {/* Tetto di Spesa Ministeriale - Per tutti i profili */}

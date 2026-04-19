@@ -289,8 +289,12 @@ export default function ProfileScreen() {
                 
                 {/* Three Column Layout */}
                 <View style={styles.bookFlowContainer}>
-                  {/* LEFT - VENDI */}
-                  <View style={styles.bookFlowColumn}>
+                  {/* LEFT - VENDI (Cliccabile → vai a Sell Tab) */}
+                  <TouchableOpacity 
+                    style={styles.bookFlowColumn}
+                    onPress={() => router.push('/(tabs)/sell')}
+                    activeOpacity={0.7}
+                  >
                     <View style={[styles.bookFlowHeader, { backgroundColor: '#2196F3' }]}>
                       <Text style={styles.bookFlowHeaderClass}>
                         {compatibility.vendere?.classe_destinazione 
@@ -315,7 +319,7 @@ export default function ProfileScreen() {
                         {compatibility.vendere?.totale_non_vendibili} ed. cambiate
                       </Text>
                     )}
-                  </View>
+                  </TouchableOpacity>
 
                   {/* CENTER - Iniziale del nome nel header */}
                   <View style={styles.bookFlowColumn}>
@@ -337,8 +341,12 @@ export default function ProfileScreen() {
                     </Text>
                   </View>
 
-                  {/* RIGHT - COMPRA */}
-                  <View style={styles.bookFlowColumn}>
+                  {/* RIGHT - COMPRA (Cliccabile → vai a Search Tab) */}
+                  <TouchableOpacity 
+                    style={styles.bookFlowColumn}
+                    onPress={() => router.push('/(tabs)/search')}
+                    activeOpacity={0.7}
+                  >
                     <View style={[styles.bookFlowHeader, { backgroundColor: '#4CAF50' }]}>
                       <Text style={styles.bookFlowHeaderClass}>
                         {compatibility.comprare?.classe_origine 
@@ -358,7 +366,7 @@ export default function ProfileScreen() {
                     <Text style={[styles.bookFlowHint, { color: '#4CAF50', fontWeight: '600' }]}>
                       Spesa: €{((compatibility.comprare?.totale_usati || 0) * 10).toFixed(0)}
                     </Text>
-                  </View>
+                  </TouchableOpacity>
                 </View>
                 
                 {/* TOTALE PARZIALE SPESA per questo profilo */}
