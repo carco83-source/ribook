@@ -340,6 +340,12 @@ async def calcola_stato_acquisto(db, libro: dict, classe: int, tipo_scuola: str,
     - consigliato_raw='AP' significa da acquistare
     - Volumi unici durano per il ciclo (2 anni biennio, 3 anni triennio)
     
+    ============================================================
+    REGOLA ANNO PUBBLICAZIONE:
+    ============================================================
+    - Se anno_pubblicazione >= 2024 → NUOVO (edizione troppo recente)
+    - Non può esistere usato perché nessuno lo ha ancora posseduto
+    
     Returns:
         (stato, motivo, copie_disponibili)
         stato: "NUOVO", "USATO", "GIA_POSSEDUTO"
@@ -349,6 +355,21 @@ async def calcola_stato_acquisto(db, libro: dict, classe: int, tipo_scuola: str,
     da_acquistare = libro.get('da_acquistare', True)
     consigliato_raw = libro.get('consigliato_raw', 'NO').upper()
     is_volume_unico = libro.get('is_volume_unico', False)
+    anno_pubblicazione = libro.get('anno_pubblicazione')
+    
+    # ============================================================
+    # REGOLA 0 GLOBALE: ANNO PUBBLICAZIONE >= 2023 → NUOVO
+    # Edizione troppo recente, non può esistere usato
+    # Per volumi unici: 2023 è il primo anno di utilizzo
+    # Per annuali: 2024+ è troppo recente
+    # ============================================================
+    if anno_pubblicazione:
+        # Volumi unici pubblicati dal 2023 non possono essere usati (primo ciclo)
+        if is_volume_unico and anno_pubblicazione >= 2023:
+            return ("NUOVO", f"Edizione {anno_pubblicazione} - primo ciclo, no usato", 0)
+        # Libri annuali pubblicati dal 2024 non possono essere usati
+        if anno_pubblicazione >= 2024:
+            return ("NUOVO", f"Edizione {anno_pubblicazione} - troppo recente per usato", 0)
     
     # Conta copie disponibili per questo ISBN
     copie = await db.listings.count_documents({
