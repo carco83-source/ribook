@@ -357,6 +357,18 @@ export default function SellScreen() {
     ? selectedPriceOption.toFixed(2)
     : (priceRange.prices[0]?.prezzoAcquirente || 0).toFixed(2);
 
+  // Auto-seleziona il prezzo consigliato quando il form è aperto
+  useEffect(() => {
+    if (showListingForm && selectedBook && selectedPriceOption === null) {
+      // Seleziona automaticamente il prezzo consigliato (indice 1 per usati, indice 0 per nuovi)
+      const defaultPriceIndex = isNewBook ? 0 : 1;
+      const defaultPrice = priceRange.prices[defaultPriceIndex]?.prezzoAcquirente || priceRange.prices[0]?.prezzoAcquirente;
+      if (defaultPrice) {
+        setSelectedPriceOption(defaultPrice);
+      }
+    }
+  }, [showListingForm, selectedBook, isNewBook, priceRange.prices]);
+
   // Bookshop options
   const toggleBookshop = (shopId: string) => {
     setSelectedBookshops(prev => {
