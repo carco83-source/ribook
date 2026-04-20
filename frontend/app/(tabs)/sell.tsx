@@ -825,10 +825,19 @@ export default function SellScreen() {
       // Usa priceRange per la condizione (nuova formula)
       const currentPriceRange = calculatePriceRange();
       
+      // Trova il guadagno corrispondente al prezzo selezionato
+      const selectedPriceInfo = currentPriceRange.prices.find(
+        p => p.prezzoAcquirente === selectedPriceOption
+      );
+      const guadagnoUtente = selectedPriceInfo?.guadagnoVenditore || 
+        (currentPriceRange.guadagnoUtente) || 
+        (selectedPriceOption * 0.83 - 0.25);
+      
       console.log('Creating listing with:', {
         isbn: selectedBook.isbn,
         prezzo: selectedPriceOption,
-        condizione: currentPriceRange.condition
+        condizione: currentPriceRange.condition,
+        guadagno: guadagnoUtente
       });
       
       await axios.post(`${API_URL}/api/listings?user_id=${userId}`, {
@@ -851,8 +860,8 @@ export default function SellScreen() {
         child_profile_id: selectedChild?.id,
         child_name: selectedChild?.nome_figlio,
         is_new_book: isNewBook,
-        usura: currentPriceRange.usura, // Salva anche l'usura calcolata
-        guadagno_utente: currentPriceRange.guadagnoUtente, // E il guadagno utente
+        usura: currentPriceRange.usura || 0, // Salva anche l'usura calcolata
+        guadagno_utente: guadagnoUtente, // Guadagno venditore
       });
 
       Alert.alert('Successo!', 'Annuncio creato con successo');
