@@ -96,7 +96,7 @@ export default function SellScreen() {
   const [hasWritings, setHasWritings] = useState(0); // Slider 0-100
   const [hasHighlights, setHasHighlights] = useState(0); // Slider 0-100
   const [hasFolds, setHasFolds] = useState(0); // Slider 0-100
-  const [coverCondition, setCoverCondition] = useState(0); // Slider 0-100
+  // coverCondition rimosso - ora abbiamo solo 3 slider
   const [selectedBookshop, setSelectedBookshop] = useState('');
   const [notes, setNotes] = useState('');
   const [creatingListing, setCreatingListing] = useState(false);
@@ -160,6 +160,7 @@ export default function SellScreen() {
   ];
 
   // Calcolo automatico condizione basato su slider (media pesata)
+  // NOTA: Rimosso slider copertina - ora ci sono solo 3 slider
   const calculateCondition = (): { condition: string; score: number } => {
     // Se il libro è NUOVO, restituisci direttamente 'nuovo'
     if (isNewBook) {
@@ -167,11 +168,11 @@ export default function SellScreen() {
     }
     
     // Media pesata dei difetti (0 = perfetto, 100 = molto rovinato)
+    // Solo 3 slider: Scritte, Evidenziature, Pieghe - totale 100%
     const avgDefects = (
-      hasWritings * 0.30 +      // Scritte peso 30%
-      hasHighlights * 0.25 +    // Evidenziature peso 25%
-      hasFolds * 0.20 +         // Pieghe peso 20%
-      coverCondition * 0.25     // Copertina peso 25%
+      hasWritings * 0.40 +      // Scritte peso 40%
+      hasHighlights * 0.35 +    // Evidenziature peso 35%
+      hasFolds * 0.25           // Pieghe peso 25%
     );
     
     // Determina condizione finale basata sulla media
@@ -412,7 +413,7 @@ export default function SellScreen() {
     setHasWritings(0);
     setHasHighlights(0);
     setHasFolds(0);
-    setCoverCondition(0);
+    // coverCondition rimosso - non più usato
     setSelectedBookshops([]);
     setIsNewBook(false);
     setNotes('');
@@ -696,12 +697,11 @@ export default function SellScreen() {
       // Get selected bookshop details
       const selectedShopsDetails = bookshopsData.filter(b => selectedBookshops.includes(b.id));
       
-      // Prepare condition details
+      // Prepare condition details (copertina rimossa)
       const conditionDetails = {
         scritte: hasWritings,
         evidenziature: hasHighlights,
         pieghe: hasFolds,
-        copertina: coverCondition,
       };
       
       // Usa priceRange per la condizione (nuova formula)
@@ -1299,7 +1299,7 @@ export default function SellScreen() {
                     color={listingPhotos.length >= 1 ? "#4CAF50" : "#1a472a"} 
                   />
                   <Text style={[styles.photoReqText, { color: listingPhotos.length >= 1 ? '#4CAF50' : '#666', marginLeft: 8 }]}>
-                    1. Copertina fronte/retro
+                    1. Foto libro (opzionale)
                   </Text>
                   {listingPhotos.length >= 1 && <Ionicons name="checkmark-circle" size={16} color="#4CAF50" style={{ marginLeft: 'auto' }} />}
                 </View>
@@ -1310,7 +1310,7 @@ export default function SellScreen() {
                     color={listingPhotos.length >= 2 ? "#4CAF50" : "#1a472a"} 
                   />
                   <Text style={[styles.photoReqText, { color: listingPhotos.length >= 2 ? '#4CAF50' : '#666', marginLeft: 8 }]}>
-                    2. Pagina più usurata
+                    2. Foto aggiuntiva (opzionale)
                   </Text>
                   {listingPhotos.length >= 2 && <Ionicons name="checkmark-circle" size={16} color="#4CAF50" style={{ marginLeft: 'auto' }} />}
                 </View>
@@ -1321,7 +1321,7 @@ export default function SellScreen() {
                     color={listingPhotos.length >= 3 ? "#4CAF50" : "#1a472a"} 
                   />
                   <Text style={[styles.photoReqText, { color: listingPhotos.length >= 3 ? '#4CAF50' : '#666', marginLeft: 8 }]}>
-                    3. Fascicoli (se previsti)
+                    3. Foto aggiuntiva (opzionale)
                   </Text>
                   {listingPhotos.length >= 3 && <Ionicons name="checkmark-circle" size={16} color="#4CAF50" style={{ marginLeft: 'auto' }} />}
                 </View>
@@ -1336,7 +1336,7 @@ export default function SellScreen() {
                     />
                     <View style={styles.photoLabel}>
                       <Text style={styles.photoLabelText}>
-                        {index === 0 ? 'Copertina' : index === 1 ? 'Usura' : 'Fascicoli'}
+                        Foto {index + 1}
                       </Text>
                     </View>
                     <TouchableOpacity
