@@ -175,9 +175,12 @@ export default function SellScreen() {
       hasFolds * 0.25           // Pieghe peso 25%
     );
     
-    // Determina condizione finale basata sulla media (SOLO ottimo e buono)
-    if (avgDefects <= 25) return { condition: 'ottimo', score: avgDefects };
-    return { condition: 'buono', score: avgDefects };
+    // Determina condizione finale:
+    // Ottimo: 0-30%, Buono: 30-70%, Accettabile: 70-90%, Scarso: 90-100%
+    if (avgDefects <= 30) return { condition: 'ottimo', score: avgDefects };
+    if (avgDefects <= 70) return { condition: 'buono', score: avgDefects };
+    if (avgDefects <= 90) return { condition: 'accettabile', score: avgDefects };
+    return { condition: 'scarso', score: avgDefects };
   };
 
   // Funzione per calcolare il colore gradiente verde → giallo → rosso
@@ -280,11 +283,14 @@ export default function SellScreen() {
     const prezzoMedio = prezzoUsato;
     const prezzoBasso = prezzoUsato * 0.90;
     
-    // Determina condizione basata su usura (RIMOSSO "accettabile")
+    // Determina condizione basata su usura
+    // Ottimo: 0-30%, Buono: 30-70%, Accettabile: 70-90%, Scarso: 90-100%
     let condition = 'buono';
     const usuraPercentuale = usura * 100;
-    if (usuraPercentuale <= 15) condition = 'ottimo';
-    else condition = 'buono';
+    if (usuraPercentuale <= 30) condition = 'ottimo';
+    else if (usuraPercentuale <= 70) condition = 'buono';
+    else if (usuraPercentuale <= 90) condition = 'accettabile';
+    else condition = 'scarso';
     
     return {
       usura: Math.round(usuraPercentuale * 10) / 10,
@@ -1683,6 +1689,8 @@ export default function SellScreen() {
                     'nuovo': { label: 'Nuovo', color: '#2196F3', icon: 'star' },
                     'ottimo': { label: 'Ottimo', color: '#4CAF50', icon: 'checkmark-circle' },
                     'buono': { label: 'Buono', color: '#FF9800', icon: 'thumbs-up' },
+                    'accettabile': { label: 'Accettabile', color: '#FF5722', icon: 'alert-circle' },
+                    'scarso': { label: 'Scarso', color: '#f44336', icon: 'warning' },
                   }[condition] || { label: 'Buono', color: '#FF9800', icon: 'thumbs-up' };
                   
                   return (
