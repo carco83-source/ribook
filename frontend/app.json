@@ -39,7 +39,7 @@
         }
       ],
       [
-        "expo-barcode-scanner",
+        "expo-camera",
         {
           "cameraPermission": "Scansiona il codice a barre dei libri"
         }
