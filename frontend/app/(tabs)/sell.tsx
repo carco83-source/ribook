@@ -19,7 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import * as ImagePicker from 'expo-image-picker';
-import { BarCodeScanner } from 'expo-barcode-scanner';
+import { Camera, CameraType, BarCodeScanningResult } from 'expo-camera';
 import Slider from '@react-native-community/slider';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
@@ -157,6 +157,7 @@ export default function SellScreen() {
   const [showScanner, setShowScanner] = useState(false);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [scanned, setScanned] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
 
   // Bookshops data with addresses for Google Maps
   const bookshopsData = [
@@ -435,11 +436,12 @@ export default function SellScreen() {
 
   // Open barcode scanner
   const openScanner = async () => {
-    const { status } = await BarCodeScanner.requestPermissionsAsync();
+    const { status } = await Camera.requestCameraPermissionsAsync();
     setHasPermission(status === 'granted');
     
     if (status === 'granted') {
       setScanned(false);
+      setCameraReady(false);
       setShowScanner(true);
     } else {
       Alert.alert(
@@ -450,14 +452,14 @@ export default function SellScreen() {
   };
 
   // Handle barcode scanned
-  const handleBarCodeScanned = ({ type, data }: { type: string; data: string }) => {
-    if (scanned) return;
+  const handleBarCodeScanned = (result: BarCodeScanningResult) => {
+    if (scanned || !cameraReady) return;
     setScanned(true);
     
     // Clean the ISBN
-    const cleanISBN = data.replace(/[-\s]/g, '').trim();
+    const cleanISBN = result.data.replace(/[-\s]/g, '').trim();
     
-    console.log('Barcode scanned:', { type, data: cleanISBN });
+    console.log('Barcode scanned:', cleanISBN);
     
     // Close scanner and set ISBN
     setShowScanner(false);
@@ -965,23 +967,28 @@ export default function SellScreen() {
             <Text style={styles.scannerTitle}>Inquadra il codice a barre</Text>
           </View>
           
-          <BarCodeScanner
+          <Camera
+            style={{ flex: 1 }}
+            type={CameraType.back}
             onBarCodeScanned={scanned ? undefined : handleBarCodeScanned}
-            style={StyleSheet.absoluteFillObject}
-            barCodeTypes={[
-              BarCodeScanner.Constants.BarCodeType.ean13,
-              BarCodeScanner.Constants.BarCodeType.ean8,
-              BarCodeScanner.Constants.BarCodeType.code128,
-            ]}
+            barCodeScannerSettings={{
+              barCodeTypes: ['ean13', 'ean8', 'code128'],
+            }}
+            onCameraReady={() => {
+              console.log('Camera ready');
+              setCameraReady(true);
+            }}
           />
           
-          <View style={styles.scannerOverlay}>
+          <View style={styles.scannerOverlay} pointerEvents="none">
             <View style={styles.scannerFrame} />
           </View>
           
           <View style={styles.scannerFooter}>
             <Text style={styles.scannerHint}>
-              Posiziona il codice a barre all'interno del riquadro
+              {cameraReady 
+                ? 'Posiziona il codice a barre all\'interno del riquadro'
+                : 'Inizializzazione camera...'}
             </Text>
             {scanned && (
               <TouchableOpacity 
