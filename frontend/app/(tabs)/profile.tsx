@@ -371,34 +371,53 @@ export default function ProfileScreen() {
                 
                 {/* TOTALE PARZIALE SPESA per questo profilo */}
                 {(() => {
-                  // TOTALE NUOVI: usa il valore dal Radar (costo_obbligatori = spesa se tutti nuovi)
-                  // Questo è il costo totale dei libri obbligatori calcolato dal backend
+                  // COSTO LIBRI NUOVI OBBLIGATORI: libri che DEVONO essere comprati nuovi
+                  // (non esistono usati perché nuova edizione, prima adozione, ecc.)
+                  const costoNuoviObbligatori = compatibility.nuovi?.costo_totale || 0;
+                  const numLibriNuoviObbligatori = compatibility.nuovi?.totale || 0;
+                  
+                  // COSTO TOTALE SE TUTTI NUOVI (ipotetico massimo)
                   const totaleSeTuttiNuovi = compatibility.tetto_spesa?.costo_obbligatori || 0;
                   
                   // TOTALE IPOTETICO: con libri usati (risparmio usando usati)
                   const costoUsatiParziale = (compatibility.comprare?.totale_usati || 0) * 10; // €10 per libro usato
-                  const costoNuoviParziale = compatibility.nuovi?.costo_totale || 0;
                   const ricavoParziale = (compatibility.vendere?.totale_vendibili || 0) * 8; // €8 ricavo per libro venduto
-                  const spesaNettaParziale = costoUsatiParziale + costoNuoviParziale - ricavoParziale;
+                  const spesaNettaParziale = costoUsatiParziale + costoNuoviObbligatori - ricavoParziale;
                   
                   return (
                     <View style={styles.partialTotalBoxExpanded}>
-                      {/* TOTALE NUOVI - spesa se tutti i libri fossero comprati nuovi */}
+                      {/* COSTO LIBRI OBBLIGATORIAMENTE NUOVI */}
                       <View style={styles.totalNuoviRow}>
-                        <Ionicons name="book-outline" size={18} color="#1a472a" />
-                        <Text style={styles.totalNuoviLabelBold}>TOTALE NUOVI:</Text>
-                        <Text style={styles.totalNuoviValueBold}>€{totaleSeTuttiNuovi.toFixed(2)}</Text>
+                        <Ionicons name="alert-circle" size={18} color="#FF9800" />
+                        <Text style={[styles.totalNuoviLabelBold, { color: '#FF9800' }]}>
+                          NUOVI OBBLIGATORI ({numLibriNuoviObbligatori}):
+                        </Text>
+                        <Text style={[styles.totalNuoviValueBold, { color: '#FF9800' }]}>
+                          €{costoNuoviObbligatori.toFixed(2)}
+                        </Text>
                       </View>
-                      {/* TOTALE IPOTETICO - con libri usati */}
+                      
+                      {/* TOTALE SE TUTTI NUOVI (ipotetico massimo) */}
                       <View style={styles.partialTotalRow}>
+                        <Ionicons name="book-outline" size={16} color="#999" />
+                        <Text style={[styles.partialTotalLabel, { color: '#999', fontSize: 12 }]}>
+                          Se tutto nuovo:
+                        </Text>
+                        <Text style={[styles.partialTotalValue, { color: '#999', fontSize: 12 }]}>
+                          €{totaleSeTuttiNuovi.toFixed(2)}
+                        </Text>
+                      </View>
+                      
+                      {/* TOTALE IPOTETICO - con libri usati */}
+                      <View style={[styles.partialTotalRow, { marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#eee' }]}>
                         <Ionicons name="calculator-outline" size={18} color="#1a472a" />
-                        <Text style={styles.partialTotalLabel}>TOTALE IPOTETICO:</Text>
+                        <Text style={styles.partialTotalLabel}>SPESA STIMATA:</Text>
                         <Text style={[styles.partialTotalValue, spesaNettaParziale < 0 && { color: '#4CAF50' }]}>
                           €{Math.abs(spesaNettaParziale).toFixed(0)} {spesaNettaParziale < 0 ? '(guadagno)' : ''}
                         </Text>
                       </View>
                       <Text style={styles.partialTotalDetail}>
-                        (Usati €{costoUsatiParziale} + Nuovi €{costoNuoviParziale.toFixed(0)} - Ricavo €{ricavoParziale})
+                        (Usati €{costoUsatiParziale} + Nuovi €{costoNuoviObbligatori.toFixed(0)} - Ricavo €{ricavoParziale})
                       </Text>
                     </View>
                   );
