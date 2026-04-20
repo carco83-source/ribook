@@ -249,6 +249,10 @@ export default function BookstorePortalScreen() {
   };
 
   const handleBarCodeScanned = ({ data }: { data: string }) => {
+    console.log('=== QR CODE DETECTED ===');
+    console.log('Data:', data);
+    console.log('========================');
+    
     setShowScanner(false);
     handleConfirmPickup(data);
   };
@@ -553,7 +557,8 @@ export default function BookstorePortalScreen() {
                 facing="back"
                 onBarcodeScanned={handleBarCodeScanned}
                 barcodeScannerSettings={{
-                  barcodeTypes: ['qr'],
+                  barcodeTypes: ['qr', 'aztec', 'datamatrix', 'code128', 'code39'],
+                  interval: 500,
                 }}
               />
               <View style={styles.cameraOverlay}>
