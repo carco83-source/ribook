@@ -613,15 +613,6 @@ export default function SellScreen() {
   const createListing = async () => {
     if (!selectedBook || !userId) return;
 
-    // Validate minimum 2 photos
-    if (listingPhotos.length < 2) {
-      Alert.alert(
-        'Foto obbligatorie', 
-        'Devi caricare almeno 2 foto:\n\n1. Copertina aperta (fronte + retro insieme)\n2. Pagina con più usura'
-      );
-      return;
-    }
-
     // Validate price selected
     if (selectedPriceOption === null) {
       Alert.alert('Prezzo richiesto', 'Seleziona un prezzo dalla forbice di prezzi');
@@ -655,8 +646,9 @@ export default function SellScreen() {
         prezzo_copertina: selectedBook.prezzo_copertina,
         condizione: conditionResult.condition, // ottimo, buono, accettabile, nuovo
         prezzo_vendita: selectedPriceOption, // Prezzo selezionato dalla forbice
-        foto_base64: listingPhotos[0], // Main photo
+        foto_base64: listingPhotos.length > 0 ? listingPhotos[0] : null, // Main photo (opzionale)
         foto_aggiuntive: listingPhotos.slice(1), // Additional photos
+        cover_url: autoCoverUrl, // Copertina automatica da IBS.it
         condition_details: conditionDetails, // Dettagli slider
         bookstore_ids: selectedBookshops,
         bookstore_names: selectedShopsDetails.map(s => s.name),
