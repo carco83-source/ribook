@@ -371,20 +371,34 @@ export default function ProfileScreen() {
                 
                 {/* TOTALE PARZIALE SPESA per questo profilo */}
                 {(() => {
-                  // COSTO TOTALE SE TUTTI I TESTI FOSSERO ACQUISTATI NUOVI
-                  // Include tutti i libri da comprare (usati + nuovi) calcolati a prezzo di copertina
-                  const totaleSeTuttiNuovi = compatibility.tetto_spesa?.costo_obbligatori || 0;
+                  // Calcola il COSTO TOTALE SE TUTTI I TESTI FOSSERO ACQUISTATI NUOVI
+                  // Somma i prezzi di copertina di tutti i libri da comprare (usati + nuovi)
+                  
+                  // Libri che possono essere comprati usati (ma calcoliamo il prezzo nuovo)
+                  const libriUsati = compatibility.comprare?.libri_usati || compatibility.comprare?.usati?.libri || [];
+                  const costoUsatiSeNuovi = libriUsati.reduce((sum: number, libro: any) => 
+                    sum + (libro.prezzo_copertina || libro.prezzo_nuovo || 0), 0);
+                  
+                  // Libri che devono essere comprati nuovi
+                  const libriNuovi = compatibility.nuovi?.libri || [];
+                  const costoNuovi = libriNuovi.reduce((sum: number, libro: any) => 
+                    sum + (libro.prezzo_copertina || libro.prezzo || 0), 0);
+                  
+                  // TOTALE SE TUTTI NUOVI = somma prezzi copertina
+                  const totaleSeTuttiNuovi = costoUsatiSeNuovi + costoNuovi;
                   
                   // Numero totale libri da acquistare
-                  const numLibriUsati = compatibility.comprare?.totale_usati || 0;
-                  const numLibriNuovi = compatibility.nuovi?.totale || 0;
+                  const numLibriUsati = compatibility.comprare?.totale_usati || libriUsati.length || 0;
+                  const numLibriNuovi = compatibility.nuovi?.totale || libriNuovi.length || 0;
                   const totaleLibriDaComprare = numLibriUsati + numLibriNuovi;
                   
-                  // TOTALE IPOTETICO: con libri usati (risparmio usando usati)
-                  const costoUsatiParziale = (compatibility.comprare?.totale_usati || 0) * 10; // €10 per libro usato
-                  const costoNuoviObbligatori = compatibility.nuovi?.costo_totale || 0;
+                  // SPESA STIMATA: con libri usati (risparmio usando usati)
+                  // Costo usati al prezzo usato (50% del nuovo)
+                  const costoUsatiReale = libriUsati.reduce((sum: number, libro: any) => 
+                    sum + (libro.prezzo_usato || (libro.prezzo_copertina || 0) * 0.5), 0);
+                  const costoNuoviReale = costoNuovi; // I nuovi si pagano a prezzo pieno
                   const ricavoParziale = (compatibility.vendere?.totale_vendibili || 0) * 8; // €8 ricavo per libro venduto
-                  const spesaNettaParziale = costoUsatiParziale + costoNuoviObbligatori - ricavoParziale;
+                  const spesaNettaParziale = costoUsatiReale + costoNuoviReale - ricavoParziale;
                   
                   return (
                     <View style={styles.partialTotalBoxExpanded}>
@@ -411,7 +425,7 @@ export default function ProfileScreen() {
                         </Text>
                       </View>
                       <Text style={styles.partialTotalDetail}>
-                        (Usati €{costoUsatiParziale} + Nuovi €{costoNuoviObbligatori.toFixed(0)} - Ricavo €{ricavoParziale})
+                        (Usati €{costoUsatiReale.toFixed(0)} + Nuovi €{costoNuoviReale.toFixed(0)} - Ricavo €{ricavoParziale})
                       </Text>
                     </View>
                   );
