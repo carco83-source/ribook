@@ -19,7 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import * as ImagePicker from 'expo-image-picker';
-import { Camera, CameraType, BarCodeScanningResult } from 'expo-camera';
+import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
 import Slider from '@react-native-community/slider';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
@@ -155,7 +155,7 @@ export default function SellScreen() {
   
   // Barcode Scanner
   const [showScanner, setShowScanner] = useState(false);
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
 
@@ -436,23 +436,24 @@ export default function SellScreen() {
 
   // Open barcode scanner
   const openScanner = async () => {
-    const { status } = await Camera.requestCameraPermissionsAsync();
-    setHasPermission(status === 'granted');
-    
-    if (status === 'granted') {
-      setScanned(false);
-      setCameraReady(false);
-      setShowScanner(true);
-    } else {
-      Alert.alert(
-        'Permesso negato',
-        'Per scansionare il codice a barre serve il permesso della fotocamera'
-      );
+    if (!permission?.granted) {
+      const result = await requestPermission();
+      if (!result.granted) {
+        Alert.alert(
+          'Permesso negato',
+          'Per scansionare il codice a barre serve il permesso della fotocamera'
+        );
+        return;
+      }
     }
+    
+    setScanned(false);
+    setCameraReady(false);
+    setShowScanner(true);
   };
 
   // Handle barcode scanned
-  const handleBarCodeScanned = (result: BarCodeScanningResult) => {
+  const handleBarCodeScanned = (result: BarcodeScanningResult) => {
     if (scanned || !cameraReady) return;
     setScanned(true);
     
@@ -967,12 +968,12 @@ export default function SellScreen() {
             <Text style={styles.scannerTitle}>Inquadra il codice a barre</Text>
           </View>
           
-          <Camera
+          <CameraView
             style={{ flex: 1 }}
-            type={CameraType.back}
-            onBarCodeScanned={scanned ? undefined : handleBarCodeScanned}
-            barCodeScannerSettings={{
-              barCodeTypes: ['ean13', 'ean8', 'code128'],
+            facing="back"
+            onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+            barcodeScannerSettings={{
+              barcodeTypes: ['ean13', 'ean8', 'code128'],
             }}
             onCameraReady={() => {
               console.log('Camera ready');
