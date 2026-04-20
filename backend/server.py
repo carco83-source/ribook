@@ -4267,10 +4267,39 @@ async def get_child_analysis_v2(user_id: str, child_id: str):
             
             libri_storici = adozione_prec.get("libri", []) if adozione_prec else []
             
-            if libri_storici:
-                vendibili, non_vendibili = await calcola_vendibili(
-                    db, libri_storici, child_classe, child_tipo, child_codice_scuola, child_sezione
+            # FILTRO: Rimuovi libri QUINQUENNALI (Religione, Scienze Motorie) dai dati 2024/2025
+            # perché questi dati sono spesso inaffidabili. Per questi libri, verifichiamo
+            # se lo studente li ha davvero confrontando con la lista attuale (2025/2026)
+            libri_storici_filtrati = []
+            for libro in libri_storici:
+                disciplina = libro.get('disciplina', '').upper()
+                is_quinquennale = any(m in disciplina for m in ['RELIGIONE', 'SCIENZE MOTORIE', 'EDUCAZIONE FISICA'])
+                
+                if is_quinquennale:
+                    # Per libri quinquennali: verifica se lo STESSO ISBN è nella lista attuale
+                    # Se non c'è, significa che il libro è cambiato e lo studente non l'ha mai avuto
+                    isbn = libro.get('isbn', '')
+                    ha_libro_attuale = any(l.get('isbn') == isbn for l in libri_correnti)
+                    if ha_libro_attuale:
+                        # Lo studente ha questo libro quinquennale, ma NON è vendibile (serve ancora)
+                        non_vendibili.append({
+                            "isbn": isbn,
+                            "titolo": libro.get("titolo", ""),
+                            "disciplina": disciplina,
+                            "is_volume_unico": True,
+                            "status": "NON VENDIBILE",
+                            "motivo": "Quinquennale - serve fino a 5ª"
+                        })
+                    # Se non ha lo stesso ISBN, ignora (dati 2024/2025 errati)
+                else:
+                    libri_storici_filtrati.append(libro)
+            
+            if libri_storici_filtrati:
+                vendibili_calc, non_vendibili_calc = await calcola_vendibili(
+                    db, libri_storici_filtrati, child_classe, child_tipo, child_codice_scuola, child_sezione
                 )
+                vendibili.extend(vendibili_calc)
+                non_vendibili.extend(non_vendibili_calc)
     
     # ================================================
     # 4. RIMOZIONE DUPLICATI TRA GIÀ POSSEDUTI E NON VENDIBILI
