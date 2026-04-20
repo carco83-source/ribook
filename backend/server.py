@@ -15,6 +15,9 @@ import string
 import hashlib
 import base64
 import io
+import requests
+import re
+import httpx
 
 # Book logic module for complex classification
 from book_logic import (
@@ -1252,6 +1255,64 @@ async def search_book_by_isbn(isbn: str):
     if not book:
         raise HTTPException(status_code=404, detail="Libro non trovato")
     return Book(**book)
+
+# ============== BOOK COVER API (IBS.it) ==============
+
+@api_router.get("/books/cover/{isbn}")
+async def get_book_cover(isbn: str):
+    """
+    Recupera la copertina del libro da IBS.it
+    IBS.it usa un pattern URL diretto: https://www.ibs.it/images/{ISBN}_0_0_0_{SIZE}.jpg
+    SIZE: 180_50 = piccola, 536_0 = grande
+    """
+    try:
+        # Pulisci ISBN
+        clean_isbn = isbn.strip().replace("-", "").replace(" ", "")
+        
+        # URL diretto IBS.it (formato grande)
+        ibs_cover_url = f"https://www.ibs.it/images/{clean_isbn}_0_0_0_536_0.jpg"
+        
+        # Verifica che l'immagine esista
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.head(ibs_cover_url, follow_redirects=True)
+            
+            if response.status_code == 200:
+                content_type = response.headers.get('content-type', '')
+                if 'image' in content_type:
+                    return {
+                        "isbn": clean_isbn,
+                        "cover_url": ibs_cover_url,
+                        "source": "ibs.it"
+                    }
+        
+        # Fallback: prova URL IBS.it alternativo
+        ibs_alt_url = f"https://www.ibs.it/images/{clean_isbn}_0_0_0_180_50.jpg"
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.head(ibs_alt_url, follow_redirects=True)
+            if response.status_code == 200:
+                return {
+                    "isbn": clean_isbn,
+                    "cover_url": ibs_alt_url,
+                    "source": "ibs.it"
+                }
+        
+        # Fallback finale: Open Library
+        openlibrary_url = f"https://covers.openlibrary.org/b/isbn/{clean_isbn}-L.jpg"
+        
+        return {
+            "isbn": clean_isbn,
+            "cover_url": openlibrary_url,
+            "source": "openlibrary",
+            "fallback": True
+        }
+        
+    except Exception as e:
+        logging.error(f"Error fetching book cover for ISBN {isbn}: {e}")
+        return {
+            "isbn": isbn,
+            "cover_url": None,
+            "error": str(e)
+        }
 
 # ============== BOOK LISTINGS ROUTES ==============
 

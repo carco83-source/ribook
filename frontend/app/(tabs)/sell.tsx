@@ -19,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
 import Slider from '@react-native-community/slider';
 
@@ -100,6 +101,10 @@ export default function SellScreen() {
   const [notes, setNotes] = useState('');
   const [creatingListing, setCreatingListing] = useState(false);
   const [loadingPhoto, setLoadingPhoto] = useState(false); // Loading durante elaborazione foto
+  
+  // Copertina automatica da IBS.it
+  const [autoCoverUrl, setAutoCoverUrl] = useState<string | null>(null);
+  const [loadingCover, setLoadingCover] = useState(false);
 
   // Libro Nuovo flag
   const [isNewBook, setIsNewBook] = useState(false);
@@ -348,6 +353,12 @@ export default function SellScreen() {
     setIsNewBook(false);
     setNotes('');
     setSelectedPriceOption(null);
+    setAutoCoverUrl(null); // Reset copertina
+    
+    // Recupera automaticamente la copertina da IBS.it
+    if (book.isbn) {
+      fetchBookCover(book.isbn);
+    }
     
     setShowListingForm(true);
   };
@@ -474,6 +485,62 @@ export default function SellScreen() {
     }
   };
 
+  // Funzione per comprimere immagine (max 1MB, formato JPEG ottimizzato)
+  const compressImage = async (uri: string): Promise<string | null> => {
+    try {
+      // Ridimensiona a max 1280px di larghezza mantenendo aspect ratio
+      const manipulated = await ImageManipulator.manipulateAsync(
+        uri,
+        [{ resize: { width: 1280 } }],
+        { 
+          compress: 0.6, // 60% qualità JPEG (buon compromesso qualità/dimensione)
+          format: ImageManipulator.SaveFormat.JPEG,
+          base64: true 
+        }
+      );
+      
+      // Verifica dimensione (base64 è ~33% più grande del binario)
+      if (manipulated.base64) {
+        const sizeKB = (manipulated.base64.length * 0.75) / 1024;
+        console.log(`Foto compressa: ${sizeKB.toFixed(0)} KB`);
+        
+        // Se ancora troppo grande, comprimi di più
+        if (sizeKB > 1024) {
+          const extraCompressed = await ImageManipulator.manipulateAsync(
+            uri,
+            [{ resize: { width: 800 } }],
+            { compress: 0.4, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+          );
+          return extraCompressed.base64 || null;
+        }
+        return manipulated.base64;
+      }
+      return null;
+    } catch (error) {
+      console.error('Errore compressione:', error);
+      return null;
+    }
+  };
+
+  // Funzione per recuperare copertina automatica da IBS.it
+  const fetchBookCover = async (isbn: string) => {
+    if (!isbn) return;
+    
+    setLoadingCover(true);
+    try {
+      const response = await axios.get(`${API_URL}/api/books/cover/${isbn}`);
+      if (response.data && response.data.cover_url) {
+        setAutoCoverUrl(response.data.cover_url);
+        console.log('Copertina recuperata da:', response.data.source);
+      }
+    } catch (error) {
+      console.error('Errore recupero copertina:', error);
+      setAutoCoverUrl(null);
+    } finally {
+      setLoadingCover(false);
+    }
+  };
+
   const pickImage = async () => {
     if (listingPhotos.length >= 3) {
       Alert.alert('Limite raggiunto', 'Puoi caricare massimo 3 foto');
@@ -486,13 +553,18 @@ export default function SellScreen() {
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [16, 9], // Formato orizzontale (landscape)
-        quality: 0.3, // Ridotta per upload veloce (buona qualità visiva)
-        base64: true,
-        exif: false, // Rimuove metadati per ridurre dimensione
+        quality: 0.7, // Qualità iniziale alta, poi comprimiamo
+        exif: false, // Rimuove metadati
       });
 
-      if (!result.canceled && result.assets[0].base64) {
-        setListingPhotos([...listingPhotos, result.assets[0].base64]);
+      if (!result.canceled && result.assets[0].uri) {
+        // Comprimi l'immagine
+        const compressedBase64 = await compressImage(result.assets[0].uri);
+        if (compressedBase64) {
+          setListingPhotos([...listingPhotos, compressedBase64]);
+        } else {
+          Alert.alert('Errore', 'Impossibile elaborare la foto');
+        }
       }
     } finally {
       setLoadingPhoto(false);
@@ -516,13 +588,18 @@ export default function SellScreen() {
       const result = await ImagePicker.launchCameraAsync({
         allowsEditing: true,
         aspect: [16, 9], // Formato orizzontale (landscape)
-        quality: 0.3, // Ridotta per upload veloce (buona qualità visiva)
-        base64: true,
-        exif: false, // Rimuove metadati per ridurre dimensione
+        quality: 0.7, // Qualità iniziale alta, poi comprimiamo
+        exif: false, // Rimuove metadati
       });
 
-      if (!result.canceled && result.assets[0].base64) {
-        setListingPhotos([...listingPhotos, result.assets[0].base64]);
+      if (!result.canceled && result.assets[0].uri) {
+        // Comprimi l'immagine
+        const compressedBase64 = await compressImage(result.assets[0].uri);
+        if (compressedBase64) {
+          setListingPhotos([...listingPhotos, compressedBase64]);
+        } else {
+          Alert.alert('Errore', 'Impossibile elaborare la foto');
+        }
       }
     } finally {
       setLoadingPhoto(false);
@@ -1110,33 +1187,64 @@ export default function SellScreen() {
                 </View>
               )}
 
-              {/* Photos Section - 2 MANDATORY + 1 OPTIONAL */}
-              <Text style={styles.formLabel}>Foto del libro (2 obbligatorie) *</Text>
+              {/* ========== COPERTINA AUTOMATICA + FOTO OPZIONALI ========== */}
+              
+              {/* Copertina automatica da IBS.it */}
+              <View style={{ marginBottom: 16 }}>
+                <Text style={styles.formLabel}>Copertina del libro</Text>
+                {loadingCover ? (
+                  <View style={{ alignItems: 'center', padding: 20 }}>
+                    <ActivityIndicator size="small" color="#1a472a" />
+                    <Text style={{ color: '#666', marginTop: 8 }}>Carico copertina...</Text>
+                  </View>
+                ) : autoCoverUrl ? (
+                  <View style={{ alignItems: 'center' }}>
+                    <Image
+                      source={{ uri: autoCoverUrl }}
+                      style={{ width: 120, height: 180, borderRadius: 8, backgroundColor: '#f0f0f0' }}
+                      resizeMode="contain"
+                    />
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
+                      <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
+                      <Text style={{ color: '#4CAF50', fontSize: 12, marginLeft: 4 }}>
+                        Copertina caricata automaticamente
+                      </Text>
+                    </View>
+                  </View>
+                ) : (
+                  <View style={{ alignItems: 'center', padding: 20, backgroundColor: '#f9f9f9', borderRadius: 8 }}>
+                    <Ionicons name="image-outline" size={40} color="#ccc" />
+                    <Text style={{ color: '#999', marginTop: 8 }}>Copertina non disponibile</Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Foto aggiuntive OPZIONALI */}
+              <Text style={styles.formLabel}>Foto aggiuntive (opzionali - max 3)</Text>
               <View style={styles.photoRequirements}>
-                <View style={[styles.photoReqItem, listingPhotos.length >= 1 && styles.photoReqItemDone]}>
+                <View style={[styles.photoReqItem, styles.photoReqItemOptional, listingPhotos.length >= 1 && styles.photoReqItemDone]}>
                   <Ionicons 
                     name={listingPhotos.length >= 1 ? "checkmark-circle" : "ellipse-outline"} 
                     size={18} 
-                    color={listingPhotos.length >= 1 ? "#4CAF50" : "#999"} 
+                    color={listingPhotos.length >= 1 ? "#4CAF50" : "#aaa"} 
                   />
-                  <Text style={styles.photoReqText}>1. Copertina aperta (fronte + retro insieme)</Text>
+                  <Text style={[styles.photoReqText, { color: '#666' }]}>1. Pagina con più usura</Text>
                 </View>
-                <View style={[styles.photoReqItem, listingPhotos.length >= 2 && styles.photoReqItemDone]}>
+                <View style={[styles.photoReqItem, styles.photoReqItemOptional, listingPhotos.length >= 2 && styles.photoReqItemDone]}>
                   <Ionicons 
                     name={listingPhotos.length >= 2 ? "checkmark-circle" : "ellipse-outline"} 
                     size={18} 
-                    color={listingPhotos.length >= 2 ? "#4CAF50" : "#999"} 
+                    color={listingPhotos.length >= 2 ? "#4CAF50" : "#aaa"} 
                   />
-                  <Text style={styles.photoReqText}>2. Pagina con più usura (la peggiore)</Text>
+                  <Text style={[styles.photoReqText, { color: '#666' }]}>2. Altra pagina con usura</Text>
                 </View>
-                {/* Terza foto opzionale - altra pagina con usura */}
                 <View style={[styles.photoReqItem, styles.photoReqItemOptional, listingPhotos.length >= 3 && styles.photoReqItemDone]}>
                   <Ionicons 
                     name={listingPhotos.length >= 3 ? "checkmark-circle" : "ellipse-outline"} 
                     size={18} 
                     color={listingPhotos.length >= 3 ? "#4CAF50" : "#aaa"} 
                   />
-                  <Text style={[styles.photoReqText, { color: '#666' }]}>3. Foto dei fascicoli se previsti (opzionale)</Text>
+                  <Text style={[styles.photoReqText, { color: '#666' }]}>3. Foto dei fascicoli se previsti</Text>
                 </View>
               </View>
               
@@ -1149,7 +1257,7 @@ export default function SellScreen() {
                     />
                     <View style={styles.photoLabel}>
                       <Text style={styles.photoLabelText}>
-                        {index === 0 ? 'Copertine' : index === 1 ? 'Usura' : 'Fascicoli'}
+                        {index === 0 ? 'Usura 1' : index === 1 ? 'Usura 2' : 'Fascicoli'}
                       </Text>
                     </View>
                     <TouchableOpacity
@@ -1164,7 +1272,7 @@ export default function SellScreen() {
                 {loadingPhoto && (
                   <View style={[styles.addPhotoBtn, { justifyContent: 'center', alignItems: 'center' }]}>
                     <ActivityIndicator size="small" color="#1a472a" />
-                    <Text style={[styles.addPhotoBtnText, { fontSize: 10 }]}>Elaboro...</Text>
+                    <Text style={[styles.addPhotoBtnText, { fontSize: 10 }]}>Comprimo...</Text>
                   </View>
                 )}
                 {/* Mostra pulsanti per caricare foto se meno di 3 e non in loading */}
@@ -1181,17 +1289,11 @@ export default function SellScreen() {
                   </View>
                 )}
               </View>
-              {listingPhotos.length < 2 && (
-                <Text style={styles.photoWarning}>
-                  Devi caricare almeno 2 foto per continuare
-                </Text>
-              )}
-              {/* Suggerimento terza foto opzionale */}
-              {listingPhotos.length === 2 && (
-                <Text style={[styles.photoWarning, { color: '#2196F3' }]}>
-                  💡 Puoi aggiungere una 3ª foto con altra pagina usurata (opzionale)
-                </Text>
-              )}
+              
+              {/* Info compressione */}
+              <Text style={{ fontSize: 11, color: '#999', textAlign: 'center', marginTop: 4, marginBottom: 12 }}>
+                📸 Foto compresse automaticamente (max 1MB, formato orizzontale)
+              </Text>
 
               {/* ========== SEZIONE STATO LIBRO ========== */}
               <View style={styles.conditionSectionHeader}>
@@ -1540,10 +1642,10 @@ export default function SellScreen() {
               <TouchableOpacity
                 style={[
                   styles.submitButton, 
-                  (creatingListing || listingPhotos.length < 2) && styles.submitButtonDisabled
+                  creatingListing && styles.submitButtonDisabled
                 ]}
                 onPress={createListing}
-                disabled={creatingListing || listingPhotos.length < 2}
+                disabled={creatingListing}
               >
                 {creatingListing ? (
                   <ActivityIndicator color="#fff" />
