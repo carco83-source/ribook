@@ -454,13 +454,21 @@ export default function SellScreen() {
 
   // Handle barcode scanned
   const handleBarCodeScanned = (result: BarcodeScanningResult) => {
-    if (scanned || !cameraReady) return;
+    // Prevent multiple scans
+    if (scanned) {
+      console.log('Scan already in progress, ignoring...');
+      return;
+    }
+    
+    console.log('=== BARCODE DETECTED ===');
+    console.log('Type:', result.type);
+    console.log('Data:', result.data);
+    console.log('========================');
+    
     setScanned(true);
     
     // Clean the ISBN
     const cleanISBN = result.data.replace(/[-\s]/g, '').trim();
-    
-    console.log('Barcode scanned:', cleanISBN);
     
     // Close scanner and set ISBN
     setShowScanner(false);
@@ -973,10 +981,11 @@ export default function SellScreen() {
             facing="back"
             onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
             barcodeScannerSettings={{
-              barcodeTypes: ['ean13', 'ean8', 'code128'],
+              barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39', 'itf14'],
+              interval: 500,
             }}
             onCameraReady={() => {
-              console.log('Camera ready');
+              console.log('Camera ready for barcode scanning');
               setCameraReady(true);
             }}
           />

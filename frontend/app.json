@@ -41,7 +41,8 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Scansiona il codice a barre dei libri"
+          "cameraPermission": "Scansiona il codice a barre dei libri",
+          "barcodeScannerEnabled": true
         }
       ]
     ],
