@@ -670,6 +670,11 @@ async def calcola_vendibili(db, libri_storici: List[dict], classe: int, tipo_scu
             libro_richiesto = False
             classe_destinazione = None
             
+            # RELIGIONE e SCIENZE MOTORIE sono QUINQUENNALI → tratta come volumi unici
+            is_quinquennale = any(materia in disciplina.upper() for materia in [
+                'RELIGIONE', 'SCIENZE MOTORIE', 'EDUCAZIONE FISICA'
+            ]) if disciplina else False
+            
             for cl in [1, 2]:
                 adozione_cl = await db.adozioni.find_one({
                     "codice_scuola": codice_scuola,
@@ -677,8 +682,8 @@ async def calcola_vendibili(db, libri_storici: List[dict], classe: int, tipo_scu
                 })
                 if adozione_cl:
                     for l in adozione_cl.get('libri', []):
-                        if is_volume_unico:
-                            # VOLUME UNICO: cerca stesso ISBN
+                        if is_volume_unico or is_quinquennale:
+                            # VOLUME UNICO o QUINQUENNALE: cerca stesso ISBN
                             if l.get('isbn') == isbn:
                                 libro_richiesto = True
                                 classe_destinazione = cl
@@ -710,8 +715,8 @@ async def calcola_vendibili(db, libri_storici: List[dict], classe: int, tipo_scu
                         })
                         if adozione_altra:
                             for l in adozione_altra.get('libri', []):
-                                if is_volume_unico:
-                                    # VOLUME UNICO: cerca stesso ISBN
+                                if is_volume_unico or is_quinquennale:
+                                    # VOLUME UNICO o QUINQUENNALE: cerca stesso ISBN
                                     if l.get('isbn') == isbn:
                                         libro_richiesto = True
                                         classe_destinazione = cl
