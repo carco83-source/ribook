@@ -269,10 +269,10 @@ export default function SellScreen() {
     const commissioni = 0.17;
     const prezzoVendita = prezzoUsato / (1 - commissioni);
     
-    // 🎯 VARIANTI UX
-    const prezzoConsigliato = prezzoVendita;
-    const prezzoVeloce = prezzoVendita * 0.9;
-    const prezzoAlto = Math.min(prezzoVendita * 1.1, prezzoNuovo);
+    // 🎯 VARIANTI UX (abbassate del 10%)
+    const prezzoConsigliato = prezzoVendita * 0.90; // -10%
+    const prezzoVeloce = prezzoVendita * 0.80; // -10% sul veloce
+    const prezzoAlto = Math.min(prezzoVendita * 1.00, prezzoNuovo); // -10% sull'alto
     
     // Determina condizione basata su usura
     let condition = 'buono';
@@ -664,7 +664,10 @@ export default function SellScreen() {
   };
 
   const createListing = async () => {
-    if (!selectedBook || !userId) return;
+    if (!selectedBook || !userId) {
+      console.log('Missing selectedBook or userId');
+      return;
+    }
 
     // Validate price selected
     if (selectedPriceOption === null) {
@@ -690,6 +693,15 @@ export default function SellScreen() {
         copertina: coverCondition,
       };
       
+      // Usa priceRange per la condizione (nuova formula)
+      const currentPriceRange = calculatePriceRange();
+      
+      console.log('Creating listing with:', {
+        isbn: selectedBook.isbn,
+        prezzo: selectedPriceOption,
+        condizione: currentPriceRange.condition
+      });
+      
       await axios.post(`${API_URL}/api/listings?user_id=${userId}`, {
         book_id: selectedBook.isbn || selectedBook.id,
         book_isbn: selectedBook.isbn,
@@ -697,7 +709,7 @@ export default function SellScreen() {
         book_autori: selectedBook.autori,
         book_disciplina: selectedBook.disciplina,
         prezzo_copertina: selectedBook.prezzo_copertina,
-        condizione: conditionResult.condition, // ottimo, buono, accettabile, nuovo
+        condizione: currentPriceRange.condition, // Usa la nuova formula
         prezzo_vendita: selectedPriceOption, // Prezzo selezionato dalla forbice
         foto_base64: listingPhotos.length > 0 ? listingPhotos[0] : null, // Main photo (opzionale)
         foto_aggiuntive: listingPhotos.slice(1), // Additional photos
@@ -710,6 +722,8 @@ export default function SellScreen() {
         child_profile_id: selectedChild?.id,
         child_name: selectedChild?.nome_figlio,
         is_new_book: isNewBook,
+        usura: currentPriceRange.usura, // Salva anche l'usura calcolata
+        guadagno_utente: currentPriceRange.guadagnoUtente, // E il guadagno utente
       });
 
       Alert.alert('Successo!', 'Annuncio creato con successo');
