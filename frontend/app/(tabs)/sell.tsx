@@ -513,8 +513,8 @@ export default function SellScreen() {
   };
 
   const pickImage = async () => {
-    if (listingPhotos.length >= 4) {
-      Alert.alert('Limite raggiunto', 'Puoi caricare massimo 4 foto');
+    if (listingPhotos.length >= 5) {
+      Alert.alert('Limite raggiunto', 'Puoi caricare massimo 5 foto');
       return;
     }
 
@@ -532,8 +532,8 @@ export default function SellScreen() {
   };
 
   const takePhoto = async () => {
-    if (listingPhotos.length >= 4) {
-      Alert.alert('Limite raggiunto', 'Puoi caricare massimo 4 foto');
+    if (listingPhotos.length >= 5) {
+      Alert.alert('Limite raggiunto', 'Puoi caricare massimo 5 foto');
       return;
     }
 
@@ -1178,7 +1178,7 @@ export default function SellScreen() {
                 </View>
               )}
 
-              {/* Photos Section - 2 MANDATORY PHOTOS + 1 OPTIONAL FOR FASCICOLI */}
+              {/* Photos Section - 2 MANDATORY + 2 OPTIONAL (usura extra + fascicoli) */}
               <Text style={styles.formLabel}>Foto del libro (2 obbligatorie) *</Text>
               <View style={styles.photoRequirements}>
                 <View style={[styles.photoReqItem, listingPhotos.length >= 1 && styles.photoReqItemDone]}>
@@ -1197,15 +1197,24 @@ export default function SellScreen() {
                   />
                   <Text style={styles.photoReqText}>2. Pagina con più usura (la peggiore)</Text>
                 </View>
-                {/* Terza foto per fascicoli - solo se flag attivo e >1 fascicolo cartaceo */}
+                {/* Terza foto opzionale - altra pagina con usura */}
+                <View style={[styles.photoReqItem, styles.photoReqItemOptional, listingPhotos.length >= 3 && styles.photoReqItemDone]}>
+                  <Ionicons 
+                    name={listingPhotos.length >= 3 ? "checkmark-circle" : "ellipse-outline"} 
+                    size={18} 
+                    color={listingPhotos.length >= 3 ? "#4CAF50" : "#aaa"} 
+                  />
+                  <Text style={[styles.photoReqText, { color: '#666' }]}>3. Altra pagina con usura (opzionale)</Text>
+                </View>
+                {/* Quarta foto per fascicoli - solo se ci sono fascicoli */}
                 {hasFascicoli && selectedBook && countFascicoliCartacei(selectedBook.titolo) > 0 && (
-                  <View style={[styles.photoReqItem, listingPhotos.length >= 3 && styles.photoReqItemDone]}>
+                  <View style={[styles.photoReqItem, listingPhotos.length >= 4 && styles.photoReqItemDone]}>
                     <Ionicons 
-                      name={listingPhotos.length >= 3 ? "checkmark-circle" : "ellipse-outline"} 
+                      name={listingPhotos.length >= 4 ? "checkmark-circle" : "ellipse-outline"} 
                       size={18} 
-                      color={listingPhotos.length >= 3 ? "#4CAF50" : "#999"} 
+                      color={listingPhotos.length >= 4 ? "#4CAF50" : "#FF9800"} 
                     />
-                    <Text style={styles.photoReqText}>3. Tutti i {getTotaleFascicoli(selectedBook.titolo)} fascicoli insieme</Text>
+                    <Text style={[styles.photoReqText, { color: '#FF9800' }]}>4. Tutti i {getTotaleFascicoli(selectedBook.titolo)} fascicoli insieme</Text>
                   </View>
                 )}
               </View>
@@ -1219,7 +1228,7 @@ export default function SellScreen() {
                     />
                     <View style={styles.photoLabel}>
                       <Text style={styles.photoLabelText}>
-                        {index === 0 ? 'Copertine' : index === 1 ? 'Pagina peggiore' : 'Fascicoli'}
+                        {index === 0 ? 'Copertine' : index === 1 ? 'Usura 1' : index === 2 ? 'Usura 2' : 'Fascicoli'}
                       </Text>
                     </View>
                     <TouchableOpacity
@@ -1232,9 +1241,10 @@ export default function SellScreen() {
                 ))}
                 {/* Mostra pulsanti per caricare foto se: 
                     - meno di 2 foto (obbligatorie)
-                    - OPPURE meno di 3 foto E flag attivo E ci sono fascicoli cartacei extra */}
-                {(listingPhotos.length < 2 || 
-                  (hasFascicoli && selectedBook && countFascicoliCartacei(selectedBook.titolo) > 0 && listingPhotos.length < 3)) && (
+                    - OPPURE meno di 3 foto (terza opzionale usura)
+                    - OPPURE meno di 4 foto E ci sono fascicoli cartacei */}
+                {(listingPhotos.length < 3 || 
+                  (hasFascicoli && selectedBook && countFascicoliCartacei(selectedBook.titolo) > 0 && listingPhotos.length < 4)) && (
                   <View style={styles.addPhotoButtons}>
                     <TouchableOpacity style={styles.addPhotoBtn} onPress={takePhoto}>
                       <Ionicons name="camera" size={24} color="#1a472a" />
@@ -1252,10 +1262,16 @@ export default function SellScreen() {
                   Devi caricare almeno 2 foto per continuare
                 </Text>
               )}
-              {/* Warning per terza foto fascicoli */}
-              {hasFascicoli && selectedBook && countFascicoliCartacei(selectedBook.titolo) > 0 && listingPhotos.length === 2 && (
+              {/* Suggerimento terza foto opzionale */}
+              {listingPhotos.length === 2 && (
+                <Text style={[styles.photoWarning, { color: '#2196F3' }]}>
+                  💡 Puoi aggiungere una 3ª foto con altra pagina usurata (opzionale)
+                </Text>
+              )}
+              {/* Warning per quarta foto fascicoli */}
+              {hasFascicoli && selectedBook && countFascicoliCartacei(selectedBook.titolo) > 0 && listingPhotos.length >= 2 && listingPhotos.length < 4 && (
                 <Text style={[styles.photoWarning, { color: '#FF9800' }]}>
-                  Carica la 3ª foto con tutti i {getTotaleFascicoli(selectedBook.titolo)} fascicoli insieme
+                  ⚠️ Carica la foto con tutti i {getTotaleFascicoli(selectedBook.titolo)} fascicoli insieme
                 </Text>
               )}
 
@@ -2008,6 +2024,13 @@ const styles = StyleSheet.create({
   },
   photoReqItemDone: {
     opacity: 0.7,
+  },
+  photoReqItemOptional: {
+    opacity: 0.8,
+    borderLeftWidth: 2,
+    borderLeftColor: '#2196F3',
+    paddingLeft: 8,
+    marginLeft: 8,
   },
   photoReqText: {
     fontSize: 13,
