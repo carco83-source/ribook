@@ -175,10 +175,9 @@ export default function SellScreen() {
       hasFolds * 0.25           // Pieghe peso 25%
     );
     
-    // Determina condizione finale basata sulla media
+    // Determina condizione finale basata sulla media (SOLO ottimo e buono)
     if (avgDefects <= 25) return { condition: 'ottimo', score: avgDefects };
-    if (avgDefects <= 55) return { condition: 'buono', score: avgDefects };
-    return { condition: 'accettabile', score: avgDefects };
+    return { condition: 'buono', score: avgDefects };
   };
 
   // Funzione per calcolare il colore gradiente verde → giallo → rosso
@@ -226,10 +225,10 @@ export default function SellScreen() {
     }
     
     // ========== LIBRO NUOVO ==========
-    // 15% in meno del prezzo ministeriale, poi commissioni
+    // 7% in meno del prezzo ministeriale, poi commissioni
     if (isNewBook) {
       const commissioni = 0.17;
-      const prezzoBase = prezzoNuovo * 0.85; // 85% del nuovo (15% sconto)
+      const prezzoBase = prezzoNuovo * 0.93; // 93% del nuovo (7% sconto)
       const prezzoVendita = prezzoBase / (1 - commissioni); // Aggiungi commissioni
       
       // Il prezzo di vendita NON può superare il prezzo ministeriale
@@ -247,12 +246,11 @@ export default function SellScreen() {
     }
     
     // ========== LIBRO USATO ==========
-    // Pesi difetti (AUMENTATI per scritte e evidenziature)
+    // Pesi difetti
     const pesi = {
-      scritte: 0.40,        // Aumentato da 0.30 → 0.40
-      evidenziature: 0.35,  // Aumentato da 0.25 → 0.35
-      pieghe: 0.25          // Aumentato da 0.20 → 0.25
-      // RIMOSSA copertina (ora è foto)
+      scritte: 0.40,
+      evidenziature: 0.35,
+      pieghe: 0.25
     };
     
     // Calcolo usura (0 → 1)
@@ -262,13 +260,13 @@ export default function SellScreen() {
       hasFolds * pesi.pieghe
     ) / 100;
     
-    // PREZZO BASE USATO: max 70% del ministeriale (usato perfetto)
-    const maxUsato = prezzoNuovo * 0.70;
+    // PREZZO BASE USATO: max 80% del ministeriale (usato perfetto)
+    const maxUsato = prezzoNuovo * 0.80;
     
     // Curva non lineare per l'usura
     let prezzoUsato = maxUsato * (1 - Math.pow(usura, 1.2));
     
-    // Hard cap: mai sopra il 70% del nuovo
+    // Hard cap: mai sopra l'80% del nuovo
     prezzoUsato = Math.min(prezzoUsato, maxUsato);
     
     // Minimo 20% del nuovo per libri molto usurati
@@ -286,12 +284,11 @@ export default function SellScreen() {
     const prezzoVeloce = prezzoFinale * 0.90;
     const prezzoAlto = Math.min(prezzoFinale * 1.05, prezzoNuovo);
     
-    // Determina condizione basata su usura
+    // Determina condizione basata su usura (RIMOSSO "accettabile")
     let condition = 'buono';
     const usuraPercentuale = usura * 100;
-    if (usuraPercentuale <= 10) condition = 'ottimo';
-    else if (usuraPercentuale <= 30) condition = 'buono';
-    else condition = 'accettabile';
+    if (usuraPercentuale <= 15) condition = 'ottimo';
+    else condition = 'buono';
     
     return {
       usura: Math.round(usuraPercentuale * 10) / 10,
@@ -1274,12 +1271,6 @@ export default function SellScreen() {
                       style={{ width: 120, height: 180, borderRadius: 8, backgroundColor: '#f0f0f0' }}
                       resizeMode="contain"
                     />
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
-                      <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
-                      <Text style={{ color: '#4CAF50', fontSize: 12, marginLeft: 4 }}>
-                        Copertina caricata automaticamente
-                      </Text>
-                    </View>
                   </View>
                 ) : (
                   <View style={{ alignItems: 'center', padding: 20, backgroundColor: '#f9f9f9', borderRadius: 8 }}>
@@ -1289,41 +1280,62 @@ export default function SellScreen() {
                 )}
               </View>
 
-              {/* Foto aggiuntive OPZIONALI con icone */}
-              <Text style={styles.formLabel}>📸 Foto del libro (opzionali - max 3)</Text>
+              {/* Foto aggiuntive OPZIONALI con pulsanti Scatta per ciascuna */}
+              <Text style={styles.formLabel}>Foto del libro (opzionali - max 3)</Text>
               <View style={styles.photoRequirements}>
                 <View style={[styles.photoReqItem, styles.photoReqItemOptional, listingPhotos.length >= 1 && styles.photoReqItemDone]}>
-                  <Ionicons 
-                    name="camera" 
-                    size={18} 
-                    color={listingPhotos.length >= 1 ? "#4CAF50" : "#1a472a"} 
-                  />
-                  <Text style={[styles.photoReqText, { color: listingPhotos.length >= 1 ? '#4CAF50' : '#666', marginLeft: 8 }]}>
-                    1. Foto libro (opzionale)
-                  </Text>
-                  {listingPhotos.length >= 1 && <Ionicons name="checkmark-circle" size={16} color="#4CAF50" style={{ marginLeft: 'auto' }} />}
+                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
+                    <Ionicons 
+                      name="camera" 
+                      size={18} 
+                      color={listingPhotos.length >= 1 ? "#4CAF50" : "#1a472a"} 
+                    />
+                    <Text style={[styles.photoReqText, { color: listingPhotos.length >= 1 ? '#4CAF50' : '#666', marginLeft: 8 }]}>
+                      1. Foto copertina - libro aperto
+                    </Text>
+                  </View>
+                  {listingPhotos.length < 1 && (
+                    <TouchableOpacity style={styles.photoScattaBtn} onPress={takePhoto}>
+                      <Text style={styles.photoScattaBtnText}>Scatta</Text>
+                    </TouchableOpacity>
+                  )}
+                  {listingPhotos.length >= 1 && <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />}
                 </View>
                 <View style={[styles.photoReqItem, styles.photoReqItemOptional, listingPhotos.length >= 2 && styles.photoReqItemDone]}>
-                  <Ionicons 
-                    name="camera" 
-                    size={18} 
-                    color={listingPhotos.length >= 2 ? "#4CAF50" : "#1a472a"} 
-                  />
-                  <Text style={[styles.photoReqText, { color: listingPhotos.length >= 2 ? '#4CAF50' : '#666', marginLeft: 8 }]}>
-                    2. Foto aggiuntiva (opzionale)
-                  </Text>
-                  {listingPhotos.length >= 2 && <Ionicons name="checkmark-circle" size={16} color="#4CAF50" style={{ marginLeft: 'auto' }} />}
+                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
+                    <Ionicons 
+                      name="camera" 
+                      size={18} 
+                      color={listingPhotos.length >= 2 ? "#4CAF50" : "#1a472a"} 
+                    />
+                    <Text style={[styles.photoReqText, { color: listingPhotos.length >= 2 ? '#4CAF50' : '#666', marginLeft: 8 }]}>
+                      2. Fascicoli (se previsti)
+                    </Text>
+                  </View>
+                  {listingPhotos.length >= 1 && listingPhotos.length < 2 && (
+                    <TouchableOpacity style={styles.photoScattaBtn} onPress={takePhoto}>
+                      <Text style={styles.photoScattaBtnText}>Scatta</Text>
+                    </TouchableOpacity>
+                  )}
+                  {listingPhotos.length >= 2 && <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />}
                 </View>
                 <View style={[styles.photoReqItem, styles.photoReqItemOptional, listingPhotos.length >= 3 && styles.photoReqItemDone]}>
-                  <Ionicons 
-                    name="camera" 
-                    size={18} 
-                    color={listingPhotos.length >= 3 ? "#4CAF50" : "#1a472a"} 
-                  />
-                  <Text style={[styles.photoReqText, { color: listingPhotos.length >= 3 ? '#4CAF50' : '#666', marginLeft: 8 }]}>
-                    3. Foto aggiuntiva (opzionale)
-                  </Text>
-                  {listingPhotos.length >= 3 && <Ionicons name="checkmark-circle" size={16} color="#4CAF50" style={{ marginLeft: 'auto' }} />}
+                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
+                    <Ionicons 
+                      name="camera" 
+                      size={18} 
+                      color={listingPhotos.length >= 3 ? "#4CAF50" : "#1a472a"} 
+                    />
+                    <Text style={[styles.photoReqText, { color: listingPhotos.length >= 3 ? '#4CAF50' : '#666', marginLeft: 8 }]}>
+                      3. Foto delle pagine peggiori
+                    </Text>
+                  </View>
+                  {listingPhotos.length >= 2 && listingPhotos.length < 3 && (
+                    <TouchableOpacity style={styles.photoScattaBtn} onPress={takePhoto}>
+                      <Text style={styles.photoScattaBtnText}>Scatta</Text>
+                    </TouchableOpacity>
+                  )}
+                  {listingPhotos.length >= 3 && <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />}
                 </View>
               </View>
               
@@ -1354,13 +1366,9 @@ export default function SellScreen() {
                     <Text style={[styles.addPhotoBtnText, { fontSize: 10 }]}>Comprimo...</Text>
                   </View>
                 )}
-                {/* Mostra pulsanti per caricare foto se meno di 3 e non in loading */}
+                {/* Solo pulsante Galleria sotto le foto */}
                 {listingPhotos.length < 3 && !loadingPhoto && (
                   <View style={styles.addPhotoButtons}>
-                    <TouchableOpacity style={styles.addPhotoBtn} onPress={takePhoto}>
-                      <Ionicons name="camera" size={24} color="#1a472a" />
-                      <Text style={styles.addPhotoBtnText}>Scatta</Text>
-                    </TouchableOpacity>
                     <TouchableOpacity style={styles.addPhotoBtn} onPress={pickImage}>
                       <Ionicons name="images" size={24} color="#1a472a" />
                       <Text style={styles.addPhotoBtnText}>Galleria</Text>
@@ -1371,7 +1379,7 @@ export default function SellScreen() {
               
               {/* Info compressione */}
               <Text style={{ fontSize: 11, color: '#999', textAlign: 'center', marginTop: 4, marginBottom: 12 }}>
-                📸 Foto compresse automaticamente (max 1MB, formato orizzontale)
+                Foto compresse automaticamente (max 1MB, formato orizzontale)
               </Text>
 
               {/* ========== SEZIONE STATO LIBRO ========== */}
@@ -1399,16 +1407,16 @@ export default function SellScreen() {
                   />
                   <View style={styles.newBookInfo}>
                     <Text style={[styles.newBookTitle, isNewBook && styles.newBookTitleActive]}>
-                      ✨ Libro Nuovo
+                      Libro Nuovo
                     </Text>
                     <Text style={styles.newBookSubtitle}>
-                      Mai usato, ancora nella confezione originale
+                      Mai usato
                     </Text>
                   </View>
                 </View>
                 {isNewBook && (
                   <View style={styles.newBookBadge}>
-                    <Text style={styles.newBookBadgeText}>85% del prezzo di copertina</Text>
+                    <Text style={styles.newBookBadgeText}>93% del prezzo di copertina</Text>
                   </View>
                 )}
               </TouchableOpacity>
@@ -1534,7 +1542,6 @@ export default function SellScreen() {
                     'nuovo': { label: 'Nuovo', color: '#2196F3', icon: 'star' },
                     'ottimo': { label: 'Ottimo', color: '#4CAF50', icon: 'checkmark-circle' },
                     'buono': { label: 'Buono', color: '#FF9800', icon: 'thumbs-up' },
-                    'accettabile': { label: 'Accettabile', color: '#f44336', icon: 'alert-circle' },
                   }[condition] || { label: 'Buono', color: '#FF9800', icon: 'thumbs-up' };
                   
                   return (
@@ -1547,7 +1554,7 @@ export default function SellScreen() {
                           {condConfig.label}
                         </Text>
                         <Text style={styles.calculatedConditionHint}>
-                          {isNewBook ? 'Libro nuovo' : `Media difetti: ${Math.round(score)}%`}
+                          {isNewBook ? 'Libro nuovo' : `Usura del libro: ${Math.round(score)}%`}
                         </Text>
                       </View>
                     </View>
@@ -1556,26 +1563,9 @@ export default function SellScreen() {
               </View>
 
               {/* Price - Forbice di prezzi selezionabili */}
-              <Text style={styles.formLabel}>💰 Scegli il tuo prezzo</Text>
+              <Text style={styles.formLabel}>Scegli il tuo prezzo</Text>
               <View style={styles.priceRangeContainer}>
-                {/* Info usura e guadagno */}
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <Text style={[styles.priceRangeSubtitle, { color: '#666' }]}>
-                    📊 Usura: {priceRange.usura?.toFixed(1) || 0}%
-                  </Text>
-                  <Text style={[styles.priceRangeSubtitle, { color: '#1a472a', fontWeight: 'bold' }]}>
-                    Stato: {priceRange.condition === 'nuovo' ? '✨ Nuovo' : priceRange.condition === 'ottimo' ? '👍 Ottimo' : priceRange.condition === 'buono' ? '👌 Buono' : '📖 Accettabile'}
-                  </Text>
-                </View>
-                
-                <Text style={styles.priceRangeTitle}>
-                  💵 Tu ricevi: €{priceRange.guadagnoUtente?.toFixed(2) || '0.00'}
-                </Text>
-                <Text style={{ fontSize: 11, color: '#999', textAlign: 'center', marginBottom: 12 }}>
-                  (dopo commissioni 17%)
-                </Text>
-                
-                <View style={styles.priceOptionsContainer}>
+                <View style={styles.priceOptionsContainer}>>
                   {priceRange.prices.map((priceOpt, index) => {
                     // Calcolo guadagno utente (83% del prezzo vendita)
                     const sellerEarnings = (priceOpt.price * 0.83).toFixed(2);
@@ -2225,14 +2215,14 @@ const styles = StyleSheet.create({
   sliderContainer: {
     marginBottom: 16,
     backgroundColor: '#f8f9fa',
-    padding: 12,
+    padding: 14,
     borderRadius: 10,
   },
   sliderHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 4,
+    marginBottom: 6,
   },
   sliderLabel: {
     flex: 1,
@@ -2247,34 +2237,46 @@ const styles = StyleSheet.create({
   },
   slider: {
     width: '100%',
-    height: 40,
+    height: 50,
   },
-  // Gradient Slider styles
+  // Gradient Slider styles - PIÙ GRANDI
   gradientSliderWrapper: {
     position: 'relative',
-    height: 40,
+    height: 50,
     justifyContent: 'center',
   },
   gradientTrackBackground: {
     position: 'absolute',
     left: 0,
     right: 0,
-    height: 12,
+    height: 18,
     backgroundColor: '#e0e0e0',
-    borderRadius: 6,
+    borderRadius: 9,
   },
   gradientTrackFill: {
     position: 'absolute',
     left: 0,
-    height: 12,
-    borderRadius: 6,
-    minWidth: 12,
+    height: 18,
+    borderRadius: 9,
+    minWidth: 18,
   },
   gradientSlider: {
     position: 'absolute',
     width: '100%',
-    height: 40,
+    height: 50,
     zIndex: 10,
+  },
+  // Pulsante Scatta inline
+  photoScattaBtn: {
+    backgroundColor: '#1a472a',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  photoScattaBtnText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
   },
   // Price Range styles
   priceRangeContainer: {
