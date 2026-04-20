@@ -371,48 +371,42 @@ export default function ProfileScreen() {
                 
                 {/* TOTALE PARZIALE SPESA per questo profilo */}
                 {(() => {
-                  // COSTO LIBRI NUOVI OBBLIGATORI: libri che DEVONO essere comprati nuovi
-                  // (non esistono usati perché nuova edizione, prima adozione, ecc.)
-                  const costoNuoviObbligatori = compatibility.nuovi?.costo_totale || 0;
-                  const numLibriNuoviObbligatori = compatibility.nuovi?.totale || 0;
-                  
-                  // COSTO TOTALE SE TUTTI NUOVI (ipotetico massimo)
+                  // COSTO TOTALE SE TUTTI I TESTI FOSSERO ACQUISTATI NUOVI
+                  // Include tutti i libri da comprare (usati + nuovi) calcolati a prezzo di copertina
                   const totaleSeTuttiNuovi = compatibility.tetto_spesa?.costo_obbligatori || 0;
+                  
+                  // Numero totale libri da acquistare
+                  const numLibriUsati = compatibility.comprare?.totale_usati || 0;
+                  const numLibriNuovi = compatibility.nuovi?.totale || 0;
+                  const totaleLibriDaComprare = numLibriUsati + numLibriNuovi;
                   
                   // TOTALE IPOTETICO: con libri usati (risparmio usando usati)
                   const costoUsatiParziale = (compatibility.comprare?.totale_usati || 0) * 10; // €10 per libro usato
+                  const costoNuoviObbligatori = compatibility.nuovi?.costo_totale || 0;
                   const ricavoParziale = (compatibility.vendere?.totale_vendibili || 0) * 8; // €8 ricavo per libro venduto
                   const spesaNettaParziale = costoUsatiParziale + costoNuoviObbligatori - ricavoParziale;
                   
                   return (
                     <View style={styles.partialTotalBoxExpanded}>
-                      {/* COSTO LIBRI OBBLIGATORIAMENTE NUOVI */}
+                      {/* TOTALE SE TUTTI NUOVI */}
                       <View style={styles.totalNuoviRow}>
-                        <Ionicons name="alert-circle" size={18} color="#FF9800" />
-                        <Text style={[styles.totalNuoviLabelBold, { color: '#FF9800' }]}>
-                          NUOVI OBBLIGATORI ({numLibriNuoviObbligatori}):
+                        <Ionicons name="book" size={18} color="#1a472a" />
+                        <Text style={styles.totalNuoviLabelBold}>
+                          TOTALE TESTI NUOVI ({totaleLibriDaComprare}):
                         </Text>
-                        <Text style={[styles.totalNuoviValueBold, { color: '#FF9800' }]}>
-                          €{costoNuoviObbligatori.toFixed(2)}
-                        </Text>
-                      </View>
-                      
-                      {/* TOTALE SE TUTTI NUOVI (ipotetico massimo) */}
-                      <View style={styles.partialTotalRow}>
-                        <Ionicons name="book-outline" size={16} color="#999" />
-                        <Text style={[styles.partialTotalLabel, { color: '#999', fontSize: 12 }]}>
-                          Se tutto nuovo:
-                        </Text>
-                        <Text style={[styles.partialTotalValue, { color: '#999', fontSize: 12 }]}>
+                        <Text style={styles.totalNuoviValueBold}>
                           €{totaleSeTuttiNuovi.toFixed(2)}
                         </Text>
                       </View>
+                      <Text style={[styles.partialTotalDetail, { marginBottom: 8, color: '#666' }]}>
+                        (se acquistati tutti a prezzo di copertina)
+                      </Text>
                       
-                      {/* TOTALE IPOTETICO - con libri usati */}
-                      <View style={[styles.partialTotalRow, { marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#eee' }]}>
-                        <Ionicons name="calculator-outline" size={18} color="#1a472a" />
-                        <Text style={styles.partialTotalLabel}>SPESA STIMATA:</Text>
-                        <Text style={[styles.partialTotalValue, spesaNettaParziale < 0 && { color: '#4CAF50' }]}>
+                      {/* SPESA STIMATA - con libri usati */}
+                      <View style={[styles.partialTotalRow, { paddingTop: 8, borderTopWidth: 1, borderTopColor: '#eee' }]}>
+                        <Ionicons name="calculator-outline" size={18} color="#4CAF50" />
+                        <Text style={[styles.partialTotalLabel, { color: '#4CAF50' }]}>SPESA STIMATA:</Text>
+                        <Text style={[styles.partialTotalValue, { color: '#4CAF50', fontWeight: 'bold' }]}>
                           €{Math.abs(spesaNettaParziale).toFixed(0)} {spesaNettaParziale < 0 ? '(guadagno)' : ''}
                         </Text>
                       </View>
