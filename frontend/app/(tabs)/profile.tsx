@@ -446,6 +446,15 @@ export default function ProfileScreen() {
                     </>
                   )}
                 </TouchableOpacity>
+
+                {/* View Book List Button */}
+                <TouchableOpacity
+                  style={styles.viewBookListButton}
+                  onPress={() => router.push(`/book-list?childId=${child.id}`)}
+                >
+                  <Ionicons name="list" size={20} color="#1a472a" />
+                  <Text style={styles.viewBookListButtonText}>Visualizza Lista Libri</Text>
+                </TouchableOpacity>
                 
                 {/* Delete Profile Button */}
                 <TouchableOpacity
@@ -1617,5 +1626,23 @@ const styles = StyleSheet.create({
   realTransactionLabel: {
     fontSize: 11,
     color: '#666',
+  },
+  // View Book List Button
+  viewBookListButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#e8f5e9',
+    padding: 14,
+    borderRadius: 10,
+    gap: 8,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#1a472a',
+  },
+  viewBookListButtonText: {
+    color: '#1a472a',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
