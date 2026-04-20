@@ -19,7 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import * as ImagePicker from 'expo-image-picker';
-import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
+import { BarCodeScanner } from 'expo-barcode-scanner';
 import Slider from '@react-native-community/slider';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
@@ -155,9 +155,8 @@ export default function SellScreen() {
   
   // Barcode Scanner
   const [showScanner, setShowScanner] = useState(false);
-  const [permission, requestPermission] = useCameraPermissions();
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [scanned, setScanned] = useState(false);
-  const [cameraReady, setCameraReady] = useState(false);
 
   // Bookshops data with addresses for Google Maps
   const bookshopsData = [
@@ -436,29 +435,29 @@ export default function SellScreen() {
 
   // Open barcode scanner
   const openScanner = async () => {
-    if (!permission?.granted) {
-      const result = await requestPermission();
-      if (!result.granted) {
-        Alert.alert(
-          'Permesso negato',
-          'Per scansionare il codice a barre serve il permesso della fotocamera'
-        );
-        return;
-      }
-    }
+    const { status } = await BarCodeScanner.requestPermissionsAsync();
+    setHasPermission(status === 'granted');
     
-    setScanned(false);
-    setCameraReady(false);
-    setShowScanner(true);
+    if (status === 'granted') {
+      setScanned(false);
+      setShowScanner(true);
+    } else {
+      Alert.alert(
+        'Permesso negato',
+        'Per scansionare il codice a barre serve il permesso della fotocamera'
+      );
+    }
   };
 
   // Handle barcode scanned
-  const handleBarCodeScanned = (result: BarcodeScanningResult) => {
-    if (scanned || !cameraReady) return;
+  const handleBarCodeScanned = ({ type, data }: { type: string; data: string }) => {
+    if (scanned) return;
     setScanned(true);
     
     // Clean the ISBN
-    const cleanISBN = result.data.replace(/[-\s]/g, '').trim();
+    const cleanISBN = data.replace(/[-\s]/g, '').trim();
+    
+    console.log('Barcode scanned:', { type, data: cleanISBN });
     
     // Close scanner and set ISBN
     setShowScanner(false);
@@ -966,14 +965,14 @@ export default function SellScreen() {
             <Text style={styles.scannerTitle}>Inquadra il codice a barre</Text>
           </View>
           
-          <CameraView
+          <BarCodeScanner
+            onBarCodeScanned={scanned ? undefined : handleBarCodeScanned}
             style={StyleSheet.absoluteFillObject}
-            facing="back"
-            barcodeScannerSettings={{
-              barcodeTypes: ["ean13", "ean8"],
-            }}
-            onBarcodeScanned={scanned || !cameraReady ? undefined : handleBarCodeScanned}
-            onCameraReady={() => setCameraReady(true)}
+            barCodeTypes={[
+              BarCodeScanner.Constants.BarCodeType.ean13,
+              BarCodeScanner.Constants.BarCodeType.ean8,
+              BarCodeScanner.Constants.BarCodeType.code128,
+            ]}
           />
           
           <View style={styles.scannerOverlay}>
@@ -984,8 +983,13 @@ export default function SellScreen() {
             <Text style={styles.scannerHint}>
               Posiziona il codice a barre all'interno del riquadro
             </Text>
-            {!cameraReady && (
-              <ActivityIndicator color="#fff" style={{ marginTop: 10 }} />
+            {scanned && (
+              <TouchableOpacity 
+                style={styles.scanAgainButton}
+                onPress={() => setScanned(false)}
+              >
+                <Text style={styles.scanAgainText}>Tocca per scansionare di nuovo</Text>
+              </TouchableOpacity>
             )}
           </View>
         </View>
@@ -2815,5 +2819,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#fff',
     textAlign: 'center',
+  },
+  scanAgainButton: {
+    marginTop: 16,
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  scanAgainText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
