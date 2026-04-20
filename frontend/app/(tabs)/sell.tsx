@@ -99,6 +99,7 @@ export default function SellScreen() {
   const [selectedBookshop, setSelectedBookshop] = useState('');
   const [notes, setNotes] = useState('');
   const [creatingListing, setCreatingListing] = useState(false);
+  const [loadingPhoto, setLoadingPhoto] = useState(false); // Loading durante elaborazione foto
 
   // Libro Nuovo flag
   const [isNewBook, setIsNewBook] = useState(false);
@@ -479,16 +480,22 @@ export default function SellScreen() {
       return;
     }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [16, 9], // Formato orizzontale (landscape)
-      quality: 0.5,
-      base64: true,
-    });
+    setLoadingPhoto(true);
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [16, 9], // Formato orizzontale (landscape)
+        quality: 0.3, // Ridotta per upload veloce (buona qualità visiva)
+        base64: true,
+        exif: false, // Rimuove metadati per ridurre dimensione
+      });
 
-    if (!result.canceled && result.assets[0].base64) {
-      setListingPhotos([...listingPhotos, result.assets[0].base64]);
+      if (!result.canceled && result.assets[0].base64) {
+        setListingPhotos([...listingPhotos, result.assets[0].base64]);
+      }
+    } finally {
+      setLoadingPhoto(false);
     }
   };
 
@@ -504,15 +511,21 @@ export default function SellScreen() {
       return;
     }
 
-    const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      aspect: [16, 9], // Formato orizzontale (landscape)
-      quality: 0.5,
-      base64: true,
-    });
+    setLoadingPhoto(true);
+    try {
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [16, 9], // Formato orizzontale (landscape)
+        quality: 0.3, // Ridotta per upload veloce (buona qualità visiva)
+        base64: true,
+        exif: false, // Rimuove metadati per ridurre dimensione
+      });
 
-    if (!result.canceled && result.assets[0].base64) {
-      setListingPhotos([...listingPhotos, result.assets[0].base64]);
+      if (!result.canceled && result.assets[0].base64) {
+        setListingPhotos([...listingPhotos, result.assets[0].base64]);
+      }
+    } finally {
+      setLoadingPhoto(false);
     }
   };
 
@@ -1147,8 +1160,15 @@ export default function SellScreen() {
                     </TouchableOpacity>
                   </View>
                 ))}
-                {/* Mostra pulsanti per caricare foto se meno di 3 */}
-                {listingPhotos.length < 3 && (
+                {/* Mostra loading durante elaborazione foto */}
+                {loadingPhoto && (
+                  <View style={[styles.addPhotoBtn, { justifyContent: 'center', alignItems: 'center' }]}>
+                    <ActivityIndicator size="small" color="#1a472a" />
+                    <Text style={[styles.addPhotoBtnText, { fontSize: 10 }]}>Elaboro...</Text>
+                  </View>
+                )}
+                {/* Mostra pulsanti per caricare foto se meno di 3 e non in loading */}
+                {listingPhotos.length < 3 && !loadingPhoto && (
                   <View style={styles.addPhotoButtons}>
                     <TouchableOpacity style={styles.addPhotoBtn} onPress={takePhoto}>
                       <Ionicons name="camera" size={24} color="#1a472a" />
