@@ -349,7 +349,7 @@ export default function SellScreen() {
   const priceRange = calculatePriceRange();
   const calculatedPrice = selectedPriceOption !== null 
     ? selectedPriceOption.toFixed(2)
-    : priceRange.prices[1]?.price.toFixed(2) || '0.00';
+    : (priceRange.prices[0]?.prezzoAcquirente || 0).toFixed(2);
 
   // Bookshop options
   const toggleBookshop = (shopId: string) => {
