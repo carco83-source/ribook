@@ -474,15 +474,15 @@ export default function SellScreen() {
   };
 
   const pickImage = async () => {
-    if (listingPhotos.length >= 5) {
-      Alert.alert('Limite raggiunto', 'Puoi caricare massimo 5 foto');
+    if (listingPhotos.length >= 3) {
+      Alert.alert('Limite raggiunto', 'Puoi caricare massimo 3 foto');
       return;
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
-      aspect: [4, 3],
+      aspect: [16, 9], // Formato orizzontale (landscape)
       quality: 0.5,
       base64: true,
     });
@@ -493,8 +493,8 @@ export default function SellScreen() {
   };
 
   const takePhoto = async () => {
-    if (listingPhotos.length >= 5) {
-      Alert.alert('Limite raggiunto', 'Puoi caricare massimo 5 foto');
+    if (listingPhotos.length >= 3) {
+      Alert.alert('Limite raggiunto', 'Puoi caricare massimo 3 foto');
       return;
     }
 
@@ -506,7 +506,7 @@ export default function SellScreen() {
 
     const result = await ImagePicker.launchCameraAsync({
       allowsEditing: true,
-      aspect: [4, 3],
+      aspect: [16, 9], // Formato orizzontale (landscape)
       quality: 0.5,
       base64: true,
     });
@@ -1123,7 +1123,7 @@ export default function SellScreen() {
                     size={18} 
                     color={listingPhotos.length >= 3 ? "#4CAF50" : "#aaa"} 
                   />
-                  <Text style={[styles.photoReqText, { color: '#666' }]}>3. Altra pagina con usura (opzionale)</Text>
+                  <Text style={[styles.photoReqText, { color: '#666' }]}>3. Foto dei fascicoli se previsti (opzionale)</Text>
                 </View>
               </View>
               
@@ -1136,7 +1136,7 @@ export default function SellScreen() {
                     />
                     <View style={styles.photoLabel}>
                       <Text style={styles.photoLabelText}>
-                        {index === 0 ? 'Copertine' : index === 1 ? 'Usura 1' : 'Usura 2'}
+                        {index === 0 ? 'Copertine' : index === 1 ? 'Usura' : 'Fascicoli'}
                       </Text>
                     </View>
                     <TouchableOpacity
@@ -1862,8 +1862,8 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   photoThumbnail: {
-    width: 80,
-    height: 80,
+    width: 120,
+    height: 68, // Aspect ratio 16:9 orizzontale
     borderRadius: 8,
   },
   removePhotoBtn: {
@@ -1876,8 +1876,8 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   addPhotoBtn: {
-    width: 80,
-    height: 80,
+    width: 120,
+    height: 68, // Aspect ratio 16:9 orizzontale
     borderRadius: 8,
     backgroundColor: '#f0f0f0',
     justifyContent: 'center',
