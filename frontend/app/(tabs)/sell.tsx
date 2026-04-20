@@ -201,11 +201,13 @@ export default function SellScreen() {
   };
 
   // ============================================================
-  // FORMULA CALCOLO PREZZO LIBRO USATO (PROFESSIONALE)
+  // FORMULA CALCOLO PREZZO LIBRO USATO (V2 - PREZZI PIÙ BASSI)
   // ============================================================
-  // Pesi difetti: scritte 30%, evidenziature 25%, pieghe 20%, copertina 25%
-  // Curva non lineare (pow 1.3) per prezzo più realistico
-  // Commissioni: 17% (12% piattaforma + 5% transazione)
+  // REGOLE:
+  // - Usato PERFETTO (0 difetti): max 70% del prezzo ministeriale
+  // - Nuovo: 85% del ministeriale (15% in meno), poi commissioni
+  // - Scritte e evidenziature pesano di più
+  // - Commissioni: 17% (12% piattaforma + 5% transazione)
   // ============================================================
   
   const calcolaPrezzoLibro = () => {
@@ -222,57 +224,66 @@ export default function SellScreen() {
       };
     }
     
-    // Libro nuovo: nessuna usura
+    // ========== LIBRO NUOVO ==========
+    // 15% in meno del prezzo ministeriale, poi commissioni
     if (isNewBook) {
       const commissioni = 0.17;
-      const prezzoVendita = prezzoNuovo * 0.95; // 95% del nuovo
-      const guadagno = prezzoVendita * (1 - commissioni);
+      const prezzoBase = prezzoNuovo * 0.85; // 85% del nuovo (15% sconto)
+      const prezzoVendita = prezzoBase / (1 - commissioni); // Aggiungi commissioni
+      
+      // Il prezzo di vendita NON può superare il prezzo ministeriale
+      const prezzoFinale = Math.min(prezzoVendita, prezzoNuovo);
+      const guadagno = prezzoFinale * (1 - commissioni);
       
       return {
         usura: 0,
-        prezzoConsigliato: Math.round(prezzoVendita * 100) / 100,
-        prezzoVeloce: Math.round(prezzoVendita * 0.9 * 100) / 100,
-        prezzoAlto: Math.round(prezzoNuovo * 100) / 100,
+        prezzoConsigliato: Math.round(prezzoFinale * 100) / 100,
+        prezzoVeloce: Math.round(prezzoFinale * 0.95 * 100) / 100,
+        prezzoAlto: Math.round(Math.min(prezzoFinale * 1.05, prezzoNuovo) * 100) / 100,
         guadagnoUtente: Math.round(guadagno * 100) / 100,
         condition: 'nuovo'
       };
     }
     
-    // 🎯 PESI DIFETTI
+    // ========== LIBRO USATO ==========
+    // Pesi difetti (AUMENTATI per scritte e evidenziature)
     const pesi = {
-      scritte: 0.30,
-      evidenziature: 0.25,
-      pieghe: 0.20,
-      copertina: 0.25
+      scritte: 0.40,        // Aumentato da 0.30 → 0.40
+      evidenziature: 0.35,  // Aumentato da 0.25 → 0.35
+      pieghe: 0.25          // Aumentato da 0.20 → 0.25
+      // RIMOSSA copertina (ora è foto)
     };
     
-    // 📊 CALCOLO USURA (0 → 1)
+    // Calcolo usura (0 → 1)
     let usura = (
       hasWritings * pesi.scritte +
       hasHighlights * pesi.evidenziature +
-      hasFolds * pesi.pieghe +
-      coverCondition * pesi.copertina
+      hasFolds * pesi.pieghe
     ) / 100;
     
-    // 🔥 CURVA NON LINEARE
-    let prezzoUsato = prezzoNuovo * (1 - Math.pow(usura, 1.3));
+    // PREZZO BASE USATO: max 70% del ministeriale (usato perfetto)
+    const maxUsato = prezzoNuovo * 0.70;
     
-    // 🧠 SOFT CAP (no prezzi troppo vicini al nuovo)
-    if (usura < 0.05) {
-      prezzoUsato = Math.min(prezzoUsato, prezzoNuovo * 0.9);
-    }
+    // Curva non lineare per l'usura
+    let prezzoUsato = maxUsato * (1 - Math.pow(usura, 1.2));
     
-    // 🚫 HARD CAP
-    prezzoUsato = Math.min(prezzoUsato, prezzoNuovo);
+    // Hard cap: mai sopra il 70% del nuovo
+    prezzoUsato = Math.min(prezzoUsato, maxUsato);
     
-    // 💸 COMMISSIONI (12% + 5%)
+    // Minimo 20% del nuovo per libri molto usurati
+    prezzoUsato = Math.max(prezzoUsato, prezzoNuovo * 0.20);
+    
+    // Commissioni (17%)
     const commissioni = 0.17;
     const prezzoVendita = prezzoUsato / (1 - commissioni);
     
-    // 🎯 VARIANTI UX (abbassate del 10%)
-    const prezzoConsigliato = prezzoVendita * 0.90; // -10%
-    const prezzoVeloce = prezzoVendita * 0.80; // -10% sul veloce
-    const prezzoAlto = Math.min(prezzoVendita * 1.00, prezzoNuovo); // -10% sull'alto
+    // Il prezzo NON può MAI superare il prezzo ministeriale
+    const prezzoFinale = Math.min(prezzoVendita, prezzoNuovo);
+    
+    // Varianti UX
+    const prezzoConsigliato = prezzoFinale;
+    const prezzoVeloce = prezzoFinale * 0.90;
+    const prezzoAlto = Math.min(prezzoFinale * 1.05, prezzoNuovo);
     
     // Determina condizione basata su usura
     let condition = 'buono';
@@ -1278,32 +1289,41 @@ export default function SellScreen() {
                 )}
               </View>
 
-              {/* Foto aggiuntive OPZIONALI */}
-              <Text style={styles.formLabel}>Foto aggiuntive (opzionali - max 3)</Text>
+              {/* Foto aggiuntive OPZIONALI con icone */}
+              <Text style={styles.formLabel}>📸 Foto del libro (opzionali - max 3)</Text>
               <View style={styles.photoRequirements}>
                 <View style={[styles.photoReqItem, styles.photoReqItemOptional, listingPhotos.length >= 1 && styles.photoReqItemDone]}>
                   <Ionicons 
-                    name={listingPhotos.length >= 1 ? "checkmark-circle" : "ellipse-outline"} 
+                    name="camera" 
                     size={18} 
-                    color={listingPhotos.length >= 1 ? "#4CAF50" : "#aaa"} 
+                    color={listingPhotos.length >= 1 ? "#4CAF50" : "#1a472a"} 
                   />
-                  <Text style={[styles.photoReqText, { color: '#666' }]}>1. Pagina con più usura</Text>
+                  <Text style={[styles.photoReqText, { color: listingPhotos.length >= 1 ? '#4CAF50' : '#666', marginLeft: 8 }]}>
+                    1. Copertina fronte/retro
+                  </Text>
+                  {listingPhotos.length >= 1 && <Ionicons name="checkmark-circle" size={16} color="#4CAF50" style={{ marginLeft: 'auto' }} />}
                 </View>
                 <View style={[styles.photoReqItem, styles.photoReqItemOptional, listingPhotos.length >= 2 && styles.photoReqItemDone]}>
                   <Ionicons 
-                    name={listingPhotos.length >= 2 ? "checkmark-circle" : "ellipse-outline"} 
+                    name="camera" 
                     size={18} 
-                    color={listingPhotos.length >= 2 ? "#4CAF50" : "#aaa"} 
+                    color={listingPhotos.length >= 2 ? "#4CAF50" : "#1a472a"} 
                   />
-                  <Text style={[styles.photoReqText, { color: '#666' }]}>2. Altra pagina con usura</Text>
+                  <Text style={[styles.photoReqText, { color: listingPhotos.length >= 2 ? '#4CAF50' : '#666', marginLeft: 8 }]}>
+                    2. Pagina più usurata
+                  </Text>
+                  {listingPhotos.length >= 2 && <Ionicons name="checkmark-circle" size={16} color="#4CAF50" style={{ marginLeft: 'auto' }} />}
                 </View>
                 <View style={[styles.photoReqItem, styles.photoReqItemOptional, listingPhotos.length >= 3 && styles.photoReqItemDone]}>
                   <Ionicons 
-                    name={listingPhotos.length >= 3 ? "checkmark-circle" : "ellipse-outline"} 
+                    name="camera" 
                     size={18} 
-                    color={listingPhotos.length >= 3 ? "#4CAF50" : "#aaa"} 
+                    color={listingPhotos.length >= 3 ? "#4CAF50" : "#1a472a"} 
                   />
-                  <Text style={[styles.photoReqText, { color: '#666' }]}>3. Foto dei fascicoli se previsti</Text>
+                  <Text style={[styles.photoReqText, { color: listingPhotos.length >= 3 ? '#4CAF50' : '#666', marginLeft: 8 }]}>
+                    3. Fascicoli (se previsti)
+                  </Text>
+                  {listingPhotos.length >= 3 && <Ionicons name="checkmark-circle" size={16} color="#4CAF50" style={{ marginLeft: 'auto' }} />}
                 </View>
               </View>
               
@@ -1316,7 +1336,7 @@ export default function SellScreen() {
                     />
                     <View style={styles.photoLabel}>
                       <Text style={styles.photoLabelText}>
-                        {index === 0 ? 'Usura 1' : index === 1 ? 'Usura 2' : 'Fascicoli'}
+                        {index === 0 ? 'Copertina' : index === 1 ? 'Usura' : 'Fascicoli'}
                       </Text>
                     </View>
                     <TouchableOpacity
@@ -1487,34 +1507,6 @@ export default function SellScreen() {
                       minimumTrackTintColor="transparent"
                       maximumTrackTintColor="transparent"
                       thumbTintColor={isNewBook ? "#ccc" : getGradientColor(hasFolds)}
-                      disabled={isNewBook}
-                    />
-                  </View>
-                </View>
-
-                {/* Slider Copertina */}
-                <View style={styles.sliderContainer}>
-                  <View style={styles.sliderHeader}>
-                    <Ionicons name="book" size={18} color={isNewBook ? "#ccc" : "#666"} />
-                    <Text style={[styles.sliderLabel, isNewBook && styles.disabledText]}>Condizioni copertina</Text>
-                    <Text style={[styles.sliderValue, { color: getGradientColor(coverCondition) }]}>
-                      {coverCondition}%
-                    </Text>
-                  </View>
-                  {/* Custom Gradient Track */}
-                  <View style={styles.gradientSliderWrapper}>
-                    <View style={styles.gradientTrackBackground} />
-                    <View style={[styles.gradientTrackFill, { width: `${coverCondition}%`, backgroundColor: getGradientColor(coverCondition) }]} />
-                    <Slider
-                      style={styles.gradientSlider}
-                      minimumValue={0}
-                      maximumValue={100}
-                      step={5}
-                      value={coverCondition}
-                      onValueChange={(val) => !isNewBook && setCoverCondition(val)}
-                      minimumTrackTintColor="transparent"
-                      maximumTrackTintColor="transparent"
-                      thumbTintColor={isNewBook ? "#ccc" : getGradientColor(coverCondition)}
                       disabled={isNewBook}
                     />
                   </View>
