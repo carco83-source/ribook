@@ -1469,6 +1469,161 @@ async def mark_notification_read(notification_id: str):
     )
     return {"success": result.modified_count > 0}
 
+
+@api_router.post("/notifications/process-expired")
+async def process_expired_notifications():
+    """
+    Processa le notifiche di conferma scadute (dopo 24h senza risposta).
+    - Segna la notifica come 'expired'
+    - Rimuove l'item dal carrello
+    - Invia notifica all'acquirente che il libro non è disponibile
+    """
+    from datetime import datetime
+    
+    now = datetime.utcnow()
+    
+    # Trova notifiche di conferma scadute (pending e oltre expires_at)
+    expired_notifications = await db.notifications.find({
+        "type": "confirmation_request",
+        "status": "pending",
+        "expires_at": {"$lt": now.isoformat()}
+    }).to_list(100)
+    
+    processed_count = 0
+    
+    for notification in expired_notifications:
+        try:
+            notification_id = notification.get("id")
+            data = notification.get("data", {})
+            buyer_id = data.get("buyer_id")
+            cart_item_id = data.get("cart_item_id")
+            book_title = data.get("book_title", "Libro richiesto")
+            
+            # 1. Segna la notifica come scaduta
+            await db.notifications.update_one(
+                {"id": notification_id},
+                {"$set": {"status": "expired", "read": True}}
+            )
+            
+            # 2. Rimuovi/aggiorna l'item dal carrello
+            if cart_item_id:
+                await db.cart.update_one(
+                    {"id": cart_item_id},
+                    {"$set": {"stato": "scaduto", "status": "expired"}}
+                )
+            
+            # 3. Invia notifica all'acquirente
+            if buyer_id:
+                buyer_notification = {
+                    "id": str(uuid.uuid4()),
+                    "user_id": buyer_id,
+                    "type": "request_expired",
+                    "title": "Richiesta scaduta",
+                    "message": f"\"{book_title}\" non disponibile per mancata risposta",
+                    "data": {
+                        "original_notification_id": notification_id,
+                        "book_title": book_title
+                    },
+                    "read": False,
+                    "created_at": now.isoformat()
+                }
+                await db.notifications.insert_one(buyer_notification)
+            
+            processed_count += 1
+            
+        except Exception as e:
+            print(f"Errore processando notifica {notification.get('id')}: {e}")
+            continue
+    
+    return {
+        "processed": processed_count,
+        "message": f"Processate {processed_count} notifiche scadute"
+    }
+
+
+@api_router.get("/notifications/check-expired/{user_id}")
+async def check_expired_for_user(user_id: str):
+    """
+    Controlla e processa le notifiche scadute per un utente specifico.
+    Chiamato quando l'utente apre l'app per aggiornare lo stato.
+    """
+    from datetime import datetime
+    
+    now = datetime.utcnow()
+    
+    # Trova notifiche di conferma inviate a questo utente che sono scadute
+    expired_seller_notifications = await db.notifications.find({
+        "user_id": user_id,
+        "type": "confirmation_request",
+        "status": "pending",
+        "expires_at": {"$lt": now.isoformat()}
+    }).to_list(50)
+    
+    # Trova anche richieste fatte da questo utente che sono scadute
+    expired_buyer_notifications = await db.notifications.find({
+        "type": "confirmation_request",
+        "status": "pending",
+        "data.buyer_id": user_id,
+        "expires_at": {"$lt": now.isoformat()}
+    }).to_list(50)
+    
+    processed = 0
+    
+    # Processa le notifiche scadute
+    all_expired = expired_seller_notifications + expired_buyer_notifications
+    seen_ids = set()
+    
+    for notification in all_expired:
+        notification_id = notification.get("id")
+        if notification_id in seen_ids:
+            continue
+        seen_ids.add(notification_id)
+        
+        data = notification.get("data", {})
+        buyer_id = data.get("buyer_id")
+        cart_item_id = data.get("cart_item_id")
+        book_title = data.get("book_title", "Libro richiesto")
+        
+        # Segna come scaduta
+        await db.notifications.update_one(
+            {"id": notification_id},
+            {"$set": {"status": "expired", "read": True}}
+        )
+        
+        # Aggiorna carrello
+        if cart_item_id:
+            await db.cart.update_one(
+                {"id": cart_item_id},
+                {"$set": {"stato": "scaduto", "status": "expired"}}
+            )
+        
+        # Notifica acquirente (se non è già stato notificato)
+        if buyer_id:
+            existing = await db.notifications.find_one({
+                "type": "request_expired",
+                "data.original_notification_id": notification_id
+            })
+            
+            if not existing:
+                buyer_notification = {
+                    "id": str(uuid.uuid4()),
+                    "user_id": buyer_id,
+                    "type": "request_expired",
+                    "title": "Richiesta scaduta",
+                    "message": f"\"{book_title}\" non disponibile per mancata risposta",
+                    "data": {
+                        "original_notification_id": notification_id,
+                        "book_title": book_title
+                    },
+                    "read": False,
+                    "created_at": now.isoformat()
+                }
+                await db.notifications.insert_one(buyer_notification)
+        
+        processed += 1
+    
+    return {"processed": processed}
+
 @api_router.get("/listings")
 async def get_listings(classe: Optional[str] = None, materia: Optional[str] = None, stato: str = "disponibile", limit: int = 50, skip: int = 0):
     # Support both 'stato' (old) and 'status' (new) fields
@@ -5320,19 +5475,25 @@ async def add_to_cart(listing_id: str, bookstore_id: str, buyer_id: str):
     
     # Create notification for seller
     buyer = await db.users.find_one({"id": buyer_id})
+    expires_at = now + timedelta(hours=24)  # Scade dopo 24 ore
+    
     notification = {
         "id": str(uuid.uuid4()),
         "user_id": listing["seller_id"],
         "type": "confirmation_request",
         "title": "Richiesta di conferma",
-        "message": f"{buyer.get('username', 'Un utente')} vuole acquistare '{listing.get('book_titolo', 'un libro')}'",
+        "message": f"{buyer.get('username', 'Un utente')} vuole acquistare '{listing.get('book_title', listing.get('book_titolo', 'un libro'))}'",
         "data": {
             "cart_item_id": cart_item["id"],
             "listing_id": listing_id,
-            "buyer_id": buyer_id
+            "buyer_id": buyer_id,
+            "book_title": listing.get('book_title', listing.get('book_titolo', 'Libro')),
+            "buyer_name": buyer.get('username', buyer.get('nome', 'Utente'))
         },
         "read": False,
-        "created_at": now.isoformat()
+        "created_at": now.isoformat(),
+        "expires_at": expires_at.isoformat(),
+        "status": "pending"  # pending, confirmed, rejected, expired
     }
     await db.notifications.insert_one(notification)
     

@@ -189,8 +189,12 @@ export default function RadarScreen() {
         console.log('Failed to load cart');
       }
       
-      // Load notifications
+      // Load notifications - prima controlla le scadute
       try {
+        // Controlla e processa notifiche scadute
+        await axios.get(`${API_URL}/api/notifications/check-expired/${storedUserId}`);
+        
+        // Poi carica le notifiche aggiornate
         const notifResponse = await axios.get(`${API_URL}/api/notifications/${storedUserId}`);
         setNotifications(notifResponse.data.notifications || []);
         setUnreadCount(notifResponse.data.unread_count || 0);
