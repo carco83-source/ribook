@@ -225,22 +225,21 @@ export default function SellScreen() {
     }
     
     // ========== LIBRO NUOVO ==========
-    // 7% in meno del prezzo ministeriale, poi commissioni
+    // 7% in meno del prezzo ministeriale (93%), poi commissioni
     if (isNewBook) {
-      const commissioni = 0.17;
-      const prezzoBase = prezzoNuovo * 0.93; // 93% del nuovo (7% sconto)
-      const prezzoVendita = prezzoBase / (1 - commissioni); // Aggiungi commissioni
+      const prezzoAcquirente = prezzoNuovo * 0.93; // 93% del prezzo copertina
+      // Commissioni totali: 17% piattaforma + Stripe (1.5% + 0.25€)
+      const commissionePiattaforma = 0.17;
+      const stripePercent = 0.015;
+      const stripeFisso = 0.25;
       
-      // Il prezzo di vendita NON può superare il prezzo ministeriale
-      const prezzoFinale = Math.min(prezzoVendita, prezzoNuovo);
-      const guadagno = prezzoFinale * (1 - commissioni);
+      // Calcola guadagno venditore: prezzo acquirente - commissioni
+      const guadagnoVenditore = prezzoAcquirente * (1 - commissionePiattaforma) - stripeFisso;
       
       return {
         usura: 0,
-        prezzoConsigliato: Math.round(prezzoFinale * 100) / 100,
-        prezzoVeloce: Math.round(prezzoFinale * 0.95 * 100) / 100,
-        prezzoAlto: Math.round(Math.min(prezzoFinale * 1.05, prezzoNuovo) * 100) / 100,
-        guadagnoUtente: Math.round(guadagno * 100) / 100,
+        prezzoAcquirente: Math.round(prezzoAcquirente * 100) / 100,
+        guadagnoUtente: Math.round(guadagnoVenditore * 100) / 100,
         condition: 'nuovo'
       };
     }
@@ -272,17 +271,14 @@ export default function SellScreen() {
     // Minimo 20% del nuovo per libri molto usurati
     prezzoUsato = Math.max(prezzoUsato, prezzoNuovo * 0.20);
     
-    // Commissioni (17%)
-    const commissioni = 0.17;
-    const prezzoVendita = prezzoUsato / (1 - commissioni);
+    // Commissioni (17% piattaforma + Stripe)
+    const commissionePiattaforma = 0.17;
+    const stripeFisso = 0.25;
     
-    // Il prezzo NON può MAI superare il prezzo ministeriale
-    const prezzoFinale = Math.min(prezzoVendita, prezzoNuovo);
-    
-    // Varianti UX
-    const prezzoConsigliato = prezzoFinale;
-    const prezzoVeloce = prezzoFinale * 0.90;
-    const prezzoAlto = Math.min(prezzoFinale * 1.05, prezzoNuovo);
+    // Varianti UX - 3 opzioni prezzo (quello che paga l'acquirente)
+    const prezzoAlto = Math.min(prezzoUsato * 1.10, prezzoNuovo * 0.85);
+    const prezzoMedio = prezzoUsato;
+    const prezzoBasso = prezzoUsato * 0.90;
     
     // Determina condizione basata su usura (RIMOSSO "accettabile")
     let condition = 'buono';
@@ -292,10 +288,12 @@ export default function SellScreen() {
     
     return {
       usura: Math.round(usuraPercentuale * 10) / 10,
-      prezzoConsigliato: Math.round(prezzoConsigliato * 100) / 100,
-      prezzoVeloce: Math.round(prezzoVeloce * 100) / 100,
       prezzoAlto: Math.round(prezzoAlto * 100) / 100,
-      guadagnoUtente: Math.round(prezzoUsato * 100) / 100,
+      prezzoMedio: Math.round(prezzoMedio * 100) / 100,
+      prezzoBasso: Math.round(prezzoBasso * 100) / 100,
+      guadagnoAlto: Math.round((prezzoAlto * (1 - commissionePiattaforma) - stripeFisso) * 100) / 100,
+      guadagnoMedio: Math.round((prezzoMedio * (1 - commissionePiattaforma) - stripeFisso) * 100) / 100,
+      guadagnoBasso: Math.round((prezzoBasso * (1 - commissionePiattaforma) - stripeFisso) * 100) / 100,
       condition
     };
   };
@@ -304,14 +302,45 @@ export default function SellScreen() {
   const calculatePriceRange = () => {
     const prezzoCalcolato = calcolaPrezzoLibro();
     
+    // Se libro nuovo, una sola opzione
+    if (isNewBook) {
+      return {
+        condition: prezzoCalcolato.condition,
+        usura: 0,
+        isNew: true,
+        prezzoAcquirente: prezzoCalcolato.prezzoAcquirente,
+        guadagnoUtente: prezzoCalcolato.guadagnoUtente,
+        prices: [
+          { 
+            label: 'Libro Nuovo', 
+            prezzoAcquirente: prezzoCalcolato.prezzoAcquirente,
+            guadagnoVenditore: prezzoCalcolato.guadagnoUtente
+          }
+        ]
+      };
+    }
+    
+    // Libro usato - 3 opzioni
     return {
       condition: prezzoCalcolato.condition,
       usura: prezzoCalcolato.usura,
-      guadagnoUtente: prezzoCalcolato.guadagnoUtente,
+      isNew: false,
       prices: [
-        { label: 'Prezzo alto', price: prezzoCalcolato.prezzoAlto },
-        { label: 'Prezzo consigliato', price: prezzoCalcolato.prezzoConsigliato },
-        { label: 'Vendita rapida', price: prezzoCalcolato.prezzoVeloce },
+        { 
+          label: 'Prezzo alto', 
+          prezzoAcquirente: prezzoCalcolato.prezzoAlto,
+          guadagnoVenditore: prezzoCalcolato.guadagnoAlto
+        },
+        { 
+          label: 'Prezzo consigliato', 
+          prezzoAcquirente: prezzoCalcolato.prezzoMedio,
+          guadagnoVenditore: prezzoCalcolato.guadagnoMedio
+        },
+        { 
+          label: 'Vendita rapida', 
+          prezzoAcquirente: prezzoCalcolato.prezzoBasso,
+          guadagnoVenditore: prezzoCalcolato.guadagnoBasso
+        },
       ]
     };
   };
@@ -633,6 +662,99 @@ export default function SellScreen() {
     }
   };
 
+  // Funzione per scattare foto in posizione specifica (indipendente)
+  const takePhotoAtIndex = async (index: number) => {
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Permesso negato', 'Serve il permesso per usare la fotocamera');
+      return;
+    }
+
+    setLoadingPhoto(true);
+    try {
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: false, // Disabilita editing per preservare orientamento
+        quality: 0.7,
+        exif: true, // Mantieni EXIF per orientamento
+      });
+
+      if (!result.canceled && result.assets[0].uri) {
+        // Comprimi e ruota automaticamente l'immagine
+        const compressedBase64 = await compressAndRotateImage(result.assets[0].uri);
+        if (compressedBase64) {
+          // Inserisci la foto nella posizione specifica
+          const newPhotos = [...listingPhotos];
+          // Se l'indice è oltre la lunghezza, riempi con null
+          while (newPhotos.length < index) {
+            newPhotos.push('');
+          }
+          if (newPhotos.length === index) {
+            newPhotos.push(compressedBase64);
+          } else {
+            newPhotos[index] = compressedBase64;
+          }
+          // Filtra eventuali stringhe vuote
+          setListingPhotos(newPhotos.filter(p => p !== ''));
+        } else {
+          Alert.alert('Errore', 'Impossibile elaborare la foto');
+        }
+      }
+    } finally {
+      setLoadingPhoto(false);
+    }
+  };
+
+  // Comprimi e ruota automaticamente foto in landscape
+  const compressAndRotateImage = async (uri: string): Promise<string | null> => {
+    try {
+      // Prima ridimensiona e ruota se necessario (formato 16:9 orizzontale)
+      const manipResult = await ImageManipulator.manipulateAsync(
+        uri,
+        [
+          { resize: { width: 1280 } }, // Max 1280px larghezza
+        ],
+        { 
+          compress: 0.6, 
+          format: ImageManipulator.SaveFormat.JPEG,
+        }
+      );
+      
+      // Converti in base64
+      const response = await fetch(manipResult.uri);
+      const blob = await response.blob();
+      
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const base64 = (reader.result as string).split(',')[1];
+          // Verifica dimensione (max 1MB)
+          if (base64.length > 1400000) {
+            // Ricomprimi con qualità più bassa
+            ImageManipulator.manipulateAsync(
+              uri,
+              [{ resize: { width: 800 } }],
+              { compress: 0.4, format: ImageManipulator.SaveFormat.JPEG }
+            ).then(async (recompressed) => {
+              const resp2 = await fetch(recompressed.uri);
+              const blob2 = await resp2.blob();
+              const reader2 = new FileReader();
+              reader2.onloadend = () => {
+                resolve((reader2.result as string).split(',')[1]);
+              };
+              reader2.readAsDataURL(blob2);
+            });
+          } else {
+            resolve(base64);
+          }
+        };
+        reader.readAsDataURL(blob);
+      });
+    } catch (error) {
+      console.error('Error compressing image:', error);
+      return null;
+    }
+  };
+
   const takePhoto = async () => {
     if (listingPhotos.length >= 3) {
       Alert.alert('Limite raggiunto', 'Puoi caricare massimo 3 foto');
@@ -648,15 +770,14 @@ export default function SellScreen() {
     setLoadingPhoto(true);
     try {
       const result = await ImagePicker.launchCameraAsync({
-        allowsEditing: true,
-        aspect: [16, 9], // Formato orizzontale (landscape)
-        quality: 0.7, // Qualità iniziale alta, poi comprimiamo
-        exif: false, // Rimuove metadati
+        allowsEditing: false,
+        quality: 0.7,
+        exif: true,
       });
 
       if (!result.canceled && result.assets[0].uri) {
-        // Comprimi l'immagine
-        const compressedBase64 = await compressImage(result.assets[0].uri);
+        // Comprimi e ruota automaticamente
+        const compressedBase64 = await compressAndRotateImage(result.assets[0].uri);
         if (compressedBase64) {
           setListingPhotos([...listingPhotos, compressedBase64]);
         } else {
@@ -1280,106 +1401,117 @@ export default function SellScreen() {
                 )}
               </View>
 
-              {/* Foto aggiuntive OPZIONALI con pulsanti Scatta per ciascuna */}
+              {/* Foto aggiuntive OPZIONALI - OGNI ICONA È INDIPENDENTE */}
               <Text style={styles.formLabel}>Foto del libro (opzionali - max 3)</Text>
               <View style={styles.photoRequirements}>
-                <View style={[styles.photoReqItem, styles.photoReqItemOptional, listingPhotos.length >= 1 && styles.photoReqItemDone]}>
-                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
-                    <Ionicons 
-                      name="camera" 
-                      size={18} 
-                      color={listingPhotos.length >= 1 ? "#4CAF50" : "#1a472a"} 
-                    />
-                    <Text style={[styles.photoReqText, { color: listingPhotos.length >= 1 ? '#4CAF50' : '#666', marginLeft: 8 }]}>
-                      1. Foto copertina - libro aperto
-                    </Text>
-                  </View>
-                  {listingPhotos.length < 1 && (
-                    <TouchableOpacity style={styles.photoScattaBtn} onPress={takePhoto}>
-                      <Text style={styles.photoScattaBtnText}>Scatta</Text>
+                {/* Foto 1 - Copertina libro aperto */}
+                <TouchableOpacity 
+                  style={[styles.photoReqItem, styles.photoReqItemClickable, listingPhotos[0] && styles.photoReqItemDone]}
+                  onPress={() => !listingPhotos[0] && takePhotoAtIndex(0)}
+                  disabled={!!listingPhotos[0]}
+                >
+                  <Ionicons 
+                    name="camera" 
+                    size={22} 
+                    color={listingPhotos[0] ? "#4CAF50" : "#1a472a"} 
+                  />
+                  <Text style={[styles.photoReqText, { color: listingPhotos[0] ? '#4CAF50' : '#333', marginLeft: 10, flex: 1 }]}>
+                    1. Foto copertina - libro aperto
+                  </Text>
+                  {listingPhotos[0] ? (
+                    <TouchableOpacity onPress={() => removePhoto(0)}>
+                      <Ionicons name="close-circle" size={20} color="#ff4444" />
                     </TouchableOpacity>
+                  ) : (
+                    <Text style={styles.photoScattaInline}>Scatta</Text>
                   )}
-                  {listingPhotos.length >= 1 && <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />}
-                </View>
-                <View style={[styles.photoReqItem, styles.photoReqItemOptional, listingPhotos.length >= 2 && styles.photoReqItemDone]}>
-                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
-                    <Ionicons 
-                      name="camera" 
-                      size={18} 
-                      color={listingPhotos.length >= 2 ? "#4CAF50" : "#1a472a"} 
-                    />
-                    <Text style={[styles.photoReqText, { color: listingPhotos.length >= 2 ? '#4CAF50' : '#666', marginLeft: 8 }]}>
-                      2. Fascicoli (se previsti)
-                    </Text>
-                  </View>
-                  {listingPhotos.length >= 1 && listingPhotos.length < 2 && (
-                    <TouchableOpacity style={styles.photoScattaBtn} onPress={takePhoto}>
-                      <Text style={styles.photoScattaBtnText}>Scatta</Text>
+                </TouchableOpacity>
+
+                {/* Foto 2 - Fascicoli */}
+                <TouchableOpacity 
+                  style={[styles.photoReqItem, styles.photoReqItemClickable, listingPhotos[1] && styles.photoReqItemDone]}
+                  onPress={() => !listingPhotos[1] && takePhotoAtIndex(1)}
+                  disabled={!!listingPhotos[1]}
+                >
+                  <Ionicons 
+                    name="camera" 
+                    size={22} 
+                    color={listingPhotos[1] ? "#4CAF50" : "#1a472a"} 
+                  />
+                  <Text style={[styles.photoReqText, { color: listingPhotos[1] ? '#4CAF50' : '#333', marginLeft: 10, flex: 1 }]}>
+                    2. Fascicoli (se previsti)
+                  </Text>
+                  {listingPhotos[1] ? (
+                    <TouchableOpacity onPress={() => removePhoto(1)}>
+                      <Ionicons name="close-circle" size={20} color="#ff4444" />
                     </TouchableOpacity>
+                  ) : (
+                    <Text style={styles.photoScattaInline}>Scatta</Text>
                   )}
-                  {listingPhotos.length >= 2 && <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />}
-                </View>
-                <View style={[styles.photoReqItem, styles.photoReqItemOptional, listingPhotos.length >= 3 && styles.photoReqItemDone]}>
-                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
-                    <Ionicons 
-                      name="camera" 
-                      size={18} 
-                      color={listingPhotos.length >= 3 ? "#4CAF50" : "#1a472a"} 
-                    />
-                    <Text style={[styles.photoReqText, { color: listingPhotos.length >= 3 ? '#4CAF50' : '#666', marginLeft: 8 }]}>
-                      3. Foto delle pagine peggiori
-                    </Text>
-                  </View>
-                  {listingPhotos.length >= 2 && listingPhotos.length < 3 && (
-                    <TouchableOpacity style={styles.photoScattaBtn} onPress={takePhoto}>
-                      <Text style={styles.photoScattaBtnText}>Scatta</Text>
+                </TouchableOpacity>
+
+                {/* Foto 3 - Pagine peggiori */}
+                <TouchableOpacity 
+                  style={[styles.photoReqItem, styles.photoReqItemClickable, listingPhotos[2] && styles.photoReqItemDone]}
+                  onPress={() => !listingPhotos[2] && takePhotoAtIndex(2)}
+                  disabled={!!listingPhotos[2]}
+                >
+                  <Ionicons 
+                    name="camera" 
+                    size={22} 
+                    color={listingPhotos[2] ? "#4CAF50" : "#1a472a"} 
+                  />
+                  <Text style={[styles.photoReqText, { color: listingPhotos[2] ? '#4CAF50' : '#333', marginLeft: 10, flex: 1 }]}>
+                    3. Foto delle pagine peggiori
+                  </Text>
+                  {listingPhotos[2] ? (
+                    <TouchableOpacity onPress={() => removePhoto(2)}>
+                      <Ionicons name="close-circle" size={20} color="#ff4444" />
                     </TouchableOpacity>
+                  ) : (
+                    <Text style={styles.photoScattaInline}>Scatta</Text>
                   )}
-                  {listingPhotos.length >= 3 && <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />}
-                </View>
+                </TouchableOpacity>
               </View>
               
-              <View style={styles.photosGrid}>
-                {listingPhotos.map((photo, index) => (
-                  <View key={index} style={styles.photoItem}>
-                    <Image
-                      source={{ uri: `data:image/jpeg;base64,${photo}` }}
-                      style={styles.photoThumbnail}
-                    />
-                    <View style={styles.photoLabel}>
-                      <Text style={styles.photoLabelText}>
-                        Foto {index + 1}
-                      </Text>
+              {/* Miniature foto scattate */}
+              {listingPhotos.length > 0 && (
+                <View style={styles.photosGrid}>
+                  {listingPhotos.map((photo, index) => (
+                    <View key={index} style={styles.photoItem}>
+                      <Image
+                        source={{ uri: `data:image/jpeg;base64,${photo}` }}
+                        style={styles.photoThumbnail}
+                      />
+                      <View style={styles.photoLabel}>
+                        <Text style={styles.photoLabelText}>
+                          Foto {index + 1}
+                        </Text>
+                      </View>
                     </View>
-                    <TouchableOpacity
-                      style={styles.removePhotoBtn}
-                      onPress={() => removePhoto(index)}
-                    >
-                      <Ionicons name="close-circle" size={22} color="#ff4444" />
-                    </TouchableOpacity>
-                  </View>
-                ))}
-                {/* Mostra loading durante elaborazione foto */}
-                {loadingPhoto && (
-                  <View style={[styles.addPhotoBtn, { justifyContent: 'center', alignItems: 'center' }]}>
-                    <ActivityIndicator size="small" color="#1a472a" />
-                    <Text style={[styles.addPhotoBtnText, { fontSize: 10 }]}>Comprimo...</Text>
-                  </View>
-                )}
-                {/* Solo pulsante Galleria sotto le foto */}
-                {listingPhotos.length < 3 && !loadingPhoto && (
-                  <View style={styles.addPhotoButtons}>
-                    <TouchableOpacity style={styles.addPhotoBtn} onPress={pickImage}>
-                      <Ionicons name="images" size={24} color="#1a472a" />
-                      <Text style={styles.addPhotoBtnText}>Galleria</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </View>
+                  ))}
+                </View>
+              )}
+              
+              {/* Loading durante elaborazione foto */}
+              {loadingPhoto && (
+                <View style={{ alignItems: 'center', padding: 16 }}>
+                  <ActivityIndicator size="small" color="#1a472a" />
+                  <Text style={{ color: '#666', marginTop: 8, fontSize: 12 }}>Elaborazione foto...</Text>
+                </View>
+              )}
+              
+              {/* Pulsante Galleria */}
+              {listingPhotos.length < 3 && !loadingPhoto && (
+                <TouchableOpacity style={styles.galleryBtn} onPress={pickImage}>
+                  <Ionicons name="images" size={20} color="#1a472a" />
+                  <Text style={styles.galleryBtnText}>Scegli dalla Galleria</Text>
+                </TouchableOpacity>
+              )}
               
               {/* Info compressione */}
-              <Text style={{ fontSize: 11, color: '#999', textAlign: 'center', marginTop: 4, marginBottom: 12 }}>
-                Foto compresse automaticamente (max 1MB, formato orizzontale)
+              <Text style={{ fontSize: 11, color: '#999', textAlign: 'center', marginTop: 8, marginBottom: 12 }}>
+                Foto compresse e ruotate automaticamente
               </Text>
 
               {/* ========== SEZIONE STATO LIBRO ========== */}
@@ -1565,31 +1697,26 @@ export default function SellScreen() {
               {/* Price - Forbice di prezzi selezionabili */}
               <Text style={styles.formLabel}>Scegli il tuo prezzo</Text>
               <View style={styles.priceRangeContainer}>
-                <View style={styles.priceOptionsContainer}>>
+                <View style={styles.priceOptionsContainer}>
                   {priceRange.prices.map((priceOpt, index) => {
-                    // Calcolo guadagno utente (83% del prezzo vendita)
-                    const sellerEarnings = (priceOpt.price * 0.83).toFixed(2);
-                    // Commissione Stripe: 1.5% + 0.25€
-                    const stripeCommission = (priceOpt.price * 0.015) + 0.25;
-                    const buyerPrice = (priceOpt.price + stripeCommission).toFixed(2);
                     return (
                       <TouchableOpacity
                         key={index}
                         style={[
                           styles.priceOptionButton,
-                          selectedPriceOption === priceOpt.price && styles.priceOptionButtonSelected,
-                          index === 2 && styles.priceOptionButtonFast
+                          selectedPriceOption === priceOpt.prezzoAcquirente && styles.priceOptionButtonSelected,
+                          !isNewBook && index === 2 && styles.priceOptionButtonFast
                         ]}
-                        onPress={() => setSelectedPriceOption(priceOpt.price)}
+                        onPress={() => setSelectedPriceOption(priceOpt.prezzoAcquirente)}
                       >
                         <View style={styles.priceOptionLeft}>
                           <Text style={[
                             styles.priceOptionLabel,
-                            selectedPriceOption === priceOpt.price && styles.priceOptionLabelSelected
+                            selectedPriceOption === priceOpt.prezzoAcquirente && styles.priceOptionLabelSelected
                           ]}>
                             {priceOpt.label}
                           </Text>
-                          {index === 2 && (
+                          {!isNewBook && index === 2 && (
                             <View style={styles.fastSaleBadge}>
                               <Ionicons name="flash" size={10} color="#fff" />
                               <Text style={styles.fastSaleBadgeText}>Rapido</Text>
@@ -1599,47 +1726,25 @@ export default function SellScreen() {
                         <View style={styles.priceOptionRight}>
                           <Text style={[
                             styles.priceOptionValue,
-                            selectedPriceOption === priceOpt.price && styles.priceOptionValueSelected
+                            selectedPriceOption === priceOpt.prezzoAcquirente && styles.priceOptionValueSelected
                           ]}>
-                            Tu ricevi: €{sellerEarnings}
+                            Tu ricevi: €{priceOpt.guadagnoVenditore?.toFixed(2)}
                           </Text>
                           <Text style={styles.priceOptionBuyerCost}>
-                            Acquirente paga: €{buyerPrice}
+                            L'acquirente paga: €{priceOpt.prezzoAcquirente?.toFixed(2)}
                           </Text>
                         </View>
                       </TouchableOpacity>
                     );
                   })}
                 </View>
-
-                {selectedPriceOption !== null && (() => {
-                  const stripeComm = (selectedPriceOption * 0.015) + 0.25;
-                  const finalBuyerPrice = (selectedPriceOption + stripeComm).toFixed(2);
-                  const sellerNet = (selectedPriceOption * 0.83).toFixed(2);
-                  return (
-                    <View style={styles.selectedPriceSummary}>
-                      <View style={styles.summaryFinal}>
-                        <View style={styles.summaryFinalRow}>
-                          <Ionicons name="checkmark-circle" size={18} color="#4CAF50" />
-                          <Text style={styles.summaryFinalLabel}>Tu riceverai:</Text>
-                          <Text style={styles.summaryFinalGreen}>€{sellerNet}</Text>
-                        </View>
-                        <View style={styles.summaryFinalRow}>
-                          <Ionicons name="cart" size={18} color="#2196F3" />
-                          <Text style={styles.summaryFinalLabel}>Acquirente paga:</Text>
-                          <Text style={styles.summaryFinalBlue}>€{finalBuyerPrice}</Text>
-                        </View>
-                      </View>
-                    </View>
-                  );
-                })()}
-                
-                {selectedBook && selectedBook.prezzo_copertina && (
-                  <Text style={styles.originalPriceHint}>
-                    Prezzo copertina: €{selectedBook.prezzo_copertina.toFixed(2)}
-                  </Text>
-                )}
               </View>
+              
+              {selectedBook && selectedBook.prezzo_copertina && (
+                <Text style={styles.originalPriceHint}>
+                  Prezzo copertina: €{selectedBook.prezzo_copertina.toFixed(2)}
+                </Text>
+              )}
 
               {/* Bookshop Selection - Multi-select */}
               <Text style={styles.formLabel}>Punti di ritiro *</Text>
@@ -2276,6 +2381,40 @@ const styles = StyleSheet.create({
   photoScattaBtnText: {
     color: '#fff',
     fontSize: 12,
+    fontWeight: '600',
+  },
+  // Foto indipendenti - clickable row
+  photoReqItemClickable: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    padding: 14,
+    borderRadius: 10,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  photoScattaInline: {
+    color: '#1a472a',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  // Pulsante Galleria grande
+  galleryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f0f4f0',
+    padding: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#1a472a',
+    borderStyle: 'dashed',
+    gap: 8,
+  },
+  galleryBtnText: {
+    color: '#1a472a',
+    fontSize: 14,
     fontWeight: '600',
   },
   // Price Range styles
