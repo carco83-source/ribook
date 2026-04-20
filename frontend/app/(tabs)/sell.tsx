@@ -200,57 +200,110 @@ export default function SellScreen() {
     }
   };
 
-  // Calcola forbice di prezzi basata sulla condizione
-  const calculatePriceRange = () => {
-    const prezzoCopertina = selectedBook?.prezzo_copertina || 0;
-    const { condition } = calculateCondition();
+  // ============================================================
+  // FORMULA CALCOLO PREZZO LIBRO USATO (PROFESSIONALE)
+  // ============================================================
+  // Pesi difetti: scritte 30%, evidenziature 25%, pieghe 20%, copertina 25%
+  // Curva non lineare (pow 1.3) per prezzo più realistico
+  // Commissioni: 17% (12% piattaforma + 5% transazione)
+  // ============================================================
+  
+  const calcolaPrezzoLibro = () => {
+    const prezzoNuovo = selectedBook?.prezzo_copertina || 0;
     
-    if (isNewBook) {
-      // Libro nuovo: 85-100% del prezzo
+    if (prezzoNuovo === 0) {
       return {
-        condition: 'nuovo',
-        prices: [
-          { label: 'Prezzo massimo', percentage: 1.00, price: Math.round(prezzoCopertina * 100) / 100 },
-          { label: 'Prezzo consigliato', percentage: 0.90, price: Math.round(prezzoCopertina * 0.90 * 100) / 100 },
-          { label: 'Vendita rapida', percentage: 0.85, price: Math.round(prezzoCopertina * 0.85 * 100) / 100 },
-        ]
+        usura: 0,
+        prezzoConsigliato: 0,
+        prezzoVeloce: 0,
+        prezzoAlto: 0,
+        guadagnoUtente: 0,
+        condition: 'buono'
       };
     }
     
-    let percentages: { label: string; percentage: number }[];
-    
-    switch (condition) {
-      case 'ottimo':
-        // Ottimo: 65-50%
-        percentages = [
-          { label: 'Prezzo alto', percentage: 0.65 },
-          { label: 'Prezzo consigliato', percentage: 0.55 },
-          { label: 'Vendita rapida', percentage: 0.50 },
-        ];
-        break;
-      case 'buono':
-        // Buono: 55-40%
-        percentages = [
-          { label: 'Prezzo alto', percentage: 0.55 },
-          { label: 'Prezzo consigliato', percentage: 0.45 },
-          { label: 'Vendita rapida', percentage: 0.40 },
-        ];
-        break;
-      default:
-        // Accettabile: 45-30%
-        percentages = [
-          { label: 'Prezzo alto', percentage: 0.45 },
-          { label: 'Prezzo consigliato', percentage: 0.35 },
-          { label: 'Vendita rapida', percentage: 0.30 },
-        ];
+    // Libro nuovo: nessuna usura
+    if (isNewBook) {
+      const commissioni = 0.17;
+      const prezzoVendita = prezzoNuovo * 0.95; // 95% del nuovo
+      const guadagno = prezzoVendita * (1 - commissioni);
+      
+      return {
+        usura: 0,
+        prezzoConsigliato: Math.round(prezzoVendita * 100) / 100,
+        prezzoVeloce: Math.round(prezzoVendita * 0.9 * 100) / 100,
+        prezzoAlto: Math.round(prezzoNuovo * 100) / 100,
+        guadagnoUtente: Math.round(guadagno * 100) / 100,
+        condition: 'nuovo'
+      };
     }
     
+    // 🎯 PESI DIFETTI
+    const pesi = {
+      scritte: 0.30,
+      evidenziature: 0.25,
+      pieghe: 0.20,
+      copertina: 0.25
+    };
+    
+    // 📊 CALCOLO USURA (0 → 1)
+    let usura = (
+      hasWritings * pesi.scritte +
+      hasHighlights * pesi.evidenziature +
+      hasFolds * pesi.pieghe +
+      coverCondition * pesi.copertina
+    ) / 100;
+    
+    // 🔥 CURVA NON LINEARE
+    let prezzoUsato = prezzoNuovo * (1 - Math.pow(usura, 1.3));
+    
+    // 🧠 SOFT CAP (no prezzi troppo vicini al nuovo)
+    if (usura < 0.05) {
+      prezzoUsato = Math.min(prezzoUsato, prezzoNuovo * 0.9);
+    }
+    
+    // 🚫 HARD CAP
+    prezzoUsato = Math.min(prezzoUsato, prezzoNuovo);
+    
+    // 💸 COMMISSIONI (12% + 5%)
+    const commissioni = 0.17;
+    const prezzoVendita = prezzoUsato / (1 - commissioni);
+    
+    // 🎯 VARIANTI UX
+    const prezzoConsigliato = prezzoVendita;
+    const prezzoVeloce = prezzoVendita * 0.9;
+    const prezzoAlto = Math.min(prezzoVendita * 1.1, prezzoNuovo);
+    
+    // Determina condizione basata su usura
+    let condition = 'buono';
+    const usuraPercentuale = usura * 100;
+    if (usuraPercentuale <= 10) condition = 'ottimo';
+    else if (usuraPercentuale <= 30) condition = 'buono';
+    else condition = 'accettabile';
+    
     return {
-      condition,
-      prices: percentages.map(p => ({
-        ...p,
-        price: Math.round(prezzoCopertina * p.percentage * 100) / 100
-      }))
+      usura: Math.round(usuraPercentuale * 10) / 10,
+      prezzoConsigliato: Math.round(prezzoConsigliato * 100) / 100,
+      prezzoVeloce: Math.round(prezzoVeloce * 100) / 100,
+      prezzoAlto: Math.round(prezzoAlto * 100) / 100,
+      guadagnoUtente: Math.round(prezzoUsato * 100) / 100,
+      condition
+    };
+  };
+
+  // Calcola forbice di prezzi basata sulla nuova formula
+  const calculatePriceRange = () => {
+    const prezzoCalcolato = calcolaPrezzoLibro();
+    
+    return {
+      condition: prezzoCalcolato.condition,
+      usura: prezzoCalcolato.usura,
+      guadagnoUtente: prezzoCalcolato.guadagnoUtente,
+      prices: [
+        { label: 'Prezzo alto', price: prezzoCalcolato.prezzoAlto },
+        { label: 'Prezzo consigliato', price: prezzoCalcolato.prezzoConsigliato },
+        { label: 'Vendita rapida', price: prezzoCalcolato.prezzoVeloce },
+      ]
     };
   };
 
@@ -1499,20 +1552,30 @@ export default function SellScreen() {
               {/* Price - Forbice di prezzi selezionabili */}
               <Text style={styles.formLabel}>💰 Scegli il tuo prezzo</Text>
               <View style={styles.priceRangeContainer}>
+                {/* Info usura e guadagno */}
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <Text style={[styles.priceRangeSubtitle, { color: '#666' }]}>
+                    📊 Usura: {priceRange.usura?.toFixed(1) || 0}%
+                  </Text>
+                  <Text style={[styles.priceRangeSubtitle, { color: '#1a472a', fontWeight: 'bold' }]}>
+                    Stato: {priceRange.condition === 'nuovo' ? '✨ Nuovo' : priceRange.condition === 'ottimo' ? '👍 Ottimo' : priceRange.condition === 'buono' ? '👌 Buono' : '📖 Accettabile'}
+                  </Text>
+                </View>
+                
                 <Text style={styles.priceRangeTitle}>
-                  Il tuo libro vale circa: €{priceRange.prices[1]?.price.toFixed(2) || '0.00'}
+                  💵 Tu ricevi: €{priceRange.guadagnoUtente?.toFixed(2) || '0.00'}
                 </Text>
-                <Text style={styles.priceRangeSubtitle}>
-                  Stato: {priceRange.condition === 'nuovo' ? 'Nuovo' : priceRange.condition === 'ottimo' ? 'Ottimo' : priceRange.condition === 'buono' ? 'Buono' : 'Accettabile'}
+                <Text style={{ fontSize: 11, color: '#999', textAlign: 'center', marginBottom: 12 }}>
+                  (dopo commissioni 17%)
                 </Text>
                 
                 <View style={styles.priceOptionsContainer}>
                   {priceRange.prices.map((priceOpt, index) => {
-                    // Commissioni: 12% App + 5% Libraio = 17%
+                    // Calcolo guadagno utente (83% del prezzo vendita)
+                    const sellerEarnings = (priceOpt.price * 0.83).toFixed(2);
                     // Commissione Stripe: 1.5% + 0.25€
                     const stripeCommission = (priceOpt.price * 0.015) + 0.25;
                     const buyerPrice = (priceOpt.price + stripeCommission).toFixed(2);
-                    const sellerEarnings = (priceOpt.price * 0.83).toFixed(2); // Venditore riceve 83% (100% - 17%)
                     return (
                       <TouchableOpacity
                         key={index}
