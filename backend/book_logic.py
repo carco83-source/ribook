@@ -363,13 +363,17 @@ async def calcola_stato_acquisto(db, libro: dict, classe: int, tipo_scuola: str,
     # Edizione troppo recente, non può esistere usato
     # Per volumi unici: 2023 è il primo anno di utilizzo
     # Per annuali: 2024+ è troppo recente
+    # ATTENZIONE: Per volumi unici, questa regola si applica SOLO in 1ª classe
+    # Perché in 2ª/3ª lo studente ha già comprato il libro in 1ª
     # ============================================================
     if anno_pubblicazione:
         # Volumi unici pubblicati dal 2023 non possono essere usati (primo ciclo)
-        if is_volume_unico and anno_pubblicazione >= 2023:
+        # MA questa regola si applica SOLO se siamo in 1ª classe!
+        # In 2ª/3ª media, lo studente ha GIÀ comprato il libro in 1ª
+        if is_volume_unico and anno_pubblicazione >= 2023 and classe == 1:
             return ("NUOVO", f"Edizione {anno_pubblicazione} - primo ciclo, no usato", 0)
         # Libri annuali pubblicati dal 2024 non possono essere usati
-        if anno_pubblicazione >= 2024:
+        if not is_volume_unico and anno_pubblicazione >= 2024:
             return ("NUOVO", f"Edizione {anno_pubblicazione} - troppo recente per usato", 0)
     
     # Conta copie disponibili per questo ISBN
