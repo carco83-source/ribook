@@ -7,7 +7,7 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   Platform,
-  useWindowDimensions,
+  Dimensions,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,6 +16,24 @@ import axios from 'axios';
 import * as ScreenOrientation from 'expo-screen-orientation';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+
+// Ordine di importanza delle materie
+const MATERIE_ORDINE: { [key: string]: number } = {
+  'italiano': 1,
+  'matematica': 2,
+  'inglese': 3,
+  'storia': 4,
+  'geografia': 5,
+  'scienze': 6,
+  'tecnologia': 7,
+  'musica': 8,
+  'arte': 9,
+  'arte e immagine': 9,
+  'educazione fisica': 10,
+  'scienze motorie': 10,
+  'religione': 11,
+  'religione cattolica': 11,
+};
 
 interface BookData {
   isbn: string;
@@ -28,7 +46,8 @@ interface BookData {
   nuova_adozione?: boolean;
   da_acquistare?: boolean;
   consigliato?: boolean;
-  stato?: string; // 'comprare_nuovo', 'comprare_usato', 'vendere', 'gia_posseduto'
+  stato?: string;
+  priorita?: number; // 1 = da acquistare nuovo, 2 = da acquistare usato, 3 = vendibile, 4 = già posseduto
 }
 
 interface ChildData {
@@ -49,28 +68,22 @@ export default function BookListScreen() {
   const params = useLocalSearchParams();
   const router = useRouter();
   const childId = params.childId as string;
-  const { width, height } = useWindowDimensions();
-  const isLandscape = width > height;
   
   const [loading, setLoading] = useState(true);
   const [childData, setChildData] = useState<ChildData | null>(null);
   const [books, setBooks] = useState<BookData[]>([]);
-  const [analysis, setAnalysis] = useState<any>(null);
+  const [currentPage, setCurrentPage] = useState(0);
 
-  // Sblocca rotazione schermo quando si entra in questa pagina
+  // Sblocca rotazione schermo
   useEffect(() => {
     const unlockOrientation = async () => {
       try {
         await ScreenOrientation.unlockAsync();
-        console.log('Screen orientation unlocked');
       } catch (e) {
         console.log('Could not unlock orientation:', e);
       }
     };
-    
     unlockOrientation();
-    
-    // Quando si esce, riporta a portrait
     return () => {
       ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
     };
@@ -80,6 +93,14 @@ export default function BookListScreen() {
     loadData();
   }, [childId]);
 
+  const getMateriaPriority = (disciplina: string): number => {
+    const normalized = disciplina?.toLowerCase().trim() || '';
+    for (const [key, value] of Object.entries(MATERIE_ORDINE)) {
+      if (normalized.includes(key)) return value;
+    }
+    return 50; // Default per materie non riconosciute
+  };
+
   const loadData = async () => {
     try {
       const userId = await AsyncStorage.getItem('user_id');
@@ -88,7 +109,7 @@ export default function BookListScreen() {
         return;
       }
 
-      // Carica dati utente per ottenere info figlio
+      // Carica dati utente
       const userRes = await axios.get(`${API_URL}/api/users/${userId}`);
       const profili = userRes.data.profili_figli || [];
       const child = profili.find((p: any) => p.id === childId);
@@ -113,13 +134,11 @@ export default function BookListScreen() {
       const analysisRes = await axios.get(
         `${API_URL}/api/profiles/${userId}/children/${childId}/analysis`
       );
-      setAnalysis(analysisRes.data);
 
-      // Combina tutti i libri in un'unica lista
       const allBooks: BookData[] = [];
       const seenIsbns = new Set<string>();
 
-      // Libri da comprare nuovi
+      // 1. Libri da comprare NUOVI (priorità 1)
       if (analysisRes.data.nuovi?.libri) {
         analysisRes.data.nuovi.libri.forEach((libro: any) => {
           if (!seenIsbns.has(libro.isbn)) {
@@ -130,12 +149,13 @@ export default function BookListScreen() {
               da_acquistare: true,
               nuova_adozione: libro.nuova_adozione || false,
               consigliato: libro.consigliato || false,
+              priorita: 1,
             });
           }
         });
       }
 
-      // Libri da comprare usati
+      // 2. Libri da comprare USATI (priorità 2)
       if (analysisRes.data.comprare?.libri_usati) {
         analysisRes.data.comprare.libri_usati.forEach((libro: any) => {
           if (!seenIsbns.has(libro.isbn)) {
@@ -146,28 +166,13 @@ export default function BookListScreen() {
               da_acquistare: true,
               nuova_adozione: libro.nuova_adozione || false,
               consigliato: libro.consigliato || false,
+              priorita: 2,
             });
           }
         });
       }
 
-      // Libri da vendere (già posseduti)
-      if (analysisRes.data.vendere?.libri_vendibili) {
-        analysisRes.data.vendere.libri_vendibili.forEach((libro: any) => {
-          if (!seenIsbns.has(libro.isbn)) {
-            seenIsbns.add(libro.isbn);
-            allBooks.push({
-              ...libro,
-              stato: 'vendere',
-              da_acquistare: false,
-              nuova_adozione: false,
-              consigliato: false,
-            });
-          }
-        });
-      }
-
-      // Libri già posseduti (compatibili)
+      // 3. Libri già posseduti (priorità 3)
       if (analysisRes.data.gia_posseduti?.libri) {
         analysisRes.data.gia_posseduti.libri.forEach((libro: any) => {
           if (!seenIsbns.has(libro.isbn)) {
@@ -178,15 +183,36 @@ export default function BookListScreen() {
               da_acquistare: false,
               nuova_adozione: false,
               consigliato: false,
+              priorita: 3,
             });
           }
         });
       }
 
-      // Ordina per disciplina
-      allBooks.sort((a, b) => (a.disciplina || '').localeCompare(b.disciplina || ''));
-      setBooks(allBooks);
+      // 4. Libri vendibili (priorità 4)
+      if (analysisRes.data.vendere?.libri_vendibili) {
+        analysisRes.data.vendere.libri_vendibili.forEach((libro: any) => {
+          if (!seenIsbns.has(libro.isbn)) {
+            seenIsbns.add(libro.isbn);
+            allBooks.push({
+              ...libro,
+              stato: 'vendere',
+              da_acquistare: false,
+              nuova_adozione: false,
+              consigliato: false,
+              priorita: 4,
+            });
+          }
+        });
+      }
 
+      // Ordina: prima per priorità (da acquistare prima), poi per importanza materia
+      allBooks.sort((a, b) => {
+        if (a.priorita !== b.priorita) return (a.priorita || 99) - (b.priorita || 99);
+        return getMateriaPriority(a.disciplina) - getMateriaPriority(b.disciplina);
+      });
+
+      setBooks(allBooks);
     } catch (error) {
       console.error('Error loading book list:', error);
     } finally {
@@ -197,27 +223,31 @@ export default function BookListScreen() {
   const getTipoScuolaLabel = (tipo: string): string => {
     const tipi: { [key: string]: string } = {
       'primaria': 'SCUOLA PRIMARIA',
-      'secondaria': 'SCUOLA SECONDARIA DI I GRADO',
-      'secondaria_primo': 'SCUOLA SECONDARIA DI I GRADO',
-      'secondaria_secondo': 'SCUOLA SECONDARIA DI II GRADO',
-      'superiore': 'SCUOLA SECONDARIA DI II GRADO',
+      'secondaria': 'SCUOLA SEC. I GRADO',
+      'secondaria_primo': 'SCUOLA SEC. I GRADO',
+      'secondaria_secondo': 'SCUOLA SEC. II GRADO',
+      'superiore': 'SCUOLA SEC. II GRADO',
     };
     return tipi[tipo] || 'SCUOLA SECONDARIA';
   };
 
-  const getClasseLabel = (classe: number): string => {
-    const nomi: { [key: number]: string } = {
-      1: 'Prima', 2: 'Seconda', 3: 'Terza', 4: 'Quarta', 5: 'Quinta',
-    };
-    return nomi[classe] || `${classe}ª`;
+  const getStatoLabel = (book: BookData): { text: string; color: string } => {
+    if (book.priorita === 1) return { text: 'DA ACQUISTARE NUOVO', color: '#f44336' };
+    if (book.priorita === 2) return { text: 'DA ACQUISTARE USATO', color: '#FF9800' };
+    if (book.priorita === 3) return { text: 'GIÀ POSSEDUTO', color: '#4CAF50' };
+    if (book.priorita === 4) return { text: 'VENDIBILE', color: '#2196F3' };
+    return { text: '', color: '#666' };
   };
 
-  const copyToClipboard = (text: string) => {
-    if (Platform.OS === 'web') {
-      navigator.clipboard.writeText(text);
-    }
-    // Su mobile, il testo è già selezionabile
-  };
+  // Calcola pagine (10 libri per pagina)
+  const LIBRI_PER_PAGINA = 10;
+  const totalPages = Math.ceil(books.length / LIBRI_PER_PAGINA);
+  const currentBooks = books.slice(currentPage * LIBRI_PER_PAGINA, (currentPage + 1) * LIBRI_PER_PAGINA);
+
+  // Riempi con slot vuoti se necessario
+  while (currentBooks.length < LIBRI_PER_PAGINA) {
+    currentBooks.push({} as BookData);
+  }
 
   if (loading) {
     return (
@@ -229,160 +259,137 @@ export default function BookListScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-      {/* Header con tasto indietro */}
+    <View style={styles.container}>
+      {/* Header Navigation */}
       <View style={styles.headerNav}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="#1a472a" />
-          <Text style={styles.backButtonText}>Indietro</Text>
+          <Ionicons name="arrow-back" size={22} color="#1a472a" />
         </TouchableOpacity>
-        <TouchableOpacity 
-          style={styles.printButton} 
-          onPress={() => {
-            if (Platform.OS === 'web') {
-              window.print();
-            }
-          }}
-        >
-          <Ionicons name="print" size={20} color="#fff" />
-          <Text style={styles.printButtonText}>Stampa</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* ========== INTESTAZIONE RILIBRO ========== */}
-      <View style={styles.headerSection}>
-        <Text style={styles.riLibroTitle}>RiLiBro</Text>
-        <Text style={styles.subtitle}>Elenco dei libri di testo adottati e consigliati</Text>
-      </View>
-
-      {/* ========== INFO SCUOLA E CLASSE ========== */}
-      <View style={styles.schoolInfoSection}>
-        <View style={styles.schoolInfoRow}>
-          <Text style={styles.schoolInfoLabel}>{getTipoScuolaLabel(childData?.tipo_scuola || '')}</Text>
-          <Text style={styles.schoolInfoSeparator}>•</Text>
-          <Text style={styles.schoolInfoValue}>
-            Classe {childData?.classe}{childData?.sezione?.toUpperCase()}
-          </Text>
-          <Text style={styles.schoolInfoSeparator}>•</Text>
-          <Text style={styles.schoolInfoValue}>A.S. {childData?.anno_scolastico}</Text>
+        
+        <View style={styles.pageIndicator}>
+          <Text style={styles.pageText}>Pag. {currentPage + 1}/{totalPages || 1}</Text>
         </View>
         
-        <View style={styles.schoolDataRow}>
+        <TouchableOpacity 
+          style={styles.printButton} 
+          onPress={() => { if (Platform.OS === 'web') window.print(); }}
+        >
+          <Ionicons name="print" size={18} color="#fff" />
+        </TouchableOpacity>
+      </View>
+
+      {/* Contenuto A4 */}
+      <View style={styles.a4Container}>
+        {/* INTESTAZIONE */}
+        <View style={styles.headerSection}>
+          <Text style={styles.riLibroTitle}>RiLiBro</Text>
+          <View style={styles.schoolInfoRow}>
+            <Text style={styles.schoolInfoText}>
+              {getTipoScuolaLabel(childData?.tipo_scuola || '')} • Classe {childData?.classe}{childData?.sezione?.toUpperCase()} • A.S. {childData?.anno_scolastico}
+            </Text>
+          </View>
           <Text style={styles.schoolName}>{childData?.scuola_nome?.toUpperCase()}</Text>
-        </View>
-        <View style={styles.schoolDataRow}>
-          <Text style={styles.schoolCode}>Cod. {childData?.scuola_codice}</Text>
-          <Text style={styles.schoolLocation}>
-            {childData?.scuola_comune} {childData?.scuola_cap ? `(${childData?.scuola_cap})` : ''} 
-            {childData?.scuola_provincia ? ` - ${childData?.scuola_provincia}` : ''}
+          <Text style={styles.schoolDetails}>
+            Cod. {childData?.scuola_codice} • {childData?.scuola_comune} {childData?.scuola_cap && `(${childData?.scuola_cap})`}
           </Text>
         </View>
+
+        {/* GRIGLIA 2x5 (10 libri) */}
+        <View style={styles.booksGrid}>
+          {currentBooks.map((book, index) => (
+            <View key={book.isbn || `empty-${index}`} style={styles.bookCell}>
+              {book.isbn ? (
+                <>
+                  {/* Stato libro */}
+                  <View style={[styles.bookStatoBadge, { backgroundColor: getStatoLabel(book).color }]}>
+                    <Text style={styles.bookStatoText}>{getStatoLabel(book).text}</Text>
+                  </View>
+                  
+                  {/* Materia */}
+                  <Text style={styles.bookMateria} numberOfLines={1}>
+                    {book.disciplina?.toUpperCase()}
+                  </Text>
+                  
+                  {/* Titolo */}
+                  <Text style={styles.bookTitolo} numberOfLines={2}>
+                    {book.titolo}{book.volume ? ` Vol.${book.volume}` : ''}
+                  </Text>
+                  
+                  {/* Autore/Editore */}
+                  <Text style={styles.bookAutore} numberOfLines={1}>
+                    {book.autori} - {book.editore}
+                  </Text>
+                  
+                  {/* ISBN e Prezzo */}
+                  <View style={styles.bookIsbnRow}>
+                    <Text style={styles.bookIsbn} selectable>{book.isbn}</Text>
+                    <Text style={styles.bookPrezzo}>€{book.prezzo_copertina?.toFixed(2)}</Text>
+                  </View>
+                  
+                  {/* Adozione badges */}
+                  <View style={styles.bookBadgesRow}>
+                    {book.nuova_adozione && (
+                      <View style={[styles.badge, styles.badgeNuova]}>
+                        <Text style={styles.badgeText}>N.ADOZ</Text>
+                      </View>
+                    )}
+                    {book.da_acquistare && (
+                      <View style={[styles.badge, styles.badgeAcquista]}>
+                        <Text style={styles.badgeText}>ACQUISTA</Text>
+                      </View>
+                    )}
+                    {book.consigliato && (
+                      <View style={[styles.badge, styles.badgeConsigliato]}>
+                        <Text style={styles.badgeText}>CONSIG.</Text>
+                      </View>
+                    )}
+                  </View>
+                </>
+              ) : (
+                <View style={styles.emptyCell}>
+                  <Text style={styles.emptyCellText}>-</Text>
+                </View>
+              )}
+            </View>
+          ))}
+        </View>
       </View>
 
-      {/* ========== LISTA LIBRI ========== */}
-      <View style={styles.booksSection}>
-        {books.map((book, index) => (
-          <View key={book.isbn || index} style={styles.bookCard}>
-            {/* Disciplina */}
-            <Text style={styles.bookDisciplina}>{book.disciplina?.toUpperCase()}</Text>
-            
-            {/* Titolo e Volume */}
-            <Text style={styles.bookTitolo}>
-              {book.titolo}
-              {book.volume ? ` - Vol. ${book.volume}` : ''}
-            </Text>
-            
-            {/* Autore e Editore */}
-            <View style={styles.bookAuthorRow}>
-              <Text style={styles.bookAutori}>{book.autori}</Text>
-              <Text style={styles.bookEditore}>{book.editore}</Text>
-            </View>
-            
-            {/* ISBN e Prezzo */}
-            <View style={styles.bookIsbnPriceRow}>
-              <TouchableOpacity 
-                style={styles.isbnContainer}
-                onPress={() => copyToClipboard(book.isbn)}
-              >
-                <Text style={styles.isbnLabel}>ISBN:</Text>
-                <Text style={styles.isbnValue} selectable={true}>{book.isbn}</Text>
-                <Ionicons name="copy-outline" size={14} color="#666" />
-              </TouchableOpacity>
-              <Text style={styles.bookPrezzo}>€ {book.prezzo_copertina?.toFixed(2)}</Text>
-            </View>
-            
-            {/* Tre riquadri: Nuova Adoz. | Da Acqui. | Consig. */}
-            <View style={styles.bookStatusRow}>
-              <View style={[
-                styles.statusBox,
-                book.nuova_adozione && styles.statusBoxActive
-              ]}>
-                <Text style={[
-                  styles.statusBoxLabel,
-                  book.nuova_adozione && styles.statusBoxLabelActive
-                ]}>NUOVA ADOZ.</Text>
-                <View style={[
-                  styles.statusCheckbox,
-                  book.nuova_adozione && styles.statusCheckboxChecked
-                ]}>
-                  {book.nuova_adozione && <Ionicons name="checkmark" size={12} color="#fff" />}
-                </View>
-              </View>
-              
-              <View style={[
-                styles.statusBox,
-                book.da_acquistare && styles.statusBoxActive
-              ]}>
-                <Text style={[
-                  styles.statusBoxLabel,
-                  book.da_acquistare && styles.statusBoxLabelActive
-                ]}>DA ACQUI.</Text>
-                <View style={[
-                  styles.statusCheckbox,
-                  book.da_acquistare && styles.statusCheckboxChecked
-                ]}>
-                  {book.da_acquistare && <Ionicons name="checkmark" size={12} color="#fff" />}
-                </View>
-              </View>
-              
-              <View style={[
-                styles.statusBox,
-                book.consigliato && styles.statusBoxActiveBlue
-              ]}>
-                <Text style={[
-                  styles.statusBoxLabel,
-                  book.consigliato && styles.statusBoxLabelActiveBlue
-                ]}>CONSIG.</Text>
-                <View style={[
-                  styles.statusCheckbox,
-                  book.consigliato && styles.statusCheckboxCheckedBlue
-                ]}>
-                  {book.consigliato && <Ionicons name="checkmark" size={12} color="#fff" />}
-                </View>
-              </View>
-            </View>
-          </View>
-        ))}
-      </View>
-
-      {/* ========== FOOTER ========== */}
-      <View style={styles.footerSection}>
-        <Text style={styles.footerText}>
-          Totale libri: {books.length} • Generato da RiLiBro
-        </Text>
-      </View>
-    </ScrollView>
+      {/* Navigazione pagine */}
+      {totalPages > 1 && (
+        <View style={styles.pagination}>
+          <TouchableOpacity 
+            style={[styles.pageButton, currentPage === 0 && styles.pageButtonDisabled]}
+            onPress={() => setCurrentPage(p => Math.max(0, p - 1))}
+            disabled={currentPage === 0}
+          >
+            <Ionicons name="chevron-back" size={24} color={currentPage === 0 ? '#ccc' : '#1a472a'} />
+          </TouchableOpacity>
+          
+          <Text style={styles.paginationText}>
+            {currentPage + 1} / {totalPages}
+          </Text>
+          
+          <TouchableOpacity 
+            style={[styles.pageButton, currentPage >= totalPages - 1 && styles.pageButtonDisabled]}
+            onPress={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))}
+            disabled={currentPage >= totalPages - 1}
+          >
+            <Ionicons name="chevron-forward" size={24} color={currentPage >= totalPages - 1 ? '#ccc' : '#1a472a'} />
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
   );
 }
+
+const { width, height } = Dimensions.get('window');
+const isLandscape = width > height;
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
-  },
-  contentContainer: {
-    paddingBottom: 40,
-    width: '100%',
+    backgroundColor: '#f5f5f5',
   },
   loadingContainer: {
     flex: 1,
@@ -401,253 +408,194 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 12,
+    padding: 8,
+    backgroundColor: '#fff',
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: '#ddd',
   },
   backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+    padding: 8,
   },
-  backButtonText: {
+  pageIndicator: {
+    backgroundColor: '#e8f5e9',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  pageText: {
+    fontSize: 12,
+    fontWeight: '600',
     color: '#1a472a',
-    fontSize: 16,
-    fontWeight: '500',
   },
   printButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
     backgroundColor: '#1a472a',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    gap: 6,
-  },
-  printButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
+    padding: 8,
+    borderRadius: 6,
   },
 
-  // Header RiLiBro
+  // A4 Container - proporzioni 21:29.7
+  a4Container: {
+    flex: 1,
+    backgroundColor: '#fff',
+    margin: 4,
+    borderRadius: 4,
+    overflow: 'hidden',
+    aspectRatio: 21 / 29.7,
+    maxHeight: '100%',
+    alignSelf: 'center',
+  },
+
+  // Header Section
   headerSection: {
+    backgroundColor: '#1a472a',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     alignItems: 'center',
-    paddingVertical: 24,
-    borderBottomWidth: 2,
-    borderBottomColor: '#1a472a',
-    marginHorizontal: 16,
   },
   riLibroTitle: {
-    fontSize: 48,
+    fontSize: 28,
     fontWeight: 'bold',
-    color: '#1a472a',
-    letterSpacing: 4,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 8,
-    textAlign: 'center',
-  },
-
-  // School Info
-  schoolInfoSection: {
-    padding: 16,
-    backgroundColor: '#f8f9fa',
-    marginHorizontal: 16,
-    marginTop: 16,
-    borderRadius: 8,
+    color: '#fff',
+    letterSpacing: 3,
   },
   schoolInfoRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  schoolInfoLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#1a472a',
-  },
-  schoolInfoSeparator: {
-    fontSize: 13,
-    color: '#999',
-    marginHorizontal: 8,
-  },
-  schoolInfoValue: {
-    fontSize: 13,
-    color: '#333',
-    fontWeight: '500',
-  },
-  schoolDataRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: 16,
     marginTop: 4,
   },
+  schoolInfoText: {
+    fontSize: 10,
+    color: '#c8e6c9',
+  },
   schoolName: {
-    fontSize: 15,
+    fontSize: 11,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#fff',
+    marginTop: 2,
     textAlign: 'center',
   },
-  schoolCode: {
-    fontSize: 12,
-    color: '#666',
-  },
-  schoolLocation: {
-    fontSize: 12,
-    color: '#666',
+  schoolDetails: {
+    fontSize: 9,
+    color: '#a5d6a7',
+    marginTop: 1,
   },
 
-  // Books Section
-  booksSection: {
-    padding: 16,
-  },
-  bookCard: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 12,
-  },
-  bookDisciplina: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#1a472a',
-    backgroundColor: '#e8f5e9',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-    alignSelf: 'flex-start',
-    marginBottom: 8,
-  },
-  bookTitolo: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 6,
-    lineHeight: 20,
-  },
-  bookAuthorRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 8,
-  },
-  bookAutori: {
-    fontSize: 13,
-    color: '#555',
-  },
-  bookEditore: {
-    fontSize: 13,
-    color: '#888',
-    fontStyle: 'italic',
-  },
-  bookIsbnPriceRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-  },
-  isbnContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#f5f5f5',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  isbnLabel: {
-    fontSize: 11,
-    color: '#888',
-  },
-  isbnValue: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#333',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-  },
-  bookPrezzo: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#1a472a',
-  },
-  
-  // Status Row (3 boxes)
-  bookStatusRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  statusBox: {
+  // Books Grid - 2 colonne x 5 righe
+  booksGrid: {
     flex: 1,
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#ddd',
+    flexWrap: 'wrap',
+    padding: 4,
   },
-  statusBoxActive: {
-    backgroundColor: '#e8f5e9',
-    borderColor: '#4CAF50',
+  bookCell: {
+    width: '50%',
+    height: '20%',
+    padding: 3,
+    borderWidth: 0.5,
+    borderColor: '#e0e0e0',
+    backgroundColor: '#fff',
   },
-  statusBoxActiveBlue: {
-    backgroundColor: '#e3f2fd',
-    borderColor: '#2196F3',
-  },
-  statusBoxLabel: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#888',
-  },
-  statusBoxLabelActive: {
-    color: '#4CAF50',
-  },
-  statusBoxLabelActiveBlue: {
-    color: '#2196F3',
-  },
-  statusCheckbox: {
-    width: 18,
-    height: 18,
-    borderRadius: 4,
-    borderWidth: 2,
-    borderColor: '#ccc',
+  emptyCell: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#fafafa',
   },
-  statusCheckboxChecked: {
-    backgroundColor: '#4CAF50',
-    borderColor: '#4CAF50',
-  },
-  statusCheckboxCheckedBlue: {
-    backgroundColor: '#2196F3',
-    borderColor: '#2196F3',
+  emptyCellText: {
+    color: '#ddd',
+    fontSize: 20,
   },
 
-  // Footer
-  footerSection: {
-    padding: 16,
-    alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-    marginTop: 16,
+  // Book content
+  bookStatoBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 2,
+    marginBottom: 2,
   },
-  footerText: {
-    fontSize: 12,
-    color: '#888',
+  bookStatoText: {
+    color: '#fff',
+    fontSize: 7,
+    fontWeight: 'bold',
+  },
+  bookMateria: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    color: '#1a472a',
+    marginBottom: 1,
+  },
+  bookTitolo: {
+    fontSize: 9,
+    fontWeight: '600',
+    color: '#333',
+    lineHeight: 11,
+    marginBottom: 1,
+  },
+  bookAutore: {
+    fontSize: 7,
+    color: '#666',
+    marginBottom: 2,
+  },
+  bookIsbnRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  bookIsbn: {
+    fontSize: 8,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    color: '#555',
+  },
+  bookPrezzo: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#1a472a',
+  },
+  bookBadgesRow: {
+    flexDirection: 'row',
+    gap: 3,
+    flexWrap: 'wrap',
+  },
+  badge: {
+    paddingHorizontal: 3,
+    paddingVertical: 1,
+    borderRadius: 2,
+  },
+  badgeNuova: {
+    backgroundColor: '#e3f2fd',
+  },
+  badgeAcquista: {
+    backgroundColor: '#ffebee',
+  },
+  badgeConsigliato: {
+    backgroundColor: '#fff3e0',
+  },
+  badgeText: {
+    fontSize: 6,
+    fontWeight: '600',
+    color: '#333',
+  },
+
+  // Pagination
+  pagination: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 8,
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#ddd',
+    gap: 20,
+  },
+  pageButton: {
+    padding: 8,
+  },
+  pageButtonDisabled: {
+    opacity: 0.3,
+  },
+  paginationText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1a472a',
   },
 });
