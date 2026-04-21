@@ -165,29 +165,9 @@ export default function ProfileScreen() {
       const userId = await AsyncStorage.getItem('user_id');
       const pdfUrl = `${API_URL}/api/profiles/${userId}/children/${childId}/books-pdf`;
       
-      if (Platform.OS === 'web') {
-        // On web, open PDF in new tab
-        window.open(pdfUrl, '_blank');
-      } else {
-        // On mobile, download and share
-        const filename = `lista_libri_${childName}_${childClasse}.pdf`;
-        const fileUri = FileSystem.documentDirectory + filename;
-        
-        const downloadResult = await FileSystem.downloadAsync(pdfUrl, fileUri);
-        
-        if (downloadResult.status === 200) {
-          if (await Sharing.isAvailableAsync()) {
-            await Sharing.shareAsync(downloadResult.uri, {
-              mimeType: 'application/pdf',
-              dialogTitle: 'Condividi Lista Libri'
-            });
-          } else {
-            showAlert('PDF Scaricato', `File salvato: ${filename}`);
-          }
-        } else {
-          showAlert('Errore', 'Impossibile scaricare il PDF');
-        }
-      }
+      // Apri sempre nel browser per visualizzazione corretta landscape
+      await Linking.openURL(pdfUrl);
+      
     } catch (error) {
       console.error('Error downloading PDF:', error);
       showAlert('Errore', 'Impossibile generare il PDF');
