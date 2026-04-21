@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
   TextInput,
   ScrollView,
   Pressable,
+  Platform,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -126,6 +127,8 @@ export default function SellScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
+  const [webScannerReady, setWebScannerReady] = useState(false);
+  const webScannerRef = useRef<any>(null);
 
   // Bookshops data with addresses for Google Maps
   const bookshopsData = [
@@ -518,6 +521,45 @@ export default function SellScreen() {
 
   // Open barcode scanner
   const openScanner = async () => {
+    // Su web, usa html5-qrcode
+    if (Platform.OS === 'web') {
+      setScanned(false);
+      setWebScannerReady(false);
+      setShowScanner(true);
+      
+      // Inizializza html5-qrcode dopo che il modal è visibile
+      setTimeout(async () => {
+        try {
+          const { Html5Qrcode } = await import('html5-qrcode');
+          const html5QrCode = new Html5Qrcode("web-barcode-reader");
+          webScannerRef.current = html5QrCode;
+          
+          await html5QrCode.start(
+            { facingMode: "environment" },
+            {
+              fps: 10,
+              qrbox: { width: 280, height: 150 },
+              aspectRatio: 1.5,
+            },
+            (decodedText: string) => {
+              console.log('=== WEB BARCODE DETECTED ===');
+              console.log('Data:', decodedText);
+              handleWebBarcodeScanned(decodedText);
+            },
+            (errorMessage: string) => {
+              // Ignora errori di scansione continui
+            }
+          );
+          setWebScannerReady(true);
+        } catch (err) {
+          console.error('Error starting web scanner:', err);
+          Alert.alert('Errore', 'Impossibile avviare lo scanner. Assicurati di dare i permessi alla camera.');
+        }
+      }, 500);
+      return;
+    }
+    
+    // Su mobile, usa expo-camera
     if (!permission?.granted) {
       const result = await requestPermission();
       if (!result.granted) {
@@ -534,7 +576,34 @@ export default function SellScreen() {
     setShowScanner(true);
   };
 
-  // Handle barcode scanned
+  // Handle web barcode scanned
+  const handleWebBarcodeScanned = (decodedText: string) => {
+    if (scanned) return;
+    
+    setScanned(true);
+    const cleanISBN = decodedText.replace(/[-\s]/g, '').trim();
+    
+    // Stop and close scanner
+    closeWebScanner();
+    setShowScanner(false);
+    setIsbnInput(cleanISBN);
+    
+    // Auto-search the book
+    searchBookByISBNValue(cleanISBN);
+  };
+
+  // Close web scanner
+  const closeWebScanner = () => {
+    if (webScannerRef.current) {
+      webScannerRef.current.stop().catch((err: any) => {
+        console.log('Scanner already stopped');
+      });
+      webScannerRef.current = null;
+    }
+    setWebScannerReady(false);
+  };
+
+  // Handle barcode scanned (mobile)
   const handleBarCodeScanned = (result: BarcodeScanningResult) => {
     // Prevent multiple scans
     if (scanned) {
@@ -1229,48 +1298,90 @@ export default function SellScreen() {
       <Modal
         visible={showScanner}
         animationType="slide"
-        onRequestClose={() => setShowScanner(false)}
+        onRequestClose={() => {
+          if (Platform.OS === 'web') {
+            closeWebScanner();
+          }
+          setShowScanner(false);
+        }}
       >
         <View style={styles.scannerContainer}>
           <View style={styles.scannerHeader}>
             <TouchableOpacity 
               style={styles.scannerCloseButton}
-              onPress={() => setShowScanner(false)}
+              onPress={() => {
+                if (Platform.OS === 'web') {
+                  closeWebScanner();
+                }
+                setShowScanner(false);
+              }}
             >
               <Ionicons name="close" size={28} color="#fff" />
             </TouchableOpacity>
             <Text style={styles.scannerTitle}>Inquadra il codice a barre</Text>
           </View>
           
-          <CameraView
-            style={{ flex: 1 }}
-            facing="back"
-            barcodeScannerEnabled={true}
-            onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
-            barcodeScannerSettings={{
-              barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39', 'itf14'],
-              interval: 300,
-            }}
-            onCameraReady={() => {
-              console.log('Camera ready for barcode scanning');
-              setCameraReady(true);
-            }}
-          />
+          {Platform.OS === 'web' ? (
+            /* Web Scanner usando html5-qrcode */
+            <View style={{ flex: 1, backgroundColor: '#000' }}>
+              <View 
+                id="web-barcode-reader" 
+                style={{ 
+                  width: '100%', 
+                  height: '100%',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}
+              />
+              {!webScannerReady && (
+                <View style={styles.scannerLoadingOverlay}>
+                  <ActivityIndicator size="large" color="#fff" />
+                  <Text style={{ color: '#fff', marginTop: 12 }}>Avvio scanner...</Text>
+                </View>
+              )}
+            </View>
+          ) : (
+            /* Mobile Scanner usando expo-camera */
+            <CameraView
+              style={{ flex: 1 }}
+              facing="back"
+              barcodeScannerEnabled={true}
+              onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+              barcodeScannerSettings={{
+                barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39', 'itf14'],
+                interval: 300,
+              }}
+              onCameraReady={() => {
+                console.log('Camera ready for barcode scanning');
+                setCameraReady(true);
+              }}
+            />
+          )}
           
-          <View style={styles.scannerOverlay} pointerEvents="none">
-            <View style={styles.scannerFrame} />
-          </View>
+          {Platform.OS !== 'web' && (
+            <View style={styles.scannerOverlay} pointerEvents="none">
+              <View style={styles.scannerFrame} />
+            </View>
+          )}
           
           <View style={styles.scannerFooter}>
             <Text style={styles.scannerHint}>
-              {cameraReady 
-                ? 'Posiziona il codice a barre all\'interno del riquadro'
-                : 'Inizializzazione camera...'}
+              {Platform.OS === 'web' 
+                ? (webScannerReady ? 'Inquadra il codice a barre ISBN del libro' : 'Avvio camera...')
+                : (cameraReady ? 'Posiziona il codice a barre all\'interno del riquadro' : 'Inizializzazione camera...')}
             </Text>
             {scanned && (
               <TouchableOpacity 
                 style={styles.scanAgainButton}
-                onPress={() => setScanned(false)}
+                onPress={() => {
+                  setScanned(false);
+                  if (Platform.OS === 'web') {
+                    // Riavvia web scanner
+                    closeWebScanner();
+                    openScanner();
+                  }
+                }}
               >
                 <Text style={styles.scanAgainText}>Tocca per scansionare di nuovo</Text>
               </TouchableOpacity>
@@ -3112,5 +3223,16 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  // Web Scanner Loading Overlay
+  scannerLoadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
