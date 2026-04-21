@@ -13,7 +13,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
-import * as ScreenOrientation from 'expo-screen-orientation';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -73,21 +72,7 @@ export default function BookListScreen() {
   const [childData, setChildData] = useState<ChildData | null>(null);
   const [books, setBooks] = useState<BookData[]>([]);
   const [currentPage, setCurrentPage] = useState(0);
-
-  // Sblocca rotazione schermo
-  useEffect(() => {
-    const unlockOrientation = async () => {
-      try {
-        await ScreenOrientation.unlockAsync();
-      } catch (e) {
-        console.log('Could not unlock orientation:', e);
-      }
-    };
-    unlockOrientation();
-    return () => {
-      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
-    };
-  }, []);
+  const [viewMode, setViewMode] = useState<'portrait' | 'landscape'>('portrait');
 
   useEffect(() => {
     loadData();
@@ -259,45 +244,65 @@ export default function BookListScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      {/* Header Navigation */}
-      <View style={styles.headerNav}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={22} color="#1a472a" />
-        </TouchableOpacity>
-        
-        <View style={styles.pageIndicator}>
-          <Text style={styles.pageText}>Pag. {currentPage + 1}/{totalPages || 1}</Text>
+    <ScrollView 
+      style={styles.container}
+      horizontal={viewMode === 'landscape'}
+      contentContainerStyle={viewMode === 'landscape' ? styles.landscapeContent : undefined}
+    >
+      <View style={viewMode === 'landscape' ? styles.landscapeWrapper : styles.portraitWrapper}>
+        {/* Header Navigation */}
+        <View style={styles.headerNav}>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <Ionicons name="arrow-back" size={22} color="#1a472a" />
+          </TouchableOpacity>
+          
+          {/* Pulsante cambio vista */}
+          <TouchableOpacity 
+            style={styles.viewModeButton}
+            onPress={() => setViewMode(viewMode === 'portrait' ? 'landscape' : 'portrait')}
+          >
+            <Ionicons 
+              name={viewMode === 'portrait' ? 'phone-landscape' : 'phone-portrait'} 
+              size={18} 
+              color="#1a472a" 
+            />
+            <Text style={styles.viewModeText}>
+              {viewMode === 'portrait' ? 'Orizzontale' : 'Verticale'}
+            </Text>
+          </TouchableOpacity>
+          
+          <View style={styles.pageIndicator}>
+            <Text style={styles.pageText}>Pag. {currentPage + 1}/{totalPages || 1}</Text>
+          </View>
+          
+          <TouchableOpacity 
+            style={styles.printButton} 
+            onPress={() => { if (Platform.OS === 'web') window.print(); }}
+          >
+            <Ionicons name="print" size={18} color="#fff" />
+          </TouchableOpacity>
         </View>
-        
-        <TouchableOpacity 
-          style={styles.printButton} 
-          onPress={() => { if (Platform.OS === 'web') window.print(); }}
-        >
-          <Ionicons name="print" size={18} color="#fff" />
-        </TouchableOpacity>
-      </View>
 
-      {/* Contenuto A4 */}
-      <View style={styles.a4Container}>
-        {/* INTESTAZIONE */}
-        <View style={styles.headerSection}>
-          <Text style={styles.riLibroTitle}>RiLiBro</Text>
-          <View style={styles.schoolInfoRow}>
-            <Text style={styles.schoolInfoText}>
-              {getTipoScuolaLabel(childData?.tipo_scuola || '')} • Classe {childData?.classe}{childData?.sezione?.toUpperCase()} • A.S. {childData?.anno_scolastico}
+        {/* Contenuto */}
+        <View style={[styles.a4Container, viewMode === 'landscape' && styles.a4ContainerLandscape]}>
+          {/* INTESTAZIONE */}
+          <View style={styles.headerSection}>
+            <Text style={[styles.riLibroTitle, viewMode === 'landscape' && styles.riLibroTitleLandscape]}>RiLiBro</Text>
+            <View style={styles.schoolInfoRow}>
+              <Text style={styles.schoolInfoText}>
+                {getTipoScuolaLabel(childData?.tipo_scuola || '')} • Classe {childData?.classe}{childData?.sezione?.toUpperCase()} • A.S. {childData?.anno_scolastico}
+              </Text>
+            </View>
+            <Text style={styles.schoolName}>{childData?.scuola_nome?.toUpperCase()}</Text>
+            <Text style={styles.schoolDetails}>
+              Cod. {childData?.scuola_codice} • {childData?.scuola_comune} {childData?.scuola_cap && `(${childData?.scuola_cap})`}
             </Text>
           </View>
-          <Text style={styles.schoolName}>{childData?.scuola_nome?.toUpperCase()}</Text>
-          <Text style={styles.schoolDetails}>
-            Cod. {childData?.scuola_codice} • {childData?.scuola_comune} {childData?.scuola_cap && `(${childData?.scuola_cap})`}
-          </Text>
-        </View>
 
-        {/* GRIGLIA 2x5 (10 libri) */}
-        <View style={styles.booksGrid}>
-          {currentBooks.map((book, index) => (
-            <View key={book.isbn || `empty-${index}`} style={styles.bookCell}>
+          {/* GRIGLIA - in landscape mostra più colonne */}
+          <View style={[styles.booksGrid, viewMode === 'landscape' && styles.booksGridLandscape]}>
+            {currentBooks.map((book, index) => (
+              <View key={book.isbn || `empty-${index}`} style={[styles.bookCell, viewMode === 'landscape' && styles.bookCellLandscape]}>
               {book.isbn ? (
                 <>
                   {/* Stato libro */}
@@ -379,7 +384,8 @@ export default function BookListScreen() {
           </TouchableOpacity>
         </View>
       )}
-    </View>
+      </View>
+    </ScrollView>
   );
 }
 
@@ -597,5 +603,46 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#1a472a',
+  },
+  // Stili per cambio vista
+  viewModeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#e8f5e9',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    gap: 4,
+  },
+  viewModeText: {
+    fontSize: 12,
+    color: '#1a472a',
+    fontWeight: '500',
+  },
+  // Layout portrait/landscape
+  portraitWrapper: {
+    flex: 1,
+  },
+  landscapeWrapper: {
+    width: 900,
+    minHeight: '100%',
+  },
+  landscapeContent: {
+    flexGrow: 1,
+  },
+  a4ContainerLandscape: {
+    aspectRatio: 29.7 / 21,
+    width: 850,
+  },
+  riLibroTitleLandscape: {
+    fontSize: 36,
+  },
+  booksGridLandscape: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  bookCellLandscape: {
+    width: '20%',
+    height: '50%',
   },
 });
