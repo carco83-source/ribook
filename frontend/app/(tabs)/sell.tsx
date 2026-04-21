@@ -521,63 +521,79 @@ export default function SellScreen() {
 
   // Open barcode scanner
   const openScanner = async () => {
-    // Reset stati
+    // Reset tutti gli stati
     setScanned(false);
+    setWebScannerReady(false);
     
     // Su web, usa html5-qrcode
     if (Platform.OS === 'web') {
-      // Prima chiudi eventuali scanner aperti
-      if (webScannerRef.current) {
-        try {
-          await webScannerRef.current.stop();
-        } catch (e) {
-          // Ignora se già fermato
-        }
-        webScannerRef.current = null;
-      }
+      // Prima pulisci completamente eventuali scanner precedenti
+      await stopWebScanner();
       
-      setWebScannerReady(false);
+      // Mostra il modal
       setShowScanner(true);
       
-      // Inizializza html5-qrcode dopo che il modal è visibile
+      // Aspetta che il DOM sia pronto, poi inizializza
       setTimeout(async () => {
         try {
+          // Importa dinamicamente
           const { Html5Qrcode } = await import('html5-qrcode');
           
+          // Verifica che l'elemento DOM esista
+          const element = document.getElementById('web-barcode-reader');
+          if (!element) {
+            console.error('DOM element not found');
+            Alert.alert('Errore', 'Elemento scanner non trovato. Riprova.');
+            return;
+          }
+          
+          // Pulisci eventuali contenuti residui nell'elemento
+          element.innerHTML = '';
+          
           // Crea nuova istanza
-          const html5QrCode = new Html5Qrcode("web-barcode-reader");
+          const html5QrCode = new Html5Qrcode("web-barcode-reader", {
+            verbose: false,
+            experimentalFeatures: {
+              useBarCodeDetectorIfSupported: true
+            }
+          });
           webScannerRef.current = html5QrCode;
           
+          // Configura e avvia
           await html5QrCode.start(
             { facingMode: "environment" },
             {
               fps: 15,
-              qrbox: { width: 300, height: 150 },
-              aspectRatio: 2.0,
-              formatsToSupport: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], // Tutti i formati barcode
+              qrbox: { width: 300, height: 120 },
+              aspectRatio: 2.5,
             },
             (decodedText: string) => {
-              console.log('=== WEB BARCODE DETECTED ===');
-              console.log('Data:', decodedText);
+              console.log('=== BARCODE DETECTED ===', decodedText);
               handleWebBarcodeScanned(decodedText);
             },
             (errorMessage: string) => {
-              // Ignora errori di scansione continui
+              // Ignora errori di scansione continui (normali durante la ricerca)
             }
           );
+          
           setWebScannerReady(true);
-          console.log('Web scanner started successfully');
+          console.log('Scanner avviato con successo');
+          
         } catch (err: any) {
-          console.error('Error starting web scanner:', err);
-          if (err.toString().includes('NotAllowedError')) {
-            Alert.alert('Permesso negato', 'Devi dare i permessi alla camera per usare lo scanner.');
-          } else if (err.toString().includes('already scanning')) {
-            console.log('Scanner already running, ignoring...');
-          } else {
-            Alert.alert('Errore', 'Impossibile avviare lo scanner. Riprova.');
+          console.error('Errore avvio scanner:', err);
+          
+          if (err.toString().includes('NotAllowedError') || err.toString().includes('Permission')) {
+            Alert.alert('Permesso Camera', 'Devi autorizzare l\'accesso alla camera per usare lo scanner.');
+          } else if (err.toString().includes('NotFoundError')) {
+            Alert.alert('Camera non trovata', 'Nessuna camera disponibile su questo dispositivo.');
+          } else if (!err.toString().includes('already scanning')) {
+            Alert.alert('Errore Scanner', 'Impossibile avviare lo scanner. Chiudi e riprova.');
           }
+          
+          setShowScanner(false);
         }
-      }, 800);
+      }, 1000); // Aumentato il delay per dare tempo al DOM
+      
       return;
     }
     
@@ -598,14 +614,17 @@ export default function SellScreen() {
   };
 
   // Handle web barcode scanned
-  const handleWebBarcodeScanned = (decodedText: string) => {
+  const handleWebBarcodeScanned = async (decodedText: string) => {
     if (scanned) return;
     
+    console.log('Barcode scanned:', decodedText);
     setScanned(true);
     const cleanISBN = decodedText.replace(/[-\s]/g, '').trim();
     
-    // Stop and close scanner
-    closeWebScanner();
+    // Prima ferma lo scanner completamente
+    await stopWebScanner();
+    
+    // Poi chiudi il modal
     setShowScanner(false);
     setIsbnInput(cleanISBN);
     
@@ -613,15 +632,29 @@ export default function SellScreen() {
     searchBookByISBNValue(cleanISBN);
   };
 
-  // Close web scanner
-  const closeWebScanner = () => {
+  // Stop and cleanup web scanner completely
+  const stopWebScanner = async () => {
     if (webScannerRef.current) {
-      webScannerRef.current.stop().catch((err: any) => {
-        console.log('Scanner already stopped');
-      });
+      try {
+        const scanner = webScannerRef.current;
+        // Prima stop, poi clear per rimuovere elementi DOM
+        if (scanner.isScanning) {
+          await scanner.stop();
+        }
+        await scanner.clear();
+        console.log('Web scanner stopped and cleared');
+      } catch (err: any) {
+        console.log('Scanner cleanup error (ignorable):', err.message);
+      }
       webScannerRef.current = null;
     }
     setWebScannerReady(false);
+    setScanned(false);
+  };
+
+  // Close web scanner (alias for backward compatibility)
+  const closeWebScanner = () => {
+    stopWebScanner();
   };
 
   // Handle barcode scanned (mobile)
