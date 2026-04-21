@@ -260,14 +260,14 @@ export default function BookListScreen() {
       </View>
 
       {/* ========== LISTA LIBRI ========== */}
-      <View style={[styles.booksSection, isLandscape && styles.booksSectionLandscape]}>
+      <View style={styles.booksSection}>
         {books.map((book, index) => (
-          <View key={book.isbn || index} style={[styles.bookCard, isLandscape && styles.bookCardLandscape]}>
+          <View key={book.isbn || index} style={styles.bookCard}>
             {/* Disciplina */}
             <Text style={styles.bookDisciplina}>{book.disciplina?.toUpperCase()}</Text>
             
             {/* Titolo e Volume */}
-            <Text style={[styles.bookTitolo, isLandscape && styles.bookTitoloLandscape]}>
+            <Text style={styles.bookTitolo}>
               {book.titolo}
               {book.volume ? ` - Vol. ${book.volume}` : ''}
             </Text>
@@ -362,9 +362,6 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     paddingBottom: 40,
-    // Proporzioni A4: ottimizzato per stampa
-    maxWidth: 794, // ~21cm a 96dpi
-    alignSelf: 'center',
     width: '100%',
   },
   loadingContainer: {
@@ -632,22 +629,5 @@ const styles = StyleSheet.create({
   footerText: {
     fontSize: 12,
     color: '#888',
-  },
-  
-  // ========== STILI LANDSCAPE (Orizzontale) ==========
-  booksSectionLandscape: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    padding: 12,
-  },
-  bookCardLandscape: {
-    width: '48.5%',
-    marginBottom: 10,
-    padding: 10,
-  },
-  bookTitoloLandscape: {
-    fontSize: 13,
-    lineHeight: 18,
   },
 });
