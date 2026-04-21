@@ -318,12 +318,12 @@ export default function SearchScreen() {
 
       {/* Generic Search Box - Always visible */}
       <View style={styles.genericSearchContainer}>
-        <Text style={styles.genericSearchLabel}>Oppure cerca per titolo o ISBN:</Text>
+        <Text style={styles.genericSearchLabel}>Cerca per ISBN:</Text>
         <View style={styles.genericSearchInputWrapper}>
-          <Ionicons name="search" size={20} color="#666" />
+          <Ionicons name="barcode-outline" size={20} color="#666" />
           <TextInput
             style={styles.genericSearchInput}
-            placeholder="Es: Matematica Verde o 9788808520234"
+            placeholder="Inserisci codice ISBN (es: 9788808520234)"
             placeholderTextColor="#b0b0b0"
             value={genericSearchQuery}
             onChangeText={handleGenericSearch}
@@ -333,6 +333,7 @@ export default function SearchScreen() {
               setBooks([]);
             }}
             autoCapitalize="none"
+            keyboardType="numeric"
           />
           {genericSearchQuery.length > 0 && (
             <TouchableOpacity onPress={() => { setGenericSearchQuery(''); setGenericResults([]); }}>
@@ -340,6 +341,9 @@ export default function SearchScreen() {
             </TouchableOpacity>
           )}
         </View>
+        <Text style={styles.searchHintText}>
+          Per essere più precisi è preferibile cercare il testo per codice ISBN che potrai trovare visualizzando la lista dei testi nella sezione Profilo.
+        </Text>
         {genericSearchLoading && (
           <ActivityIndicator size="small" color="#1a472a" style={{ marginTop: 8 }} />
         )}
@@ -1181,5 +1185,12 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#4CAF50',
     marginBottom: 8,
+  },
+  searchHintText: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 12,
+    lineHeight: 18,
+    fontStyle: 'italic',
   },
 });
