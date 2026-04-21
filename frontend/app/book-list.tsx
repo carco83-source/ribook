@@ -13,6 +13,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import * as ScreenOrientation from 'expo-screen-orientation';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -55,6 +56,25 @@ export default function BookListScreen() {
   const [childData, setChildData] = useState<ChildData | null>(null);
   const [books, setBooks] = useState<BookData[]>([]);
   const [analysis, setAnalysis] = useState<any>(null);
+
+  // Sblocca rotazione schermo quando si entra in questa pagina
+  useEffect(() => {
+    const unlockOrientation = async () => {
+      try {
+        await ScreenOrientation.unlockAsync();
+        console.log('Screen orientation unlocked');
+      } catch (e) {
+        console.log('Could not unlock orientation:', e);
+      }
+    };
+    
+    unlockOrientation();
+    
+    // Quando si esce, riporta a portrait
+    return () => {
+      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
+    };
+  }, []);
 
   useEffect(() => {
     loadData();
