@@ -1245,10 +1245,11 @@ export default function SellScreen() {
           <CameraView
             style={{ flex: 1 }}
             facing="back"
+            barcodeScannerEnabled={true}
             onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
             barcodeScannerSettings={{
               barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39', 'itf14'],
-              interval: 500,
+              interval: 300,
             }}
             onCameraReady={() => {
               console.log('Camera ready for barcode scanning');
