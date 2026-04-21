@@ -554,30 +554,31 @@ export default function SellScreen() {
           const html5QrCode = new Html5Qrcode("web-barcode-reader", {
             verbose: false,
             experimentalFeatures: {
-              useBarCodeDetectorIfSupported: true
+              useBarCodeDetectorIfSupported: true // Usa API nativa del browser (MOLTO più veloce)
             }
           });
           webScannerRef.current = html5QrCode;
           
-          // Configura e avvia
+          // Configura e avvia - IMPOSTAZIONI ULTRA REATTIVE
           await html5QrCode.start(
             { facingMode: "environment" },
             {
-              fps: 15,
-              qrbox: { width: 300, height: 120 },
-              aspectRatio: 2.5,
+              fps: 30, // 30 FPS per massima reattività
+              qrbox: { width: 320, height: 90 }, // Area stretta ottimizzata per barcode
+              aspectRatio: 1.777, // 16:9
+              disableFlip: false, // Permetti barcode invertiti
             },
             (decodedText: string) => {
               console.log('=== BARCODE DETECTED ===', decodedText);
               handleWebBarcodeScanned(decodedText);
             },
             (errorMessage: string) => {
-              // Ignora errori di scansione continui (normali durante la ricerca)
+              // Ignora errori continui
             }
           );
           
           setWebScannerReady(true);
-          console.log('Scanner avviato con successo');
+          console.log('Scanner avviato - 30 FPS Ultra Reattivo');
           
         } catch (err: any) {
           console.error('Errore avvio scanner:', err);
@@ -592,7 +593,7 @@ export default function SellScreen() {
           
           setShowScanner(false);
         }
-      }, 1000); // Aumentato il delay per dare tempo al DOM
+      }, 500); // Delay ridotto per avvio più rapido
       
       return;
     }
