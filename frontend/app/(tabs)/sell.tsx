@@ -1093,15 +1093,14 @@ export default function SellScreen() {
             </View>
           </View>
 
-          {item.stato === 'disponibile' && (
-            <TouchableOpacity
-              style={styles.deleteButton}
-              onPress={() => handleDeleteListing(item.id)}
-            >
-              <Ionicons name="trash-outline" size={16} color="#ff4444" />
-              <Text style={styles.deleteButtonText}>Elimina</Text>
-            </TouchableOpacity>
-          )}
+          {/* Pulsante Elimina - sempre visibile */}
+          <TouchableOpacity
+            style={styles.deleteButton}
+            onPress={() => handleDeleteListing(item.id)}
+          >
+            <Ionicons name="trash-outline" size={16} color="#ff4444" />
+            <Text style={styles.deleteButtonText}>Elimina</Text>
+          </TouchableOpacity>
         </View>
       </View>
     );
