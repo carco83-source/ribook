@@ -290,31 +290,10 @@ export default function SearchScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Profile Selector */}
-      <TouchableOpacity
-        style={styles.profileSelector}
-        onPress={() => setShowChildPicker(true)}
-      >
-        <View style={styles.profileSelectorContent}>
-          <Ionicons name="person-circle" size={24} color="#1a472a" />
-          <View style={styles.profileSelectorText}>
-            {selectedChild ? (
-              <>
-                <Text style={styles.profileName}>{selectedChild.nome_figlio}</Text>
-                <Text style={styles.profileSchool}>
-                  {selectedChild.classe}ª - {selectedChild.scuola.substring(0, 30)}...
-                </Text>
-              </>
-            ) : (
-              <>
-                <Text style={styles.profileName}>Seleziona profilo per ricerca guidata</Text>
-                <Text style={styles.profileSchool}>Scegli per chi cercare i libri</Text>
-              </>
-            )}
-          </View>
-        </View>
-        <Ionicons name="chevron-down" size={24} color="#666" />
-      </TouchableOpacity>
+      {/* Profile Selector - Vuoto per ora */}
+      <View style={styles.profileSelectorEmpty}>
+        {/* Sezione da riempire successivamente */}
+      </View>
 
       {/* Generic Search Box - Always visible */}
       <View style={styles.genericSearchContainer}>
@@ -342,7 +321,14 @@ export default function SearchScreen() {
           )}
         </View>
         <Text style={styles.searchHintText}>
-          Per essere più precisi è preferibile cercare il testo per codice ISBN che potrai trovare visualizzando la lista dei testi nella sezione Profilo.
+          Per essere più precisi è preferibile cercare il testo per codice ISBN che potrai trovare visualizzando la lista dei testi nella sezione{' '}
+          <Text 
+            style={styles.searchHintLink}
+            onPress={() => router.push('/(tabs)/profile')}
+          >
+            Profilo
+          </Text>
+          .
         </Text>
         {genericSearchLoading && (
           <ActivityIndicator size="small" color="#1a472a" style={{ marginTop: 8 }} />
@@ -1187,10 +1173,17 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   searchHintText: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 12,
-    lineHeight: 18,
-    fontStyle: 'italic',
+    fontSize: 14,
+    color: '#555',
+    marginTop: 14,
+    lineHeight: 22,
+  },
+  searchHintLink: {
+    color: '#1a472a',
+    fontWeight: 'bold',
+    textDecorationLine: 'underline',
+  },
+  profileSelectorEmpty: {
+    height: 8,
   },
 });
