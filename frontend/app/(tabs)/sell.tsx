@@ -521,9 +521,21 @@ export default function SellScreen() {
 
   // Open barcode scanner
   const openScanner = async () => {
+    // Reset stati
+    setScanned(false);
+    
     // Su web, usa html5-qrcode
     if (Platform.OS === 'web') {
-      setScanned(false);
+      // Prima chiudi eventuali scanner aperti
+      if (webScannerRef.current) {
+        try {
+          await webScannerRef.current.stop();
+        } catch (e) {
+          // Ignora se già fermato
+        }
+        webScannerRef.current = null;
+      }
+      
       setWebScannerReady(false);
       setShowScanner(true);
       
@@ -531,15 +543,18 @@ export default function SellScreen() {
       setTimeout(async () => {
         try {
           const { Html5Qrcode } = await import('html5-qrcode');
+          
+          // Crea nuova istanza
           const html5QrCode = new Html5Qrcode("web-barcode-reader");
           webScannerRef.current = html5QrCode;
           
           await html5QrCode.start(
             { facingMode: "environment" },
             {
-              fps: 10,
-              qrbox: { width: 280, height: 150 },
-              aspectRatio: 1.5,
+              fps: 15,
+              qrbox: { width: 300, height: 150 },
+              aspectRatio: 2.0,
+              formatsToSupport: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], // Tutti i formati barcode
             },
             (decodedText: string) => {
               console.log('=== WEB BARCODE DETECTED ===');
@@ -551,11 +566,18 @@ export default function SellScreen() {
             }
           );
           setWebScannerReady(true);
-        } catch (err) {
+          console.log('Web scanner started successfully');
+        } catch (err: any) {
           console.error('Error starting web scanner:', err);
-          Alert.alert('Errore', 'Impossibile avviare lo scanner. Assicurati di dare i permessi alla camera.');
+          if (err.toString().includes('NotAllowedError')) {
+            Alert.alert('Permesso negato', 'Devi dare i permessi alla camera per usare lo scanner.');
+          } else if (err.toString().includes('already scanning')) {
+            console.log('Scanner already running, ignoring...');
+          } else {
+            Alert.alert('Errore', 'Impossibile avviare lo scanner. Riprova.');
+          }
         }
-      }, 500);
+      }, 800);
       return;
     }
     
@@ -571,7 +593,6 @@ export default function SellScreen() {
       }
     }
     
-    setScanned(false);
     setCameraReady(false);
     setShowScanner(true);
   };
@@ -654,7 +675,7 @@ export default function SellScreen() {
       setIsbnInput('');
     } catch (error: any) {
       if (error.response?.status === 404) {
-        setIsbnError('Libro non presente nelle scuole di Catanzaro');
+        setIsbnError(`Libro con ISBN ${isbn} non presente negli elenchi delle scuole di Catanzaro`);
       } else {
         setIsbnError('Errore nella ricerca. Riprova.');
       }
