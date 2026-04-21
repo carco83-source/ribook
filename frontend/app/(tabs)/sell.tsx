@@ -1019,27 +1019,38 @@ export default function SellScreen() {
   };
 
   const handleDeleteListing = async (listingId: string) => {
-    Alert.alert(
-      'Elimina annuncio',
-      'Sei sicuro di voler eliminare questo annuncio?',
-      [
-        { text: 'Annulla', style: 'cancel' },
-        {
-          text: 'Elimina',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await axios.delete(
-                `${API_URL}/api/listings/${listingId}?user_id=${userId}`
-              );
-              setListings(listings.filter((l) => l.id !== listingId));
-            } catch (error: any) {
-              Alert.alert('Errore', error.response?.data?.detail || 'Impossibile eliminare');
-            }
+    // Su web usa confirm, su mobile usa Alert
+    if (Platform.OS === 'web') {
+      const conferma = window.confirm('Sei sicuro di voler eliminare questo annuncio?');
+      if (conferma) {
+        try {
+          await axios.delete(`${API_URL}/api/listings/${listingId}?user_id=${userId}`);
+          setListings(listings.filter((l) => l.id !== listingId));
+        } catch (error: any) {
+          window.alert(error.response?.data?.detail || 'Impossibile eliminare');
+        }
+      }
+    } else {
+      Alert.alert(
+        'Elimina annuncio',
+        'Sei sicuro di voler eliminare questo annuncio?',
+        [
+          { text: 'Annulla', style: 'cancel' },
+          {
+            text: 'Elimina',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                await axios.delete(`${API_URL}/api/listings/${listingId}?user_id=${userId}`);
+                setListings(listings.filter((l) => l.id !== listingId));
+              } catch (error: any) {
+                Alert.alert('Errore', error.response?.data?.detail || 'Impossibile eliminare');
+              }
+            },
           },
-        },
-      ]
-    );
+        ]
+      );
+    }
   };
 
   const getConditionConfig = (condition: string) => {
