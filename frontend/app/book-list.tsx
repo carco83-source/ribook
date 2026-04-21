@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -47,6 +48,8 @@ export default function BookListScreen() {
   const params = useLocalSearchParams();
   const router = useRouter();
   const childId = params.childId as string;
+  const { width, height } = useWindowDimensions();
+  const isLandscape = width > height;
   
   const [loading, setLoading] = useState(true);
   const [childData, setChildData] = useState<ChildData | null>(null);
@@ -257,14 +260,14 @@ export default function BookListScreen() {
       </View>
 
       {/* ========== LISTA LIBRI ========== */}
-      <View style={styles.booksSection}>
+      <View style={[styles.booksSection, isLandscape && styles.booksSectionLandscape]}>
         {books.map((book, index) => (
-          <View key={book.isbn || index} style={styles.bookCard}>
+          <View key={book.isbn || index} style={[styles.bookCard, isLandscape && styles.bookCardLandscape]}>
             {/* Disciplina */}
             <Text style={styles.bookDisciplina}>{book.disciplina?.toUpperCase()}</Text>
             
             {/* Titolo e Volume */}
-            <Text style={styles.bookTitolo}>
+            <Text style={[styles.bookTitolo, isLandscape && styles.bookTitoloLandscape]}>
               {book.titolo}
               {book.volume ? ` - Vol. ${book.volume}` : ''}
             </Text>
@@ -629,5 +632,22 @@ const styles = StyleSheet.create({
   footerText: {
     fontSize: 12,
     color: '#888',
+  },
+  
+  // ========== STILI LANDSCAPE (Orizzontale) ==========
+  booksSectionLandscape: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    padding: 12,
+  },
+  bookCardLandscape: {
+    width: '48.5%',
+    marginBottom: 10,
+    padding: 10,
+  },
+  bookTitoloLandscape: {
+    fontSize: 13,
+    lineHeight: 18,
   },
 });
