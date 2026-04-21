@@ -4832,6 +4832,196 @@ async def generate_books_pdf(user_id: str, child_id: str):
     return StreamingResponse(buffer, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename={filename}"})
 
 
+@api_router.get("/profiles/{user_id}/children/{child_id}/books-html")
+async def generate_books_html(user_id: str, child_id: str):
+    """
+    Genera pagina HTML responsive per visualizzare la lista libri su mobile
+    """
+    from fastapi.responses import HTMLResponse
+    
+    # Get user and child profile
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+    
+    profili_figli = user.get("profili_figli", [])
+    child_profile = next((p for p in profili_figli if p.get("id") == child_id), None)
+    
+    if not child_profile:
+        raise HTTPException(status_code=404, detail="Profilo figlio non trovato")
+    
+    child_nome = child_profile.get("nome_figlio", "Figlio")
+    child_scuola = child_profile.get("scuola", child_profile.get("school_name", ""))
+    child_classe = int(child_profile.get("classe", 1))
+    child_sezione = child_profile.get("sezione", "A")
+    child_codice_scuola = child_profile.get("codice_scuola", child_profile.get("school_code", ""))
+    
+    # Get books from adozioni
+    adozioni_query = {
+        "codice_scuola": child_codice_scuola,
+        "classe": child_classe,
+        "sezione": {"$regex": f"^{child_sezione}$", "$options": "i"}
+    }
+    
+    books = await db.adozioni.find(adozioni_query).to_list(length=100)
+    
+    # Build HTML
+    books_html = ""
+    for book in books:
+        nuova_adoz = "✓" if book.get("nuova_adozione") else ""
+        da_acq = "✓" if book.get("da_acquistare") else ""
+        consig = "✓" if book.get("consigliato") else ""
+        prezzo = f"€{book.get('prezzo_copertina', 0):.2f}"
+        
+        books_html += f"""
+        <div class="book">
+            <div class="book-header">
+                <span class="disciplina">{book.get('disciplina', '')}</span>
+                <span class="prezzo">{prezzo}</span>
+            </div>
+            <div class="titolo">{book.get('titolo', '')}</div>
+            <div class="autore">{book.get('autori', '')} - {book.get('editore', '')}</div>
+            <div class="isbn">ISBN: {book.get('isbn', '')}</div>
+            <div class="badges">
+                {f'<span class="badge nuova">N.ADOZ</span>' if nuova_adoz else ''}
+                {f'<span class="badge acquista">ACQUISTA</span>' if da_acq else ''}
+                {f'<span class="badge consig">CONSIG.</span>' if consig else ''}
+            </div>
+        </div>
+        """
+    
+    html_content = f"""
+    <!DOCTYPE html>
+    <html lang="it">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Lista Libri - {child_nome}</title>
+        <style>
+            * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+            body {{ 
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                background: #f5f5f5;
+                padding: 10px;
+            }}
+            .header {{
+                background: #1a472a;
+                color: white;
+                padding: 15px;
+                text-align: center;
+                border-radius: 10px;
+                margin-bottom: 15px;
+            }}
+            .header h1 {{ font-size: 28px; letter-spacing: 3px; }}
+            .header .info {{ font-size: 12px; opacity: 0.9; margin-top: 5px; }}
+            .header .scuola {{ font-size: 14px; font-weight: bold; margin-top: 5px; }}
+            
+            .books-container {{
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                gap: 10px;
+            }}
+            
+            @media (orientation: landscape) {{
+                .books-container {{
+                    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                }}
+                .book {{ padding: 10px; }}
+            }}
+            
+            .book {{
+                background: white;
+                border-radius: 8px;
+                padding: 12px;
+                border-left: 4px solid #1a472a;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            }}
+            .book-header {{
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 8px;
+            }}
+            .disciplina {{
+                background: #e8f5e9;
+                color: #1a472a;
+                padding: 3px 8px;
+                border-radius: 4px;
+                font-size: 11px;
+                font-weight: bold;
+            }}
+            .prezzo {{
+                font-size: 16px;
+                font-weight: bold;
+                color: #1a472a;
+            }}
+            .titolo {{
+                font-size: 14px;
+                font-weight: 600;
+                color: #333;
+                margin-bottom: 5px;
+                line-height: 1.3;
+            }}
+            .autore {{
+                font-size: 11px;
+                color: #666;
+                margin-bottom: 5px;
+            }}
+            .isbn {{
+                font-size: 11px;
+                color: #888;
+                font-family: monospace;
+                background: #f5f5f5;
+                padding: 3px 6px;
+                border-radius: 3px;
+                display: inline-block;
+                margin-bottom: 8px;
+            }}
+            .badges {{
+                display: flex;
+                gap: 5px;
+                flex-wrap: wrap;
+            }}
+            .badge {{
+                font-size: 9px;
+                padding: 2px 6px;
+                border-radius: 3px;
+                font-weight: bold;
+            }}
+            .badge.nuova {{ background: #e3f2fd; color: #1565c0; }}
+            .badge.acquista {{ background: #ffebee; color: #c62828; }}
+            .badge.consig {{ background: #fff3e0; color: #ef6c00; }}
+            
+            .footer {{
+                text-align: center;
+                padding: 15px;
+                color: #888;
+                font-size: 12px;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>RiLiBro</h1>
+            <div class="info">Classe {child_classe}{child_sezione} • A.S. 2025/2026</div>
+            <div class="scuola">{child_scuola}</div>
+            <div class="info">Cod. {child_codice_scuola}</div>
+        </div>
+        
+        <div class="books-container">
+            {books_html}
+        </div>
+        
+        <div class="footer">
+            Totale: {len(books)} libri • Generato da RiLiBro
+        </div>
+    </body>
+    </html>
+    """
+    
+    return HTMLResponse(content=html_content)
+
+
 
 @api_router.get("/profiles/{user_id}/children/{child_id}/books-to-sell")
 async def get_books_to_sell(user_id: str, child_id: str):

@@ -163,14 +163,14 @@ export default function ProfileScreen() {
     setDownloadingPdf(childId);
     try {
       const userId = await AsyncStorage.getItem('user_id');
-      const pdfUrl = `${API_URL}/api/profiles/${userId}/children/${childId}/books-pdf`;
+      // Usa la versione HTML che è responsive e gira con il telefono
+      const htmlUrl = `${API_URL}/api/profiles/${userId}/children/${childId}/books-html`;
       
-      // Apri sempre nel browser per visualizzazione corretta landscape
-      await Linking.openURL(pdfUrl);
+      await Linking.openURL(htmlUrl);
       
     } catch (error) {
-      console.error('Error downloading PDF:', error);
-      showAlert('Errore', 'Impossibile generare il PDF');
+      console.error('Error opening book list:', error);
+      showAlert('Errore', 'Impossibile aprire la lista libri');
     } finally {
       setDownloadingPdf(null);
     }
