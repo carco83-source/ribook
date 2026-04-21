@@ -290,10 +290,31 @@ export default function SearchScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Profile Selector - Vuoto per ora */}
-      <View style={styles.profileSelectorEmpty}>
-        {/* Sezione da riempire successivamente */}
-      </View>
+      {/* Profile Selector - Ricerca Guidata */}
+      <TouchableOpacity
+        style={styles.profileSelector}
+        onPress={() => setShowChildPicker(true)}
+      >
+        <View style={styles.profileSelectorContent}>
+          <Ionicons name="person-circle" size={24} color="#1a472a" />
+          <View style={styles.profileSelectorText}>
+            {selectedChild ? (
+              <>
+                <Text style={styles.profileName}>{selectedChild.nome_figlio}</Text>
+                <Text style={styles.profileSchool}>
+                  {selectedChild.classe}ª - {selectedChild.scuola.substring(0, 30)}...
+                </Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.profileName}>Seleziona profilo per ricerca guidata</Text>
+                <Text style={styles.profileSchool}>Tocca per scegliere il figlio</Text>
+              </>
+            )}
+          </View>
+        </View>
+        <Ionicons name="chevron-down" size={24} color="#666" />
+      </TouchableOpacity>
 
       {/* Generic Search Box - Always visible */}
       <View style={styles.genericSearchContainer}>
