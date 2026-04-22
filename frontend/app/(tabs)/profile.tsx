@@ -447,15 +447,6 @@ export default function ProfileScreen() {
                     </>
                   )}
                 </TouchableOpacity>
-
-                {/* View Book List Button */}
-                <TouchableOpacity
-                  style={styles.viewBookListButton}
-                  onPress={() => router.push(`/book-list?childId=${child.id}`)}
-                >
-                  <Ionicons name="list" size={20} color="#1a472a" />
-                  <Text style={styles.viewBookListButtonText}>Visualizza Lista Libri</Text>
-                </TouchableOpacity>
                 
                 {/* Delete Profile Button */}
                 <TouchableOpacity
