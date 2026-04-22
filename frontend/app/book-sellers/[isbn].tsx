@@ -299,11 +299,11 @@ export default function BookSellersScreen() {
                       <View style={styles.sellerInfo}>
                         <View style={styles.sellerAvatar}>
                           <Text style={styles.sellerAvatarText}>
-                            {listing.seller_username?.charAt(0)?.toUpperCase() || listing.seller_name?.charAt(0)?.toUpperCase() || '?'}
+                            {listing.seller_username?.charAt(0)?.toUpperCase() || '?'}
                           </Text>
                         </View>
                         <View>
-                          <Text style={styles.sellerName}>{listing.seller_username || listing.seller_name}</Text>
+                          <Text style={styles.sellerName}>{listing.seller_username || 'Venditore'}</Text>
                         </View>
                       </View>
                       <View style={{ alignItems: 'flex-end' }}>

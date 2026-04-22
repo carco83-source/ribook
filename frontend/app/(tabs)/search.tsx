@@ -316,7 +316,8 @@ export default function SearchScreen() {
         <Ionicons name="chevron-down" size={24} color="#666" />
       </TouchableOpacity>
 
-      {/* Generic Search Box - Always visible */}
+      {/* Generic Search Box - Only visible when no profile selected */}
+      {!selectedChild && (
       <View style={styles.genericSearchContainer}>
         <Text style={styles.genericSearchLabel}>Cerca per ISBN:</Text>
         <View style={styles.genericSearchInputWrapper}>
@@ -327,11 +328,6 @@ export default function SearchScreen() {
             placeholderTextColor="#b0b0b0"
             value={genericSearchQuery}
             onChangeText={handleGenericSearch}
-            onFocus={() => {
-              // Quando si seleziona la barra di ricerca generica, annulla la ricerca per profilo
-              setSelectedChild(null);
-              setBooks([]);
-            }}
             autoCapitalize="none"
             keyboardType="numeric"
           />
@@ -355,9 +351,10 @@ export default function SearchScreen() {
           <ActivityIndicator size="small" color="#1a472a" style={{ marginTop: 8 }} />
         )}
       </View>
+      )}
 
       {/* Generic Search Results */}
-      {genericResults.length > 0 && (
+      {!selectedChild && genericResults.length > 0 && (
         <View style={styles.genericResultsContainer}>
           <Text style={styles.genericResultsTitle}>
             Risultati ricerca ({genericResults.length}):

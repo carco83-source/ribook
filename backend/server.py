@@ -1748,8 +1748,16 @@ async def get_listings_by_isbn(isbn: str):
         listing.pop('_id', None)
         seller = await db.users.find_one({"id": listing.get("seller_id")})
         if seller:
-            listing["seller_name"] = seller.get("nome", seller.get("username", "Utente"))
+            # Use the user's anonymous code (username)
             listing["seller_username"] = seller.get("username", "Utente")
+        else:
+            # Generate anonymous code from seller_id (first 5 chars after last dash, uppercased)
+            seller_id = listing.get("seller_id", "")
+            if seller_id:
+                code_part = seller_id.split("-")[-1][:5].upper()
+                listing["seller_username"] = f"Utente_{code_part}"
+            else:
+                listing["seller_username"] = "Venditore"
     
     # Get book info from adozioni or books collection
     book_info = None
