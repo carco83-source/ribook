@@ -8186,6 +8186,200 @@ async def seed_bookstores():
     
     return {"message": f"Inserite {len(sample_bookstores)} cartolibrerie di esempio"}
 
+
+# ============== CHAT / MESSAGING SYSTEM ==============
+
+class ConversationCreate(BaseModel):
+    """Create a new conversation"""
+    buyer_id: str
+    seller_id: str
+    listing_id: str
+    book_isbn: str
+    book_title: str
+
+class MessageCreate(BaseModel):
+    """Create a new message"""
+    sender_id: str
+    content: str
+
+class Conversation(BaseModel):
+    """Conversation model"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    listing_id: str
+    book_isbn: str
+    book_title: str
+    buyer_id: str
+    buyer_username: str
+    seller_id: str
+    seller_username: str
+    last_message: Optional[str] = None
+    last_message_at: Optional[str] = None
+    created_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+
+class ConversationMessage(BaseModel):
+    """Chat message model"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    conversation_id: str
+    sender_id: str
+    sender_username: str
+    content: str
+    read: bool = False
+    created_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+
+
+@api_router.post("/conversations")
+async def create_or_get_conversation(data: ConversationCreate):
+    """
+    Create a new conversation or return existing one.
+    A conversation is unique per buyer-seller-listing combination.
+    """
+    # Check if conversation already exists
+    existing = await db.conversations.find_one({
+        "buyer_id": data.buyer_id,
+        "seller_id": data.seller_id,
+        "listing_id": data.listing_id
+    })
+    
+    if existing:
+        existing.pop("_id", None)
+        return existing
+    
+    # Get buyer and seller info
+    buyer = await db.users.find_one({"id": data.buyer_id})
+    seller = await db.users.find_one({"id": data.seller_id})
+    
+    if not buyer or not seller:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+    
+    # Prevent chatting with yourself
+    if data.buyer_id == data.seller_id:
+        raise HTTPException(status_code=400, detail="Non puoi contattare te stesso")
+    
+    conversation = Conversation(
+        listing_id=data.listing_id,
+        book_isbn=data.book_isbn,
+        book_title=data.book_title,
+        buyer_id=data.buyer_id,
+        buyer_username=buyer.get("username", "Utente"),
+        seller_id=data.seller_id,
+        seller_username=seller.get("username", "Utente"),
+    )
+    
+    await db.conversations.insert_one(conversation.dict())
+    
+    return conversation.dict()
+
+
+@api_router.get("/conversations/{user_id}")
+async def get_user_conversations(user_id: str):
+    """Get all conversations for a user (as buyer or seller)"""
+    conversations = await db.conversations.find({
+        "$or": [
+            {"buyer_id": user_id},
+            {"seller_id": user_id}
+        ]
+    }).sort("last_message_at", -1).to_list(100)
+    
+    # Count unread messages for each conversation
+    result = []
+    for conv in conversations:
+        conv.pop("_id", None)
+        
+        # Count unread messages where sender is not the current user
+        unread_count = await db.messages.count_documents({
+            "conversation_id": conv["id"],
+            "sender_id": {"$ne": user_id},
+            "read": False
+        })
+        conv["unread_count"] = unread_count
+        result.append(conv)
+    
+    return {"conversations": result}
+
+
+@api_router.get("/conversations/detail/{conversation_id}")
+async def get_conversation_detail(conversation_id: str):
+    """Get conversation details"""
+    conversation = await db.conversations.find_one({"id": conversation_id})
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversazione non trovata")
+    
+    conversation.pop("_id", None)
+    return conversation
+
+
+@api_router.get("/conversations/{conversation_id}/messages")
+async def get_conversation_messages(conversation_id: str):
+    """Get all messages in a conversation"""
+    messages = await db.messages.find({
+        "conversation_id": conversation_id
+    }).sort("created_at", 1).to_list(500)
+    
+    for msg in messages:
+        msg.pop("_id", None)
+    
+    return {"messages": messages}
+
+
+@api_router.post("/conversations/{conversation_id}/messages")
+async def send_message(conversation_id: str, data: MessageCreate):
+    """Send a message in a conversation"""
+    # Verify conversation exists
+    conversation = await db.conversations.find_one({"id": conversation_id})
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversazione non trovata")
+    
+    # Verify sender is part of the conversation
+    if data.sender_id not in [conversation["buyer_id"], conversation["seller_id"]]:
+        raise HTTPException(status_code=403, detail="Non sei parte di questa conversazione")
+    
+    # Get sender info
+    sender = await db.users.find_one({"id": data.sender_id})
+    if not sender:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+    
+    # Create message
+    message = ConversationMessage(
+        conversation_id=conversation_id,
+        sender_id=data.sender_id,
+        sender_username=sender.get("username", "Utente"),
+        content=data.content
+    )
+    
+    await db.messages.insert_one(message.dict())
+    
+    # Update conversation with last message
+    await db.conversations.update_one(
+        {"id": conversation_id},
+        {"$set": {
+            "last_message": data.content[:100],  # Truncate for preview
+            "last_message_at": message.created_at
+        }}
+    )
+    
+    return {"message": message.dict()}
+
+
+@api_router.post("/conversations/{conversation_id}/read")
+async def mark_messages_as_read(conversation_id: str, data: dict):
+    """Mark all messages in a conversation as read for a user"""
+    user_id = data.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id richiesto")
+    
+    # Mark all messages from the other user as read
+    result = await db.messages.update_many(
+        {
+            "conversation_id": conversation_id,
+            "sender_id": {"$ne": user_id},
+            "read": False
+        },
+        {"$set": {"read": True}}
+    )
+    
+    return {"marked_read": result.modified_count}
+
+
 # Include the router in the main app
 app.include_router(api_router)
 

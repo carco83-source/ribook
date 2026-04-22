@@ -7,20 +7,27 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  Alert,
+  Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_BASE = Constants.expoConfig?.extra?.apiUrl || '/api';
+const API_BASE = process.env.EXPO_PUBLIC_BACKEND_URL 
+  ? `${process.env.EXPO_PUBLIC_BACKEND_URL}/api`
+  : Constants.expoConfig?.extra?.apiUrl || '/api';
 
 interface Listing {
   id: string;
   seller_id: string;
   seller_name: string;
   seller_username: string;
-  prezzo_vendita: number;
-  condizione: string;
+  prezzo_vendita?: number;
+  price?: number; // Alternative field name from API
+  condizione?: string;
+  condition?: string; // Alternative field name from API
   condition_details?: {
     cover?: string;
     pages?: string;
@@ -48,9 +55,15 @@ export default function BookSellersScreen() {
   const [bookInfo, setBookInfo] = useState<BookInfo | null>(null);
   const [listings, setListings] = useState<Listing[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [contactingId, setContactingId] = useState<string | null>(null);
 
   const fetchData = async () => {
     try {
+      // Get current user
+      const storedUserId = await AsyncStorage.getItem('user_id');
+      setUserId(storedUserId);
+
       const response = await fetch(`${API_BASE}/listings/isbn/${isbn}`);
       if (!response.ok) {
         throw new Error('Errore nel caricamento');
@@ -65,6 +78,71 @@ export default function BookSellersScreen() {
     } finally {
       setLoading(false);
       setRefreshing(false);
+    }
+  };
+
+  // Handle contact seller
+  const handleContactSeller = async (listing: Listing) => {
+    if (!userId) {
+      if (Platform.OS === 'web') {
+        if (confirm('Devi accedere per contattare il venditore. Vuoi accedere ora?')) {
+          router.push('/login');
+        }
+      } else {
+        Alert.alert(
+          'Accesso richiesto',
+          'Devi accedere per contattare il venditore',
+          [
+            { text: 'Annulla', style: 'cancel' },
+            { text: 'Accedi', onPress: () => router.push('/login') }
+          ]
+        );
+      }
+      return;
+    }
+
+    // Prevent contacting yourself
+    if (userId === listing.seller_id) {
+      if (Platform.OS === 'web') {
+        alert('Non puoi contattare te stesso!');
+      } else {
+        Alert.alert('Attenzione', 'Non puoi contattare te stesso!');
+      }
+      return;
+    }
+
+    setContactingId(listing.id);
+
+    try {
+      // Create or get existing conversation
+      const response = await fetch(`${API_BASE}/conversations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          buyer_id: userId,
+          seller_id: listing.seller_id,
+          listing_id: listing.id,
+          book_isbn: isbn,
+          book_title: bookInfo?.titolo || 'Libro',
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Navigate to chat
+        router.push(`/chat/${data.id}`);
+      } else {
+        throw new Error('Errore nella creazione della chat');
+      }
+    } catch (err) {
+      console.error('Error creating conversation:', err);
+      if (Platform.OS === 'web') {
+        alert('Errore nell\'avvio della chat. Riprova.');
+      } else {
+        Alert.alert('Errore', 'Impossibile avviare la chat. Riprova.');
+      }
+    } finally {
+      setContactingId(null);
     }
   };
 
@@ -170,11 +248,18 @@ export default function BookSellersScreen() {
               {listings.length} {listings.length === 1 ? 'copia disponibile' : 'copie disponibili'}
             </Text>
 
-            {listings.map((listing) => (
-              <TouchableOpacity
+            {listings.map((listing) => {
+              // Calculate savings safely - handle both field names
+              const prezzoCopertina = bookInfo?.prezzo_copertina || 0;
+              const prezzoVendita = listing.prezzo_vendita || listing.price || 0;
+              const savings = prezzoCopertina - prezzoVendita;
+              const showSavings = prezzoCopertina > 0 && prezzoVendita > 0 && savings > 0;
+              const condizione = listing.condizione || listing.condition || 'buono';
+
+              return (
+              <View
                 key={listing.id}
                 style={styles.sellerCard}
-                onPress={() => router.push(`/listing/${listing.id}`)}
               >
                 <View style={styles.sellerHeader}>
                   <View style={styles.sellerInfo}>
@@ -188,10 +273,10 @@ export default function BookSellersScreen() {
                     </View>
                   </View>
                   <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={styles.listingPrice}>€{listing.prezzo_vendita?.toFixed(2)}</Text>
-                    {bookInfo && (
+                    <Text style={styles.listingPrice}>€{prezzoVendita.toFixed(2)}</Text>
+                    {showSavings && (
                       <Text style={styles.savings}>
-                        Risparmi €{(bookInfo.prezzo_copertina - listing.prezzo_vendita).toFixed(2)}
+                        Risparmi €{savings.toFixed(2)}
                       </Text>
                     )}
                   </View>
@@ -200,10 +285,10 @@ export default function BookSellersScreen() {
                 <View style={styles.conditionRow}>
                   <View style={[
                     styles.conditionBadge,
-                    { backgroundColor: getConditionColor(listing.condizione) }
+                    { backgroundColor: getConditionColor(condizione) }
                   ]}>
                     <Text style={styles.conditionText}>
-                      {getConditionLabel(listing.condizione)}
+                      {getConditionLabel(condizione)}
                     </Text>
                   </View>
                   
@@ -223,12 +308,36 @@ export default function BookSellersScreen() {
                   </View>
                 )}
 
-                <View style={styles.viewButton}>
-                  <Text style={styles.viewButtonText}>Vedi dettagli</Text>
-                  <Ionicons name="chevron-forward" size={16} color="#1a472a" />
+                {/* Action Buttons Row */}
+                <View style={styles.actionButtonsRow}>
+                  {/* Contact Seller Button */}
+                  <TouchableOpacity
+                    style={styles.contactButton}
+                    onPress={() => handleContactSeller(listing)}
+                    disabled={contactingId === listing.id}
+                  >
+                    {contactingId === listing.id ? (
+                      <ActivityIndicator size="small" color="#1a472a" />
+                    ) : (
+                      <>
+                        <Ionicons name="chatbubble-outline" size={16} color="#1a472a" />
+                        <Text style={styles.contactButtonText}>Contatta venditore</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+
+                  {/* View Details Button */}
+                  <TouchableOpacity
+                    style={styles.viewButton}
+                    onPress={() => router.push(`/listing/${listing.id}`)}
+                  >
+                    <Text style={styles.viewButtonText}>Vedi dettagli</Text>
+                    <Ionicons name="chevron-forward" size={16} color="#1a472a" />
+                  </TouchableOpacity>
                 </View>
-              </TouchableOpacity>
-            ))}
+              </View>
+              );
+            })}
           </View>
         ) : (
           <View style={styles.emptyState}>
@@ -417,6 +526,29 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#1a472a',
     fontWeight: '500',
+  },
+  actionButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+    marginTop: 4,
+  },
+  contactButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#e8f5e9',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 6,
+  },
+  contactButtonText: {
+    fontSize: 13,
+    color: '#1a472a',
+    fontWeight: '600',
   },
   emptyState: {
     flex: 1,

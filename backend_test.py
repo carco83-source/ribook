@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 """
-Backend Testing for ScambiaLibri - Radar View and Cart Duplicate Prevention
-Testing the fixes for:
-1. Radar View Missing Data - compatibility endpoint vendere structure
-2. Cart Duplicate Orders - order creation duplicate prevention
+Backend Testing for ScambiaLibri - Chat/Conversation System APIs
+Testing the new Chat/Conversation System APIs:
+1. Create/Get Conversation (POST /api/conversations)
+2. Get User Conversations (GET /api/conversations/{user_id})
+3. Get Conversation Detail (GET /api/conversations/detail/{conversation_id})
+4. Send Message (POST /api/conversations/{conversation_id}/messages)
+5. Get Messages (GET /api/conversations/{conversation_id}/messages)
+6. Mark as Read (POST /api/conversations/{conversation_id}/read)
 """
 
 import requests
@@ -17,13 +21,15 @@ BACKEND_URL = os.environ.get('EXPO_PUBLIC_BACKEND_URL', 'https://language-check-
 API_BASE = f"{BACKEND_URL}/api"
 
 # Test credentials from review request
-TEST_USER_ID = "58ac430d-da2a-4954-bb2f-feea6de1f30c"
-TEST_CHILDREN = {
-    "goja": "bb7aaaf8-1ab2-40a9-9709-ef84da7eb54d",  # Goja, 3° Scalfaro
-    "carmen": "66ff6294-5695-4a67-bf92-798643a50ef2",  # Carmen, 1° media
-    "george": "george-profile-001",  # George, 2° media
-    "aldo": "bde1f85a-511c-43eb-a310-4c004ea4f298"  # Aldo, 3° Liceo
-}
+TEST_EMAIL = "carco83@gmail.com"
+TEST_PASSWORD = "admin2024"
+
+# Test user IDs from review request
+BUYER_ID = "58ac430d-da2a-4954-bb2f-feea6de1f30c"
+SELLER_ID = "58ac430d-da2a-4954-bb2f-feea6de1f30c"  # Use same user for initial testing
+LISTING_ID = "25352340-97e6-4db8-bcbd-4a2590de3330"
+BOOK_ISBN = "9788863085495"
+BOOK_TITLE = "DESIGN. MANUALI D'ARTE"
 
 class TestResults:
     def __init__(self):
@@ -31,6 +37,7 @@ class TestResults:
         self.passed_tests = 0
         self.failed_tests = 0
         self.results = []
+        self.conversation_id = None  # Store conversation ID for subsequent tests
     
     def add_result(self, test_name, passed, details=""):
         self.total_tests += 1
@@ -50,7 +57,7 @@ class TestResults:
     
     def print_summary(self):
         print(f"\n{'='*60}")
-        print(f"TEST SUMMARY")
+        print(f"CHAT SYSTEM TEST SUMMARY")
         print(f"{'='*60}")
         print(f"Total Tests: {self.total_tests}")
         print(f"Passed: {self.passed_tests}")
@@ -58,64 +65,163 @@ class TestResults:
         print(f"Success Rate: {(self.passed_tests/self.total_tests*100):.1f}%")
         print(f"{'='*60}")
 
-def test_compatibility_endpoint_vendere_structure():
-    """Test 1: Compatibility endpoint returns correct vendere structure"""
-    print(f"\n🔍 TEST 1: Compatibility endpoint vendere structure for Goja")
+def create_test_seller():
+    """Create a test seller user for testing"""
+    print(f"\n👤 Creating test seller user")
     
-    url = f"{API_BASE}/profiles/{TEST_USER_ID}/children/{TEST_CHILDREN['goja']}/compatibility"
+    register_url = f"{API_BASE}/auth/register"
+    register_data = {
+        "email": "test.seller@example.com",
+        "password": "testpass123",
+        "nome": "Test",
+        "cognome": "Seller"
+    }
     
     try:
-        response = requests.get(url, timeout=30)
+        response = requests.post(register_url, json=register_data, timeout=30)
+        
+        if response.status_code not in [200, 201]:
+            # User might already exist, try to login
+            login_url = f"{API_BASE}/auth/login"
+            login_data = {
+                "email": "test.seller@example.com",
+                "password": "testpass123"
+            }
+            
+            login_response = requests.post(login_url, json=login_data, timeout=30)
+            if login_response.status_code == 200:
+                data = login_response.json()
+                seller_id = data.get("user_id")
+                if seller_id:
+                    print(f"✅ Test seller login successful. User ID: {seller_id}")
+                    return seller_id
+            
+            print(f"❌ Failed to create/login test seller: HTTP {response.status_code}: {response.text}")
+            return None
+        
+        data = response.json()
+        seller_id = data.get("user_id")
+        
+        if seller_id:
+            print(f"✅ Test seller created successfully. User ID: {seller_id}")
+            return seller_id
+        else:
+            print(f"❌ Registration response missing user ID: {data}")
+            return None
+            
+    except Exception as e:
+        print(f"❌ Test seller creation error: {str(e)}")
+        return None
+
+def login_user():
+    """Login user to get authentication token"""
+    print(f"\n🔐 Logging in as {TEST_EMAIL}")
+    
+    login_url = f"{API_BASE}/auth/login"
+    login_data = {
+        "email": TEST_EMAIL,
+        "password": TEST_PASSWORD
+    }
+    
+    try:
+        response = requests.post(login_url, json=login_data, timeout=30)
         
         if response.status_code != 200:
+            print(f"❌ Login failed: HTTP {response.status_code}: {response.text}")
+            return None
+        
+        data = response.json()
+        user_id = data.get("user_id")
+        
+        if user_id:
+            print(f"✅ Login successful. User ID: {user_id}")
+            return user_id
+        else:
+            print(f"❌ Login response missing user ID: {data}")
+            return None
+            
+    except Exception as e:
+        print(f"❌ Login error: {str(e)}")
+        return None
+    """Login user to get authentication token"""
+    print(f"\n🔐 Logging in as {TEST_EMAIL}")
+    
+    login_url = f"{API_BASE}/auth/login"
+    login_data = {
+        "email": TEST_EMAIL,
+        "password": TEST_PASSWORD
+    }
+    
+    try:
+        response = requests.post(login_url, json=login_data, timeout=30)
+        
+        if response.status_code != 200:
+            print(f"❌ Login failed: HTTP {response.status_code}: {response.text}")
+            return None
+        
+        data = response.json()
+        user_id = data.get("user_id")
+        
+        if user_id:
+            print(f"✅ Login successful. User ID: {user_id}")
+            return user_id
+        else:
+            print(f"❌ Login response missing user ID: {data}")
+            return None
+            
+    except Exception as e:
+        print(f"❌ Login error: {str(e)}")
+        return None
+
+def test_create_conversation(results):
+    """Test 1: Create/Get Conversation (POST /api/conversations)"""
+    print(f"\n🔍 TEST 1: Create/Get Conversation")
+    
+    url = f"{API_BASE}/conversations"
+    conversation_data = {
+        "buyer_id": BUYER_ID,
+        "seller_id": SELLER_ID,
+        "listing_id": LISTING_ID,
+        "book_isbn": BOOK_ISBN,
+        "book_title": BOOK_TITLE
+    }
+    
+    try:
+        response = requests.post(url, json=conversation_data, timeout=30)
+        
+        if response.status_code not in [200, 201]:
             return False, f"HTTP {response.status_code}: {response.text}"
         
         data = response.json()
         
-        # Check if vendere object exists
-        if "vendere" not in data:
-            return False, "Missing 'vendere' object in response"
-        
-        vendere = data["vendere"]
-        
-        # Check required fields in vendere
-        required_fields = ["libri_vendibili", "libri_non_vendibili", "totale_non_vendibili"]
+        # Check required fields
+        required_fields = ["id", "buyer_id", "seller_id", "listing_id", "book_isbn", "book_title", "buyer_username", "seller_username"]
         missing_fields = []
         
         for field in required_fields:
-            if field not in vendere:
+            if field not in data:
                 missing_fields.append(field)
         
         if missing_fields:
-            return False, f"Missing fields in vendere: {missing_fields}"
+            return False, f"Missing fields: {missing_fields}"
         
-        # Check libri_gia_posseduti
-        if "libri_gia_posseduti" not in data:
-            return False, "Missing 'libri_gia_posseduti' object in response"
+        # Verify data matches input
+        if data["buyer_id"] != BUYER_ID:
+            return False, f"buyer_id mismatch: expected {BUYER_ID}, got {data['buyer_id']}"
         
-        libri_gia_posseduti = data["libri_gia_posseduti"]
-        if "libri" not in libri_gia_posseduti:
-            return False, "Missing 'libri' in libri_gia_posseduti"
+        if data["seller_id"] != SELLER_ID:
+            return False, f"seller_id mismatch: expected {SELLER_ID}, got {data['seller_id']}"
         
-        # Verify data types
-        if not isinstance(vendere["libri_vendibili"], list):
-            return False, "libri_vendibili should be a list"
+        if data["listing_id"] != LISTING_ID:
+            return False, f"listing_id mismatch: expected {LISTING_ID}, got {data['listing_id']}"
         
-        if not isinstance(vendere["libri_non_vendibili"], list):
-            return False, "libri_non_vendibili should be a list"
+        if data["book_isbn"] != BOOK_ISBN:
+            return False, f"book_isbn mismatch: expected {BOOK_ISBN}, got {data['book_isbn']}"
         
-        if not isinstance(vendere["totale_non_vendibili"], (int, float)):
-            return False, "totale_non_vendibili should be a number"
+        # Store conversation ID for subsequent tests
+        results.conversation_id = data["id"]
         
-        if not isinstance(libri_gia_posseduti["libri"], list):
-            return False, "libri_gia_posseduti.libri should be a list"
-        
-        # Check that we have 3 items in libri_gia_posseduti (volumi quinquennali)
-        if len(libri_gia_posseduti["libri"]) != 3:
-            return False, f"Expected 3 items in libri_gia_posseduti, got {len(libri_gia_posseduti['libri'])}"
-        
-        details = f"vendere.libri_vendibili: {len(vendere['libri_vendibili'])}, libri_non_vendibili: {len(vendere['libri_non_vendibili'])}, totale_non_vendibili: {vendere['totale_non_vendibili']}, libri_gia_posseduti: {len(libri_gia_posseduti['libri'])}"
-        
+        details = f"Conversation created with ID: {data['id']}, buyer: {data['buyer_username']}, seller: {data['seller_username']}"
         return True, details
         
     except requests.exceptions.RequestException as e:
@@ -125,11 +231,11 @@ def test_compatibility_endpoint_vendere_structure():
     except Exception as e:
         return False, f"Unexpected error: {str(e)}"
 
-def test_compatibility_endpoint_first_year():
-    """Test 2: Compatibility endpoint for 1st year student (Carmen)"""
-    print(f"\n🔍 TEST 2: Compatibility endpoint for Carmen (1st year)")
+def test_get_user_conversations(results):
+    """Test 2: Get User Conversations (GET /api/conversations/{user_id})"""
+    print(f"\n🔍 TEST 2: Get User Conversations")
     
-    url = f"{API_BASE}/profiles/{TEST_USER_ID}/children/{TEST_CHILDREN['carmen']}/compatibility"
+    url = f"{API_BASE}/conversations/{BUYER_ID}"
     
     try:
         response = requests.get(url, timeout=30)
@@ -139,34 +245,45 @@ def test_compatibility_endpoint_first_year():
         
         data = response.json()
         
-        # Check vendere structure
-        if "vendere" not in data:
-            return False, "Missing 'vendere' object in response"
+        # Check response structure
+        if "conversations" not in data:
+            return False, "Missing 'conversations' field in response"
         
-        vendere = data["vendere"]
+        conversations = data["conversations"]
         
-        # For 1st year student, totale_vendibili should be 0 (no books to sell)
-        if "totale_vendibili" not in vendere:
-            return False, "Missing 'totale_vendibili' in vendere"
+        if not isinstance(conversations, list):
+            return False, "conversations should be a list"
         
-        if vendere["totale_vendibili"] != 0:
-            return False, f"Expected totale_vendibili=0 for 1st year, got {vendere['totale_vendibili']}"
+        if len(conversations) == 0:
+            return False, "No conversations found for user"
         
-        # Check libri_gia_posseduti
-        if "libri_gia_posseduti" not in data:
-            return False, "Missing 'libri_gia_posseduti' object in response"
+        # Check if our conversation is in the list
+        conversation_found = False
+        for conv in conversations:
+            if conv.get("id") == results.conversation_id:
+                conversation_found = True
+                
+                # Check required fields
+                required_fields = ["id", "buyer_id", "seller_id", "listing_id", "book_isbn", "book_title", "unread_count"]
+                missing_fields = []
+                
+                for field in required_fields:
+                    if field not in conv:
+                        missing_fields.append(field)
+                
+                if missing_fields:
+                    return False, f"Missing fields in conversation: {missing_fields}"
+                
+                # Check unread_count is a number
+                if not isinstance(conv["unread_count"], (int, float)):
+                    return False, f"unread_count should be a number, got {type(conv['unread_count'])}"
+                
+                break
         
-        libri_gia_posseduti = data["libri_gia_posseduti"]
+        if not conversation_found:
+            return False, f"Created conversation {results.conversation_id} not found in user conversations"
         
-        if "totale" not in libri_gia_posseduti:
-            return False, "Missing 'totale' in libri_gia_posseduti"
-        
-        # For 1st year student, totale should be 0 (no books already owned)
-        if libri_gia_posseduti["totale"] != 0:
-            return False, f"Expected libri_gia_posseduti.totale=0 for 1st year, got {libri_gia_posseduti['totale']}"
-        
-        details = f"totale_vendibili: {vendere['totale_vendibili']}, libri_gia_posseduti.totale: {libri_gia_posseduti['totale']}"
-        
+        details = f"Found {len(conversations)} conversations, unread_count: {conv['unread_count']}"
         return True, details
         
     except requests.exceptions.RequestException as e:
@@ -176,64 +293,40 @@ def test_compatibility_endpoint_first_year():
     except Exception as e:
         return False, f"Unexpected error: {str(e)}"
 
-def test_duplicate_order_prevention():
-    """Test 3: Duplicate order prevention"""
-    print(f"\n🔍 TEST 3: Duplicate order prevention")
+def test_get_conversation_detail(results):
+    """Test 3: Get Conversation Detail (GET /api/conversations/detail/{conversation_id})"""
+    print(f"\n🔍 TEST 3: Get Conversation Detail")
     
-    # First get an available listing
-    listings_url = f"{API_BASE}/listings?status=available"
+    if not results.conversation_id:
+        return False, "No conversation ID available from previous test"
+    
+    url = f"{API_BASE}/conversations/detail/{results.conversation_id}"
     
     try:
-        response = requests.get(listings_url, timeout=30)
+        response = requests.get(url, timeout=30)
         
         if response.status_code != 200:
-            return False, f"Failed to get listings: HTTP {response.status_code}"
+            return False, f"HTTP {response.status_code}: {response.text}"
         
-        listings = response.json()
+        data = response.json()
         
-        if not listings or len(listings) == 0:
-            return False, "No available listings found for testing"
+        # Check required fields
+        required_fields = ["id", "buyer_id", "seller_id", "listing_id", "book_isbn", "book_title", "buyer_username", "seller_username", "created_at"]
+        missing_fields = []
         
-        # Find a listing that's not from our test user (to avoid self-purchase error)
-        test_buyer_id = "b513ee73-48da-4c3a-8e38-12cfe4b9e49e"
-        available_listing = None
+        for field in required_fields:
+            if field not in data:
+                missing_fields.append(field)
         
-        for listing in listings:
-            if listing.get("seller_id") != test_buyer_id:
-                available_listing = listing
-                break
+        if missing_fields:
+            return False, f"Missing fields: {missing_fields}"
         
-        if not available_listing:
-            return False, "No suitable listings found (all belong to test user)"
+        # Verify this is our conversation
+        if data["id"] != results.conversation_id:
+            return False, f"Conversation ID mismatch: expected {results.conversation_id}, got {data['id']}"
         
-        listing_id = available_listing.get("id")
-        
-        if not listing_id:
-            return False, "Listing missing ID field"
-        
-        # Try to create first order
-        order_url = f"{API_BASE}/orders/create?user_id={test_buyer_id}&listing_id={listing_id}&bookstore_id=21d774b1-2fbe-4b21-ae5b-94d158df2f72"
-        
-        response1 = requests.post(order_url, timeout=30)
-        
-        if response1.status_code not in [200, 201]:
-            return False, f"First order creation failed: HTTP {response1.status_code}: {response1.text}"
-        
-        # Try to create second order for the same listing (should fail)
-        response2 = requests.post(order_url, timeout=30)
-        
-        if response2.status_code == 200 or response2.status_code == 201:
-            return False, "Second order creation should have failed but succeeded"
-        
-        # Check if error message indicates duplicate prevention
-        error_text = response2.text.lower()
-        if ("già un ordine attivo" in error_text or 
-            "già stato riservato" in error_text or 
-            "già riservato" in error_text or
-            "annuncio non disponibile" in error_text):
-            return True, f"Duplicate order correctly prevented: {response2.status_code} - {response2.text}"
-        else:
-            return False, f"Unexpected error message: {response2.text}"
+        details = f"Conversation detail retrieved: {data['book_title']} between {data['buyer_username']} and {data['seller_username']}"
+        return True, details
         
     except requests.exceptions.RequestException as e:
         return False, f"Request failed: {str(e)}"
@@ -242,81 +335,229 @@ def test_duplicate_order_prevention():
     except Exception as e:
         return False, f"Unexpected error: {str(e)}"
 
-def test_all_profiles_compatibility():
-    """Test 4: Verify all profiles have valid compatibility data"""
-    print(f"\n🔍 TEST 4: All profiles compatibility data")
+def test_send_message(results):
+    """Test 4: Send Message (POST /api/conversations/{conversation_id}/messages)"""
+    print(f"\n🔍 TEST 4: Send Message")
     
-    results = []
+    if not results.conversation_id:
+        return False, "No conversation ID available from previous test"
     
-    for name, child_id in TEST_CHILDREN.items():
-        url = f"{API_BASE}/profiles/{TEST_USER_ID}/children/{child_id}/compatibility"
+    url = f"{API_BASE}/conversations/{results.conversation_id}/messages"
+    message_data = {
+        "sender_id": BUYER_ID,
+        "content": "I fascicoli ci sono tutti?"
+    }
+    
+    try:
+        response = requests.post(url, json=message_data, timeout=30)
         
-        try:
-            response = requests.get(url, timeout=30)
-            
-            if response.status_code != 200:
-                results.append(f"{name}: HTTP {response.status_code}")
-                continue
-            
-            data = response.json()
-            
-            # Basic structure checks
-            required_sections = ["vendere", "comprare", "nuovi", "libri_gia_posseduti"]
-            missing_sections = []
-            
-            for section in required_sections:
-                if section not in data:
-                    missing_sections.append(section)
-            
-            if missing_sections:
-                results.append(f"{name}: Missing sections {missing_sections}")
-                continue
-            
-            # Check vendere structure
-            vendere = data["vendere"]
-            required_vendere_fields = ["libri_vendibili", "libri_non_vendibili", "totale_non_vendibili"]
-            missing_vendere = [f for f in required_vendere_fields if f not in vendere]
-            
-            if missing_vendere:
-                results.append(f"{name}: Missing vendere fields {missing_vendere}")
-                continue
-            
-            results.append(f"{name}: ✅ Valid structure")
-            
-        except Exception as e:
-            results.append(f"{name}: Error - {str(e)}")
+        if response.status_code not in [200, 201]:
+            return False, f"HTTP {response.status_code}: {response.text}"
+        
+        data = response.json()
+        
+        # Check response structure
+        if "message" not in data:
+            return False, "Missing 'message' field in response"
+        
+        message = data["message"]
+        
+        # Check required fields
+        required_fields = ["id", "conversation_id", "sender_id", "sender_username", "content", "read", "created_at"]
+        missing_fields = []
+        
+        for field in required_fields:
+            if field not in message:
+                missing_fields.append(field)
+        
+        if missing_fields:
+            return False, f"Missing fields in message: {missing_fields}"
+        
+        # Verify message data
+        if message["conversation_id"] != results.conversation_id:
+            return False, f"conversation_id mismatch: expected {results.conversation_id}, got {message['conversation_id']}"
+        
+        if message["sender_id"] != BUYER_ID:
+            return False, f"sender_id mismatch: expected {BUYER_ID}, got {message['sender_id']}"
+        
+        if message["content"] != "I fascicoli ci sono tutti?":
+            return False, f"content mismatch: expected 'I fascicoli ci sono tutti?', got '{message['content']}'"
+        
+        if message["read"] != False:
+            return False, f"read should be False for new message, got {message['read']}"
+        
+        details = f"Message sent: '{message['content']}' by {message['sender_username']}"
+        return True, details
+        
+    except requests.exceptions.RequestException as e:
+        return False, f"Request failed: {str(e)}"
+    except json.JSONDecodeError as e:
+        return False, f"Invalid JSON response: {str(e)}"
+    except Exception as e:
+        return False, f"Unexpected error: {str(e)}"
+
+def test_get_messages(results):
+    """Test 5: Get Messages (GET /api/conversations/{conversation_id}/messages)"""
+    print(f"\n🔍 TEST 5: Get Messages")
     
-    # Check if all profiles passed
-    failed_profiles = [r for r in results if "✅" not in r]
+    if not results.conversation_id:
+        return False, "No conversation ID available from previous test"
     
-    if failed_profiles:
-        return False, f"Failed profiles: {'; '.join(failed_profiles)}"
-    else:
-        return True, f"All profiles valid: {'; '.join(results)}"
+    url = f"{API_BASE}/conversations/{results.conversation_id}/messages"
+    
+    try:
+        response = requests.get(url, timeout=30)
+        
+        if response.status_code != 200:
+            return False, f"HTTP {response.status_code}: {response.text}"
+        
+        data = response.json()
+        
+        # Check response structure
+        if "messages" not in data:
+            return False, "Missing 'messages' field in response"
+        
+        messages = data["messages"]
+        
+        if not isinstance(messages, list):
+            return False, "messages should be a list"
+        
+        if len(messages) == 0:
+            return False, "No messages found in conversation"
+        
+        # Check if our message is in the list
+        message_found = False
+        for msg in messages:
+            if msg.get("content") == "I fascicoli ci sono tutti?":
+                message_found = True
+                
+                # Check required fields
+                required_fields = ["id", "conversation_id", "sender_id", "sender_username", "content", "read", "created_at"]
+                missing_fields = []
+                
+                for field in required_fields:
+                    if field not in msg:
+                        missing_fields.append(field)
+                
+                if missing_fields:
+                    return False, f"Missing fields in message: {missing_fields}"
+                
+                break
+        
+        if not message_found:
+            return False, "Sent message not found in conversation messages"
+        
+        # Check if messages are sorted by created_at (should be ascending)
+        if len(messages) > 1:
+            for i in range(1, len(messages)):
+                if messages[i]["created_at"] < messages[i-1]["created_at"]:
+                    return False, "Messages are not sorted by created_at in ascending order"
+        
+        details = f"Retrieved {len(messages)} messages, sorted by created_at"
+        return True, details
+        
+    except requests.exceptions.RequestException as e:
+        return False, f"Request failed: {str(e)}"
+    except json.JSONDecodeError as e:
+        return False, f"Invalid JSON response: {str(e)}"
+    except Exception as e:
+        return False, f"Unexpected error: {str(e)}"
+
+def test_mark_as_read(results):
+    """Test 6: Mark as Read (POST /api/conversations/{conversation_id}/read)"""
+    print(f"\n🔍 TEST 6: Mark as Read")
+    
+    if not results.conversation_id:
+        return False, "No conversation ID available from previous test"
+    
+    url = f"{API_BASE}/conversations/{results.conversation_id}/read"
+    read_data = {
+        "user_id": SELLER_ID  # Seller marking buyer's message as read
+    }
+    
+    try:
+        response = requests.post(url, json=read_data, timeout=30)
+        
+        if response.status_code not in [200, 201]:
+            return False, f"HTTP {response.status_code}: {response.text}"
+        
+        data = response.json()
+        
+        # Check response structure
+        if "marked_read" not in data:
+            return False, "Missing 'marked_read' field in response"
+        
+        marked_read = data["marked_read"]
+        
+        if not isinstance(marked_read, (int, float)):
+            return False, f"marked_read should be a number, got {type(marked_read)}"
+        
+        # Should have marked at least 1 message as read
+        if marked_read < 1:
+            return False, f"Expected at least 1 message to be marked as read, got {marked_read}"
+        
+        details = f"Marked {marked_read} messages as read"
+        return True, details
+        
+    except requests.exceptions.RequestException as e:
+        return False, f"Request failed: {str(e)}"
+    except json.JSONDecodeError as e:
+        return False, f"Invalid JSON response: {str(e)}"
+    except Exception as e:
+        return False, f"Unexpected error: {str(e)}"
 
 def main():
-    """Run all tests"""
-    print("🚀 Starting ScambiaLibri Backend Testing - Radar View & Cart Duplicate Prevention")
+    """Run all chat system tests"""
+    print("🚀 Starting ScambiaLibri Backend Testing - Chat/Conversation System APIs")
     print(f"Backend URL: {API_BASE}")
-    print(f"Test User ID: {TEST_USER_ID}")
+    print(f"Test Email: {TEST_EMAIL}")
+    print(f"Buyer ID: {BUYER_ID}")
+    print(f"Listing ID: {LISTING_ID}")
+    print(f"Book ISBN: {BOOK_ISBN}")
+    print(f"Book Title: {BOOK_TITLE}")
+    
+    # Login first to verify credentials
+    user_id = login_user()
+    if not user_id:
+        print("❌ Login failed. Cannot proceed with tests.")
+        return 1
+    
+    # Create a test seller
+    seller_id = create_test_seller()
+    if not seller_id:
+        print("❌ Failed to create test seller. Cannot proceed with tests.")
+        return 1
+    
+    # Update global SELLER_ID for tests
+    global SELLER_ID
+    SELLER_ID = seller_id
+    print(f"Seller ID: {SELLER_ID}")
     
     results = TestResults()
     
-    # Test 1: Compatibility endpoint vendere structure
-    passed, details = test_compatibility_endpoint_vendere_structure()
-    results.add_result("Compatibility endpoint vendere structure (Goja)", passed, details)
+    # Test 1: Create/Get Conversation
+    passed, details = test_create_conversation(results)
+    results.add_result("Create/Get Conversation", passed, details)
     
-    # Test 2: Compatibility endpoint for 1st year student
-    passed, details = test_compatibility_endpoint_first_year()
-    results.add_result("Compatibility endpoint 1st year (Carmen)", passed, details)
+    # Test 2: Get User Conversations
+    passed, details = test_get_user_conversations(results)
+    results.add_result("Get User Conversations", passed, details)
     
-    # Test 3: Duplicate order prevention
-    passed, details = test_duplicate_order_prevention()
-    results.add_result("Duplicate order prevention", passed, details)
+    # Test 3: Get Conversation Detail
+    passed, details = test_get_conversation_detail(results)
+    results.add_result("Get Conversation Detail", passed, details)
     
-    # Test 4: All profiles compatibility
-    passed, details = test_all_profiles_compatibility()
-    results.add_result("All profiles compatibility data", passed, details)
+    # Test 4: Send Message
+    passed, details = test_send_message(results)
+    results.add_result("Send Message", passed, details)
+    
+    # Test 5: Get Messages
+    passed, details = test_get_messages(results)
+    results.add_result("Get Messages", passed, details)
+    
+    # Test 6: Mark as Read
+    passed, details = test_mark_as_read(results)
+    results.add_result("Mark as Read", passed, details)
     
     # Print summary
     results.print_summary()
