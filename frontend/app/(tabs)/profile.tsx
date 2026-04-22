@@ -16,6 +16,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import * as WebBrowser from 'expo-web-browser';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -166,11 +167,23 @@ export default function ProfileScreen() {
       // Usa la versione HTML che è responsive e gira con il telefono
       const htmlUrl = `${API_URL}/api/profiles/${userId}/children/${childId}/books-html`;
       
-      await Linking.openURL(htmlUrl);
+      // Usa WebBrowser per aprire in-app browser che supporta rotazione
+      await WebBrowser.openBrowserAsync(htmlUrl, {
+        presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
+        controlsColor: '#1a472a',
+        toolbarColor: '#ffffff',
+      });
       
     } catch (error) {
       console.error('Error opening book list:', error);
-      showAlert('Errore', 'Impossibile aprire la lista libri');
+      // Fallback a Linking
+      try {
+        const userId = await AsyncStorage.getItem('user_id');
+        const htmlUrl = `${API_URL}/api/profiles/${userId}/children/${childId}/books-html`;
+        await Linking.openURL(htmlUrl);
+      } catch (e) {
+        showAlert('Errore', 'Impossibile aprire la lista libri');
+      }
     } finally {
       setDownloadingPdf(null);
     }
