@@ -8244,12 +8244,24 @@ async def create_or_get_conversation(data: ConversationCreate):
         existing.pop("_id", None)
         return existing
     
-    # Get buyer and seller info
+    # Get buyer info (must be a real user)
     buyer = await db.users.find_one({"id": data.buyer_id})
-    seller = await db.users.find_one({"id": data.seller_id})
+    if not buyer:
+        raise HTTPException(status_code=404, detail="Acquirente non trovato")
     
-    if not buyer or not seller:
-        raise HTTPException(status_code=404, detail="Utente non trovato")
+    # Get seller info - first check users, then listings (for test data)
+    seller = await db.users.find_one({"id": data.seller_id})
+    seller_username = "Venditore"
+    
+    if seller:
+        seller_username = seller.get("username", "Venditore")
+    else:
+        # Seller might be test data - get info from the listing
+        listing = await db.listings.find_one({"id": data.listing_id})
+        if listing:
+            seller_username = listing.get("seller_name", "Venditore")
+        else:
+            raise HTTPException(status_code=404, detail="Venditore non trovato")
     
     # Prevent chatting with yourself
     if data.buyer_id == data.seller_id:
@@ -8262,7 +8274,7 @@ async def create_or_get_conversation(data: ConversationCreate):
         buyer_id=data.buyer_id,
         buyer_username=buyer.get("username", "Utente"),
         seller_id=data.seller_id,
-        seller_username=seller.get("username", "Utente"),
+        seller_username=seller_username,
     )
     
     await db.conversations.insert_one(conversation.dict())

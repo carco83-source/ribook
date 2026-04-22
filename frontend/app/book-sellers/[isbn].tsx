@@ -9,6 +9,7 @@ import {
   RefreshControl,
   Alert,
   Platform,
+  Image,
 } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,6 +19,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const API_BASE = process.env.EXPO_PUBLIC_BACKEND_URL 
   ? `${process.env.EXPO_PUBLIC_BACKEND_URL}/api`
   : Constants.expoConfig?.extra?.apiUrl || '/api';
+
+// Helper to get book cover URL from IBS.it
+const getBookCoverUrl = (isbn: string): string => {
+  return `https://www.ibs.it/images/${isbn}_0_536_0_75.jpg`;
+};
 
 interface Listing {
   id: string;
@@ -156,20 +162,39 @@ export default function BookSellersScreen() {
   };
 
   const getConditionLabel = (condizione: string) => {
+    const normalizedCondition = condizione?.toLowerCase().replace(/_/g, ' ') || '';
+    
     switch (condizione) {
       case 'come_nuovo': return 'Come nuovo';
+      case 'ottime_condizioni': return 'Ottime condizioni';
+      case 'buone_condizioni': return 'Buone condizioni';
       case 'buono': return 'Buono';
       case 'molto_usato': return 'Molto usato';
-      default: return condizione;
+      case 'accettabile': return 'Accettabile';
+      case 'scarso': return 'Scarso';
+      default: 
+        // Capitalize first letter of each word
+        return condizione
+          .replace(/_/g, ' ')
+          .replace(/\b\w/g, (c) => c.toUpperCase());
     }
   };
 
   const getConditionColor = (condizione: string) => {
     switch (condizione) {
-      case 'come_nuovo': return '#4CAF50';
-      case 'buono': return '#8BC34A';
-      case 'molto_usato': return '#FF9800';
-      default: return '#888';
+      case 'come_nuovo':
+      case 'ottime_condizioni':
+        return '#4CAF50'; // Green
+      case 'buone_condizioni':
+      case 'buono':
+        return '#8BC34A'; // Light green
+      case 'accettabile':
+      case 'molto_usato':
+        return '#FF9800'; // Orange
+      case 'scarso':
+        return '#f44336'; // Red
+      default: 
+        return '#888';
     }
   };
 
@@ -261,52 +286,63 @@ export default function BookSellersScreen() {
                 key={listing.id}
                 style={styles.sellerCard}
               >
-                <View style={styles.sellerHeader}>
-                  <View style={styles.sellerInfo}>
-                    <View style={styles.sellerAvatar}>
-                      <Text style={styles.sellerAvatarText}>
-                        {listing.seller_username?.charAt(0)?.toUpperCase() || '?'}
-                      </Text>
+                <View style={styles.cardContentRow}>
+                  {/* Book Cover Thumbnail */}
+                  <Image
+                    source={{ uri: getBookCoverUrl(isbn || '') }}
+                    style={styles.bookThumbnail}
+                    resizeMode="contain"
+                  />
+                  
+                  <View style={styles.cardDetails}>
+                    <View style={styles.sellerHeader}>
+                      <View style={styles.sellerInfo}>
+                        <View style={styles.sellerAvatar}>
+                          <Text style={styles.sellerAvatarText}>
+                            {listing.seller_username?.charAt(0)?.toUpperCase() || listing.seller_name?.charAt(0)?.toUpperCase() || '?'}
+                          </Text>
+                        </View>
+                        <View>
+                          <Text style={styles.sellerName}>{listing.seller_username || listing.seller_name}</Text>
+                        </View>
+                      </View>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={styles.listingPrice}>€{prezzoVendita.toFixed(2)}</Text>
+                        {showSavings && (
+                          <Text style={styles.savings}>
+                            Risparmi €{savings.toFixed(2)}
+                          </Text>
+                        )}
+                      </View>
                     </View>
-                    <View>
-                      <Text style={styles.sellerName}>{listing.seller_username}</Text>
+
+                    <View style={styles.conditionRow}>
+                      <View style={[
+                        styles.conditionBadge,
+                        { backgroundColor: getConditionColor(condizione) }
+                      ]}>
+                        <Text style={styles.conditionText}>
+                          {getConditionLabel(condizione)}
+                        </Text>
+                      </View>
+                      
+                      {listing.condition_details?.notes && (
+                        <Text style={styles.conditionNotes} numberOfLines={1}>
+                          {listing.condition_details.notes}
+                        </Text>
+                      )}
                     </View>
-                  </View>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={styles.listingPrice}>€{prezzoVendita.toFixed(2)}</Text>
-                    {showSavings && (
-                      <Text style={styles.savings}>
-                        Risparmi €{savings.toFixed(2)}
-                      </Text>
+
+                    {listing.bookstores && listing.bookstores.length > 0 && (
+                      <View style={styles.bookstoreRow}>
+                        <Ionicons name="location" size={14} color="#1a472a" />
+                        <Text style={styles.bookstoreText}>
+                          {listing.bookstores.map(b => b.nome).join(', ')}
+                        </Text>
+                      </View>
                     )}
                   </View>
                 </View>
-
-                <View style={styles.conditionRow}>
-                  <View style={[
-                    styles.conditionBadge,
-                    { backgroundColor: getConditionColor(condizione) }
-                  ]}>
-                    <Text style={styles.conditionText}>
-                      {getConditionLabel(condizione)}
-                    </Text>
-                  </View>
-                  
-                  {listing.condition_details?.notes && (
-                    <Text style={styles.conditionNotes} numberOfLines={1}>
-                      {listing.condition_details.notes}
-                    </Text>
-                  )}
-                </View>
-
-                {listing.bookstores && listing.bookstores.length > 0 && (
-                  <View style={styles.bookstoreRow}>
-                    <Ionicons name="location" size={14} color="#1a472a" />
-                    <Text style={styles.bookstoreText}>
-                      {listing.bookstores.map(b => b.nome).join(', ')}
-                    </Text>
-                  </View>
-                )}
 
                 {/* Action Buttons Row */}
                 <View style={styles.actionButtonsRow}>
@@ -442,11 +478,24 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
+  cardContentRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  bookThumbnail: {
+    width: 60,
+    height: 85,
+    borderRadius: 4,
+    backgroundColor: '#f0f0f0',
+  },
+  cardDetails: {
+    flex: 1,
+  },
   sellerHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 12,
+    marginBottom: 8,
   },
   sellerInfo: {
     flexDirection: 'row',
