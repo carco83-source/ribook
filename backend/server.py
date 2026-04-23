@@ -8257,17 +8257,26 @@ async def create_or_get_conversation(data: ConversationCreate):
     if not buyer:
         raise HTTPException(status_code=404, detail="Acquirente non trovato")
     
-    # Get seller info - first check users, then listings (for test data)
+    # Generate anonymous code for buyer
+    buyer_code = buyer.get("username")
+    if not buyer_code or buyer_code == "Utente":
+        code_part = data.buyer_id.split("-")[-1][:5].upper()
+        buyer_code = f"Utente_{code_part}"
+    
+    # Get seller info - generate anonymous code
     seller = await db.users.find_one({"id": data.seller_id})
-    seller_username = "Venditore"
     
     if seller:
-        seller_username = seller.get("username", "Venditore")
+        seller_code = seller.get("username")
+        if not seller_code or seller_code == "Utente":
+            code_part = data.seller_id.split("-")[-1][:5].upper()
+            seller_code = f"Utente_{code_part}"
     else:
-        # Seller might be test data - get info from the listing
+        # Seller might be test data - generate anonymous code from seller_id
         listing = await db.listings.find_one({"id": data.listing_id})
         if listing:
-            seller_username = listing.get("seller_name", "Venditore")
+            code_part = data.seller_id.split("-")[-1][:5].upper()
+            seller_code = f"Utente_{code_part}"
         else:
             raise HTTPException(status_code=404, detail="Venditore non trovato")
     
@@ -8280,9 +8289,9 @@ async def create_or_get_conversation(data: ConversationCreate):
         book_isbn=data.book_isbn,
         book_title=data.book_title,
         buyer_id=data.buyer_id,
-        buyer_username=buyer.get("username", "Utente"),
+        buyer_username=buyer_code,
         seller_id=data.seller_id,
-        seller_username=seller_username,
+        seller_username=seller_code,
     )
     
     await db.conversations.insert_one(conversation.dict())
