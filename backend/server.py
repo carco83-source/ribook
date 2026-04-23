@@ -1711,6 +1711,21 @@ async def get_listing_by_id(listing_id: str):
     
     listing.pop('_id', None)
     
+    # Generate anonymous seller code
+    seller_id = listing.get("seller_id", "")
+    seller = await db.users.find_one({"id": seller_id})
+    if seller:
+        seller_username = seller.get("username")
+        if not seller_username or seller_username == "Utente":
+            code_part = seller_id.split("-")[-1][:5].upper()
+            listing["seller_username"] = f"Utente_{code_part}"
+        else:
+            listing["seller_username"] = seller_username
+    else:
+        # Generate anonymous code from seller_id
+        code_part = seller_id.split("-")[-1][:5].upper() if seller_id else "XXXXX"
+        listing["seller_username"] = f"Utente_{code_part}"
+    
     # Carica i dati completi delle cartolibrerie
     bookstore_ids = listing.get("bookstore_ids", [])
     if bookstore_ids:

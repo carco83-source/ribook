@@ -24,43 +24,88 @@ const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 interface Listing {
   id: string;
   seller_id: string;
-  seller_username: string;
-  book_id: string;
-  book_titolo: string;
+  seller_username?: string;
+  seller_name?: string;
+  book_id?: string;
+  book_titolo?: string;
+  book_title?: string;
   book_autore?: string;
   book_autori?: string;
+  book_author?: string;
   book_isbn: string;
   book_materia?: string;
   book_disciplina?: string;
+  book_subject?: string;
   book_classe?: string;
+  book_class?: number;
   prezzo_ministeriale?: number;
   prezzo_copertina?: number;
-  condizione: string;
+  original_price?: number;
+  condizione?: string;
+  condition?: string;
   condition_details?: {
-    sottolineature: number;
-    copertina: number;
-    pagine: number;
-    esercizi: number;
+    // New structure with percentages
+    scritte?: number;
+    evidenziature?: number;
+    pieghe?: number;
+    // Legacy structure (numeric indices)
+    sottolineature?: number;
+    copertina?: number;
+    pagine?: number;
+    esercizi?: number;
   };
-  prezzo_vendita: number;
+  prezzo_vendita?: number;
+  price?: number;
   ha_fascicoli?: boolean;
   fascicoli_totali?: number;
   fascicoli_presenti?: number;
   bookstore_ids?: string[];
   bookstore_names?: string[];
+  bookstores?: any[];
   note?: string;
+  description?: string;
   foto_base64?: string;
-  stato: string;
+  photos?: string[];
+  stato?: string;
+  status?: string;
 }
 
 // Helper functions
 const getListingAuthor = (listing: Listing | null): string => {
   if (!listing) return 'N/A';
-  return listing.book_autore || listing.book_autori || 'N/A';
+  return listing.book_autore || listing.book_autori || listing.book_author || 'N/A';
 };
 const getListingPrice = (listing: Listing | null): number => {
   if (!listing) return 0;
-  return listing.prezzo_ministeriale || listing.prezzo_copertina || 0;
+  return listing.prezzo_ministeriale || listing.prezzo_copertina || listing.original_price || 0;
+};
+const getListingTitle = (listing: Listing | null): string => {
+  if (!listing) return 'N/A';
+  return listing.book_titolo || listing.book_title || 'N/A';
+};
+const getListingCondition = (listing: Listing | null): string => {
+  if (!listing) return 'buono';
+  return listing.condizione || listing.condition || 'buono';
+};
+const getListingSellingPrice = (listing: Listing | null): number => {
+  if (!listing) return 0;
+  return listing.prezzo_vendita || listing.price || 0;
+};
+const getListingSubject = (listing: Listing | null): string => {
+  if (!listing) return '';
+  return listing.book_materia || listing.book_disciplina || listing.book_subject || '';
+};
+const getListingClass = (listing: Listing | null): string => {
+  if (!listing) return '';
+  return listing.book_classe || (listing.book_class ? String(listing.book_class) : '') || '';
+};
+const getListingNotes = (listing: Listing | null): string => {
+  if (!listing) return '';
+  return listing.note || listing.description || '';
+};
+const getListingSellerName = (listing: Listing | null): string => {
+  if (!listing) return 'Venditore';
+  return listing.seller_username || listing.seller_name || 'Venditore';
 };
 
 interface Bookstore {
@@ -153,28 +198,46 @@ export default function ListingDetailScreen() {
     return labels[condition] || condition;
   };
 
+  // Helper functions for percentage-based condition display
+  const getPercentageColor = (percentage: number): string => {
+    if (percentage === 0) return '#4CAF50'; // Green - None
+    if (percentage <= 25) return '#8BC34A'; // Light green - Few
+    if (percentage <= 50) return '#FFC107'; // Yellow - Some
+    if (percentage <= 75) return '#FF9800'; // Orange - Many
+    return '#f44336'; // Red - A lot
+  };
+
+  const getPercentageLabel = (percentage: number): string => {
+    if (percentage === 0) return 'Nessuna (0%)';
+    if (percentage <= 25) return `Poche (${percentage}%)`;
+    if (percentage <= 50) return `Alcune (${percentage}%)`;
+    if (percentage <= 75) return `Molte (${percentage}%)`;
+    return `Tantissime (${percentage}%)`;
+  };
+
   const calculateCommission = () => {
     if (!listing) return { commission: 0, total: 0 };
+    const sellingPrice = getListingSellingPrice(listing);
     if (isPremium) {
-      return { commission: 0, total: listing.prezzo_vendita };
+      return { commission: 0, total: sellingPrice };
     }
-    const commission = listing.prezzo_vendita * 0.17;
-    return { commission, total: listing.prezzo_vendita };
+    const commission = sellingPrice * 0.17;
+    return { commission, total: sellingPrice };
   };
 
   const handleShare = async () => {
     if (!listing) return;
-    
-    const message = `📚 ${listing.book_titolo}\n` +
-      `✍️ ${listing.book_autore}\n` +
-      `💰 Prezzo: €${listing.prezzo_vendita.toFixed(2)}\n` +
-      `📖 Condizione: ${getConditionLabel(listing.condizione)}\n\n` +
+    const sellingPrice = getListingSellingPrice(listing);
+    const message = `📚 ${getListingTitle(listing)}\n` +
+      `✍️ ${getListingAuthor(listing)}\n` +
+      `💰 Prezzo: €${sellingPrice.toFixed(2)}\n` +
+      `📖 Condizione: ${getConditionLabel(getListingCondition(listing))}\n\n` +
       `Trovato su RiLiBro - L'app per scambiare libri scolastici usati a Catanzaro!`;
 
     try {
       await Share.share({
         message,
-        title: `${listing.book_titolo} in vendita su RiLiBro`,
+        title: `${getListingTitle(listing)} in vendita su RiLiBro`,
       });
     } catch (error) {
       console.error('Error sharing:', error);
@@ -183,9 +246,9 @@ export default function ListingDetailScreen() {
 
   const handleShareWhatsApp = async () => {
     if (!listing) return;
-    
-    const message = `📚 *${listing.book_titolo}*\n` +
-      `✍️ ${listing.book_autore}\n` +
+    const sellingPrice = getListingSellingPrice(listing);
+    const message = `📚 *${getListingTitle(listing)}*\n` +
+      `✍️ ${getListingAuthor(listing)}\n` +
       `💰 Prezzo: €${listing.prezzo_vendita.toFixed(2)}\n` +
       `📖 Condizione: ${getConditionLabel(listing.condizione)}\n\n` +
       `Trovato su RiLiBro!`;
@@ -393,22 +456,22 @@ export default function ListingDetailScreen() {
           <Text style={styles.price}>€{(total + commission).toFixed(2)}</Text>
           <View style={styles.conditionBadge}>
             <Text style={styles.conditionText}>
-              {getConditionLabel(listing.condizione)}
+              {getConditionLabel(getListingCondition(listing))}
             </Text>
           </View>
         </View>
 
-        <Text style={styles.title}>{listing.book_titolo}</Text>
-        <Text style={styles.author}>{listing.book_autore}</Text>
+        <Text style={styles.title}>{getListingTitle(listing)}</Text>
+        <Text style={styles.author}>{getListingAuthor(listing)}</Text>
 
         <View style={styles.metaContainer}>
           <View style={styles.metaItem}>
             <Ionicons name="school-outline" size={16} color="#666" />
-            <Text style={styles.metaText}>Classe {listing.book_classe}</Text>
+            <Text style={styles.metaText}>Classe {getListingClass(listing)}</Text>
           </View>
           <View style={styles.metaItem}>
             <Ionicons name="bookmark-outline" size={16} color="#666" />
-            <Text style={styles.metaText}>{listing.book_materia}</Text>
+            <Text style={styles.metaText}>{getListingSubject(listing)}</Text>
           </View>
           <View style={styles.metaItem}>
             <Ionicons name="barcode-outline" size={16} color="#666" />
@@ -416,36 +479,114 @@ export default function ListingDetailScreen() {
           </View>
         </View>
 
-        {/* Condition Details */}
+        {/* Condition Details - NEW Percentage-based display */}
         {listing.condition_details && (
           <View style={styles.conditionDetailsCard}>
-            <Text style={styles.conditionDetailsTitle}>Stato del libro</Text>
-            <View style={styles.conditionGrid}>
-              <View style={styles.conditionItem}>
-                <Text style={styles.conditionItemLabel}>Scritte/evidenziature</Text>
-                <Text style={styles.conditionItemValue}>
-                  {['✨ Nessuna', '✏️ Poche', '🖊️ Molte'][listing.condition_details.sottolineature]}
-                </Text>
+            <Text style={styles.conditionDetailsTitle}>Stato dettagliato del libro</Text>
+            
+            {/* New percentage-based condition details */}
+            {(listing.condition_details.scritte !== undefined || 
+              listing.condition_details.evidenziature !== undefined || 
+              listing.condition_details.pieghe !== undefined) ? (
+              <View style={styles.conditionGrid}>
+                {/* Scritte */}
+                <View style={styles.conditionItemNew}>
+                  <View style={styles.conditionItemHeader}>
+                    <Ionicons name="pencil" size={18} color="#666" />
+                    <Text style={styles.conditionItemLabel}>Scritte a penna/matita</Text>
+                  </View>
+                  <View style={styles.percentageBarContainer}>
+                    <View style={[
+                      styles.percentageBar, 
+                      { 
+                        width: `${listing.condition_details.scritte || 0}%`,
+                        backgroundColor: getPercentageColor(listing.condition_details.scritte || 0)
+                      }
+                    ]} />
+                  </View>
+                  <Text style={[
+                    styles.percentageText,
+                    { color: getPercentageColor(listing.condition_details.scritte || 0) }
+                  ]}>
+                    {getPercentageLabel(listing.condition_details.scritte || 0)}
+                  </Text>
+                </View>
+
+                {/* Evidenziature */}
+                <View style={styles.conditionItemNew}>
+                  <View style={styles.conditionItemHeader}>
+                    <Ionicons name="color-fill" size={18} color="#666" />
+                    <Text style={styles.conditionItemLabel}>Evidenziature</Text>
+                  </View>
+                  <View style={styles.percentageBarContainer}>
+                    <View style={[
+                      styles.percentageBar, 
+                      { 
+                        width: `${listing.condition_details.evidenziature || 0}%`,
+                        backgroundColor: getPercentageColor(listing.condition_details.evidenziature || 0)
+                      }
+                    ]} />
+                  </View>
+                  <Text style={[
+                    styles.percentageText,
+                    { color: getPercentageColor(listing.condition_details.evidenziature || 0) }
+                  ]}>
+                    {getPercentageLabel(listing.condition_details.evidenziature || 0)}
+                  </Text>
+                </View>
+
+                {/* Pieghe */}
+                <View style={styles.conditionItemNew}>
+                  <View style={styles.conditionItemHeader}>
+                    <Ionicons name="document-text" size={18} color="#666" />
+                    <Text style={styles.conditionItemLabel}>Pieghe sulle pagine</Text>
+                  </View>
+                  <View style={styles.percentageBarContainer}>
+                    <View style={[
+                      styles.percentageBar, 
+                      { 
+                        width: `${listing.condition_details.pieghe || 0}%`,
+                        backgroundColor: getPercentageColor(listing.condition_details.pieghe || 0)
+                      }
+                    ]} />
+                  </View>
+                  <Text style={[
+                    styles.percentageText,
+                    { color: getPercentageColor(listing.condition_details.pieghe || 0) }
+                  ]}>
+                    {getPercentageLabel(listing.condition_details.pieghe || 0)}
+                  </Text>
+                </View>
               </View>
-              <View style={styles.conditionItem}>
-                <Text style={styles.conditionItemLabel}>Copertina</Text>
-                <Text style={styles.conditionItemValue}>
-                  {['✨ Integra', '⚠️ Un po\' rovinata', '📉 Molto rovinata'][listing.condition_details.copertina]}
-                </Text>
+            ) : (
+              /* Legacy condition details (fallback) */
+              <View style={styles.conditionGrid}>
+                <View style={styles.conditionItem}>
+                  <Text style={styles.conditionItemLabel}>Scritte/evidenziature</Text>
+                  <Text style={styles.conditionItemValue}>
+                    {['✨ Nessuna', '✏️ Poche', '🖊️ Molte'][listing.condition_details.sottolineature || 0]}
+                  </Text>
+                </View>
+                <View style={styles.conditionItem}>
+                  <Text style={styles.conditionItemLabel}>Copertina</Text>
+                  <Text style={styles.conditionItemValue}>
+                    {['✨ Integra', '⚠️ Un po\' rovinata', '📉 Molto rovinata'][listing.condition_details.copertina || 0]}
+                  </Text>
+                </View>
+                <View style={styles.conditionItem}>
+                  <Text style={styles.conditionItemLabel}>Pagine</Text>
+                  <Text style={styles.conditionItemValue}>
+                    {['✨ Perfette', '📄 Qualche piega', '📚 Molte pieghe'][listing.condition_details.pagine || 0]}
+                  </Text>
+                </View>
+                <View style={styles.conditionItem}>
+                  <Text style={styles.conditionItemLabel}>Esercizi compilati</Text>
+                  <Text style={styles.conditionItemValue}>
+                    {['✨ Nessuno', '📝 Alcuni', '📋 Molti'][listing.condition_details.esercizi || 0]}
+                  </Text>
+                </View>
               </View>
-              <View style={styles.conditionItem}>
-                <Text style={styles.conditionItemLabel}>Pagine</Text>
-                <Text style={styles.conditionItemValue}>
-                  {['✨ Perfette', '📄 Qualche piega', '📚 Molte pieghe'][listing.condition_details.pagine]}
-                </Text>
-              </View>
-              <View style={styles.conditionItem}>
-                <Text style={styles.conditionItemLabel}>Esercizi compilati</Text>
-                <Text style={styles.conditionItemValue}>
-                  {['✨ Nessuno', '📝 Alcuni', '📋 Molti'][listing.condition_details.esercizi]}
-                </Text>
-              </View>
-            </View>
+            )}
           </View>
         )}
 
@@ -596,15 +737,15 @@ export default function ListingDetailScreen() {
 
         <View style={styles.sellerCard}>
           <Ionicons name="person-circle-outline" size={24} color="#1a472a" />
-          <Text style={styles.sellerText}>Venditore: {listing.seller_username}</Text>
+          <Text style={styles.sellerText}>Venditore: {getListingSellerName(listing)}</Text>
         </View>
         
-        {listing.note && (
+        {getListingNotes(listing) ? (
           <View style={styles.noteCard}>
             <Text style={styles.noteTitle}>Note del venditore:</Text>
-            <Text style={styles.noteText}>{listing.note}</Text>
+            <Text style={styles.noteText}>{getListingNotes(listing)}</Text>
           </View>
-        )}
+        ) : null}
 
         {/* Price Display - Simplified */}
         <View style={styles.priceBreakdown}>
@@ -928,6 +1069,34 @@ const styles = StyleSheet.create({
   conditionItemValue: {
     fontSize: 14,
     fontWeight: '500',
+  },
+  // New percentage-based condition styles
+  conditionItemNew: {
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  conditionItemHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  percentageBarContainer: {
+    height: 8,
+    backgroundColor: '#e0e0e0',
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: 4,
+  },
+  percentageBar: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  percentageText: {
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'right',
   },
   fascicoliCard: {
     backgroundColor: '#fff8e1',
