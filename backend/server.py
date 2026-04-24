@@ -594,6 +594,7 @@ class UpdateUserRequest(BaseModel):
     cognome: Optional[str] = None
     email: Optional[str] = None
     telefono: Optional[str] = None
+    iban: Optional[str] = None
     scuola: Optional[str] = None
     classe: Optional[str] = None
     sezione: Optional[str] = None
@@ -617,6 +618,8 @@ async def update_user(user_id: str, update_data: UpdateUserRequest):
         update_fields["email"] = update_data.email
     if update_data.telefono is not None:
         update_fields["telefono"] = update_data.telefono
+    if update_data.iban is not None:
+        update_fields["iban"] = update_data.iban
     if update_data.scuola is not None:
         update_fields["scuola"] = update_data.scuola
     if update_data.classe is not None:

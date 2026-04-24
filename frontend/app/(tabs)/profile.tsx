@@ -147,13 +147,20 @@ export default function ProfileScreen() {
       'Esci',
       'Sei sicuro di voler uscire?',
       async () => {
-        await AsyncStorage.multiRemove([
-          'user_id',
-          'username',
-          'user_nome',
-          'is_premium',
-        ]);
-        router.replace('/');
+        try {
+          await AsyncStorage.multiRemove([
+            'user_id',
+            'username',
+            'user_nome',
+            'is_premium',
+          ]);
+          // Use replace to prevent going back to profile
+          router.replace('/login');
+        } catch (error) {
+          console.error('Logout error:', error);
+          // Force navigate even if storage clear fails
+          router.replace('/login');
+        }
       },
       true
     );

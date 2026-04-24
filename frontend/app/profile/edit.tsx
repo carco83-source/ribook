@@ -15,7 +15,6 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
-import { Picker } from '@react-native-picker/picker';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -30,10 +29,7 @@ export default function EditProfileScreen() {
   const [cognome, setCognome] = useState('');
   const [email, setEmail] = useState('');
   const [telefono, setTelefono] = useState('');
-  const [scuola, setScuola] = useState('');
-  const [classe, setClasse] = useState('');
-  const [sezione, setSezione] = useState('');
-  const [tipoScuola, setTipoScuola] = useState('primo_grado');
+  const [iban, setIban] = useState('');
 
   useEffect(() => {
     loadUserData();
@@ -55,21 +51,43 @@ export default function EditProfileScreen() {
       setCognome(user.cognome || '');
       setEmail(user.email || '');
       setTelefono(user.telefono || '');
-      setScuola(user.scuola || '');
-      setClasse(user.classe || '');
-      setSezione(user.sezione || '');
-      setTipoScuola(user.tipo_scuola || 'primo_grado');
+      setIban(user.iban || '');
     } catch (error) {
       console.error('Error loading user data:', error);
-      Alert.alert('Errore', 'Impossibile caricare i dati del profilo');
+      if (Platform.OS === 'web') {
+        window.alert('Impossibile caricare i dati del profilo');
+      } else {
+        Alert.alert('Errore', 'Impossibile caricare i dati del profilo');
+      }
     } finally {
       setLoading(false);
     }
   };
 
   const handleSave = async () => {
+    // Validazione campi obbligatori
     if (!nome.trim()) {
-      Alert.alert('Errore', 'Il nome è obbligatorio');
+      if (Platform.OS === 'web') {
+        window.alert('Il nome è obbligatorio');
+      } else {
+        Alert.alert('Errore', 'Il nome è obbligatorio');
+      }
+      return;
+    }
+    if (!cognome.trim()) {
+      if (Platform.OS === 'web') {
+        window.alert('Il cognome è obbligatorio');
+      } else {
+        Alert.alert('Errore', 'Il cognome è obbligatorio');
+      }
+      return;
+    }
+    if (!email.trim()) {
+      if (Platform.OS === 'web') {
+        window.alert('L\'email è obbligatoria');
+      } else {
+        Alert.alert('Errore', 'L\'email è obbligatoria');
+      }
       return;
     }
 
@@ -78,29 +96,33 @@ export default function EditProfileScreen() {
       const userId = await AsyncStorage.getItem('user_id');
       
       const updateData: any = {
-        nome,
-        cognome,
-        email,
-        telefono,
+        nome: nome.trim(),
+        cognome: cognome.trim(),
+        email: email.trim().toLowerCase(),
+        telefono: telefono.trim(),
+        iban: iban.trim(),
       };
-
-      // Only include school data if provided (not required for parent accounts)
-      if (scuola.trim()) updateData.scuola = scuola;
-      if (classe.trim()) updateData.classe = classe;
-      if (sezione.trim()) updateData.sezione = sezione;
-      if (tipoScuola) updateData.tipo_scuola = tipoScuola;
 
       await axios.put(`${API_URL}/api/users/${userId}`, updateData);
 
       // Update local storage
       await AsyncStorage.setItem('user_nome', nome);
       
-      Alert.alert('Successo', 'Profilo aggiornato con successo!', [
-        { text: 'OK', onPress: () => router.back() }
-      ]);
+      if (Platform.OS === 'web') {
+        window.alert('Profilo aggiornato con successo!');
+        router.back();
+      } else {
+        Alert.alert('Successo', 'Profilo aggiornato con successo!', [
+          { text: 'OK', onPress: () => router.back() }
+        ]);
+      }
     } catch (error) {
       console.error('Error saving profile:', error);
-      Alert.alert('Errore', 'Impossibile salvare le modifiche');
+      if (Platform.OS === 'web') {
+        window.alert('Impossibile salvare le modifiche');
+      } else {
+        Alert.alert('Errore', 'Impossibile salvare le modifiche');
+      }
     } finally {
       setSaving(false);
     }
@@ -144,7 +166,7 @@ export default function EditProfileScreen() {
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Cognome</Text>
+            <Text style={styles.label}>Cognome *</Text>
             <TextInput
               style={styles.input}
               value={cognome}
@@ -154,7 +176,7 @@ export default function EditProfileScreen() {
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Email</Text>
+            <Text style={styles.label}>Email *</Text>
             <TextInput
               style={styles.input}
               value={email}
@@ -166,7 +188,7 @@ export default function EditProfileScreen() {
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Telefono</Text>
+            <Text style={styles.label}>Telefono (opzionale)</Text>
             <TextInput
               style={styles.input}
               value={telefono}
@@ -176,65 +198,18 @@ export default function EditProfileScreen() {
             />
           </View>
 
-          <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Dati scolastici (Profilo principale)</Text>
-
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Tipo Scuola *</Text>
-            <View style={styles.pickerContainer}>
-              <Picker
-                selectedValue={tipoScuola}
-                onValueChange={setTipoScuola}
-                style={styles.picker}
-              >
-                <Picker.Item label="Scuola Media (I grado)" value="primo_grado" />
-                <Picker.Item label="Scuola Superiore (II grado)" value="secondo_grado" />
-              </Picker>
-            </View>
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Scuola *</Text>
+            <Text style={styles.label}>IBAN (opzionale)</Text>
             <TextInput
               style={styles.input}
-              value={scuola}
-              onChangeText={setScuola}
-              placeholder="Nome della scuola"
+              value={iban}
+              onChangeText={setIban}
+              placeholder="IT60X0542811101000000123456"
+              autoCapitalize="characters"
             />
-          </View>
-
-          <View style={styles.row}>
-            <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
-              <Text style={styles.label}>Classe *</Text>
-              <View style={styles.pickerContainer}>
-                <Picker
-                  selectedValue={classe}
-                  onValueChange={setClasse}
-                  style={styles.picker}
-                >
-                  <Picker.Item label="1ª" value="1" />
-                  <Picker.Item label="2ª" value="2" />
-                  <Picker.Item label="3ª" value="3" />
-                  {tipoScuola === 'secondo_grado' && (
-                    <>
-                      <Picker.Item label="4ª" value="4" />
-                      <Picker.Item label="5ª" value="5" />
-                    </>
-                  )}
-                </Picker>
-              </View>
-            </View>
-
-            <View style={[styles.inputGroup, { flex: 1, marginLeft: 8 }]}>
-              <Text style={styles.label}>Sezione *</Text>
-              <TextInput
-                style={styles.input}
-                value={sezione}
-                onChangeText={setSezione}
-                placeholder="A, B, C..."
-                maxLength={2}
-                autoCapitalize="characters"
-              />
-            </View>
+            <Text style={styles.ibanNote}>
+              L'IBAN non è obbligatorio per la registrazione, ma dovrà essere inserito per poter vendere i libri e ricevere i pagamenti.
+            </Text>
           </View>
 
           <Text style={styles.note}>
@@ -337,6 +312,18 @@ const styles = StyleSheet.create({
     color: '#888',
     marginTop: 8,
     marginBottom: 24,
+  },
+  ibanNote: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 8,
+    fontStyle: 'italic',
+    lineHeight: 18,
+    backgroundColor: '#fff8e1',
+    padding: 10,
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#FF9800',
   },
   saveButton: {
     backgroundColor: '#1a472a',
