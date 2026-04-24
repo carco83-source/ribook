@@ -997,8 +997,9 @@ export default function SellScreen() {
         evidenziatore: evidenziatorePercentuale,
         // Usura Libro
         usura_libro: usuraLibroPercentuale,
-        // Esercizi Svolti
-        esercizi_svolti: eserciziSvoltiPercentuale,
+        // Esercizi Svolti (checkbox)
+        esercizi_penna: eserciziPenna,
+        esercizi_matita: eserciziMatita,
       };
       
       // Usa priceRange per la condizione (nuova formula)
