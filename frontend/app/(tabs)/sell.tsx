@@ -173,25 +173,30 @@ export default function SellScreen() {
     },
   ];
 
-  // Calcolo automatico condizione basato sui NUOVI slider
-  // PESI: Esercizi Svolti (50%) > Condizioni Pagine (35%) > Usura Libro (15%)
+  // Calcolo automatico condizione basato sui slider
+  // PESI DINAMICI in base al valore di Esercizi Svolti
+  // Se esercizi = 0: Condizioni 65%, Usura 35%, Esercizi 0%
+  // Se esercizi = 100: Condizioni 50%, Usura 25%, Esercizi 25%
   const calculateCondition = (): { condition: string; score: number } => {
     // Se il libro è NUOVO, restituisci direttamente 'nuovo'
     if (isNewBook) {
       return { condition: 'nuovo', score: 0 };
     }
     
+    // Calcolo pesi dinamici basati su esercizi svolti
+    const eserciziRatio = eserciziSvoltiPercentuale / 100; // 0 a 1
+    const pesoEsercizi = eserciziRatio * 0.25; // da 0% a 25%
+    const pesoCondizioni = 0.65 - (eserciziRatio * 0.15); // da 65% a 50%
+    const pesoUsura = 0.35 - (eserciziRatio * 0.10); // da 35% a 25%
+    
     // Media delle Condizioni Pagine (penna + matita + evidenziatore) / 3
     const condizioniPagineMedia = (pennaPercentuale + matitaPercentuale + evidenziatorePercentuale) / 3;
     
-    // Calcolo media pesata
-    // ESERCIZI SVOLTI: 50% del peso (impatto maggiore sul prezzo)
-    // CONDIZIONI PAGINE: 35% del peso
-    // USURA LIBRO: 15% del peso (impatto minore)
+    // Calcolo media pesata con pesi dinamici
     const avgDefects = (
-      eserciziSvoltiPercentuale * 0.50 +   // Esercizi svolti peso 50%
-      condizioniPagineMedia * 0.35 +        // Condizioni pagine peso 35%
-      usuraLibroPercentuale * 0.15          // Usura libro peso 15%
+      condizioniPagineMedia * pesoCondizioni +
+      usuraLibroPercentuale * pesoUsura +
+      eserciziSvoltiPercentuale * pesoEsercizi
     );
     
     // Determina condizione finale:
@@ -267,16 +272,24 @@ export default function SellScreen() {
     }
     
     // ========== LIBRO USATO ==========
-    // NUOVI PESI: Esercizi (50%) > Condizioni Pagine (35%) > Usura Libro (15%)
+    // PESI DINAMICI in base al valore di Esercizi Svolti
+    // Se esercizi = 0: Condizioni 65%, Usura 35%, Esercizi 0%
+    // Se esercizi = 100: Condizioni 50%, Usura 25%, Esercizi 25%
+    
+    // Calcolo pesi dinamici basati su esercizi svolti
+    const eserciziRatio = eserciziSvoltiPercentuale / 100; // 0 a 1
+    const pesoEsercizi = eserciziRatio * 0.25; // da 0% a 25%
+    const pesoCondizioni = 0.65 - (eserciziRatio * 0.15); // da 65% a 50%
+    const pesoUsura = 0.35 - (eserciziRatio * 0.10); // da 35% a 25%
     
     // Media delle Condizioni Pagine (penna + matita + evidenziatore) / 3
     const condizioniPagineMedia = (pennaPercentuale + matitaPercentuale + evidenziatorePercentuale) / 3;
     
-    // Calcolo usura totale con i NUOVI pesi (0 → 100 → normalizzato a 0 → 1)
+    // Calcolo usura totale con pesi dinamici (0 → 100 → normalizzato a 0 → 1)
     let usura = (
-      eserciziSvoltiPercentuale * 0.50 +   // Esercizi svolti peso 50% (impatto maggiore)
-      condizioniPagineMedia * 0.35 +        // Condizioni pagine peso 35%
-      usuraLibroPercentuale * 0.15          // Usura libro peso 15% (impatto minore)
+      condizioniPagineMedia * pesoCondizioni +
+      usuraLibroPercentuale * pesoUsura +
+      eserciziSvoltiPercentuale * pesoEsercizi
     ) / 100;
     
     // PREZZO BASE USATO: max 80% del ministeriale (usato perfetto)
@@ -1789,14 +1802,13 @@ export default function SellScreen() {
               {/* Detailed Conditions - disabled if new */}
               <View style={[isNewBook && styles.disabledSection]}>
                 <Text style={[styles.formLabel, isNewBook && styles.disabledText]}>Condizioni del libro</Text>
-                <Text style={styles.sliderHint}>Trascina gli slider: 0% = Perfetto, 100% = Molto presente</Text>
+                <Text style={styles.sliderHint}>Trascina gli slider per indicare lo stato del libro</Text>
                 
                 {/* ============= MACRO CATEGORIA 1: CONDIZIONI PAGINE ============= */}
                 <View style={styles.macroCategory}>
                   <View style={styles.macroCategoryHeader}>
                     <Ionicons name="document-text" size={20} color="#1a472a" />
                     <Text style={styles.macroCategoryTitle}>Condizioni Pagine</Text>
-                    <Text style={styles.macroCategoryWeight}>(peso 35%)</Text>
                   </View>
                   
                   {/* Mini Slider: Penna */}
@@ -1804,9 +1816,6 @@ export default function SellScreen() {
                     <View style={styles.miniSliderHeader}>
                       <Ionicons name="pencil" size={16} color={isNewBook ? "#ccc" : "#666"} />
                       <Text style={[styles.miniSliderLabel, isNewBook && styles.disabledText]}>Penna</Text>
-                      <Text style={[styles.miniSliderValue, { color: getGradientColor(pennaPercentuale) }]}>
-                        {pennaPercentuale}%
-                      </Text>
                     </View>
                     <View style={styles.gradientSliderWrapper}>
                       <View style={styles.gradientTrackBackground} />
@@ -1831,9 +1840,6 @@ export default function SellScreen() {
                     <View style={styles.miniSliderHeader}>
                       <Ionicons name="create-outline" size={16} color={isNewBook ? "#ccc" : "#666"} />
                       <Text style={[styles.miniSliderLabel, isNewBook && styles.disabledText]}>Matita</Text>
-                      <Text style={[styles.miniSliderValue, { color: getGradientColor(matitaPercentuale) }]}>
-                        {matitaPercentuale}%
-                      </Text>
                     </View>
                     <View style={styles.gradientSliderWrapper}>
                       <View style={styles.gradientTrackBackground} />
@@ -1858,9 +1864,6 @@ export default function SellScreen() {
                     <View style={styles.miniSliderHeader}>
                       <Ionicons name="color-fill" size={16} color={isNewBook ? "#ccc" : "#666"} />
                       <Text style={[styles.miniSliderLabel, isNewBook && styles.disabledText]}>Evidenziatore</Text>
-                      <Text style={[styles.miniSliderValue, { color: getGradientColor(evidenziatorePercentuale) }]}>
-                        {evidenziatorePercentuale}%
-                      </Text>
                     </View>
                     <View style={styles.gradientSliderWrapper}>
                       <View style={styles.gradientTrackBackground} />
@@ -1886,7 +1889,6 @@ export default function SellScreen() {
                   <View style={styles.macroCategoryHeader}>
                     <Ionicons name="book" size={20} color="#1a472a" />
                     <Text style={styles.macroCategoryTitle}>Usura del Libro</Text>
-                    <Text style={styles.macroCategoryWeight}>(peso 15%)</Text>
                   </View>
                   <Text style={styles.macroCategoryDescription}>Copertina, pieghe, orecchie, stato generale</Text>
                   
@@ -1894,9 +1896,6 @@ export default function SellScreen() {
                     <View style={styles.sliderHeader}>
                       <Ionicons name="warning-outline" size={18} color={isNewBook ? "#ccc" : "#666"} />
                       <Text style={[styles.sliderLabel, isNewBook && styles.disabledText]}>Livello usura</Text>
-                      <Text style={[styles.sliderValue, { color: getGradientColor(usuraLibroPercentuale) }]}>
-                        {usuraLibroPercentuale}%
-                      </Text>
                     </View>
                     <View style={styles.gradientSliderWrapper}>
                       <View style={styles.gradientTrackBackground} />
@@ -1918,23 +1917,16 @@ export default function SellScreen() {
                 </View>
 
                 {/* ============= MACRO CATEGORIA 3: ESERCIZI SVOLTI ============= */}
-                <View style={[styles.macroCategory, styles.macroCategoryHighlight]}>
+                <View style={styles.macroCategory}>
                   <View style={styles.macroCategoryHeader}>
-                    <Ionicons name="checkbox" size={20} color="#d32f2f" />
-                    <Text style={[styles.macroCategoryTitle, { color: '#d32f2f' }]}>Esercizi Svolti</Text>
-                    <Text style={[styles.macroCategoryWeight, { color: '#d32f2f' }]}>(peso 50%)</Text>
+                    <Ionicons name="checkbox" size={20} color="#1a472a" />
+                    <Text style={styles.macroCategoryTitle}>Esercizi Svolti</Text>
                   </View>
-                  <Text style={styles.macroCategoryDescription}>
-                    Ha il maggior impatto sul prezzo finale
-                  </Text>
                   
                   <View style={styles.sliderContainer}>
                     <View style={styles.sliderHeader}>
-                      <Ionicons name="checkbox-outline" size={18} color={isNewBook ? "#ccc" : "#d32f2f"} />
-                      <Text style={[styles.sliderLabel, isNewBook && styles.disabledText]}>Percentuale esercizi compilati</Text>
-                      <Text style={[styles.sliderValue, { color: getGradientColor(eserciziSvoltiPercentuale) }]}>
-                        {eserciziSvoltiPercentuale}%
-                      </Text>
+                      <Ionicons name="checkbox-outline" size={18} color={isNewBook ? "#ccc" : "#666"} />
+                      <Text style={[styles.sliderLabel, isNewBook && styles.disabledText]}>Livello esercizi compilati</Text>
                     </View>
                     <View style={styles.gradientSliderWrapper}>
                       <View style={styles.gradientTrackBackground} />
