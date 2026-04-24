@@ -9,7 +9,6 @@ import {
   ActivityIndicator,
   Platform,
   Linking,
-  Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -65,11 +64,6 @@ export default function ProfileScreen() {
   const [childProfiles, setChildProfiles] = useState<any[]>([]);
   const [childrenCompatibility, setChildrenCompatibility] = useState<{[key: string]: any}>({});
   const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
-  
-  // Modal lista libri
-  const [showListaModal, setShowListaModal] = useState(false);
-  const [listaHtmlUrl, setListaHtmlUrl] = useState<string | null>(null);
-  const [listaChildName, setListaChildName] = useState<string>('');
 
   useEffect(() => {
     loadUserData();
@@ -172,26 +166,39 @@ export default function ProfileScreen() {
     );
   };
 
-  // Visualizza lista libri in modal
+  // Download PDF lista libri
   const downloadPdf = async (childId: string, childName: string, childClasse: string) => {
     setDownloadingPdf(childId);
     try {
       const userId = await AsyncStorage.getItem('user_id');
-      // Usa l'endpoint HTML invece del PDF per visualizzazione diretta
-      const htmlUrl = `${API_URL}/api/profiles/${userId}/children/${childId}/books-html`;
+      const pdfUrl = `${API_URL}/api/profiles/${userId}/children/${childId}/books-pdf`;
       
       if (Platform.OS === 'web') {
-        // Su web, apri il modal con iframe
-        setListaHtmlUrl(htmlUrl);
-        setListaChildName(childName);
-        setShowListaModal(true);
+        // On web, open PDF in new tab
+        window.open(pdfUrl, '_blank');
       } else {
-        // Su mobile, apri nel browser esterno (si gira il telefono per landscape)
-        await WebBrowser.openBrowserAsync(htmlUrl);
+        // On mobile, download and share
+        const filename = `lista_libri_${childName}_${childClasse}.pdf`;
+        const fileUri = FileSystem.documentDirectory + filename;
+        
+        const downloadResult = await FileSystem.downloadAsync(pdfUrl, fileUri);
+        
+        if (downloadResult.status === 200) {
+          if (await Sharing.isAvailableAsync()) {
+            await Sharing.shareAsync(downloadResult.uri, {
+              mimeType: 'application/pdf',
+              dialogTitle: 'Condividi Lista Libri'
+            });
+          } else {
+            showAlert('PDF Scaricato', `File salvato: ${filename}`);
+          }
+        } else {
+          showAlert('Errore', 'Impossibile scaricare il PDF');
+        }
       }
     } catch (error) {
-      console.error('Error opening list:', error);
-      showAlert('Errore', 'Impossibile aprire la lista');
+      console.error('Error downloading PDF:', error);
+      showAlert('Errore', 'Impossibile generare il PDF');
     } finally {
       setDownloadingPdf(null);
     }
@@ -658,38 +665,6 @@ export default function ProfileScreen() {
           Acquisto libro usato assistito
         </Text>
       </View>
-
-      {/* Modal Lista Libri */}
-      <Modal
-        visible={showListaModal}
-        animationType="slide"
-        transparent={false}
-        onRequestClose={() => setShowListaModal(false)}
-      >
-        <View style={styles.listaModalContainer}>
-          <View style={styles.listaModalHeader}>
-            <Text style={styles.listaModalTitle}>Lista Libri - {listaChildName}</Text>
-            <TouchableOpacity 
-              style={styles.listaModalCloseBtn}
-              onPress={() => setShowListaModal(false)}
-            >
-              <Ionicons name="close" size={28} color="#fff" />
-            </TouchableOpacity>
-          </View>
-          {Platform.OS === 'web' && listaHtmlUrl && (
-            <iframe
-              src={listaHtmlUrl}
-              style={{
-                flex: 1,
-                width: '100%',
-                height: '100%',
-                border: 'none',
-              }}
-              title="Lista Libri"
-            />
-          )}
-        </View>
-      </Modal>
     </ScrollView>
   );
 }
@@ -1668,28 +1643,5 @@ const styles = StyleSheet.create({
     color: '#1a472a',
     fontSize: 14,
     fontWeight: '600',
-  },
-  // Modal Lista Libri styles
-  listaModalContainer: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-  listaModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#1a472a',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 50 : 16,
-  },
-  listaModalTitle: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
-    flex: 1,
-  },
-  listaModalCloseBtn: {
-    padding: 4,
   },
 });
