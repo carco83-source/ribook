@@ -189,8 +189,13 @@ export default function SellScreen() {
     const pesoCondizioni = 0.65 - (eserciziRatio * 0.15); // da 65% a 50%
     const pesoUsura = 0.35 - (eserciziRatio * 0.10); // da 35% a 25%
     
-    // Media delle Condizioni Pagine (penna + matita + evidenziatore) / 3
-    const condizioniPagineMedia = (pennaPercentuale + matitaPercentuale + evidenziatorePercentuale) / 3;
+    // Media PESATA delle Condizioni Pagine:
+    // Scritte a penna: 50%, Pagine evidenziate: 35%, Scritte a matita: 15%
+    const condizioniPagineMedia = (
+      pennaPercentuale * 0.50 +
+      evidenziatorePercentuale * 0.35 +
+      matitaPercentuale * 0.15
+    );
     
     // Calcolo media pesata con pesi dinamici
     const avgDefects = (
@@ -282,8 +287,13 @@ export default function SellScreen() {
     const pesoCondizioni = 0.65 - (eserciziRatio * 0.15); // da 65% a 50%
     const pesoUsura = 0.35 - (eserciziRatio * 0.10); // da 35% a 25%
     
-    // Media delle Condizioni Pagine (penna + matita + evidenziatore) / 3
-    const condizioniPagineMedia = (pennaPercentuale + matitaPercentuale + evidenziatorePercentuale) / 3;
+    // Media PESATA delle Condizioni Pagine:
+    // Scritte a penna: 50%, Pagine evidenziate: 35%, Scritte a matita: 15%
+    const condizioniPagineMedia = (
+      pennaPercentuale * 0.50 +
+      evidenziatorePercentuale * 0.35 +
+      matitaPercentuale * 0.15
+    );
     
     // Calcolo usura totale con pesi dinamici (0 → 100 → normalizzato a 0 → 1)
     let usura = (
@@ -1811,11 +1821,11 @@ export default function SellScreen() {
                     <Text style={styles.macroCategoryTitle}>Condizioni Pagine</Text>
                   </View>
                   
-                  {/* Mini Slider: Penna */}
+                  {/* Mini Slider: Scritte a penna (peso maggiore) */}
                   <View style={styles.miniSliderContainer}>
                     <View style={styles.miniSliderHeader}>
                       <Ionicons name="pencil" size={16} color={isNewBook ? "#ccc" : "#666"} />
-                      <Text style={[styles.miniSliderLabel, isNewBook && styles.disabledText]}>Penna</Text>
+                      <Text style={[styles.miniSliderLabel, isNewBook && styles.disabledText]}>Scritte a penna</Text>
                     </View>
                     <View style={styles.gradientSliderWrapper}>
                       <View style={styles.gradientTrackBackground} />
@@ -1835,35 +1845,11 @@ export default function SellScreen() {
                     </View>
                   </View>
 
-                  {/* Mini Slider: Matita */}
-                  <View style={styles.miniSliderContainer}>
-                    <View style={styles.miniSliderHeader}>
-                      <Ionicons name="create-outline" size={16} color={isNewBook ? "#ccc" : "#666"} />
-                      <Text style={[styles.miniSliderLabel, isNewBook && styles.disabledText]}>Matita</Text>
-                    </View>
-                    <View style={styles.gradientSliderWrapper}>
-                      <View style={styles.gradientTrackBackground} />
-                      <View style={[styles.gradientTrackFill, { width: `${matitaPercentuale}%`, backgroundColor: getGradientColor(matitaPercentuale) }]} />
-                      <Slider
-                        style={styles.gradientSlider}
-                        minimumValue={0}
-                        maximumValue={100}
-                        step={5}
-                        value={matitaPercentuale}
-                        onValueChange={(val) => !isNewBook && setMatitaPercentuale(val)}
-                        minimumTrackTintColor="transparent"
-                        maximumTrackTintColor="transparent"
-                        thumbTintColor={isNewBook ? "#ccc" : getGradientColor(matitaPercentuale)}
-                        disabled={isNewBook}
-                      />
-                    </View>
-                  </View>
-
-                  {/* Mini Slider: Evidenziatore */}
+                  {/* Mini Slider: Pagine evidenziate (peso medio) */}
                   <View style={styles.miniSliderContainer}>
                     <View style={styles.miniSliderHeader}>
                       <Ionicons name="color-fill" size={16} color={isNewBook ? "#ccc" : "#666"} />
-                      <Text style={[styles.miniSliderLabel, isNewBook && styles.disabledText]}>Evidenziatore</Text>
+                      <Text style={[styles.miniSliderLabel, isNewBook && styles.disabledText]}>Pagine evidenziate</Text>
                     </View>
                     <View style={styles.gradientSliderWrapper}>
                       <View style={styles.gradientTrackBackground} />
@@ -1878,6 +1864,30 @@ export default function SellScreen() {
                         minimumTrackTintColor="transparent"
                         maximumTrackTintColor="transparent"
                         thumbTintColor={isNewBook ? "#ccc" : getGradientColor(evidenziatorePercentuale)}
+                        disabled={isNewBook}
+                      />
+                    </View>
+                  </View>
+
+                  {/* Mini Slider: Scritte a matita (peso minore) */}
+                  <View style={styles.miniSliderContainer}>
+                    <View style={styles.miniSliderHeader}>
+                      <Ionicons name="create-outline" size={16} color={isNewBook ? "#ccc" : "#666"} />
+                      <Text style={[styles.miniSliderLabel, isNewBook && styles.disabledText]}>Scritte a matita</Text>
+                    </View>
+                    <View style={styles.gradientSliderWrapper}>
+                      <View style={styles.gradientTrackBackground} />
+                      <View style={[styles.gradientTrackFill, { width: `${matitaPercentuale}%`, backgroundColor: getGradientColor(matitaPercentuale) }]} />
+                      <Slider
+                        style={styles.gradientSlider}
+                        minimumValue={0}
+                        maximumValue={100}
+                        step={5}
+                        value={matitaPercentuale}
+                        onValueChange={(val) => !isNewBook && setMatitaPercentuale(val)}
+                        minimumTrackTintColor="transparent"
+                        maximumTrackTintColor="transparent"
+                        thumbTintColor={isNewBook ? "#ccc" : getGradientColor(matitaPercentuale)}
                         disabled={isNewBook}
                       />
                     </View>
