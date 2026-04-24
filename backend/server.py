@@ -4924,11 +4924,41 @@ async def generate_books_html(user_id: str, child_id: str):
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Lista Libri - {child_nome}</title>
         <style>
+            @page {{ 
+                size: landscape;
+            }}
             * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+            html {{
+                /* Forza orientamento landscape */
+                transform-origin: top left;
+            }}
             body {{ 
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
                 background: #f5f5f5;
                 padding: 10px;
+                min-height: 100vh;
+            }}
+            /* Banner per consigliare rotazione su mobile */
+            .rotate-hint {{
+                display: none;
+                background: #1a472a;
+                color: white;
+                padding: 12px;
+                text-align: center;
+                font-size: 14px;
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                z-index: 1000;
+            }}
+            @media (orientation: portrait) and (max-width: 768px) {{
+                .rotate-hint {{
+                    display: block;
+                }}
+                body {{
+                    padding-top: 50px;
+                }}
             }}
             .header {{
                 background: #1a472a;
@@ -4950,7 +4980,7 @@ async def generate_books_html(user_id: str, child_id: str):
             
             @media (orientation: landscape) {{
                 .books-container {{
-                    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
                 }}
                 .book {{ padding: 10px; }}
             }}
@@ -5027,6 +5057,7 @@ async def generate_books_html(user_id: str, child_id: str):
         </style>
     </head>
     <body>
+        <div class="rotate-hint">📱 Ruota il telefono in orizzontale per una visualizzazione migliore</div>
         <div class="header">
             <h1>RiLiBro</h1>
             <div class="info">Classe {child_classe}{child_sezione} • A.S. 2025/2026</div>
