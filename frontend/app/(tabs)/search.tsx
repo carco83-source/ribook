@@ -316,8 +316,7 @@ export default function SearchScreen() {
         <Ionicons name="chevron-down" size={24} color="#666" />
       </TouchableOpacity>
 
-      {/* Generic Search Box - Only visible when no profile selected */}
-      {!selectedChild && (
+      {/* Generic Search Box - Always visible */}
       <View style={styles.genericSearchContainer}>
         <Text style={styles.genericSearchLabel}>Cerca per ISBN:</Text>
         <View style={styles.genericSearchInputWrapper}>
@@ -328,6 +327,11 @@ export default function SearchScreen() {
             placeholderTextColor="#b0b0b0"
             value={genericSearchQuery}
             onChangeText={handleGenericSearch}
+            onFocus={() => {
+              // Quando si seleziona la barra di ricerca generica, resetta il profilo
+              setSelectedChild(null);
+              setBooks([]);
+            }}
             autoCapitalize="none"
             keyboardType="numeric"
           />
@@ -337,24 +341,27 @@ export default function SearchScreen() {
             </TouchableOpacity>
           )}
         </View>
-        <Text style={styles.searchHintText}>
-          Per essere più precisi è preferibile cercare il testo per codice ISBN che potrai trovare visualizzando la lista dei testi nella sezione{' '}
-          <Text 
-            style={styles.searchHintLink}
-            onPress={() => router.push('/(tabs)/profile')}
-          >
-            Profilo
-          </Text>
-          .
-        </Text>
-        <Text style={styles.miurInfoText}>
-          I testi selezionati per l'acquisto dalla ricerca guidata sono ricavati dai dati del MIUR. Se hai qualche dubbio visualizza la lista e utilizza la ricerca generica per codice ISBN.
-        </Text>
+        {!selectedChild && (
+          <>
+            <Text style={styles.searchHintText}>
+              Per essere più precisi è preferibile cercare il testo per codice ISBN che potrai trovare visualizzando la lista dei testi nella sezione{' '}
+              <Text 
+                style={styles.searchHintLink}
+                onPress={() => router.push('/(tabs)/profile')}
+              >
+                Profilo
+              </Text>
+              .
+            </Text>
+            <Text style={styles.miurInfoText}>
+              I testi selezionati per l'acquisto dalla ricerca guidata sono ricavati dai dati del MIUR. Se hai qualche dubbio visualizza la lista e utilizza la ricerca generica per codice ISBN.
+            </Text>
+          </>
+        )}
         {genericSearchLoading && (
           <ActivityIndicator size="small" color="#1a472a" style={{ marginTop: 8 }} />
         )}
       </View>
-      )}
 
       {/* Generic Search Results */}
       {!selectedChild && genericResults.length > 0 && (
