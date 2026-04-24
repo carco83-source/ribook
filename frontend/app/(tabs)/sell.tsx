@@ -173,7 +173,7 @@ export default function SellScreen() {
   ];
 
   // Calcolo automatico condizione basato sui slider
-  // PESI FISSI: 70% Condizioni Pagine, 30% Usura Libro
+  // PESI FISSI: 75% Condizioni Pagine, 25% Usura Libro
   const calculateCondition = (): { condition: string; score: number } => {
     // Se il libro è NUOVO, restituisci direttamente 'nuovo'
     if (isNewBook) {
@@ -181,31 +181,31 @@ export default function SellScreen() {
     }
     
     // Media PESATA delle Condizioni Pagine:
-    // Scritte a penna: 50%, Pagine evidenziate: 35%, Scritte a matita: 15%
-    // Se esercizi svolti sono flaggati, aggiungi penalità
-    let pennaScore = pennaPercentuale;
-    let matitaScore = matitaPercentuale;
-    if (eserciziPenna) pennaScore = Math.min(100, pennaScore + 20); // Penalità esercizi a penna
-    if (eserciziMatita) matitaScore = Math.min(100, matitaScore + 10); // Penalità esercizi a matita (minore)
-    
+    // Scritte a penna: 50% (peso maggiore - impatto alto)
+    // Pagine evidenziate: 35%
+    // Scritte a matita: 15% (peso minore)
     const condizioniPagineMedia = (
-      pennaScore * 0.50 +
+      pennaPercentuale * 0.50 +
       evidenziatorePercentuale * 0.35 +
-      matitaScore * 0.15
+      matitaPercentuale * 0.15
     );
     
     // Calcolo media pesata con pesi fissi
-    // CONDIZIONI PAGINE: 70%, USURA LIBRO: 30%
-    const avgDefects = (
-      condizioniPagineMedia * 0.70 +
-      usuraLibroPercentuale * 0.30
+    // CONDIZIONI PAGINE: 75%, USURA LIBRO: 25%
+    let avgDefects = (
+      condizioniPagineMedia * 0.75 +
+      usuraLibroPercentuale * 0.25
     );
     
+    // PENALITÀ ESERCIZI SVOLTI: +10% sull'usura totale per ogni flag
+    if (eserciziPenna) avgDefects = Math.min(100, avgDefects + 10);
+    if (eserciziMatita) avgDefects = Math.min(100, avgDefects + 10);
+    
     // Determina condizione finale:
-    // Ottimo: 0-30%, Buono: 30-70%, Accettabile: 70-90%, Scarso: 90-100%
+    // Ottimo: 0-30%, Buono: 31-60%, Accettabile: 61-80%, Scarso: 81-100%
     if (avgDefects <= 30) return { condition: 'ottimo', score: avgDefects };
-    if (avgDefects <= 70) return { condition: 'buono', score: avgDefects };
-    if (avgDefects <= 90) return { condition: 'accettabile', score: avgDefects };
+    if (avgDefects <= 60) return { condition: 'buono', score: avgDefects };
+    if (avgDefects <= 80) return { condition: 'accettabile', score: avgDefects };
     return { condition: 'scarso', score: avgDefects };
   };
 
@@ -274,28 +274,30 @@ export default function SellScreen() {
     }
     
     // ========== LIBRO USATO ==========
-    // PESI FISSI: 70% Condizioni Pagine, 30% Usura Libro
+    // PESI FISSI: 75% Condizioni Pagine, 25% Usura Libro
     
     // Media PESATA delle Condizioni Pagine:
-    // Scritte a penna: 50%, Pagine evidenziate: 35%, Scritte a matita: 15%
-    // Se esercizi svolti sono flaggati, aggiungi penalità
-    let pennaScore = pennaPercentuale;
-    let matitaScore = matitaPercentuale;
-    if (eserciziPenna) pennaScore = Math.min(100, pennaScore + 20); // Penalità esercizi a penna
-    if (eserciziMatita) matitaScore = Math.min(100, matitaScore + 10); // Penalità esercizi a matita
-    
+    // Scritte a penna: 50% (peso maggiore - impatto alto)
+    // Pagine evidenziate: 35%
+    // Scritte a matita: 15% (peso minore)
     const condizioniPagineMedia = (
-      pennaScore * 0.50 +
+      pennaPercentuale * 0.50 +
       evidenziatorePercentuale * 0.35 +
-      matitaScore * 0.15
+      matitaPercentuale * 0.15
     );
     
     // Calcolo usura totale con pesi fissi (0 → 100 → normalizzato a 0 → 1)
-    // CONDIZIONI PAGINE: 70%, USURA LIBRO: 30%
-    let usura = (
-      condizioniPagineMedia * 0.70 +
-      usuraLibroPercentuale * 0.30
-    ) / 100;
+    // CONDIZIONI PAGINE: 75%, USURA LIBRO: 25%
+    let usuraBase = (
+      condizioniPagineMedia * 0.75 +
+      usuraLibroPercentuale * 0.25
+    );
+    
+    // PENALITÀ ESERCIZI SVOLTI: +10% sull'usura totale per ogni flag
+    if (eserciziPenna) usuraBase = Math.min(100, usuraBase + 10);
+    if (eserciziMatita) usuraBase = Math.min(100, usuraBase + 10);
+    
+    let usura = usuraBase / 100;
     
     // PREZZO BASE USATO: max 80% del ministeriale (usato perfetto)
     const maxUsato = prezzoNuovo * 0.80;
@@ -319,12 +321,12 @@ export default function SellScreen() {
     const prezzoBasso = prezzoUsato * 0.90;
     
     // Determina condizione basata su usura
-    // Ottimo: 0-30%, Buono: 30-70%, Accettabile: 70-90%, Scarso: 90-100%
+    // Ottimo: 0-30%, Buono: 31-60%, Accettabile: 61-80%, Scarso: 81-100%
     let condition = 'buono';
     const usuraPercentuale = usura * 100;
     if (usuraPercentuale <= 30) condition = 'ottimo';
-    else if (usuraPercentuale <= 70) condition = 'buono';
-    else if (usuraPercentuale <= 90) condition = 'accettabile';
+    else if (usuraPercentuale <= 60) condition = 'buono';
+    else if (usuraPercentuale <= 80) condition = 'accettabile';
     else condition = 'scarso';
     
     return {
@@ -1992,7 +1994,7 @@ export default function SellScreen() {
                           {condConfig.label}
                         </Text>
                         <Text style={styles.calculatedConditionHint}>
-                          {isNewBook ? 'Libro nuovo' : `Usura del libro: ${Math.round(score)}%`}
+                          {isNewBook ? 'Libro nuovo' : `Condizione Generale: ${Math.round(score)}%`}
                         </Text>
                       </View>
                     </View>
@@ -3464,5 +3466,37 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.8)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  // Checkbox styles
+  checkboxRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    marginBottom: 4,
+    paddingVertical: 4,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: '#1a472a',
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  checkboxChecked: {
+    backgroundColor: '#1a472a',
+    borderColor: '#1a472a',
+  },
+  checkboxDisabled: {
+    borderColor: '#ccc',
+    backgroundColor: '#f5f5f5',
+  },
+  checkboxLabel: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '500',
   },
 });
