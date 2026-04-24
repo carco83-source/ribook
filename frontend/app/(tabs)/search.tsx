@@ -347,6 +347,9 @@ export default function SearchScreen() {
           </Text>
           .
         </Text>
+        <Text style={styles.miurInfoText}>
+          I testi selezionati per l'acquisto dalla ricerca guidata sono ricavati dai dati del MIUR. Se hai qualche dubbio visualizza la lista e utilizza la ricerca generica per codice ISBN.
+        </Text>
         {genericSearchLoading && (
           <ActivityIndicator size="small" color="#1a472a" style={{ marginTop: 8 }} />
         )}
@@ -400,13 +403,7 @@ export default function SearchScreen() {
 
       {/* Content */}
       {!selectedChild && genericResults.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Ionicons name="person-add" size={64} color="#ccc" />
-          <Text style={styles.emptyText}>Seleziona un profilo</Text>
-          <Text style={styles.emptySubtext}>
-            Tocca sopra per scegliere per quale figlio cercare i libri da comprare
-          </Text>
-        </View>
+        null /* Rimosso placeholder profilo - ora mostra solo area vuota */
       ) : loadingBooks ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#1a472a" />
@@ -1200,6 +1197,18 @@ const styles = StyleSheet.create({
     color: '#1a472a',
     fontWeight: 'bold',
     textDecorationLine: 'underline',
+  },
+  miurInfoText: {
+    fontSize: 13,
+    color: '#777',
+    marginTop: 16,
+    lineHeight: 20,
+    fontStyle: 'italic',
+    backgroundColor: '#f5f5f5',
+    padding: 12,
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#1a472a',
   },
   profileSelectorEmpty: {
     height: 8,
