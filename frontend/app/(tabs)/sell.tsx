@@ -94,10 +94,21 @@ export default function SellScreen() {
   
   // Form fields
   const [listingPhotos, setListingPhotos] = useState<string[]>([]);
-  const [hasWritings, setHasWritings] = useState(0); // Slider 0-100
-  const [hasHighlights, setHasHighlights] = useState(0); // Slider 0-100
-  const [hasFolds, setHasFolds] = useState(0); // Slider 0-100
-  // coverCondition rimosso - ora abbiamo solo 3 slider
+  const [hasWritings, setHasWritings] = useState(0); // RIMOSSO - ora in condizioni pagine
+  const [hasHighlights, setHasHighlights] = useState(0); // RIMOSSO - ora in condizioni pagine
+  const [hasFolds, setHasFolds] = useState(0); // RIMOSSO - ora in usura libro
+  
+  // NUOVA STRUTTURA CONDIZIONI
+  // 1. CONDIZIONI PAGINE - 3 mini slider
+  const [pennaPercentuale, setPennaPercentuale] = useState(0); // Penna 0-100%
+  const [matitaPercentuale, setMatitaPercentuale] = useState(0); // Matita 0-100%
+  const [evidenziatorePercentuale, setEvidenziatorePercentuale] = useState(0); // Evidenziatore 0-100%
+  
+  // 2. USURA DEL LIBRO - slider singolo
+  const [usuraLibroPercentuale, setUsuraLibroPercentuale] = useState(0); // 0-100%
+  
+  // 3. ESERCIZI SVOLTI - slider singolo (PESO MAGGIORE)
+  const [eserciziSvoltiPercentuale, setEserciziSvoltiPercentuale] = useState(0); // 0-100%
   const [selectedBookshop, setSelectedBookshop] = useState('');
   const [notes, setNotes] = useState('');
   const [creatingListing, setCreatingListing] = useState(false);
@@ -162,20 +173,25 @@ export default function SellScreen() {
     },
   ];
 
-  // Calcolo automatico condizione basato su slider (media pesata)
-  // NOTA: Rimosso slider copertina - ora ci sono solo 3 slider
+  // Calcolo automatico condizione basato sui NUOVI slider
+  // PESI: Esercizi Svolti (50%) > Condizioni Pagine (35%) > Usura Libro (15%)
   const calculateCondition = (): { condition: string; score: number } => {
     // Se il libro è NUOVO, restituisci direttamente 'nuovo'
     if (isNewBook) {
       return { condition: 'nuovo', score: 0 };
     }
     
-    // Media pesata dei difetti (0 = perfetto, 100 = molto rovinato)
-    // Solo 3 slider: Scritte, Evidenziature, Pieghe - totale 100%
+    // Media delle Condizioni Pagine (penna + matita + evidenziatore) / 3
+    const condizioniPagineMedia = (pennaPercentuale + matitaPercentuale + evidenziatorePercentuale) / 3;
+    
+    // Calcolo media pesata
+    // ESERCIZI SVOLTI: 50% del peso (impatto maggiore sul prezzo)
+    // CONDIZIONI PAGINE: 35% del peso
+    // USURA LIBRO: 15% del peso (impatto minore)
     const avgDefects = (
-      hasWritings * 0.40 +      // Scritte peso 40%
-      hasHighlights * 0.35 +    // Evidenziature peso 35%
-      hasFolds * 0.25           // Pieghe peso 25%
+      eserciziSvoltiPercentuale * 0.50 +   // Esercizi svolti peso 50%
+      condizioniPagineMedia * 0.35 +        // Condizioni pagine peso 35%
+      usuraLibroPercentuale * 0.15          // Usura libro peso 15%
     );
     
     // Determina condizione finale:
@@ -251,18 +267,16 @@ export default function SellScreen() {
     }
     
     // ========== LIBRO USATO ==========
-    // Pesi difetti
-    const pesi = {
-      scritte: 0.40,
-      evidenziature: 0.35,
-      pieghe: 0.25
-    };
+    // NUOVI PESI: Esercizi (50%) > Condizioni Pagine (35%) > Usura Libro (15%)
     
-    // Calcolo usura (0 → 1)
+    // Media delle Condizioni Pagine (penna + matita + evidenziatore) / 3
+    const condizioniPagineMedia = (pennaPercentuale + matitaPercentuale + evidenziatorePercentuale) / 3;
+    
+    // Calcolo usura totale con i NUOVI pesi (0 → 100 → normalizzato a 0 → 1)
     let usura = (
-      hasWritings * pesi.scritte +
-      hasHighlights * pesi.evidenziature +
-      hasFolds * pesi.pieghe
+      eserciziSvoltiPercentuale * 0.50 +   // Esercizi svolti peso 50% (impatto maggiore)
+      condizioniPagineMedia * 0.35 +        // Condizioni pagine peso 35%
+      usuraLibroPercentuale * 0.15          // Usura libro peso 15% (impatto minore)
     ) / 100;
     
     // PREZZO BASE USATO: max 80% del ministeriale (usato perfetto)
@@ -957,11 +971,16 @@ export default function SellScreen() {
       // Get selected bookshop details
       const selectedShopsDetails = bookshopsData.filter(b => selectedBookshops.includes(b.id));
       
-      // Prepare condition details (copertina rimossa)
+      // Prepare condition details (NUOVA STRUTTURA)
       const conditionDetails = {
-        scritte: hasWritings,
-        evidenziature: hasHighlights,
-        pieghe: hasFolds,
+        // Condizioni Pagine (3 mini slider)
+        penna: pennaPercentuale,
+        matita: matitaPercentuale,
+        evidenziatore: evidenziatorePercentuale,
+        // Usura Libro
+        usura_libro: usuraLibroPercentuale,
+        // Esercizi Svolti
+        esercizi_svolti: eserciziSvoltiPercentuale,
       };
       
       // Usa priceRange per la condizione (nuova formula)
@@ -1770,89 +1789,169 @@ export default function SellScreen() {
               {/* Detailed Conditions - disabled if new */}
               <View style={[isNewBook && styles.disabledSection]}>
                 <Text style={[styles.formLabel, isNewBook && styles.disabledText]}>Condizioni del libro</Text>
-                <Text style={styles.sliderHint}>Trascina gli slider: 0% = Perfetto, 100% = Molto rovinato</Text>
+                <Text style={styles.sliderHint}>Trascina gli slider: 0% = Perfetto, 100% = Molto presente</Text>
                 
-                {/* Slider Scritte */}
-                <View style={styles.sliderContainer}>
-                  <View style={styles.sliderHeader}>
-                    <Ionicons name="pencil" size={18} color={isNewBook ? "#ccc" : "#666"} />
-                    <Text style={[styles.sliderLabel, isNewBook && styles.disabledText]}>Scritte (penna/matita)</Text>
-                    <Text style={[styles.sliderValue, { color: getGradientColor(hasWritings) }]}>
-                      {hasWritings}%
-                    </Text>
+                {/* ============= MACRO CATEGORIA 1: CONDIZIONI PAGINE ============= */}
+                <View style={styles.macroCategory}>
+                  <View style={styles.macroCategoryHeader}>
+                    <Ionicons name="document-text" size={20} color="#1a472a" />
+                    <Text style={styles.macroCategoryTitle}>Condizioni Pagine</Text>
+                    <Text style={styles.macroCategoryWeight}>(peso 35%)</Text>
                   </View>
-                  {/* Custom Gradient Track */}
-                  <View style={styles.gradientSliderWrapper}>
-                    <View style={styles.gradientTrackBackground} />
-                    <View style={[styles.gradientTrackFill, { width: `${hasWritings}%`, backgroundColor: getGradientColor(hasWritings) }]} />
-                    <Slider
-                      style={styles.gradientSlider}
-                      minimumValue={0}
-                      maximumValue={100}
-                      step={5}
-                      value={hasWritings}
-                      onValueChange={(val) => !isNewBook && setHasWritings(val)}
-                      minimumTrackTintColor="transparent"
-                      maximumTrackTintColor="transparent"
-                      thumbTintColor={isNewBook ? "#ccc" : getGradientColor(hasWritings)}
-                      disabled={isNewBook}
-                    />
+                  
+                  {/* Mini Slider: Penna */}
+                  <View style={styles.miniSliderContainer}>
+                    <View style={styles.miniSliderHeader}>
+                      <Ionicons name="pencil" size={16} color={isNewBook ? "#ccc" : "#666"} />
+                      <Text style={[styles.miniSliderLabel, isNewBook && styles.disabledText]}>Penna</Text>
+                      <Text style={[styles.miniSliderValue, { color: getGradientColor(pennaPercentuale) }]}>
+                        {pennaPercentuale}%
+                      </Text>
+                    </View>
+                    <View style={styles.gradientSliderWrapper}>
+                      <View style={styles.gradientTrackBackground} />
+                      <View style={[styles.gradientTrackFill, { width: `${pennaPercentuale}%`, backgroundColor: getGradientColor(pennaPercentuale) }]} />
+                      <Slider
+                        style={styles.gradientSlider}
+                        minimumValue={0}
+                        maximumValue={100}
+                        step={5}
+                        value={pennaPercentuale}
+                        onValueChange={(val) => !isNewBook && setPennaPercentuale(val)}
+                        minimumTrackTintColor="transparent"
+                        maximumTrackTintColor="transparent"
+                        thumbTintColor={isNewBook ? "#ccc" : getGradientColor(pennaPercentuale)}
+                        disabled={isNewBook}
+                      />
+                    </View>
+                  </View>
+
+                  {/* Mini Slider: Matita */}
+                  <View style={styles.miniSliderContainer}>
+                    <View style={styles.miniSliderHeader}>
+                      <Ionicons name="create-outline" size={16} color={isNewBook ? "#ccc" : "#666"} />
+                      <Text style={[styles.miniSliderLabel, isNewBook && styles.disabledText]}>Matita</Text>
+                      <Text style={[styles.miniSliderValue, { color: getGradientColor(matitaPercentuale) }]}>
+                        {matitaPercentuale}%
+                      </Text>
+                    </View>
+                    <View style={styles.gradientSliderWrapper}>
+                      <View style={styles.gradientTrackBackground} />
+                      <View style={[styles.gradientTrackFill, { width: `${matitaPercentuale}%`, backgroundColor: getGradientColor(matitaPercentuale) }]} />
+                      <Slider
+                        style={styles.gradientSlider}
+                        minimumValue={0}
+                        maximumValue={100}
+                        step={5}
+                        value={matitaPercentuale}
+                        onValueChange={(val) => !isNewBook && setMatitaPercentuale(val)}
+                        minimumTrackTintColor="transparent"
+                        maximumTrackTintColor="transparent"
+                        thumbTintColor={isNewBook ? "#ccc" : getGradientColor(matitaPercentuale)}
+                        disabled={isNewBook}
+                      />
+                    </View>
+                  </View>
+
+                  {/* Mini Slider: Evidenziatore */}
+                  <View style={styles.miniSliderContainer}>
+                    <View style={styles.miniSliderHeader}>
+                      <Ionicons name="color-fill" size={16} color={isNewBook ? "#ccc" : "#666"} />
+                      <Text style={[styles.miniSliderLabel, isNewBook && styles.disabledText]}>Evidenziatore</Text>
+                      <Text style={[styles.miniSliderValue, { color: getGradientColor(evidenziatorePercentuale) }]}>
+                        {evidenziatorePercentuale}%
+                      </Text>
+                    </View>
+                    <View style={styles.gradientSliderWrapper}>
+                      <View style={styles.gradientTrackBackground} />
+                      <View style={[styles.gradientTrackFill, { width: `${evidenziatorePercentuale}%`, backgroundColor: getGradientColor(evidenziatorePercentuale) }]} />
+                      <Slider
+                        style={styles.gradientSlider}
+                        minimumValue={0}
+                        maximumValue={100}
+                        step={5}
+                        value={evidenziatorePercentuale}
+                        onValueChange={(val) => !isNewBook && setEvidenziatorePercentuale(val)}
+                        minimumTrackTintColor="transparent"
+                        maximumTrackTintColor="transparent"
+                        thumbTintColor={isNewBook ? "#ccc" : getGradientColor(evidenziatorePercentuale)}
+                        disabled={isNewBook}
+                      />
+                    </View>
                   </View>
                 </View>
 
-                {/* Slider Evidenziature */}
-                <View style={styles.sliderContainer}>
-                  <View style={styles.sliderHeader}>
-                    <Ionicons name="color-fill" size={18} color={isNewBook ? "#ccc" : "#666"} />
-                    <Text style={[styles.sliderLabel, isNewBook && styles.disabledText]}>Evidenziature</Text>
-                    <Text style={[styles.sliderValue, { color: getGradientColor(hasHighlights) }]}>
-                      {hasHighlights}%
-                    </Text>
+                {/* ============= MACRO CATEGORIA 2: USURA DEL LIBRO ============= */}
+                <View style={styles.macroCategory}>
+                  <View style={styles.macroCategoryHeader}>
+                    <Ionicons name="book" size={20} color="#1a472a" />
+                    <Text style={styles.macroCategoryTitle}>Usura del Libro</Text>
+                    <Text style={styles.macroCategoryWeight}>(peso 15%)</Text>
                   </View>
-                  {/* Custom Gradient Track */}
-                  <View style={styles.gradientSliderWrapper}>
-                    <View style={styles.gradientTrackBackground} />
-                    <View style={[styles.gradientTrackFill, { width: `${hasHighlights}%`, backgroundColor: getGradientColor(hasHighlights) }]} />
-                    <Slider
-                      style={styles.gradientSlider}
-                      minimumValue={0}
-                      maximumValue={100}
-                      step={5}
-                      value={hasHighlights}
-                      onValueChange={(val) => !isNewBook && setHasHighlights(val)}
-                      minimumTrackTintColor="transparent"
-                      maximumTrackTintColor="transparent"
-                      thumbTintColor={isNewBook ? "#ccc" : getGradientColor(hasHighlights)}
-                      disabled={isNewBook}
-                    />
+                  <Text style={styles.macroCategoryDescription}>Copertina, pieghe, orecchie, stato generale</Text>
+                  
+                  <View style={styles.sliderContainer}>
+                    <View style={styles.sliderHeader}>
+                      <Ionicons name="warning-outline" size={18} color={isNewBook ? "#ccc" : "#666"} />
+                      <Text style={[styles.sliderLabel, isNewBook && styles.disabledText]}>Livello usura</Text>
+                      <Text style={[styles.sliderValue, { color: getGradientColor(usuraLibroPercentuale) }]}>
+                        {usuraLibroPercentuale}%
+                      </Text>
+                    </View>
+                    <View style={styles.gradientSliderWrapper}>
+                      <View style={styles.gradientTrackBackground} />
+                      <View style={[styles.gradientTrackFill, { width: `${usuraLibroPercentuale}%`, backgroundColor: getGradientColor(usuraLibroPercentuale) }]} />
+                      <Slider
+                        style={styles.gradientSlider}
+                        minimumValue={0}
+                        maximumValue={100}
+                        step={5}
+                        value={usuraLibroPercentuale}
+                        onValueChange={(val) => !isNewBook && setUsuraLibroPercentuale(val)}
+                        minimumTrackTintColor="transparent"
+                        maximumTrackTintColor="transparent"
+                        thumbTintColor={isNewBook ? "#ccc" : getGradientColor(usuraLibroPercentuale)}
+                        disabled={isNewBook}
+                      />
+                    </View>
                   </View>
                 </View>
 
-                {/* Slider Pieghe/Orecchie */}
-                <View style={styles.sliderContainer}>
-                  <View style={styles.sliderHeader}>
-                    <Ionicons name="document" size={18} color={isNewBook ? "#ccc" : "#666"} />
-                    <Text style={[styles.sliderLabel, isNewBook && styles.disabledText]}>Orecchie/Pieghe</Text>
-                    <Text style={[styles.sliderValue, { color: getGradientColor(hasFolds) }]}>
-                      {hasFolds}%
-                    </Text>
+                {/* ============= MACRO CATEGORIA 3: ESERCIZI SVOLTI ============= */}
+                <View style={[styles.macroCategory, styles.macroCategoryHighlight]}>
+                  <View style={styles.macroCategoryHeader}>
+                    <Ionicons name="checkbox" size={20} color="#d32f2f" />
+                    <Text style={[styles.macroCategoryTitle, { color: '#d32f2f' }]}>Esercizi Svolti</Text>
+                    <Text style={[styles.macroCategoryWeight, { color: '#d32f2f' }]}>(peso 50%)</Text>
                   </View>
-                  {/* Custom Gradient Track */}
-                  <View style={styles.gradientSliderWrapper}>
-                    <View style={styles.gradientTrackBackground} />
-                    <View style={[styles.gradientTrackFill, { width: `${hasFolds}%`, backgroundColor: getGradientColor(hasFolds) }]} />
-                    <Slider
-                      style={styles.gradientSlider}
-                      minimumValue={0}
-                      maximumValue={100}
-                      step={5}
-                      value={hasFolds}
-                      onValueChange={(val) => !isNewBook && setHasFolds(val)}
-                      minimumTrackTintColor="transparent"
-                      maximumTrackTintColor="transparent"
-                      thumbTintColor={isNewBook ? "#ccc" : getGradientColor(hasFolds)}
-                      disabled={isNewBook}
-                    />
+                  <Text style={styles.macroCategoryDescription}>
+                    Ha il maggior impatto sul prezzo finale
+                  </Text>
+                  
+                  <View style={styles.sliderContainer}>
+                    <View style={styles.sliderHeader}>
+                      <Ionicons name="checkbox-outline" size={18} color={isNewBook ? "#ccc" : "#d32f2f"} />
+                      <Text style={[styles.sliderLabel, isNewBook && styles.disabledText]}>Percentuale esercizi compilati</Text>
+                      <Text style={[styles.sliderValue, { color: getGradientColor(eserciziSvoltiPercentuale) }]}>
+                        {eserciziSvoltiPercentuale}%
+                      </Text>
+                    </View>
+                    <View style={styles.gradientSliderWrapper}>
+                      <View style={styles.gradientTrackBackground} />
+                      <View style={[styles.gradientTrackFill, { width: `${eserciziSvoltiPercentuale}%`, backgroundColor: getGradientColor(eserciziSvoltiPercentuale) }]} />
+                      <Slider
+                        style={styles.gradientSlider}
+                        minimumValue={0}
+                        maximumValue={100}
+                        step={5}
+                        value={eserciziSvoltiPercentuale}
+                        onValueChange={(val) => !isNewBook && setEserciziSvoltiPercentuale(val)}
+                        minimumTrackTintColor="transparent"
+                        maximumTrackTintColor="transparent"
+                        thumbTintColor={isNewBook ? "#ccc" : getGradientColor(eserciziSvoltiPercentuale)}
+                        disabled={isNewBook}
+                      />
+                    </View>
                   </View>
                 </View>
               </View>
@@ -2576,6 +2675,71 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 50,
     zIndex: 10,
+  },
+  // ========== NUOVI STILI MACRO CATEGORIE ==========
+  macroCategory: {
+    marginBottom: 20,
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  macroCategoryHighlight: {
+    borderColor: '#ffcdd2',
+    backgroundColor: '#fff8f8',
+  },
+  macroCategoryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  macroCategoryTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1a472a',
+    flex: 1,
+  },
+  macroCategoryWeight: {
+    fontSize: 12,
+    color: '#888',
+    fontWeight: '500',
+  },
+  macroCategoryDescription: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 12,
+    marginLeft: 28,
+  },
+  // Mini slider per Condizioni Pagine
+  miniSliderContainer: {
+    marginBottom: 10,
+    backgroundColor: '#f5f5f5',
+    padding: 10,
+    borderRadius: 8,
+  },
+  miniSliderHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  miniSliderLabel: {
+    flex: 1,
+    fontSize: 13,
+    color: '#444',
+  },
+  miniSliderValue: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    minWidth: 35,
+    textAlign: 'right',
   },
   // Pulsante Scatta inline
   photoScattaBtn: {
