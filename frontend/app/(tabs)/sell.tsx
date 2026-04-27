@@ -15,7 +15,7 @@ import {
   Pressable,
   Platform,
 } from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
@@ -72,6 +72,8 @@ const CONDITION_OPTIONS = [
 
 export default function SellScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ isbn?: string; titolo?: string; prezzo?: string }>();
+  
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -453,6 +455,53 @@ export default function SellScreen() {
     setRefreshing(true);
     loadData();
   };
+
+  // Gestione parametri dalla URL (quando si clicca su un libro vendibile dal Radar)
+  useEffect(() => {
+    const handleParamsFromRadar = async () => {
+      if (params.isbn && userId) {
+        // Cerca il libro con l'ISBN fornito
+        setManualISBN(params.isbn);
+        setShowISBNSearch(true);
+        
+        // Cerca automaticamente il libro
+        try {
+          setSearchingISBN(true);
+          const response = await axios.get(`${API_URL}/api/books/search?isbn=${params.isbn}`);
+          
+          if (response.data && response.data.length > 0) {
+            const book = response.data[0];
+            setFoundBook(book);
+            
+            // Imposta automaticamente il libro e apri il form
+            const bookData: Book = {
+              id: book.id || `manual-${params.isbn}`,
+              isbn: params.isbn,
+              titolo: book.titolo || params.titolo || 'Libro non trovato',
+              autori: book.autori || '',
+              disciplina: book.disciplina || '',
+              editore: book.editore || '',
+              prezzo_copertina: book.prezzo_copertina || parseFloat(params.prezzo || '0') || 0,
+            };
+            
+            setSelectedBook(bookData);
+            setShowISBNSearch(false);
+            setShowListingForm(true);
+            
+            // Carica la copertina
+            const coverUrl = `https://www.ibs.it/images/${params.isbn}_0_0_0_536_0.jpg`;
+            setAutoCoverUrl(coverUrl);
+          }
+        } catch (error) {
+          console.error('Error searching book from params:', error);
+        } finally {
+          setSearchingISBN(false);
+        }
+      }
+    };
+    
+    handleParamsFromRadar();
+  }, [params.isbn, userId]);
 
   const selectChildForSelling = async (child: ChildProfile) => {
     setSelectedChild(child);

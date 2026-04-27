@@ -538,7 +538,7 @@ export default function RadarScreen() {
                       <TouchableOpacity 
                         key={idx} 
                         style={[styles.sampleBookItem, styles.sampleBookItemClickable]}
-                        onPress={() => router.push('/(tabs)/sell')}
+                        onPress={() => router.push(`/(tabs)/sell?isbn=${book.isbn}&titolo=${encodeURIComponent(book.titolo || '')}&prezzo=${prezzoNuovo}`)}
                       >
                         {coverUrl && (
                           <Image 
