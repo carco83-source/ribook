@@ -20,7 +20,9 @@
         "backgroundColor": "#1a5c4c"
       },
       "edgeToEdgeEnabled": true,
-      "permissions": ["CAMERA"]
+      "permissions": [
+        "CAMERA"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -44,7 +46,8 @@
           "cameraPermission": "Scansiona il codice a barre dei libri",
           "barcodeScannerEnabled": true
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true
