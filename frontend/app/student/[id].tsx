@@ -7,11 +7,15 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   Linking,
+  Platform,
+  Alert,
 } from 'react-native';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:8001';
 
@@ -31,6 +35,18 @@ interface CompatibilityData {
     costo_totale: number;
     libri?: any[];
   };
+  vendere?: {
+    totale_vendibili: number;
+    totale_non_vendibili?: number;
+    classe_destinazione: number;
+    libri_vendibili?: any[];
+  };
+  comprare?: {
+    totale_usati: number;
+    risparmio_totale: number;
+    classe_origine: number;
+    libri_usati?: any[];
+  };
   tetto_spesa?: {
     tetto_ministeriale: number;
     tetto_con_deroga_10: number;
@@ -43,15 +59,6 @@ interface CompatibilityData {
     percentuale_sforamento: number;
     differenza: number;
     riferimento_normativo: string;
-  };
-  vendere?: {
-    totale_vendibili: number;
-    classe_destinazione: number;
-  };
-  comprare?: {
-    totale_usati: number;
-    risparmio_totale: number;
-    classe_origine: number;
   };
 }
 
@@ -67,6 +74,14 @@ interface SchoolData {
   telefono?: string;
 }
 
+const showAlert = (title: string, message: string) => {
+  if (Platform.OS === 'web') {
+    window.alert(`${title}\n\n${message}`);
+  } else {
+    Alert.alert(title, message);
+  }
+};
+
 export default function StudentDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -76,6 +91,7 @@ export default function StudentDetailScreen() {
   const [child, setChild] = useState<ChildProfile | null>(null);
   const [compatibility, setCompatibility] = useState<CompatibilityData | null>(null);
   const [schoolData, setSchoolData] = useState<SchoolData | null>(null);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -134,6 +150,47 @@ export default function StudentDetailScreen() {
     }
   };
 
+  // Download PDF directly
+  const downloadPdf = async () => {
+    if (!child || !userId) return;
+    
+    setDownloadingPdf(true);
+    try {
+      const isMedia = child.tipo_scuola === 'primo_grado';
+      const tipoLabel = isMedia ? 'MEDIA' : 'SUP';
+      const pdfUrl = `${API_URL}/api/profiles/${userId}/children/${child.id}/books-pdf`;
+      
+      if (Platform.OS === 'web') {
+        // On web, open PDF in new tab
+        window.open(pdfUrl, '_blank');
+      } else {
+        // On mobile, download and share
+        const filename = `lista_libri_${child.nome_figlio}_${child.classe}${tipoLabel}.pdf`;
+        const fileUri = FileSystem.documentDirectory + filename;
+        
+        const downloadResult = await FileSystem.downloadAsync(pdfUrl, fileUri);
+        
+        if (downloadResult.status === 200) {
+          if (await Sharing.isAvailableAsync()) {
+            await Sharing.shareAsync(downloadResult.uri, {
+              mimeType: 'application/pdf',
+              dialogTitle: 'Condividi Lista Libri'
+            });
+          } else {
+            showAlert('PDF Scaricato', `File salvato: ${filename}`);
+          }
+        } else {
+          showAlert('Errore', 'Impossibile scaricare il PDF');
+        }
+      }
+    } catch (error) {
+      console.error('Error downloading PDF:', error);
+      showAlert('Errore', 'Si è verificato un errore durante il download');
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
   const getClasseLabel = (classe: number | string): string => {
     const classeNum = typeof classe === 'string' ? parseInt(classe) : classe;
     const nomiClassi: { [key: number]: string } = {
@@ -157,6 +214,48 @@ export default function StudentDetailScreen() {
     }
   };
 
+  // Calcolo corretto dei totali (come in profile.tsx)
+  const calculateTotals = () => {
+    if (!compatibility) return null;
+    
+    // Libri che possono essere comprati usati (ma calcoliamo il prezzo nuovo)
+    const libriUsati = compatibility.comprare?.libri_usati || [];
+    const costoUsatiSeNuovi = libriUsati.reduce((sum: number, libro: any) => 
+      sum + (libro.prezzo_copertina || libro.prezzo_nuovo || 0), 0);
+    
+    // Libri che devono essere comprati nuovi
+    const libriNuovi = compatibility.nuovi?.libri || [];
+    const costoNuovi = libriNuovi.reduce((sum: number, libro: any) => 
+      sum + (libro.prezzo_copertina || libro.prezzo || 0), 0);
+    
+    // TOTALE SE TUTTI NUOVI = somma prezzi copertina
+    const totaleSeTuttiNuovi = costoUsatiSeNuovi + costoNuovi;
+    
+    // Numero totale libri da acquistare
+    const numLibriUsati = compatibility.comprare?.totale_usati || libriUsati.length || 0;
+    const numLibriNuovi = compatibility.nuovi?.totale || libriNuovi.length || 0;
+    const totaleLibriDaComprare = numLibriUsati + numLibriNuovi;
+    
+    // SPESA STIMATA: con libri usati (risparmio usando usati)
+    // Costo usati al prezzo usato (50% del nuovo)
+    const costoUsatiReale = libriUsati.reduce((sum: number, libro: any) => 
+      sum + (libro.prezzo_usato || (libro.prezzo_copertina || 0) * 0.5), 0);
+    const costoNuoviReale = costoNuovi; // I nuovi si pagano a prezzo pieno
+    const ricavoParziale = (compatibility.vendere?.totale_vendibili || 0) * 8; // €8 ricavo per libro venduto
+    const spesaNetta = costoUsatiReale + costoNuoviReale - ricavoParziale;
+    
+    return {
+      totaleSeTuttiNuovi,
+      totaleLibriDaComprare,
+      costoUsatiReale,
+      costoNuoviReale,
+      ricavoParziale,
+      spesaNetta,
+      numLibriUsati,
+      numLibriNuovi,
+    };
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -178,6 +277,7 @@ export default function StudentDetailScreen() {
   }
 
   const isMedia = child.tipo_scuola === 'primo_grado';
+  const totals = calculateTotals();
 
   return (
     <View style={styles.container}>
@@ -207,6 +307,7 @@ export default function StudentDetailScreen() {
           >
             <Ionicons name="close-circle" size={32} color="rgba(255,255,255,0.9)" />
           </TouchableOpacity>
+          
           <View style={styles.studentAvatar}>
             <Text style={styles.studentInitial}>{child.nome_figlio.charAt(0).toUpperCase()}</Text>
           </View>
@@ -295,89 +396,91 @@ export default function StudentDetailScreen() {
           </View>
         )}
 
-        {/* Riepilogo Spesa Libri */}
+        {/* Spesa Libri di Testo - CALCOLATA CORRETTAMENTE */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Ionicons name="calculator-outline" size={22} color="#1a472a" />
             <Text style={styles.sectionTitle}>Spesa Libri di Testo</Text>
           </View>
           
-          <View style={[
-            styles.spesaCard,
-            { borderLeftColor: compatibility?.tetto_spesa?.entro_limite ? '#4CAF50' : 
-                             compatibility?.tetto_spesa?.entro_deroga_15 ? '#FF9800' : '#f44336' }
-          ]}>
-            {/* Totale Testi Nuovi */}
-            <View style={styles.spesaRow}>
-              <View style={styles.spesaIcon}>
-                <Ionicons name="book" size={24} color="#FF9800" />
-              </View>
-              <View style={styles.spesaInfo}>
-                <Text style={styles.spesaLabel}>TOTALE TESTI NUOVI</Text>
-                <Text style={styles.spesaSubLabel}>
-                  ({compatibility?.nuovi?.totale || 0} libri)
-                </Text>
-                <Text style={styles.spesaNote}>
-                  (se acquistati tutti a prezzo di copertina)
-                </Text>
-              </View>
-              <Text style={styles.spesaAmount}>
-                €{compatibility?.tetto_spesa?.costo_obbligatori?.toFixed(2) || compatibility?.nuovi?.costo_totale?.toFixed(2) || '0.00'}
-              </Text>
-            </View>
-
-            {/* Divider */}
-            <View style={styles.divider} />
-
-            {/* Spesa Stimata con RiLiBro */}
-            <View style={styles.spesaRow}>
-              <View style={[styles.spesaIcon, { backgroundColor: '#e8f5e9' }]}>
-                <Ionicons name="trending-down" size={24} color="#4CAF50" />
-              </View>
-              <View style={styles.spesaInfo}>
-                <Text style={[styles.spesaLabel, { color: '#4CAF50' }]}>SPESA STIMATA</Text>
-                <Text style={styles.spesaSubLabel}>
-                  (Usati €{((compatibility?.comprare?.totale_usati || 0) * 8).toFixed(0)} + Nuovi €{((compatibility?.nuovi?.totale || 0) - (compatibility?.comprare?.totale_usati || 0)) > 0 ? (((compatibility?.nuovi?.totale || 0) - (compatibility?.comprare?.totale_usati || 0)) * 15).toFixed(0) : '0'} - Ricavo €{((compatibility?.vendere?.totale_vendibili || 0) * 6).toFixed(0)})
-                </Text>
-              </View>
-              <Text style={[styles.spesaAmount, { color: '#4CAF50' }]}>
-                €{((compatibility?.nuovi?.costo_totale || 0) - (compatibility?.comprare?.risparmio_totale || 0)).toFixed(0)}
-              </Text>
-            </View>
-
-            {/* Status Box */}
-            <View style={[
-              styles.statusBox,
-              { backgroundColor: compatibility?.tetto_spesa?.entro_limite ? '#e8f5e9' : 
-                               compatibility?.tetto_spesa?.entro_deroga_15 ? '#fff3e0' : '#ffebee' }
-            ]}>
-              {compatibility?.tetto_spesa?.entro_limite ? (
-                <View style={styles.statusContent}>
-                  <Ionicons name="checkmark-circle" size={28} color="#4CAF50" />
-                  <Text style={[styles.statusText, { color: '#4CAF50' }]}>ENTRO LIMITE MINISTERIALE</Text>
-                </View>
-              ) : compatibility?.tetto_spesa?.entro_deroga_15 ? (
-                <View style={styles.statusContent}>
-                  <Ionicons name="warning" size={28} color="#FF9800" />
-                  <View>
-                    <Text style={[styles.statusText, { color: '#FF9800' }]}>SFORA IL TETTO</Text>
-                    <Text style={styles.statusSubtext}>
-                      +{compatibility.tetto_spesa.percentuale_sforamento.toFixed(1)}% (entro deroga)
+          <View style={styles.spesaCard}>
+            {totals && (
+              <>
+                {/* Totale Testi Nuovi */}
+                <View style={styles.spesaRow}>
+                  <View style={styles.spesaIcon}>
+                    <Ionicons name="book" size={24} color="#FF9800" />
+                  </View>
+                  <View style={styles.spesaInfo}>
+                    <Text style={styles.spesaLabel}>TOTALE TESTI NUOVI</Text>
+                    <Text style={styles.spesaSubLabel}>
+                      ({totals.totaleLibriDaComprare} libri)
+                    </Text>
+                    <Text style={styles.spesaNote}>
+                      (se acquistati tutti a prezzo di copertina)
                     </Text>
                   </View>
+                  <Text style={styles.spesaAmount}>
+                    €{totals.totaleSeTuttiNuovi.toFixed(2)}
+                  </Text>
                 </View>
-              ) : (
-                <View style={styles.statusContent}>
-                  <Ionicons name="alert-circle" size={28} color="#f44336" />
-                  <View>
-                    <Text style={[styles.statusText, { color: '#f44336' }]}>OLTRE LIMITE!</Text>
-                    <Text style={styles.statusSubtext}>
-                      +{compatibility?.tetto_spesa?.percentuale_sforamento?.toFixed(1) || 0}% (€{compatibility?.tetto_spesa?.differenza?.toFixed(2) || 0} in più)
+
+                {/* Divider */}
+                <View style={styles.divider} />
+
+                {/* Spesa Stimata con RiLiBro */}
+                <View style={styles.spesaRow}>
+                  <View style={[styles.spesaIcon, { backgroundColor: '#e8f5e9' }]}>
+                    <Ionicons name="trending-down" size={24} color="#4CAF50" />
+                  </View>
+                  <View style={styles.spesaInfo}>
+                    <Text style={[styles.spesaLabel, { color: '#4CAF50' }]}>SPESA STIMATA</Text>
+                    <Text style={styles.spesaSubLabel}>
+                      (Usati €{totals.costoUsatiReale.toFixed(0)} + Nuovi €{totals.costoNuoviReale.toFixed(0)} - Ricavo €{totals.ricavoParziale})
                     </Text>
                   </View>
+                  <Text style={[styles.spesaAmount, { color: totals.spesaNetta < 0 ? '#4CAF50' : '#333' }]}>
+                    €{Math.abs(totals.spesaNetta).toFixed(0)}{totals.spesaNetta < 0 ? ' (guadagno)' : ''}
+                  </Text>
                 </View>
-              )}
-            </View>
+
+                {/* Status Box basato su tetto ministeriale */}
+                {compatibility?.tetto_spesa && (
+                  <View style={[
+                    styles.statusBox,
+                    { backgroundColor: compatibility.tetto_spesa.entro_limite ? '#e8f5e9' : 
+                                     compatibility.tetto_spesa.entro_deroga_15 ? '#fff3e0' : '#ffebee' }
+                  ]}>
+                    {compatibility.tetto_spesa.entro_limite ? (
+                      <View style={styles.statusContent}>
+                        <Ionicons name="checkmark-circle" size={28} color="#4CAF50" />
+                        <Text style={[styles.statusText, { color: '#4CAF50' }]}>ENTRO LIMITE MINISTERIALE</Text>
+                      </View>
+                    ) : compatibility.tetto_spesa.entro_deroga_15 ? (
+                      <View style={styles.statusContent}>
+                        <Ionicons name="warning" size={28} color="#FF9800" />
+                        <View>
+                          <Text style={[styles.statusText, { color: '#FF9800' }]}>SFORA IL TETTO</Text>
+                          <Text style={styles.statusSubtext}>
+                            +{compatibility.tetto_spesa.percentuale_sforamento.toFixed(1)}% (entro deroga)
+                          </Text>
+                        </View>
+                      </View>
+                    ) : (
+                      <View style={styles.statusContent}>
+                        <Ionicons name="alert-circle" size={28} color="#f44336" />
+                        <View>
+                          <Text style={[styles.statusText, { color: '#f44336' }]}>OLTRE LIMITE!</Text>
+                          <Text style={styles.statusSubtext}>
+                            +{compatibility.tetto_spesa.percentuale_sforamento?.toFixed(1) || 0}% (€{compatibility.tetto_spesa.differenza?.toFixed(2) || 0} in più)
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                )}
+              </>
+            )}
           </View>
         </View>
 
@@ -398,22 +501,25 @@ export default function StudentDetailScreen() {
                   alla {getClasseLabel(compatibility.vendere.classe_destinazione)}
                 </Text>
               )}
+              <Text style={[styles.flowHint, { color: '#2196F3', fontWeight: '600' }]}>
+                Ricavo €{((compatibility?.vendere?.totale_vendibili || 0) * 8)}
+              </Text>
             </View>
             
             <View style={[styles.flowCard, { borderTopColor: '#FF9800' }]}>
               <Ionicons name="book" size={32} color="#FF9800" />
-              <Text style={styles.flowNumber}>{compatibility?.nuovi?.totale || 0}</Text>
-              <Text style={styles.flowLabel}>Da acquistare</Text>
+              <Text style={styles.flowNumber}>{totals?.numLibriNuovi || 0}</Text>
+              <Text style={styles.flowLabel}>Da comprare nuovi</Text>
               <Text style={styles.flowHint}>per quest'anno</Text>
             </View>
             
             <View style={[styles.flowCard, { borderTopColor: '#4CAF50' }]}>
               <Ionicons name="cart" size={32} color="#4CAF50" />
-              <Text style={styles.flowNumber}>{compatibility?.comprare?.totale_usati || 0}</Text>
+              <Text style={styles.flowNumber}>{totals?.numLibriUsati || 0}</Text>
               <Text style={styles.flowLabel}>Usati disponibili</Text>
-              {compatibility?.comprare?.risparmio_totale && compatibility.comprare.risparmio_totale > 0 && (
+              {totals && totals.costoUsatiReale > 0 && (
                 <Text style={[styles.flowHint, { color: '#4CAF50' }]}>
-                  Risparmio €{compatibility.comprare.risparmio_totale.toFixed(0)}
+                  Spesa €{totals.costoUsatiReale.toFixed(0)}
                 </Text>
               )}
             </View>
@@ -480,13 +586,20 @@ export default function StudentDetailScreen() {
           </View>
         )}
 
-        {/* Pulsante Scarica Lista */}
+        {/* Pulsante Scarica Lista - FUNZIONA DIRETTAMENTE */}
         <TouchableOpacity
-          style={styles.downloadButton}
-          onPress={() => router.push(`/(tabs)/profile?download=${child.id}`)}
+          style={[styles.downloadButton, downloadingPdf && styles.downloadButtonDisabled]}
+          onPress={downloadPdf}
+          disabled={downloadingPdf}
         >
-          <Ionicons name="download" size={22} color="#fff" />
-          <Text style={styles.downloadButtonText}>Scarica Lista Libri</Text>
+          {downloadingPdf ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <>
+              <Ionicons name="document-text" size={22} color="#fff" />
+              <Text style={styles.downloadButtonText}>Scarica Lista Libri</Text>
+            </>
+          )}
         </TouchableOpacity>
 
         {/* Pulsante Chiudi in basso */}
@@ -540,6 +653,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#1a472a',
     padding: 20,
     paddingTop: 10,
+  },
+  closeButtonMobile: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    zIndex: 10,
   },
   studentAvatar: {
     width: 70,
@@ -673,7 +792,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 12,
     padding: 16,
-    borderLeftWidth: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
@@ -782,16 +900,13 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     gap: 10,
   },
+  downloadButtonDisabled: {
+    opacity: 0.7,
+  },
   downloadButtonText: {
     color: '#fff',
     fontSize: 17,
     fontWeight: 'bold',
-  },
-  closeButtonMobile: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    zIndex: 10,
   },
   closeButton: {
     flexDirection: 'row',
