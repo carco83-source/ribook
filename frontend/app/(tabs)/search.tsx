@@ -341,7 +341,7 @@ export default function SearchScreen() {
             </TouchableOpacity>
           )}
         </View>
-        {!selectedChild && (
+        {!selectedChild && genericResults.length === 0 && (
           <>
             <Text style={styles.searchHintText}>
               Per essere più precisi è preferibile cercare il testo per codice ISBN che potrai trovare visualizzando la lista dei testi nella sezione{' '}

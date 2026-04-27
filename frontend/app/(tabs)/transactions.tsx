@@ -100,6 +100,9 @@ export default function TransactionsScreen() {
         </View>
 
         <Text style={styles.transactionTitle}>{item.book_titolo}</Text>
+        {item.book_isbn && (
+          <Text style={styles.transactionIsbn}>ISBN: {item.book_isbn}</Text>
+        )}
 
         <View style={styles.transactionDetails}>
           <View style={styles.detailRow}>
@@ -345,6 +348,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#333',
+    marginBottom: 4,
+  },
+  transactionIsbn: {
+    fontSize: 12,
+    color: '#888',
+    fontFamily: 'monospace',
     marginBottom: 12,
   },
   transactionDetails: {

@@ -7668,6 +7668,7 @@ async def get_user_transactions(user_id: str):
         return {
             "id": order.get("id"),
             "book_titolo": order.get("book_titolo", ""),
+            "book_isbn": order.get("book_isbn", order.get("isbn", "")),
             "buyer_username": order.get("buyer_name", ""),
             "seller_username": order.get("seller_name", ""),
             "bookstore_nome": order.get("bookstore_name", ""),
