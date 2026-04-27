@@ -8,6 +8,7 @@ import {
   RefreshControl,
   ActivityIndicator,
   Alert,
+  Image,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -579,52 +580,57 @@ export default function RadarScreen() {
                   <Text style={styles.sectionTitleGreen}>
                     LIBRI USATI ACQUISTABILI PER {child?.nome_figlio?.toUpperCase()}
                   </Text>
-                  {tuttiLibriUsati.map((book: any, idx: number) => {
-                    const copie = book.copie_disponibili || book.copie_usate_disponibili || 0;
-                    return (
-                      <TouchableOpacity 
-                        key={idx} 
-                        style={[
-                          styles.sampleBookItem,
-                          copie > 0 && styles.sampleBookItemClickable
-                        ]}
-                        onPress={() => {
-                          if (copie > 0 && book.isbn) {
-                            router.push(`/book-sellers/${book.isbn}`);
-                          }
-                        }}
-                        disabled={copie === 0}
-                      >
-                        <View style={styles.sampleBookInfo}>
-                          <Text style={styles.sampleBookTitle}>
+                  <View style={styles.booksGrid}>
+                    {tuttiLibriUsati.map((book: any, idx: number) => {
+                      const copie = book.copie_disponibili || book.copie_usate_disponibili || 0;
+                      const coverUrl = book.isbn ? `https://www.ibs.it/images/${book.isbn}_0_0_0_536_0.jpg` : null;
+                      return (
+                        <TouchableOpacity 
+                          key={idx} 
+                          style={[
+                            styles.sampleBookItem,
+                            copie > 0 && styles.sampleBookItemClickable
+                          ]}
+                          onPress={() => {
+                            if (copie > 0 && book.isbn) {
+                              router.push(`/book-sellers/${book.isbn}`);
+                            }
+                          }}
+                          disabled={copie === 0}
+                        >
+                          {coverUrl && (
+                            <Image 
+                              source={{ uri: coverUrl }} 
+                              style={styles.bookCoverImage}
+                              resizeMode="contain"
+                            />
+                          )}
+                          <Text style={styles.sampleBookTitle} numberOfLines={2}>
                             {book.titolo}
                           </Text>
                           <Text style={styles.sampleBookSubject}>
                             {book.disciplina}
                           </Text>
-                          <Text style={styles.isbnText}>
-                            ISBN: {book.isbn}
-                          </Text>
-                        </View>
-                        <View style={{ alignItems: 'flex-end', flexDirection: 'row', gap: 8 }}>
-                          <View style={[
-                            styles.copieBadge,
-                            copie > 0 ? styles.copieBadgeAvailable : styles.copieBadgeNone
-                          ]}>
-                            <Text style={[
-                              styles.copieBadgeText,
-                              copie > 0 ? styles.copieBadgeTextAvailable : styles.copieBadgeTextNone
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+                            <View style={[
+                              styles.copieBadge,
+                              copie > 0 ? styles.copieBadgeAvailable : styles.copieBadgeNone
                             ]}>
-                              {copie}
-                            </Text>
+                              <Text style={[
+                                styles.copieBadgeText,
+                                copie > 0 ? styles.copieBadgeTextAvailable : styles.copieBadgeTextNone
+                              ]}>
+                                {copie} {copie === 1 ? 'copia' : 'copie'}
+                              </Text>
+                            </View>
+                            {copie > 0 && (
+                              <Ionicons name="chevron-forward" size={20} color="#4CAF50" />
+                            )}
                           </View>
-                          {copie > 0 && (
-                            <Ionicons name="chevron-forward" size={20} color="#4CAF50" />
-                          )}
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
                   {/* Pulsante Cerca questi libri */}
                   <TouchableOpacity
                     style={[styles.viewSellersButton, { backgroundColor: '#4CAF50', marginTop: 12 }]}
@@ -1155,14 +1161,19 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 12,
   },
+  booksGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
   sampleBooksTitle: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '700',
     color: '#333',
-    marginBottom: 8,
+    marginBottom: 12,
   },
   sectionTitleGreen: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#1a472a',
     marginBottom: 12,
@@ -1170,7 +1181,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   sectionTitleOrange: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#FF9800',
     marginBottom: 8,
@@ -1178,7 +1189,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   sectionTitlePurple: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#9C27B0',
     marginBottom: 8,
@@ -1186,7 +1197,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   sectionTitleBlue: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#2196F3',
     marginBottom: 12,
@@ -1194,7 +1205,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   sectionTitleRed: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#f44336',
     marginBottom: 8,
@@ -1202,40 +1213,53 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   sampleBookItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    width: '48%',
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    minHeight: 180,
+  },
+  sampleBookItemClickable: {
+    borderColor: '#1a472a',
+    borderWidth: 1.5,
   },
   sampleBookUsable: {
     backgroundColor: '#e8f5e9',
-    marginHorizontal: -8,
-    paddingHorizontal: 8,
-    borderRadius: 4,
+    borderColor: '#4CAF50',
+  },
+  bookCoverImage: {
+    width: '100%',
+    height: 100,
+    borderRadius: 6,
+    marginBottom: 8,
+    backgroundColor: '#f5f5f5',
   },
   sampleBookInfo: {
     flex: 1,
   },
   sampleBookTitle: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
     color: '#333',
+    marginBottom: 4,
+    lineHeight: 20,
   },
   sampleBookSubject: {
-    fontSize: 11,
+    fontSize: 13,
     color: '#666',
     marginTop: 2,
   },
   isbnText: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#888',
-    marginTop: 2,
+    marginTop: 4,
     fontFamily: 'monospace',
   },
   sampleBookSeller: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#888',
     marginTop: 2,
   },
@@ -1251,14 +1275,15 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   volumeUnicoText: {
-    fontSize: 10,
+    fontSize: 11,
     color: '#1976D2',
     fontWeight: '600',
   },
   sampleBookPrice: {
-    fontSize: 14,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#1a472a',
+    marginTop: 8,
   },
   topSellersContainer: {
     marginTop: 4,
