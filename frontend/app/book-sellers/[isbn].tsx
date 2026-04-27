@@ -41,6 +41,10 @@ interface Listing {
     notes?: string;
   };
   bookstores?: Array<{ id: string; nome: string }>;
+  photos?: string[];
+  photo_1?: string;
+  photo_2?: string;
+  photo_3?: string;
 }
 
 interface BookInfo {
@@ -247,22 +251,31 @@ export default function BookSellersScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {/* Book Info Header */}
+        {/* Book Info Header with Cover */}
         {bookInfo && (
           <View style={styles.bookHeader}>
-            <Text style={styles.bookDiscipline}>{bookInfo.disciplina}</Text>
-            <Text style={styles.bookTitle}>{bookInfo.titolo}</Text>
-            <View style={styles.bookMeta}>
-              <Text style={styles.bookEditore}>{bookInfo.editore}</Text>
-              {bookInfo.autori && (
-                <Text style={styles.bookAutori}>{bookInfo.autori}</Text>
-              )}
+            <View style={styles.bookHeaderContent}>
+              {/* Cover Image from IBS */}
+              <Image
+                source={{ uri: getBookCoverUrl(isbn || '') }}
+                style={styles.bookCoverLarge}
+                resizeMode="contain"
+              />
+              {/* Book Details */}
+              <View style={styles.bookHeaderDetails}>
+                <Text style={styles.bookDiscipline}>{bookInfo.disciplina}</Text>
+                <Text style={styles.bookTitle}>{bookInfo.titolo}</Text>
+                <Text style={styles.bookEditore}>{bookInfo.editore}</Text>
+                {bookInfo.autori && (
+                  <Text style={styles.bookAutori}>{bookInfo.autori}</Text>
+                )}
+                <View style={styles.bookPriceRow}>
+                  <Text style={styles.bookPriceLabel}>Prezzo di copertina:</Text>
+                  <Text style={styles.bookPrice}>€{bookInfo.prezzo_copertina?.toFixed(2)}</Text>
+                </View>
+                <Text style={styles.bookIsbn}>ISBN: {isbn}</Text>
+              </View>
             </View>
-            <View style={styles.bookPriceRow}>
-              <Text style={styles.bookPriceLabel}>Prezzo di copertina:</Text>
-              <Text style={styles.bookPrice}>€{bookInfo.prezzo_copertina?.toFixed(2)}</Text>
-            </View>
-            <Text style={styles.bookIsbn}>ISBN: {isbn}</Text>
           </View>
         )}
 
@@ -286,62 +299,91 @@ export default function BookSellersScreen() {
                 key={listing.id}
                 style={styles.sellerCard}
               >
-                <View style={styles.cardContentRow}>
-                  {/* Book Cover Thumbnail */}
-                  <Image
-                    source={{ uri: getBookCoverUrl(isbn || '') }}
-                    style={styles.bookThumbnail}
-                    resizeMode="contain"
-                  />
-                  
-                  <View style={styles.cardDetails}>
-                    <View style={styles.sellerHeader}>
-                      <View style={styles.sellerInfo}>
-                        <View style={styles.sellerAvatar}>
-                          <Text style={styles.sellerAvatarText}>
-                            {listing.seller_username?.charAt(0)?.toUpperCase() || '?'}
-                          </Text>
-                        </View>
-                        <View>
-                          <Text style={styles.sellerName}>{listing.seller_username || 'Venditore'}</Text>
-                        </View>
-                      </View>
-                      <View style={{ alignItems: 'flex-end' }}>
-                        <Text style={styles.listingPrice}>€{prezzoVendita.toFixed(2)}</Text>
-                        {showSavings && (
-                          <Text style={styles.savings}>
-                            Risparmi €{savings.toFixed(2)}
-                          </Text>
-                        )}
-                      </View>
-                    </View>
-
-                    <View style={styles.conditionRow}>
-                      <View style={[
-                        styles.conditionBadge,
-                        { backgroundColor: getConditionColor(condizione) }
-                      ]}>
-                        <Text style={styles.conditionText}>
-                          {getConditionLabel(condizione)}
+                <View style={styles.cardDetails}>
+                  <View style={styles.sellerHeader}>
+                    <View style={styles.sellerInfo}>
+                      <View style={styles.sellerAvatar}>
+                        <Text style={styles.sellerAvatarText}>
+                          {listing.seller_username?.charAt(0)?.toUpperCase() || '?'}
                         </Text>
                       </View>
-                      
-                      {listing.condition_details?.notes && (
-                        <Text style={styles.conditionNotes} numberOfLines={1}>
-                          {listing.condition_details.notes}
+                      <View>
+                        <Text style={styles.sellerName}>{listing.seller_username || 'Venditore'}</Text>
+                      </View>
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={styles.listingPrice}>€{prezzoVendita.toFixed(2)}</Text>
+                      {showSavings && (
+                        <Text style={styles.savings}>
+                          Risparmi €{savings.toFixed(2)}
                         </Text>
                       )}
                     </View>
+                  </View>
 
-                    {listing.bookstores && listing.bookstores.length > 0 && (
-                      <View style={styles.bookstoreRow}>
-                        <Ionicons name="location" size={14} color="#1a472a" />
-                        <Text style={styles.bookstoreText}>
-                          {listing.bookstores.map(b => b.nome).join(', ')}
-                        </Text>
-                      </View>
+                  <View style={styles.conditionRow}>
+                    <View style={[
+                      styles.conditionBadge,
+                      { backgroundColor: getConditionColor(condizione) }
+                    ]}>
+                      <Text style={styles.conditionText}>
+                        {getConditionLabel(condizione)}
+                      </Text>
+                    </View>
+                    
+                    {listing.condition_details?.notes && (
+                      <Text style={styles.conditionNotes} numberOfLines={1}>
+                        {listing.condition_details.notes}
+                      </Text>
                     )}
                   </View>
+
+                  {/* Foto del venditore (se caricate) */}
+                  {(listing.photos && listing.photos.length > 0) || listing.photo_1 || listing.photo_2 || listing.photo_3 ? (
+                    <View style={styles.sellerPhotosContainer}>
+                      <Text style={styles.sellerPhotosTitle}>Foto del venditore:</Text>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sellerPhotosScroll}>
+                        {listing.photos?.map((photo: string, index: number) => (
+                          <Image 
+                            key={index} 
+                            source={{ uri: photo.startsWith('data:') ? photo : `data:image/jpeg;base64,${photo}` }} 
+                            style={styles.sellerPhotoThumb} 
+                            resizeMode="cover"
+                          />
+                        ))}
+                        {listing.photo_1 && (
+                          <Image 
+                            source={{ uri: listing.photo_1.startsWith('data:') ? listing.photo_1 : `data:image/jpeg;base64,${listing.photo_1}` }} 
+                            style={styles.sellerPhotoThumb} 
+                            resizeMode="cover"
+                          />
+                        )}
+                        {listing.photo_2 && (
+                          <Image 
+                            source={{ uri: listing.photo_2.startsWith('data:') ? listing.photo_2 : `data:image/jpeg;base64,${listing.photo_2}` }} 
+                            style={styles.sellerPhotoThumb} 
+                            resizeMode="cover"
+                          />
+                        )}
+                        {listing.photo_3 && (
+                          <Image 
+                            source={{ uri: listing.photo_3.startsWith('data:') ? listing.photo_3 : `data:image/jpeg;base64,${listing.photo_3}` }} 
+                            style={styles.sellerPhotoThumb} 
+                            resizeMode="cover"
+                          />
+                        )}
+                      </ScrollView>
+                    </View>
+                  ) : null}
+
+                  {listing.bookstores && listing.bookstores.length > 0 && (
+                    <View style={styles.bookstoreRow}>
+                      <Ionicons name="location" size={14} color="#1a472a" />
+                      <Text style={styles.bookstoreText}>
+                        {listing.bookstores.map(b => b.nome).join(', ')}
+                      </Text>
+                    </View>
+                  )}
                 </View>
 
                 {/* Action Buttons Row */}
@@ -617,5 +659,41 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
     marginTop: 8,
+  },
+  // New styles for header with cover
+  bookHeaderContent: {
+    flexDirection: 'row',
+  },
+  bookCoverLarge: {
+    width: 100,
+    height: 140,
+    borderRadius: 8,
+    backgroundColor: '#f0f0f0',
+  },
+  bookHeaderDetails: {
+    flex: 1,
+    marginLeft: 16,
+  },
+  // Seller photos styles
+  sellerPhotosContainer: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+  },
+  sellerPhotosTitle: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 8,
+  },
+  sellerPhotosScroll: {
+    flexDirection: 'row',
+  },
+  sellerPhotoThumb: {
+    width: 70,
+    height: 70,
+    borderRadius: 8,
+    marginRight: 8,
+    backgroundColor: '#f0f0f0',
   },
 });
