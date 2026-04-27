@@ -275,49 +275,46 @@ export default function RadarScreen() {
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
     >
-      {/* Header semplificato */}
-      <View style={styles.headerRow}>
-        <View style={styles.headerLeft}>
-          <Ionicons name="school" size={28} color="#1a472a" />
-          <Text style={styles.headerTitle}>RiLiBro</Text>
-        </View>
-      </View>
-
-      {/* Child Profile Selector - SUBITO DOPO HEADER */}
+      {/* Sezione Alunni - Profili cliccabili per aprire dettaglio */}
       {childProfiles.length > 0 && (
         <View style={styles.profileSelectorCard}>
-          <Text style={styles.profileSelectorLabel}>Seleziona profilo:</Text>
+          <Text style={styles.profileSelectorLabel}>Alunni</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View style={styles.childTabs}>
               {childProfiles.map((child) => (
-                <TouchableOpacity
-                  key={child.id}
-                  style={[
-                    styles.childTab,
-                    selectedChildId === child.id && styles.childTabActive
-                  ]}
-                  onPress={() => setSelectedChildId(child.id)}
-                >
-                  <Text style={[
-                    styles.childTabText,
-                    selectedChildId === child.id && styles.childTabTextActive
-                  ]}>
-                    {child.nome_figlio}
-                  </Text>
-                  <Text style={[
-                    styles.childTabSubtext,
-                    selectedChildId === child.id && styles.childTabSubtextActive
-                  ]}>
-                    {child.classe}ª {child.tipo_scuola === 'primo_grado' ? 'media' : 'sup'}
-                  </Text>
-                </TouchableOpacity>
+                <View key={child.id} style={styles.childTabContainer}>
+                  {/* Tab per selezionare */}
+                  <TouchableOpacity
+                    style={[
+                      styles.childTab,
+                      selectedChildId === child.id && styles.childTabActive
+                    ]}
+                    onPress={() => setSelectedChildId(child.id)}
+                  >
+                    <Text style={[
+                      styles.childTabText,
+                      selectedChildId === child.id && styles.childTabTextActive
+                    ]}>
+                      {child.nome_figlio}
+                    </Text>
+                  </TouchableOpacity>
+                  {/* Pulsante info per aprire dettaglio */}
+                  {selectedChildId === child.id && (
+                    <TouchableOpacity
+                      style={styles.childInfoButton}
+                      onPress={() => router.push(`/student/${child.id}`)}
+                    >
+                      <Ionicons name="information-circle" size={22} color="#1a472a" />
+                    </TouchableOpacity>
+                  )}
+                </View>
               ))}
             </View>
           </ScrollView>
         </View>
       )}
 
-      {/* Book Flow Section */}
+      {/* Sezione Libri per il profilo selezionato */}
       {selectedChildId && childrenCompatibility[selectedChildId] && (() => {
         const compatibility = childrenCompatibility[selectedChildId];
         const child = childProfiles.find(c => c.id === selectedChildId);
@@ -327,167 +324,6 @@ export default function RadarScreen() {
         
         return (
           <View style={styles.classCompatSection}>
-            {/* Header su DUE righe: scuola + classe/sezione */}
-            <Text style={styles.classCompatSubtitleBold} numberOfLines={1}>
-              {child?.scuola}
-            </Text>
-            <Text style={styles.classCompatSubtitleLight}>
-              classe {child?.classe}ª sezione {child?.sezione}
-            </Text>
-
-            {/* Three Column Layout */}
-            <View style={styles.bookFlowThreeColumns}>
-              {/* LEFT - VENDI (Cliccabile → vai a Cerca Tab) */}
-              <TouchableOpacity 
-                style={styles.bookFlowColumnNew}
-                onPress={() => router.push('/(tabs)/search')}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.bookFlowColumnHeaderCompact, { backgroundColor: '#2196F3' }]}>
-                  <Text style={styles.bookFlowColumnHeaderTextCompact}>
-                    {compatibility.vendere?.classe_destinazione 
-                      ? getClasseLabel(compatibility.vendere.classe_destinazione)
-                      : 'N/A'}
-                  </Text>
-                </View>
-                <View style={styles.bookFlowColumnBody}>
-                  <Ionicons name="arrow-up-circle" size={28} color="#2196F3" />
-                  <Text style={styles.bookFlowColumnAction}>VENDI</Text>
-                  <Text style={styles.bookFlowColumnNumber}>
-                    {compatibility.vendere?.totale_vendibili || 0}
-                  </Text>
-                  <Text style={styles.bookFlowColumnLabel}>libri</Text>
-                </View>
-              </TouchableOpacity>
-
-              {/* CENTER - Iniziale del nome nel header */}
-              <View style={styles.bookFlowColumnNew}>
-                <View style={[styles.bookFlowColumnHeaderCompact, { backgroundColor: '#1a472a' }]}>
-                  <Text style={styles.bookFlowColumnHeaderTextCompact}>{child?.nome_figlio?.charAt(0) || '?'}</Text>
-                </View>
-                <View style={styles.bookFlowColumnBody}>
-                  <Ionicons name="book" size={28} color="#FF9800" />
-                  <Text style={[styles.bookFlowColumnAction, { color: '#FF9800' }]}>NUOVI</Text>
-                  <Text style={[styles.bookFlowColumnNumber, { color: '#FF9800' }]}>
-                    {compatibility.nuovi?.totale || 0}
-                  </Text>
-                  <Text style={styles.bookFlowColumnLabel}>da comprare</Text>
-                </View>
-                <Text style={styles.bookFlowColumnHint}>
-                  €{compatibility.nuovi?.costo_totale?.toFixed(0) || 0}
-                </Text>
-              </View>
-
-              {/* RIGHT - COMPRA (Cliccabile → vai a Search Tab) */}
-              <TouchableOpacity 
-                style={styles.bookFlowColumnNew}
-                onPress={() => router.push('/(tabs)/search')}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.bookFlowColumnHeaderCompact, { backgroundColor: '#4CAF50' }]}>
-                  <Text style={styles.bookFlowColumnHeaderTextCompact}>
-                    {compatibility.comprare?.classe_origine 
-                      ? getClasseLabel(compatibility.comprare.classe_origine)
-                      : 'N/A'}
-                  </Text>
-                </View>
-                <View style={styles.bookFlowColumnBody}>
-                  <Ionicons name="cart" size={28} color="#4CAF50" />
-                  <Text style={[styles.bookFlowColumnAction, { color: '#4CAF50' }]}>COMPRA</Text>
-                  <Text style={[styles.bookFlowColumnNumber, { color: '#4CAF50' }]}>
-                    {compatibility.comprare?.totale_usati || 0}
-                  </Text>
-                  <Text style={styles.bookFlowColumnLabel}>usati</Text>
-                </View>
-                <Text style={styles.bookFlowColumnHint}>
-                  {compatibility.comprare?.risparmio_totale > 0 
-                    ? `Risparmio €${compatibility.comprare.risparmio_totale.toFixed(0)}`
-                    : 'Fine ciclo'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Tetto di Spesa Ministeriale - Per tutti i profili */}
-            {compatibility.tetto_spesa && compatibility.tetto_spesa.tetto_ministeriale > 0 && (
-              <View style={[styles.classCard, { 
-                borderLeftWidth: 4, 
-                borderLeftColor: compatibility.tetto_spesa.entro_limite ? '#4CAF50' : 
-                                 compatibility.tetto_spesa.entro_deroga_15 ? '#FF9800' : '#f44336'
-              }]}>
-                <Text style={[styles.sampleBooksTitle, { color: '#1a472a' }]}>
-                  📊 Tetto di Spesa Ministeriale
-                </Text>
-                <Text style={{ fontSize: 10, color: '#666', marginBottom: 8 }}>
-                  {compatibility.tetto_spesa.riferimento_normativo}
-                </Text>
-                
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <View>
-                    <Text style={{ fontSize: 12, color: '#666' }}>Tetto base:</Text>
-                    <Text style={{ fontSize: 16, fontWeight: 'bold' }}>€{compatibility.tetto_spesa.tetto_ministeriale?.toFixed(2)}</Text>
-                  </View>
-                  <View>
-                    <Text style={{ fontSize: 12, color: '#666' }}>Con deroga +10%:</Text>
-                    <Text style={{ fontSize: 16 }}>€{compatibility.tetto_spesa.tetto_con_deroga_10?.toFixed(2)}</Text>
-                  </View>
-                  <View>
-                    <Text style={{ fontSize: 12, color: '#666' }}>Max +15%:</Text>
-                    <Text style={{ fontSize: 16 }}>€{compatibility.tetto_spesa.tetto_con_deroga_15?.toFixed(2)}</Text>
-                  </View>
-                </View>
-                
-                <View style={{ 
-                  backgroundColor: compatibility.tetto_spesa.entro_limite ? '#E8F5E9' : 
-                                   compatibility.tetto_spesa.entro_deroga_15 ? '#FFF3E0' : '#FFEBEE',
-                  padding: 12,
-                  borderRadius: 8,
-                  marginTop: 8
-                }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 11, color: '#666' }}>Costo libri obbligatori</Text>
-                      <Text style={{ fontSize: 10, color: '#999', fontStyle: 'italic' }}>se acquistati tutti nuovi:</Text>
-                      <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#1a472a' }}>
-                        €{compatibility.tetto_spesa.costo_obbligatori?.toFixed(2)}
-                      </Text>
-                      {(compatibility.tetto_spesa.costo_consigliati || 0) > 0 && (
-                        <Text style={{ fontSize: 10, color: '#9C27B0', marginTop: 4 }}>
-                          + €{compatibility.tetto_spesa.costo_consigliati?.toFixed(2)} consigliati = €{compatibility.tetto_spesa.costo_totale_tutti?.toFixed(2)} totale
-                        </Text>
-                      )}
-                    </View>
-                    <View style={{ alignItems: 'flex-end' }}>
-                      {compatibility.tetto_spesa.entro_limite ? (
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                          <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
-                          <Text style={{ color: '#4CAF50', fontWeight: 'bold', marginLeft: 4 }}>ENTRO LIMITE</Text>
-                        </View>
-                      ) : compatibility.tetto_spesa.entro_deroga_15 ? (
-                        <View style={{ alignItems: 'flex-end' }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            <Ionicons name="warning" size={24} color="#FF9800" />
-                            <Text style={{ color: '#FF9800', fontWeight: 'bold', marginLeft: 4 }}>SFORA</Text>
-                          </View>
-                          <Text style={{ fontSize: 10, color: '#FF9800' }}>
-                            +{compatibility.tetto_spesa.percentuale_sforamento?.toFixed(1)}% (entro deroga)
-                          </Text>
-                        </View>
-                      ) : (
-                        <View style={{ alignItems: 'flex-end' }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            <Ionicons name="alert-circle" size={24} color="#f44336" />
-                            <Text style={{ color: '#f44336', fontWeight: 'bold', marginLeft: 4 }}>OLTRE LIMITE!</Text>
-                          </View>
-                          <Text style={{ fontSize: 10, color: '#f44336' }}>
-                            +{compatibility.tetto_spesa.percentuale_sforamento?.toFixed(1)}% (€{compatibility.tetto_spesa.differenza?.toFixed(2)} in più)
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                  </View>
-                </View>
-              </View>
-            )}
 
             {/* Libri Vendibili */}
             {compatibility.vendere?.libri_vendibili && compatibility.vendere.libri_vendibili.length > 0 && (
@@ -1484,6 +1320,10 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     gap: 10,
   },
+  childTabContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   childTab: {
     paddingHorizontal: 20,
     paddingVertical: 12,
@@ -1500,6 +1340,10 @@ const styles = StyleSheet.create({
   },
   childTabTextActive: {
     color: '#fff',
+  },
+  childInfoButton: {
+    marginLeft: 6,
+    padding: 6,
   },
   // New Purchasable Books Styles
   purchasableCounters: {
