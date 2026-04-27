@@ -44,7 +44,14 @@ interface Listing {
   condizione?: string;
   condition?: string;
   condition_details?: {
-    // New structure with percentages
+    // New structure with percentages (sell.tsx)
+    penna?: number;
+    matita?: number;
+    evidenziatore?: number;
+    usura_libro?: number;
+    esercizi_penna?: boolean;
+    esercizi_matita?: boolean;
+    // Old structure (fallback)
     scritte?: number;
     evidenziature?: number;
     pieghe?: number;
@@ -66,6 +73,10 @@ interface Listing {
   description?: string;
   foto_base64?: string;
   photos?: string[];
+  photo_1?: string;
+  photo_2?: string;
+  photo_3?: string;
+  condizione_percentuale?: number;
   stato?: string;
   status?: string;
 }
@@ -108,6 +119,53 @@ const getListingSellerName = (listing: Listing | null): string => {
   return listing.seller_username || listing.seller_name || 'Venditore';
 };
 
+// Calcola la percentuale della condizione generale
+const calculateConditionPercentage = (listing: Listing | null): number => {
+  if (!listing || !listing.condition_details) {
+    // Fallback basato sulla condizione testuale
+    const condition = getListingCondition(listing);
+    switch (condition) {
+      case 'nuovo': return 0;
+      case 'ottimo': return 15;
+      case 'buono': return 45;
+      case 'accettabile': return 70;
+      case 'scarso': return 90;
+      default: return 50;
+    }
+  }
+  
+  const cd = listing.condition_details;
+  
+  // Se ha i nuovi campi (penna, matita, evidenziatore, usura_libro)
+  if (cd.penna !== undefined || cd.usura_libro !== undefined) {
+    const penna = cd.penna || 0;
+    const matita = cd.matita || 0;
+    const evidenziatore = cd.evidenziatore || 0;
+    const usura = cd.usura_libro || 0;
+    
+    // Pesi: 75% Condizioni Pagine, 25% Usura
+    // Dentro Condizioni Pagine: Penna 50%, Evidenziatore 35%, Matita 15%
+    const condizioniPagineMedia = (penna * 0.50 + evidenziatore * 0.35 + matita * 0.15);
+    let percentuale = (condizioniPagineMedia * 0.75 + usura * 0.25);
+    
+    // Aggiungi penalità esercizi
+    if (cd.esercizi_penna) percentuale = Math.min(100, percentuale + 10);
+    if (cd.esercizi_matita) percentuale = Math.min(100, percentuale + 10);
+    
+    return Math.round(percentuale);
+  }
+  
+  // Fallback per struttura vecchia (scritte, evidenziature, pieghe)
+  if (cd.scritte !== undefined) {
+    const scritte = cd.scritte || 0;
+    const evidenziature = cd.evidenziature || 0;
+    const pieghe = cd.pieghe || 0;
+    return Math.round((scritte + evidenziature + pieghe) / 3);
+  }
+  
+  return 50; // Default
+};
+
 interface Bookstore {
   id: string;
   nome: string;
@@ -132,6 +190,9 @@ export default function ListingDetailScreen() {
   const [reportReason, setReportReason] = useState('');
   const [reportDescription, setReportDescription] = useState('');
   const [sendingReport, setSendingReport] = useState(false);
+  
+  // Opzione foderazione libro
+  const [richiediFoderazione, setRichiediFoderazione] = useState(false);
 
   const handleGoBack = () => {
     if (router.canGoBack()) {
@@ -460,6 +521,17 @@ export default function ListingDetailScreen() {
             </Text>
           </View>
         </View>
+        
+        {/* Condizione Generale Percentuale */}
+        <View style={styles.conditionPercentageRow}>
+          <Text style={styles.conditionPercentageLabel}>Condizione Generale:</Text>
+          <Text style={[
+            styles.conditionPercentageValue,
+            { color: getPercentageColor(calculateConditionPercentage(listing)) }
+          ]}>
+            {calculateConditionPercentage(listing)}%
+          </Text>
+        </View>
 
         <Text style={styles.title}>{getListingTitle(listing)}</Text>
         <Text style={styles.author}>{getListingAuthor(listing)}</Text>
@@ -485,78 +557,127 @@ export default function ListingDetailScreen() {
             <Text style={styles.conditionDetailsTitle}>Stato dettagliato del libro</Text>
             
             {/* New percentage-based condition details */}
-            {(listing.condition_details.scritte !== undefined || 
-              listing.condition_details.evidenziature !== undefined || 
-              listing.condition_details.pieghe !== undefined) ? (
+            {(listing.condition_details.penna !== undefined || 
+              listing.condition_details.scritte !== undefined || 
+              listing.condition_details.evidenziature !== undefined) ? (
               <View style={styles.conditionGrid}>
-                {/* Scritte */}
+                {/* Scritte a penna */}
                 <View style={styles.conditionItemNew}>
                   <View style={styles.conditionItemHeader}>
                     <Ionicons name="pencil" size={18} color="#666" />
-                    <Text style={styles.conditionItemLabel}>Scritte a penna/matita</Text>
+                    <Text style={styles.conditionItemLabel}>Scritte a penna</Text>
                   </View>
                   <View style={styles.percentageBarContainer}>
                     <View style={[
                       styles.percentageBar, 
                       { 
-                        width: `${listing.condition_details.scritte || 0}%`,
-                        backgroundColor: getPercentageColor(listing.condition_details.scritte || 0)
+                        width: `${listing.condition_details.penna || listing.condition_details.scritte || 0}%`,
+                        backgroundColor: getPercentageColor(listing.condition_details.penna || listing.condition_details.scritte || 0)
                       }
                     ]} />
                   </View>
                   <Text style={[
                     styles.percentageText,
-                    { color: getPercentageColor(listing.condition_details.scritte || 0) }
+                    { color: getPercentageColor(listing.condition_details.penna || listing.condition_details.scritte || 0) }
                   ]}>
-                    {getPercentageLabel(listing.condition_details.scritte || 0)}
+                    {listing.condition_details.penna || listing.condition_details.scritte || 0}%
                   </Text>
                 </View>
+
+                {/* Scritte a matita */}
+                {listing.condition_details.matita !== undefined && (
+                  <View style={styles.conditionItemNew}>
+                    <View style={styles.conditionItemHeader}>
+                      <Ionicons name="create-outline" size={18} color="#666" />
+                      <Text style={styles.conditionItemLabel}>Scritte a matita</Text>
+                    </View>
+                    <View style={styles.percentageBarContainer}>
+                      <View style={[
+                        styles.percentageBar, 
+                        { 
+                          width: `${listing.condition_details.matita || 0}%`,
+                          backgroundColor: getPercentageColor(listing.condition_details.matita || 0)
+                        }
+                      ]} />
+                    </View>
+                    <Text style={[
+                      styles.percentageText,
+                      { color: getPercentageColor(listing.condition_details.matita || 0) }
+                    ]}>
+                      {listing.condition_details.matita || 0}%
+                    </Text>
+                  </View>
+                )}
 
                 {/* Evidenziature */}
                 <View style={styles.conditionItemNew}>
                   <View style={styles.conditionItemHeader}>
                     <Ionicons name="color-fill" size={18} color="#666" />
-                    <Text style={styles.conditionItemLabel}>Evidenziature</Text>
+                    <Text style={styles.conditionItemLabel}>Pagine evidenziate</Text>
                   </View>
                   <View style={styles.percentageBarContainer}>
                     <View style={[
                       styles.percentageBar, 
                       { 
-                        width: `${listing.condition_details.evidenziature || 0}%`,
-                        backgroundColor: getPercentageColor(listing.condition_details.evidenziature || 0)
+                        width: `${listing.condition_details.evidenziatore || listing.condition_details.evidenziature || 0}%`,
+                        backgroundColor: getPercentageColor(listing.condition_details.evidenziatore || listing.condition_details.evidenziature || 0)
                       }
                     ]} />
                   </View>
                   <Text style={[
                     styles.percentageText,
-                    { color: getPercentageColor(listing.condition_details.evidenziature || 0) }
+                    { color: getPercentageColor(listing.condition_details.evidenziatore || listing.condition_details.evidenziature || 0) }
                   ]}>
-                    {getPercentageLabel(listing.condition_details.evidenziature || 0)}
+                    {listing.condition_details.evidenziatore || listing.condition_details.evidenziature || 0}%
                   </Text>
                 </View>
 
-                {/* Pieghe */}
-                <View style={styles.conditionItemNew}>
-                  <View style={styles.conditionItemHeader}>
-                    <Ionicons name="document-text" size={18} color="#666" />
-                    <Text style={styles.conditionItemLabel}>Pieghe sulle pagine</Text>
+                {/* Usura Libro */}
+                {(listing.condition_details.usura_libro !== undefined || listing.condition_details.pieghe !== undefined) && (
+                  <View style={styles.conditionItemNew}>
+                    <View style={styles.conditionItemHeader}>
+                      <Ionicons name="document-text" size={18} color="#666" />
+                      <Text style={styles.conditionItemLabel}>Usura del libro</Text>
+                    </View>
+                    <View style={styles.percentageBarContainer}>
+                      <View style={[
+                        styles.percentageBar, 
+                        { 
+                          width: `${listing.condition_details.usura_libro || listing.condition_details.pieghe || 0}%`,
+                          backgroundColor: getPercentageColor(listing.condition_details.usura_libro || listing.condition_details.pieghe || 0)
+                        }
+                      ]} />
+                    </View>
+                    <Text style={[
+                      styles.percentageText,
+                      { color: getPercentageColor(listing.condition_details.usura_libro || listing.condition_details.pieghe || 0) }
+                    ]}>
+                      {listing.condition_details.usura_libro || listing.condition_details.pieghe || 0}%
+                    </Text>
                   </View>
-                  <View style={styles.percentageBarContainer}>
-                    <View style={[
-                      styles.percentageBar, 
-                      { 
-                        width: `${listing.condition_details.pieghe || 0}%`,
-                        backgroundColor: getPercentageColor(listing.condition_details.pieghe || 0)
-                      }
-                    ]} />
+                )}
+
+                {/* Esercizi Svolti */}
+                {(listing.condition_details.esercizi_penna || listing.condition_details.esercizi_matita) && (
+                  <View style={styles.eserciziSvoltiContainer}>
+                    <View style={styles.eserciziSvoltiHeader}>
+                      <Ionicons name="checkbox" size={18} color="#FF9800" />
+                      <Text style={styles.eserciziSvoltiLabel}>Esercizi svolti:</Text>
+                    </View>
+                    <View style={styles.eserciziSvoltiTags}>
+                      {listing.condition_details.esercizi_penna && (
+                        <View style={styles.eserciziTag}>
+                          <Text style={styles.eserciziTagText}>A penna</Text>
+                        </View>
+                      )}
+                      {listing.condition_details.esercizi_matita && (
+                        <View style={styles.eserciziTag}>
+                          <Text style={styles.eserciziTagText}>A matita</Text>
+                        </View>
+                      )}
+                    </View>
                   </View>
-                  <Text style={[
-                    styles.percentageText,
-                    { color: getPercentageColor(listing.condition_details.pieghe || 0) }
-                  ]}>
-                    {getPercentageLabel(listing.condition_details.pieghe || 0)}
-                  </Text>
-                </View>
+                )}
               </View>
             ) : (
               /* Legacy condition details (fallback) */
@@ -589,6 +710,40 @@ export default function ListingDetailScreen() {
             )}
           </View>
         )}
+
+        {/* Foto del venditore */}
+        {(listing.photos && listing.photos.length > 0) || listing.photo_1 || listing.photo_2 || listing.photo_3 ? (
+          <View style={styles.photosCard}>
+            <Text style={styles.photosTitle}>Foto del libro</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photosScroll}>
+              {listing.photos?.map((photo, index) => (
+                <Image 
+                  key={index} 
+                  source={{ uri: photo.startsWith('data:') ? photo : `data:image/jpeg;base64,${photo}` }} 
+                  style={styles.photoThumbnail} 
+                />
+              ))}
+              {listing.photo_1 && (
+                <Image 
+                  source={{ uri: listing.photo_1.startsWith('data:') ? listing.photo_1 : `data:image/jpeg;base64,${listing.photo_1}` }} 
+                  style={styles.photoThumbnail} 
+                />
+              )}
+              {listing.photo_2 && (
+                <Image 
+                  source={{ uri: listing.photo_2.startsWith('data:') ? listing.photo_2 : `data:image/jpeg;base64,${listing.photo_2}` }} 
+                  style={styles.photoThumbnail} 
+                />
+              )}
+              {listing.photo_3 && (
+                <Image 
+                  source={{ uri: listing.photo_3.startsWith('data:') ? listing.photo_3 : `data:image/jpeg;base64,${listing.photo_3}` }} 
+                  style={styles.photoThumbnail} 
+                />
+              )}
+            </ScrollView>
+          </View>
+        ) : null}
 
         {/* Fascicoli Info */}
         {listing.ha_fascicoli && listing.fascicoli_totali && listing.fascicoli_totali > 0 && (
@@ -733,6 +888,31 @@ export default function ListingDetailScreen() {
             })
             )}
           </View>
+        )}
+
+        {/* Opzione Foderazione - appare quando una cartolibreria è selezionata */}
+        {selectedBookstore && (
+          <TouchableOpacity 
+            style={styles.foderaturaCard}
+            onPress={() => setRichiediFoderazione(!richiediFoderazione)}
+          >
+            <View style={styles.foderaturaContent}>
+              <View style={[
+                styles.foderaturaCheckbox,
+                richiediFoderazione && styles.foderaturaCheckboxChecked
+              ]}>
+                {richiediFoderazione && (
+                  <Ionicons name="checkmark" size={16} color="#fff" />
+                )}
+              </View>
+              <View style={styles.foderaturaTextContainer}>
+                <Text style={styles.foderaturaTitle}>Fodere il libro</Text>
+                <Text style={styles.foderaturaSubtitle}>
+                  Richiedi la foderazione presso {selectedBookstore.nome}
+                </Text>
+              </View>
+            </View>
+          </TouchableOpacity>
         )}
 
         <View style={styles.sellerCard}>
@@ -1432,5 +1612,118 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#888',
     marginTop: 4,
+  },
+  // Condizione percentuale row
+  conditionPercentageRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    gap: 8,
+  },
+  conditionPercentageLabel: {
+    fontSize: 14,
+    color: '#666',
+  },
+  conditionPercentageValue: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  // Esercizi svolti
+  eserciziSvoltiContainer: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+  },
+  eserciziSvoltiHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  eserciziSvoltiLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FF9800',
+  },
+  eserciziSvoltiTags: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  eserciziTag: {
+    backgroundColor: '#FFF3E0',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#FF9800',
+  },
+  eserciziTagText: {
+    fontSize: 12,
+    color: '#FF9800',
+    fontWeight: '600',
+  },
+  // Foto del libro
+  photosCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  photosTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 12,
+  },
+  photosScroll: {
+    flexDirection: 'row',
+  },
+  photoThumbnail: {
+    width: 100,
+    height: 100,
+    borderRadius: 8,
+    marginRight: 10,
+  },
+  // Foderazione libro
+  foderaturaCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 12,
+    marginHorizontal: 16,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  foderaturaContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  foderaturaCheckbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#1a472a',
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  foderaturaCheckboxChecked: {
+    backgroundColor: '#1a472a',
+  },
+  foderaturaTextContainer: {
+    flex: 1,
+  },
+  foderaturaTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  foderaturaSubtitle: {
+    fontSize: 13,
+    color: '#666',
+    marginTop: 2,
   },
 });
