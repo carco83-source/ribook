@@ -297,10 +297,10 @@ export default function ProfileScreen() {
                 
                 {/* Three Column Layout */}
                 <View style={styles.bookFlowContainer}>
-                  {/* LEFT - VENDI (Cliccabile → vai a Sell Tab) */}
+                  {/* LEFT - VENDI (Cliccabile → vai a Cerca Tab) */}
                   <TouchableOpacity 
                     style={styles.bookFlowColumn}
-                    onPress={() => router.push('/(tabs)/sell')}
+                    onPress={() => router.push('/(tabs)/search')}
                     activeOpacity={0.7}
                   >
                     <View style={[styles.bookFlowHeader, { backgroundColor: '#2196F3' }]}>

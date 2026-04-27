@@ -284,7 +284,7 @@ export default function CreateListingScreen() {
           headerTintColor: '#fff',
           headerLeft: () => (
             <TouchableOpacity 
-              onPress={() => router.canGoBack() ? router.back() : router.push('/(tabs)/sell')} 
+              onPress={() => router.canGoBack() ? router.back() : router.push('/(tabs)/search')} 
               style={{ marginLeft: 16, padding: 8 }}
             >
               <Ionicons name="arrow-back" size={24} color="#fff" />

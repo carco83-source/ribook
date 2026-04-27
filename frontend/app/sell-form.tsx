@@ -1,0 +1,1072 @@
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ActivityIndicator,
+  Alert,
+  Image,
+  Modal,
+  TextInput,
+  ScrollView,
+  Platform,
+} from 'react-native';
+import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import axios from 'axios';
+import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
+import Slider from '@react-native-community/slider';
+
+const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:8001';
+
+interface Book {
+  id: string;
+  isbn: string;
+  titolo: string;
+  autori?: string;
+  disciplina?: string;
+  prezzo_copertina?: number;
+  prezzo_suggerito?: number;
+  editore?: string;
+}
+
+// Bookshops data
+const bookshopsData = [
+  { 
+    id: 'lapostrofo', 
+    name: "Cartolibreria L'Apostrofo", 
+    address: 'Via Genova 24, Viale Crotone 138, 88100 Catanzaro',
+  },
+  { 
+    id: 'palaia', 
+    name: 'Cartolibreria Palaia Luigi', 
+    address: 'Via Santa Maria 1, 88100 Catanzaro',
+  },
+  { 
+    id: 'aemme77', 
+    name: 'AEMME 77 di Ruoppolo Francesco', 
+    address: 'Viale Tommaso Campanella 68, 88100 Catanzaro',
+  },
+  { 
+    id: 'nica', 
+    name: 'Cartolibreria NiCa', 
+    address: 'Viale Magna Grecia 179, 88100 Catanzaro',
+  },
+];
+
+export default function SellFormScreen() {
+  const router = useRouter();
+  const params = useLocalSearchParams<{ isbn?: string; titolo?: string; prezzo?: string }>();
+  
+  const [userId, setUserId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [selectedBook, setSelectedBook] = useState<Book | null>(null);
+  
+  // Form fields - Condizioni
+  const [pennaPercentuale, setPennaPercentuale] = useState(0);
+  const [matitaPercentuale, setMatitaPercentuale] = useState(0);
+  const [evidenziatorePercentuale, setEvidenziatorePercentuale] = useState(0);
+  const [usuraLibroPercentuale, setUsuraLibroPercentuale] = useState(0);
+  const [eserciziPenna, setEserciziPenna] = useState(false);
+  const [eserciziMatita, setEserciziMatita] = useState(false);
+  const [isNewBook, setIsNewBook] = useState(false);
+  
+  // Photos
+  const [listingPhotos, setListingPhotos] = useState<string[]>([]);
+  const [loadingPhoto, setLoadingPhoto] = useState(false);
+  const [autoCoverUrl, setAutoCoverUrl] = useState<string | null>(null);
+  const [loadingCover, setLoadingCover] = useState(false);
+  
+  // Bookshops & Price
+  const [selectedBookshops, setSelectedBookshops] = useState<string[]>([]);
+  const [selectedPriceOption, setSelectedPriceOption] = useState<number | null>(null);
+  const [notes, setNotes] = useState('');
+  const [creatingListing, setCreatingListing] = useState(false);
+  const [foderare, setFoderare] = useState(false);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      const storedUserId = await AsyncStorage.getItem('user_id');
+      if (!storedUserId) {
+        router.replace('/');
+        return;
+      }
+      setUserId(storedUserId);
+
+      // Se c'è un ISBN nei params, cerca il libro
+      if (params.isbn) {
+        const response = await axios.get(`${API_URL}/api/books/search?isbn=${params.isbn}`);
+        if (response.data && response.data.length > 0) {
+          const book = response.data[0];
+          setSelectedBook({
+            id: book.id || params.isbn,
+            isbn: params.isbn,
+            titolo: book.titolo || params.titolo || 'Libro',
+            autori: book.autori,
+            disciplina: book.disciplina,
+            prezzo_copertina: book.prezzo_copertina || parseFloat(params.prezzo || '0'),
+            editore: book.editore,
+          });
+          // Carica copertina
+          setAutoCoverUrl(`https://www.ibs.it/images/${params.isbn}_0_0_0_536_0.jpg`);
+        } else {
+          // Crea book manuale
+          setSelectedBook({
+            id: params.isbn,
+            isbn: params.isbn,
+            titolo: params.titolo || 'Libro',
+            prezzo_copertina: parseFloat(params.prezzo || '0'),
+          });
+          setAutoCoverUrl(`https://www.ibs.it/images/${params.isbn}_0_0_0_536_0.jpg`);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const showAlert = (title: string, message: string) => {
+    if (Platform.OS === 'web') {
+      window.alert(`${title}: ${message}`);
+    } else {
+      Alert.alert(title, message);
+    }
+  };
+
+  // Calcola colore gradiente
+  const getGradientColor = (value: number): string => {
+    if (value <= 50) {
+      const ratio = value / 50;
+      const r = Math.round(76 + (255 - 76) * ratio);
+      const g = Math.round(175 + (193 - 175) * ratio);
+      const b = Math.round(80 - 80 * ratio);
+      return `rgb(${r}, ${g}, ${b})`;
+    } else {
+      const ratio = (value - 50) / 50;
+      const r = 255;
+      const g = Math.round(193 - 193 * ratio);
+      const b = 0;
+      return `rgb(${r}, ${g}, ${b})`;
+    }
+  };
+
+  // Calcolo prezzo
+  const calcolaPrezzoLibro = () => {
+    const prezzoNuovo = selectedBook?.prezzo_copertina || 0;
+    
+    if (prezzoNuovo === 0) {
+      return {
+        usura: 0,
+        prezzoConsigliato: 0,
+        prezzoVeloce: 0,
+        prezzoAlto: 0,
+        guadagnoUtente: 0,
+        condition: 'buono'
+      };
+    }
+    
+    if (isNewBook) {
+      const prezzoAcquirente = prezzoNuovo * 0.93;
+      const commissionePiattaforma = 0.17;
+      const stripeFisso = 0.25;
+      const guadagnoVenditore = prezzoAcquirente * (1 - commissionePiattaforma) - stripeFisso;
+      
+      return {
+        usura: 0,
+        prezzoAcquirente: Math.round(prezzoAcquirente * 100) / 100,
+        guadagnoUtente: Math.round(guadagnoVenditore * 100) / 100,
+        condition: 'nuovo'
+      };
+    }
+    
+    const condizioniPagineMedia = (
+      pennaPercentuale * 0.50 +
+      evidenziatorePercentuale * 0.35 +
+      matitaPercentuale * 0.15
+    );
+    
+    let usuraBase = (
+      condizioniPagineMedia * 0.75 +
+      usuraLibroPercentuale * 0.25
+    );
+    
+    if (eserciziPenna) usuraBase = Math.min(100, usuraBase + 10);
+    if (eserciziMatita) usuraBase = Math.min(100, usuraBase + 10);
+    
+    let usura = usuraBase / 100;
+    
+    const maxUsato = prezzoNuovo * 0.80;
+    let prezzoUsato = maxUsato * (1 - Math.pow(usura, 1.2));
+    prezzoUsato = Math.min(prezzoUsato, maxUsato);
+    prezzoUsato = Math.max(prezzoUsato, prezzoNuovo * 0.20);
+    
+    const commissionePiattaforma = 0.17;
+    const stripeFisso = 0.25;
+    
+    const prezzoAlto = Math.min(prezzoUsato * 1.10, prezzoNuovo * 0.85);
+    const prezzoMedio = prezzoUsato;
+    const prezzoBasso = prezzoUsato * 0.90;
+    
+    let condition = 'buono';
+    const usuraPercentuale = usura * 100;
+    if (usuraPercentuale <= 30) condition = 'ottimo';
+    else if (usuraPercentuale <= 60) condition = 'buono';
+    else if (usuraPercentuale <= 80) condition = 'accettabile';
+    else condition = 'scarso';
+    
+    return {
+      usura: Math.round(usuraPercentuale * 10) / 10,
+      prezzoAlto: Math.round(prezzoAlto * 100) / 100,
+      prezzoMedio: Math.round(prezzoMedio * 100) / 100,
+      prezzoBasso: Math.round(prezzoBasso * 100) / 100,
+      guadagnoAlto: Math.round((prezzoAlto * (1 - commissionePiattaforma) - stripeFisso) * 100) / 100,
+      guadagnoMedio: Math.round((prezzoMedio * (1 - commissionePiattaforma) - stripeFisso) * 100) / 100,
+      guadagnoBasso: Math.round((prezzoBasso * (1 - commissionePiattaforma) - stripeFisso) * 100) / 100,
+      condition
+    };
+  };
+
+  const calculatePriceRange = () => {
+    const prezzoCalcolato = calcolaPrezzoLibro();
+    
+    if (isNewBook) {
+      return {
+        condition: prezzoCalcolato.condition,
+        usura: 0,
+        isNew: true,
+        prezzoAcquirente: prezzoCalcolato.prezzoAcquirente,
+        guadagnoUtente: prezzoCalcolato.guadagnoUtente,
+        prices: [
+          { 
+            label: 'Libro Nuovo', 
+            prezzoAcquirente: prezzoCalcolato.prezzoAcquirente,
+            guadagnoVenditore: prezzoCalcolato.guadagnoUtente
+          }
+        ]
+      };
+    }
+    
+    return {
+      condition: prezzoCalcolato.condition,
+      usura: prezzoCalcolato.usura,
+      isNew: false,
+      prices: [
+        { 
+          label: 'Prezzo alto', 
+          prezzoAcquirente: prezzoCalcolato.prezzoAlto,
+          guadagnoVenditore: prezzoCalcolato.guadagnoAlto
+        },
+        { 
+          label: 'Prezzo consigliato', 
+          prezzoAcquirente: prezzoCalcolato.prezzoMedio,
+          guadagnoVenditore: prezzoCalcolato.guadagnoMedio
+        },
+        { 
+          label: 'Vendita rapida', 
+          prezzoAcquirente: prezzoCalcolato.prezzoBasso,
+          guadagnoVenditore: prezzoCalcolato.guadagnoBasso
+        },
+      ]
+    };
+  };
+
+  const priceRange = calculatePriceRange();
+
+  // Auto-seleziona prezzo consigliato
+  useEffect(() => {
+    if (selectedBook && selectedPriceOption === null) {
+      const defaultPriceIndex = isNewBook ? 0 : 1;
+      const defaultPrice = priceRange.prices[defaultPriceIndex]?.prezzoAcquirente || priceRange.prices[0]?.prezzoAcquirente;
+      if (defaultPrice) {
+        setSelectedPriceOption(defaultPrice);
+      }
+    }
+  }, [selectedBook, isNewBook]);
+
+  const toggleBookshop = (shopId: string) => {
+    setSelectedBookshops(prev => {
+      if (prev.includes(shopId)) {
+        return prev.filter(id => id !== shopId);
+      } else {
+        return [...prev, shopId];
+      }
+    });
+  };
+
+  // Photo handling
+  const compressImage = async (uri: string): Promise<string | null> => {
+    try {
+      const manipulated = await ImageManipulator.manipulateAsync(
+        uri,
+        [{ resize: { width: 1280 } }],
+        { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+      );
+      return manipulated.base64 || null;
+    } catch (error) {
+      console.error('Error compressing:', error);
+      return null;
+    }
+  };
+
+  const takePhotoAtIndex = async (index: number) => {
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) {
+      showAlert('Permesso negato', 'Serve il permesso per usare la fotocamera');
+      return;
+    }
+
+    setLoadingPhoto(true);
+    try {
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: false,
+        quality: 0.7,
+      });
+
+      if (!result.canceled && result.assets[0].uri) {
+        const compressedBase64 = await compressImage(result.assets[0].uri);
+        if (compressedBase64) {
+          const newPhotos = [...listingPhotos];
+          while (newPhotos.length < index) {
+            newPhotos.push('');
+          }
+          if (newPhotos.length === index) {
+            newPhotos.push(compressedBase64);
+          } else {
+            newPhotos[index] = compressedBase64;
+          }
+          setListingPhotos(newPhotos.filter(p => p !== ''));
+        }
+      }
+    } finally {
+      setLoadingPhoto(false);
+    }
+  };
+
+  const removePhoto = (index: number) => {
+    setListingPhotos(listingPhotos.filter((_, i) => i !== index));
+  };
+
+  const createListing = async () => {
+    if (!selectedBook || !userId) return;
+
+    if (selectedPriceOption === null) {
+      showAlert('Prezzo richiesto', 'Seleziona un prezzo dalla forbice');
+      return;
+    }
+
+    if (selectedBookshops.length === 0) {
+      showAlert('Punto di scambio richiesto', 'Seleziona almeno una cartolibreria');
+      return;
+    }
+
+    setCreatingListing(true);
+    try {
+      const selectedShopsDetails = bookshopsData.filter(b => selectedBookshops.includes(b.id));
+      
+      const conditionDetails = {
+        penna: pennaPercentuale,
+        matita: matitaPercentuale,
+        evidenziatore: evidenziatorePercentuale,
+        usura_libro: usuraLibroPercentuale,
+        esercizi_penna: eserciziPenna,
+        esercizi_matita: eserciziMatita,
+      };
+      
+      const currentPriceRange = calculatePriceRange();
+      const selectedPriceInfo = currentPriceRange.prices.find(
+        p => p.prezzoAcquirente === selectedPriceOption
+      );
+      const guadagnoUtente = selectedPriceInfo?.guadagnoVenditore || (selectedPriceOption * 0.83 - 0.25);
+      
+      await axios.post(`${API_URL}/api/listings?user_id=${userId}`, {
+        book_id: selectedBook.isbn || selectedBook.id,
+        book_isbn: selectedBook.isbn,
+        book_titolo: selectedBook.titolo,
+        book_autori: selectedBook.autori,
+        book_disciplina: selectedBook.disciplina,
+        prezzo_copertina: selectedBook.prezzo_copertina,
+        condizione: currentPriceRange.condition,
+        prezzo_vendita: selectedPriceOption,
+        foto_base64: listingPhotos.length > 0 ? listingPhotos[0] : null,
+        foto_aggiuntive: listingPhotos.slice(1),
+        cover_url: autoCoverUrl,
+        condition_details: conditionDetails,
+        bookstore_ids: selectedBookshops,
+        bookstore_names: selectedShopsDetails.map(s => s.name),
+        bookstore_addresses: selectedShopsDetails.map(s => s.address),
+        notes: notes,
+        is_new_book: isNewBook,
+        usura: currentPriceRange.usura || 0,
+        guadagno_utente: guadagnoUtente,
+        foderare: foderare,
+      });
+
+      showAlert('Successo!', 'Annuncio creato con successo');
+      router.back();
+    } catch (error: any) {
+      showAlert('Errore', error.response?.data?.detail || 'Impossibile creare annuncio');
+    } finally {
+      setCreatingListing(false);
+    }
+  };
+
+  const getConditionLabel = (condition: string) => {
+    switch (condition) {
+      case 'nuovo': return 'Nuovo';
+      case 'ottimo': return 'Ottimo';
+      case 'buono': return 'Buono';
+      case 'accettabile': return 'Accettabile';
+      case 'scarso': return 'Scarso';
+      default: return condition;
+    }
+  };
+
+  const getConditionColor = (condition: string) => {
+    switch (condition) {
+      case 'nuovo': return '#2196F3';
+      case 'ottimo': return '#4CAF50';
+      case 'buono': return '#FF9800';
+      case 'accettabile': return '#f44336';
+      case 'scarso': return '#9e9e9e';
+      default: return '#666';
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#1a472a" />
+      </View>
+    );
+  }
+
+  if (!selectedBook) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Ionicons name="book-outline" size={64} color="#ccc" />
+        <Text style={styles.emptyText}>Nessun libro selezionato</Text>
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <Text style={styles.backButtonText}>Torna indietro</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <Stack.Screen 
+        options={{ 
+          title: 'Vendi libro',
+          headerStyle: { backgroundColor: '#1a472a' },
+          headerTintColor: '#fff',
+        }} 
+      />
+
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        {/* Book Info */}
+        <View style={styles.bookInfoCard}>
+          {autoCoverUrl && (
+            <Image source={{ uri: autoCoverUrl }} style={styles.bookCover} resizeMode="contain" />
+          )}
+          <View style={styles.bookDetails}>
+            <Text style={styles.bookTitle}>{selectedBook.titolo}</Text>
+            {selectedBook.disciplina && <Text style={styles.bookDiscipline}>{selectedBook.disciplina}</Text>}
+            <Text style={styles.bookIsbn}>ISBN: {selectedBook.isbn}</Text>
+            {selectedBook.prezzo_copertina && (
+              <Text style={styles.bookPrice}>Prezzo copertina: €{selectedBook.prezzo_copertina.toFixed(2)}</Text>
+            )}
+          </View>
+        </View>
+
+        {/* Libro Nuovo Checkbox */}
+        <View style={styles.section}>
+          <TouchableOpacity 
+            style={[styles.newBookToggle, isNewBook && styles.newBookToggleActive]}
+            onPress={() => setIsNewBook(!isNewBook)}
+          >
+            <Ionicons 
+              name={isNewBook ? "checkbox" : "square-outline"} 
+              size={24} 
+              color={isNewBook ? "#2196F3" : "#666"} 
+            />
+            <Text style={[styles.newBookText, isNewBook && styles.newBookTextActive]}>
+              Il libro è NUOVO (mai usato)
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Condizioni (solo se usato) */}
+        {!isNewBook && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Condizioni del libro</Text>
+            
+            {/* Slider Penna */}
+            <View style={styles.sliderRow}>
+              <Text style={styles.sliderLabel}>Scritte a penna</Text>
+              <Slider
+                style={styles.slider}
+                minimumValue={0}
+                maximumValue={100}
+                value={pennaPercentuale}
+                onValueChange={setPennaPercentuale}
+                minimumTrackTintColor={getGradientColor(pennaPercentuale)}
+                maximumTrackTintColor="#e0e0e0"
+                thumbTintColor={getGradientColor(pennaPercentuale)}
+              />
+              <Text style={[styles.sliderValue, { color: getGradientColor(pennaPercentuale) }]}>
+                {Math.round(pennaPercentuale)}%
+              </Text>
+            </View>
+
+            {/* Slider Matita */}
+            <View style={styles.sliderRow}>
+              <Text style={styles.sliderLabel}>Scritte a matita</Text>
+              <Slider
+                style={styles.slider}
+                minimumValue={0}
+                maximumValue={100}
+                value={matitaPercentuale}
+                onValueChange={setMatitaPercentuale}
+                minimumTrackTintColor={getGradientColor(matitaPercentuale)}
+                maximumTrackTintColor="#e0e0e0"
+                thumbTintColor={getGradientColor(matitaPercentuale)}
+              />
+              <Text style={[styles.sliderValue, { color: getGradientColor(matitaPercentuale) }]}>
+                {Math.round(matitaPercentuale)}%
+              </Text>
+            </View>
+
+            {/* Slider Evidenziatore */}
+            <View style={styles.sliderRow}>
+              <Text style={styles.sliderLabel}>Pagine evidenziate</Text>
+              <Slider
+                style={styles.slider}
+                minimumValue={0}
+                maximumValue={100}
+                value={evidenziatorePercentuale}
+                onValueChange={setEvidenziatorePercentuale}
+                minimumTrackTintColor={getGradientColor(evidenziatorePercentuale)}
+                maximumTrackTintColor="#e0e0e0"
+                thumbTintColor={getGradientColor(evidenziatorePercentuale)}
+              />
+              <Text style={[styles.sliderValue, { color: getGradientColor(evidenziatorePercentuale) }]}>
+                {Math.round(evidenziatorePercentuale)}%
+              </Text>
+            </View>
+
+            {/* Slider Usura */}
+            <View style={styles.sliderRow}>
+              <Text style={styles.sliderLabel}>Condizione generale</Text>
+              <Slider
+                style={styles.slider}
+                minimumValue={0}
+                maximumValue={100}
+                value={usuraLibroPercentuale}
+                onValueChange={setUsuraLibroPercentuale}
+                minimumTrackTintColor={getGradientColor(usuraLibroPercentuale)}
+                maximumTrackTintColor="#e0e0e0"
+                thumbTintColor={getGradientColor(usuraLibroPercentuale)}
+              />
+              <Text style={[styles.sliderValue, { color: getGradientColor(usuraLibroPercentuale) }]}>
+                {Math.round(usuraLibroPercentuale)}%
+              </Text>
+            </View>
+
+            {/* Checkbox Esercizi */}
+            <View style={styles.checkboxRow}>
+              <TouchableOpacity 
+                style={styles.checkbox}
+                onPress={() => setEserciziPenna(!eserciziPenna)}
+              >
+                <Ionicons 
+                  name={eserciziPenna ? "checkbox" : "square-outline"} 
+                  size={22} 
+                  color={eserciziPenna ? "#f44336" : "#666"} 
+                />
+                <Text style={styles.checkboxLabel}>Esercizi svolti a penna</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.checkbox}
+                onPress={() => setEserciziMatita(!eserciziMatita)}
+              >
+                <Ionicons 
+                  name={eserciziMatita ? "checkbox" : "square-outline"} 
+                  size={22} 
+                  color={eserciziMatita ? "#FF9800" : "#666"} 
+                />
+                <Text style={styles.checkboxLabel}>Esercizi svolti a matita</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* Risultato Condizione */}
+        <View style={styles.conditionResult}>
+          <Text style={styles.conditionLabel}>Condizione calcolata:</Text>
+          <View style={[styles.conditionBadge, { backgroundColor: getConditionColor(priceRange.condition) + '20' }]}>
+            <Text style={[styles.conditionText, { color: getConditionColor(priceRange.condition) }]}>
+              {getConditionLabel(priceRange.condition)}
+            </Text>
+          </View>
+        </View>
+
+        {/* Forbice Prezzi */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Scegli il prezzo</Text>
+          {priceRange.prices.map((price, idx) => (
+            <TouchableOpacity
+              key={idx}
+              style={[
+                styles.priceOption,
+                selectedPriceOption === price.prezzoAcquirente && styles.priceOptionSelected
+              ]}
+              onPress={() => setSelectedPriceOption(price.prezzoAcquirente)}
+            >
+              <View style={styles.priceOptionLeft}>
+                <Ionicons 
+                  name={selectedPriceOption === price.prezzoAcquirente ? "radio-button-on" : "radio-button-off"} 
+                  size={22} 
+                  color={selectedPriceOption === price.prezzoAcquirente ? "#1a472a" : "#666"} 
+                />
+                <Text style={styles.priceLabel}>{price.label}</Text>
+              </View>
+              <View style={styles.priceOptionRight}>
+                <Text style={styles.priceValue}>€{price.prezzoAcquirente?.toFixed(2)}</Text>
+                <Text style={styles.priceEarning}>Guadagni: €{price.guadagnoVenditore?.toFixed(2)}</Text>
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* Foto (opzionali) */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Foto del libro (opzionali)</Text>
+          <View style={styles.photoGrid}>
+            {[0, 1, 2].map((idx) => (
+              <TouchableOpacity
+                key={idx}
+                style={[styles.photoSlot, listingPhotos[idx] && styles.photoSlotFilled]}
+                onPress={() => !listingPhotos[idx] && takePhotoAtIndex(idx)}
+                disabled={loadingPhoto}
+              >
+                {listingPhotos[idx] ? (
+                  <>
+                    <Image 
+                      source={{ uri: `data:image/jpeg;base64,${listingPhotos[idx]}` }} 
+                      style={styles.photoPreview} 
+                    />
+                    <TouchableOpacity 
+                      style={styles.removePhotoBtn}
+                      onPress={() => removePhoto(idx)}
+                    >
+                      <Ionicons name="close-circle" size={24} color="#ff4444" />
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <>
+                    <Ionicons name="camera" size={28} color="#999" />
+                    <Text style={styles.photoSlotText}>Foto {idx + 1}</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+          {loadingPhoto && <ActivityIndicator style={{ marginTop: 10 }} />}
+        </View>
+
+        {/* Punti di scambio */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Punti di scambio</Text>
+          {bookshopsData.map((shop) => (
+            <TouchableOpacity
+              key={shop.id}
+              style={[styles.shopOption, selectedBookshops.includes(shop.id) && styles.shopOptionSelected]}
+              onPress={() => toggleBookshop(shop.id)}
+            >
+              <Ionicons 
+                name={selectedBookshops.includes(shop.id) ? "checkbox" : "square-outline"} 
+                size={22} 
+                color={selectedBookshops.includes(shop.id) ? "#1a472a" : "#666"} 
+              />
+              <View style={styles.shopInfo}>
+                <Text style={styles.shopName}>{shop.name}</Text>
+                <Text style={styles.shopAddress}>{shop.address}</Text>
+              </View>
+            </TouchableOpacity>
+          ))}
+          
+          {/* Fodere checkbox - visibile solo se selezionata una cartolibreria */}
+          {selectedBookshops.length > 0 && (
+            <TouchableOpacity 
+              style={[styles.foderareOption, foderare && styles.foderareOptionActive]}
+              onPress={() => setFoderare(!foderare)}
+            >
+              <Ionicons 
+                name={foderare ? "checkbox" : "square-outline"} 
+                size={22} 
+                color={foderare ? "#4CAF50" : "#666"} 
+              />
+              <Text style={[styles.foderareText, foderare && styles.foderareTextActive]}>
+                Foderare il libro (servizio cartolibreria)
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Note */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Note (opzionale)</Text>
+          <TextInput
+            style={styles.notesInput}
+            placeholder="Es: Include CD-ROM, fascicolo esercizi..."
+            placeholderTextColor="#999"
+            value={notes}
+            onChangeText={setNotes}
+            multiline
+            numberOfLines={3}
+          />
+        </View>
+
+        {/* Bottone Pubblica */}
+        <TouchableOpacity
+          style={[styles.publishButton, creatingListing && styles.publishButtonDisabled]}
+          onPress={createListing}
+          disabled={creatingListing}
+        >
+          {creatingListing ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <>
+              <Ionicons name="checkmark-circle" size={22} color="#fff" />
+              <Text style={styles.publishButtonText}>Pubblica annuncio</Text>
+            </>
+          )}
+        </TouchableOpacity>
+
+        <View style={{ height: 40 }} />
+      </ScrollView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#666',
+    marginTop: 16,
+  },
+  backButton: {
+    marginTop: 20,
+    backgroundColor: '#1a472a',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  backButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  bookInfoCard: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    margin: 16,
+    padding: 16,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  bookCover: {
+    width: 80,
+    height: 120,
+    borderRadius: 8,
+    backgroundColor: '#f0f0f0',
+  },
+  bookDetails: {
+    flex: 1,
+    marginLeft: 16,
+    justifyContent: 'center',
+  },
+  bookTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 4,
+  },
+  bookDiscipline: {
+    fontSize: 13,
+    color: '#1a472a',
+    marginBottom: 4,
+  },
+  bookIsbn: {
+    fontSize: 12,
+    color: '#888',
+    fontFamily: 'monospace',
+    marginBottom: 4,
+  },
+  bookPrice: {
+    fontSize: 14,
+    color: '#1a472a',
+    fontWeight: '600',
+  },
+  section: {
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginBottom: 12,
+    padding: 16,
+    borderRadius: 12,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 12,
+  },
+  newBookToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: '#f9f9f9',
+  },
+  newBookToggleActive: {
+    backgroundColor: '#e3f2fd',
+  },
+  newBookText: {
+    fontSize: 15,
+    color: '#666',
+  },
+  newBookTextActive: {
+    color: '#2196F3',
+    fontWeight: '600',
+  },
+  sliderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  sliderLabel: {
+    width: 130,
+    fontSize: 13,
+    color: '#333',
+  },
+  slider: {
+    flex: 1,
+    height: 40,
+  },
+  sliderValue: {
+    width: 45,
+    textAlign: 'right',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  checkboxRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+    marginTop: 8,
+  },
+  checkbox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  checkboxLabel: {
+    fontSize: 13,
+    color: '#333',
+  },
+  conditionResult: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginBottom: 12,
+    padding: 16,
+    borderRadius: 12,
+  },
+  conditionLabel: {
+    fontSize: 14,
+    color: '#666',
+  },
+  conditionBadge: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  conditionText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  priceOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 14,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#e0e0e0',
+    marginBottom: 10,
+  },
+  priceOptionSelected: {
+    borderColor: '#1a472a',
+    backgroundColor: '#f0f8f0',
+  },
+  priceOptionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  priceLabel: {
+    fontSize: 14,
+    color: '#333',
+  },
+  priceOptionRight: {
+    alignItems: 'flex-end',
+  },
+  priceValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1a472a',
+  },
+  priceEarning: {
+    fontSize: 12,
+    color: '#4CAF50',
+    marginTop: 2,
+  },
+  photoGrid: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  photoSlot: {
+    flex: 1,
+    aspectRatio: 1,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#e0e0e0',
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoSlotFilled: {
+    borderStyle: 'solid',
+    borderColor: '#4CAF50',
+  },
+  photoSlotText: {
+    fontSize: 11,
+    color: '#999',
+    marginTop: 4,
+  },
+  photoPreview: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 8,
+  },
+  removePhotoBtn: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+  },
+  shopOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    marginBottom: 10,
+    gap: 12,
+  },
+  shopOptionSelected: {
+    borderColor: '#1a472a',
+    backgroundColor: '#f0f8f0',
+  },
+  shopInfo: {
+    flex: 1,
+  },
+  shopName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+  },
+  shopAddress: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
+  },
+  foderareOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: '#f9f9f9',
+    marginTop: 8,
+    gap: 10,
+  },
+  foderareOptionActive: {
+    backgroundColor: '#e8f5e9',
+  },
+  foderareText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  foderareTextActive: {
+    color: '#4CAF50',
+    fontWeight: '600',
+  },
+  notesInput: {
+    backgroundColor: '#f9f9f9',
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 14,
+    color: '#333',
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  publishButton: {
+    backgroundColor: '#1a472a',
+    marginHorizontal: 16,
+    paddingVertical: 16,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  publishButtonDisabled: {
+    opacity: 0.7,
+  },
+  publishButtonText: {
+    color: '#fff',
+    fontSize: 17,
+    fontWeight: 'bold',
+  },
+});

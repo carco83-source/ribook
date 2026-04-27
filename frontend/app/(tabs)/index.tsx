@@ -337,10 +337,10 @@ export default function RadarScreen() {
 
             {/* Three Column Layout */}
             <View style={styles.bookFlowThreeColumns}>
-              {/* LEFT - VENDI (Cliccabile → vai a Sell Tab) */}
+              {/* LEFT - VENDI (Cliccabile → vai a Cerca Tab) */}
               <TouchableOpacity 
                 style={styles.bookFlowColumnNew}
-                onPress={() => router.push('/(tabs)/sell')}
+                onPress={() => router.push('/(tabs)/search')}
                 activeOpacity={0.7}
               >
                 <View style={[styles.bookFlowColumnHeaderCompact, { backgroundColor: '#2196F3' }]}>
@@ -504,7 +504,7 @@ export default function RadarScreen() {
                       <TouchableOpacity 
                         key={idx} 
                         style={[styles.sampleBookItem, styles.sampleBookItemClickable]}
-                        onPress={() => router.push(`/(tabs)/sell?isbn=${book.isbn}&titolo=${encodeURIComponent(book.titolo || '')}&prezzo=${prezzoNuovo}`)}
+                        onPress={() => router.push(`/sell-form?isbn=${book.isbn}&titolo=${encodeURIComponent(book.titolo || '')}&prezzo=${prezzoNuovo}`)}
                       >
                         {coverUrl && (
                           <Image 

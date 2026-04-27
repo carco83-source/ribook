@@ -141,7 +141,7 @@ export default function SearchSellScreen() {
 
   const goToSellBook = () => {
     if (vendiBook) {
-      router.push(`/(tabs)/sell?isbn=${vendiBook.isbn}&titolo=${encodeURIComponent(vendiBook.titolo || '')}&prezzo=${vendiBook.prezzo_copertina || 0}`);
+      router.push(`/sell-form?isbn=${vendiBook.isbn}&titolo=${encodeURIComponent(vendiBook.titolo || '')}&prezzo=${vendiBook.prezzo_copertina || 0}`);
     }
   };
 
