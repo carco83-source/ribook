@@ -242,6 +242,8 @@ class BookListingCreate(BaseModel):
     condizione: Optional[str] = None  # OLD: nuovo, come_nuovo, etc. - kept for backwards compatibility
     # NEW: condition answers (if provided, will override condizione)
     condition_answers: Optional[BookConditionAnswers] = None
+    # NEW: condition details from sell.tsx (percentages)
+    condition_details: Optional[dict] = None  # {penna, matita, evidenziatore, usura_libro, esercizi_penna, esercizi_matita}
     note: Optional[str] = None
     foto_base64: Optional[str] = None
     # Fascicoli (workbook supplements)
@@ -1366,8 +1368,39 @@ async def create_listing(listing_data: BookListingCreate, user_id: str = Query(.
     condition_details = None
     condizione = listing_data.condizione
     
-    # NEW SYSTEM: If condition_answers provided, calculate condition automatically
-    if listing_data.condition_answers:
+    # NEW SYSTEM: If condition_details provided directly (from sell.tsx with percentages)
+    if listing_data.condition_details:
+        condition_details = listing_data.condition_details
+        # Calculate condition from percentages (same logic as frontend)
+        penna = condition_details.get('penna', 0)
+        matita = condition_details.get('matita', 0)
+        evidenziatore = condition_details.get('evidenziatore', 0)
+        usura_libro = condition_details.get('usura_libro', 0)
+        esercizi_penna = condition_details.get('esercizi_penna', False)
+        esercizi_matita = condition_details.get('esercizi_matita', False)
+        
+        # Calculate weighted average (75% Pagine, 25% Usura)
+        condizioni_pagine_media = (penna * 0.50 + evidenziatore * 0.35 + matita * 0.15)
+        avg_defects = (condizioni_pagine_media * 0.75 + usura_libro * 0.25)
+        
+        # Add penalty for exercises
+        if esercizi_penna:
+            avg_defects = min(100, avg_defects + 10)
+        if esercizi_matita:
+            avg_defects = min(100, avg_defects + 10)
+        
+        # Determine condition from percentage
+        if avg_defects <= 30:
+            condizione = "ottimo"
+        elif avg_defects <= 60:
+            condizione = "buono"
+        elif avg_defects <= 80:
+            condizione = "accettabile"
+        else:
+            condizione = "scarso"
+    
+    # OLD SYSTEM: If condition_answers provided, calculate condition automatically
+    elif listing_data.condition_answers:
         ca = listing_data.condition_answers
         condizione = calculate_condition_from_answers(
             ca.sottolineature, ca.copertina, ca.pagine, ca.esercizi
