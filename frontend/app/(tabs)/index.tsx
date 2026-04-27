@@ -1006,6 +1006,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 8,
+    backgroundColor: '#f5f5f5',
   },
   headerLeft: {
     flexDirection: 'row',
@@ -1015,7 +1016,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 26,
     fontWeight: 'bold',
-    color: '#1a472a',
+    color: '#000',
   },
   headerRight: {
     flexDirection: 'row',

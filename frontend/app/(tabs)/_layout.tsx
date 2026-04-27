@@ -55,20 +55,21 @@ export default function TabLayout() {
           marginTop: 4,
         },
         headerStyle: {
-          backgroundColor: '#1a472a',
+          backgroundColor: '#f5f5f5',
         },
-        headerTintColor: '#fff',
+        headerTintColor: '#333',
         headerTitleStyle: {
           fontWeight: 'bold',
+          color: '#000',
         },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Radar',
+          title: 'Home',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="radio" size={size} color={color} />
+            <Ionicons name="school" size={size} color={color} />
           ),
         }}
       />
@@ -84,9 +85,9 @@ export default function TabLayout() {
       <Tabs.Screen
         name="sell"
         options={{
-          title: 'Vendi',
+          title: 'Carrello',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="add-circle" size={size} color={color} />
+            <Ionicons name="cart" size={size} color={color} />
           ),
         }}
       />
@@ -102,9 +103,9 @@ export default function TabLayout() {
       <Tabs.Screen
         name="chats"
         options={{
-          title: 'Chat',
+          title: 'Messaggi',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="chatbubbles" size={size} color={color} />
+            <Ionicons name="notifications" size={size} color={color} />
           ),
         }}
       />
