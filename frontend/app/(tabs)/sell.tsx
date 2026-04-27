@@ -460,8 +460,8 @@ export default function SellScreen() {
   useEffect(() => {
     const handleParamsFromRadar = async () => {
       if (params.isbn && userId) {
-        // Cerca il libro con l'ISBN fornito
-        setManualISBN(params.isbn);
+        // Imposta l'ISBN e apri la ricerca
+        setIsbnInput(params.isbn);
         setShowISBNSearch(true);
         
         // Cerca automaticamente il libro
