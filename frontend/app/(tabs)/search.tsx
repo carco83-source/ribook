@@ -1,630 +1,363 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TextInput,
-  FlatList,
   TouchableOpacity,
+  ScrollView,
   ActivityIndicator,
   Alert,
-  Modal,
-  ScrollView,
+  Image,
+  Platform,
+  Keyboard,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 
-const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:8001';
 
 interface Book {
   id: string;
-  titolo: string;
-  autore?: string;
-  autori?: string;
   isbn: string;
-  materia?: string;
-  disciplina?: string;
-  prezzo_ministeriale?: number;
-  prezzo_copertina?: number;
-  classe?: string;
+  titolo: string;
+  autori?: string;
   editore?: string;
-  copie_disponibili?: number;
+  disciplina?: string;
+  prezzo_copertina?: number;
 }
 
-interface ChildProfile {
-  id: string;
-  nome_figlio: string;
-  scuola: string;
-  codice_scuola: string;
-  classe: string;
-  tipo_scuola: string;
+interface SearchResult {
+  book: Book;
+  copie_disponibili: number;
+  prezzo_minimo?: number;
 }
 
-// Helper functions
-const getBookAuthor = (book: Book): string => book.autore || book.autori || 'N/A';
-const getBookSubject = (book: Book): string => book.materia || book.disciplina || 'N/A';
-const getBookPrice = (book: Book): number => book.prezzo_ministeriale || book.prezzo_copertina || 0;
-
-interface Listing {
-  id: string;
-  book_titolo: string;
-  prezzo: number;
-  condizione: string;
-  seller_name?: string;
-  seller_rating?: number;
-  created_at?: string;
-  note?: string;
-  punto_scambio?: string;
-}
-
-export default function SearchScreen() {
+export default function SearchSellScreen() {
   const router = useRouter();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [books, setBooks] = useState<Book[]>([]);
-  const [filteredBooks, setFilteredBooks] = useState<Book[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadingBooks, setLoadingBooks] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   
-  // Child profiles
-  const [childProfiles, setChildProfiles] = useState<ChildProfile[]>([]);
-  const [selectedChild, setSelectedChild] = useState<ChildProfile | null>(null);
-  const [showChildPicker, setShowChildPicker] = useState(false);
-  const [targetClasse, setTargetClasse] = useState<number | null>(null);
-
-  // Listings modal
-  const [showListingsModal, setShowListingsModal] = useState(false);
-  const [selectedBook, setSelectedBook] = useState<Book | null>(null);
+  // Vendi states
+  const [vendiIsbn, setVendiIsbn] = useState('');
+  const [vendiLoading, setVendiLoading] = useState(false);
+  const [vendiBook, setVendiBook] = useState<Book | null>(null);
+  const [showScanner, setShowScanner] = useState(false);
+  const [permission, requestPermission] = useCameraPermissions();
   
-  // Generic search
-  const [genericSearchQuery, setGenericSearchQuery] = useState('');
-  const [genericResults, setGenericResults] = useState<Book[]>([]);
-  const [genericSearchLoading, setGenericSearchLoading] = useState(false);
-  const [bookListings, setBookListings] = useState<Listing[]>([]);
-  const [loadingListings, setLoadingListings] = useState(false);
+  // Cerca states
+  const [cercaIsbn, setCercaIsbn] = useState('');
+  const [cercaLoading, setCercaLoading] = useState(false);
+  const [cercaResults, setCercaResults] = useState<SearchResult[]>([]);
+  const [cercaBook, setCercaBook] = useState<Book | null>(null);
 
   useEffect(() => {
-    loadData();
+    loadUserId();
   }, []);
 
-  useEffect(() => {
-    if (searchQuery.trim() === '') {
-      setFilteredBooks(books);
+  const loadUserId = async () => {
+    const id = await AsyncStorage.getItem('user_id');
+    setUserId(id);
+  };
+
+  const showAlert = (title: string, message: string) => {
+    if (Platform.OS === 'web') {
+      window.alert(`${title}: ${message}`);
     } else {
-      const query = searchQuery.toLowerCase();
-      setFilteredBooks(
-        books.filter(
-          (book) =>
-            book.titolo.toLowerCase().includes(query) ||
-            getBookAuthor(book).toLowerCase().includes(query) ||
-            book.isbn.includes(query) ||
-            getBookSubject(book).toLowerCase().includes(query)
-        )
-      );
-    }
-  }, [searchQuery, books]);
-
-  const loadData = async () => {
-    try {
-      const storedUserId = await AsyncStorage.getItem('user_id');
-      setUserId(storedUserId);
-
-      if (storedUserId) {
-        // Get user with child profiles
-        const userResponse = await axios.get(`${API_URL}/api/users/${storedUserId}`);
-        const profili = userResponse.data.profili_figli || [];
-        setChildProfiles(profili);
-      }
-    } catch (error) {
-      console.error('Error loading data:', error);
-    } finally {
-      setLoading(false);
+      Alert.alert(title, message);
     }
   };
 
-  const selectChildProfile = async (child: ChildProfile) => {
-    setSelectedChild(child);
-    setShowChildPicker(false);
-    setLoadingBooks(true);
-    setSearchQuery('');
-
-    try {
-      // Use the new endpoint with compatibility logic
-      const response = await axios.get(
-        `${API_URL}/api/profiles/${userId}/children/${child.id}/books-to-buy`
-      );
-      
-      if (response.data.books && response.data.books.length > 0) {
-        setBooks(response.data.books);
-        setFilteredBooks(response.data.books);
-        setTargetClasse(response.data.classe_origine);
-      } else {
-        Alert.alert(
-          'Fine Ciclo',
-          response.data.message || `${child.nome_figlio} è all'ultimo anno del ciclo, non ci sono libri da comprare usati.`
-        );
-        setBooks([]);
-        setFilteredBooks([]);
-        setTargetClasse(null);
-      }
-    } catch (error) {
-      console.error('Error loading books:', error);
-      Alert.alert('Errore', 'Impossibile caricare i libri');
-    } finally {
-      setLoadingBooks(false);
-    }
-  };
-
-  // Funzione per ricerca generica per titolo/ISBN
-  const handleGenericSearch = async (query: string) => {
-    setGenericSearchQuery(query);
-    
-    if (query.length < 3) {
-      setGenericResults([]);
+  // ==================== VENDI FUNCTIONS ====================
+  
+  const handleVendiSearch = async () => {
+    if (!vendiIsbn || vendiIsbn.length < 10) {
+      showAlert('Errore', 'Inserisci un ISBN valido (10 o 13 cifre)');
       return;
     }
     
-    setGenericSearchLoading(true);
+    Keyboard.dismiss();
+    setVendiLoading(true);
+    setVendiBook(null);
+    
     try {
-      // Cerca nei libri di tutte le scuole di Catanzaro
-      const response = await axios.get(`${API_URL}/api/books/search`, {
-        params: { q: query, limit: 20 }
-      });
-      
-      if (response.data && response.data.books) {
-        setGenericResults(response.data.books);
+      const response = await axios.get(`${API_URL}/api/books/search?isbn=${vendiIsbn}`);
+      if (response.data && response.data.length > 0) {
+        setVendiBook(response.data[0]);
       } else {
-        setGenericResults([]);
+        // Prova a cercare con l'API IBS
+        setVendiBook({
+          id: `manual-${vendiIsbn}`,
+          isbn: vendiIsbn,
+          titolo: 'Libro trovato',
+          prezzo_copertina: 0,
+        });
       }
     } catch (error) {
-      console.error('Error searching books:', error);
-      setGenericResults([]);
+      console.error('Error searching book:', error);
+      showAlert('Errore', 'Impossibile cercare il libro');
     } finally {
-      setGenericSearchLoading(false);
+      setVendiLoading(false);
     }
   };
 
-  // Funzione legacy per aprire modal con listings (usata quando ci sono copie disponibili)
-  const handleViewListings = async (book: Book) => {
-    if (!userId) return;
+  const handleBarCodeScanned = ({ data }: { data: string }) => {
+    setShowScanner(false);
+    // Clean the ISBN
+    const cleanIsbn = data.replace(/[^0-9X]/gi, '');
+    setVendiIsbn(cleanIsbn);
+    // Auto search
+    setTimeout(() => {
+      handleVendiSearchWithIsbn(cleanIsbn);
+    }, 500);
+  };
 
-    setSelectedBook(book);
-    setShowListingsModal(true);
-    setLoadingListings(true);
-
+  const handleVendiSearchWithIsbn = async (isbn: string) => {
+    if (!isbn || isbn.length < 10) return;
+    
+    setVendiLoading(true);
+    setVendiBook(null);
+    
     try {
-      const response = await axios.get(`${API_URL}/api/listings/book/${book.isbn || book.id}`);
-      setBookListings(response.data.listings || []);
+      const response = await axios.get(`${API_URL}/api/books/search?isbn=${isbn}`);
+      if (response.data && response.data.length > 0) {
+        setVendiBook(response.data[0]);
+      } else {
+        setVendiBook({
+          id: `manual-${isbn}`,
+          isbn: isbn,
+          titolo: 'Libro trovato',
+          prezzo_copertina: 0,
+        });
+      }
     } catch (error) {
-      console.error('Error loading listings:', error);
-      setBookListings([]);
+      console.error('Error searching book:', error);
     } finally {
-      setLoadingListings(false);
+      setVendiLoading(false);
     }
   };
 
-  const handleSelectListing = (listing: Listing) => {
-    // Navigate to listing detail page
-    setShowListingsModal(false);
-    router.push(`/listing/${listing.id}`);
-  };
-
-  const getConditionColor = (condizione: string): string => {
-    switch (condizione?.toLowerCase()) {
-      case 'perfetto':
-        return '#4CAF50';
-      case 'buono':
-        return '#FF9800';
-      case 'usato':
-      case 'molto_usato':
-        return '#f44336';
-      default:
-        return '#666';
+  const goToSellBook = () => {
+    if (vendiBook) {
+      router.push(`/(tabs)/sell?isbn=${vendiBook.isbn}&titolo=${encodeURIComponent(vendiBook.titolo || '')}&prezzo=${vendiBook.prezzo_copertina || 0}`);
     }
   };
 
-  const renderBook = ({ item }: { item: Book }) => {
-    const copieDisponibili = item.copie_disponibili || 0;
-    const hasAvailableCopies = copieDisponibili > 0;
-
-    return (
-      <View style={styles.bookCard}>
-        <View style={styles.bookInfo}>
-          <Text style={styles.bookTitle}>{item.titolo}</Text>
-          <Text style={styles.bookAuthor}>{getBookAuthor(item)}</Text>
-          <View style={styles.bookMeta}>
-            <View style={styles.metaBadge}>
-              <Text style={styles.metaText}>{getBookSubject(item)}</Text>
-            </View>
-          </View>
-          <Text style={styles.isbnText}>ISBN: {item.isbn}</Text>
-          <View style={styles.priceRow}>
-            <Text style={styles.bookPrice}>
-              Nuovo: €{getBookPrice(item).toFixed(2)}
-            </Text>
-            <Text style={styles.usedPrice}>
-              Usato: ~€{(getBookPrice(item) * 0.5).toFixed(2)}
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.bookActions}>
-          {hasAvailableCopies ? (
-            /* Ci sono copie disponibili - mostra numero */
-            <TouchableOpacity
-              style={styles.availableButton}
-              onPress={() => {
-                if (item.isbn) {
-                  router.push(`/book-sellers/${item.isbn}`);
-                }
-              }}
-            >
-              <View style={styles.availableBadge}>
-                <Text style={styles.availableBadgeText}>{copieDisponibili}</Text>
-              </View>
-              <Text style={styles.availableButtonText}>
-                disponibil{copieDisponibili === 1 ? 'e' : 'i'}
-              </Text>
-            </TouchableOpacity>
-          ) : (
-            /* Nessuna copia disponibile */
-            <View style={styles.noCopiesContainer}>
-              <Ionicons name="alert-circle-outline" size={24} color="#999" />
-              <Text style={styles.noCopiesText}>0 copie</Text>
-            </View>
-          )}
-        </View>
-      </View>
-    );
+  const openScanner = async () => {
+    if (Platform.OS === 'web') {
+      showAlert('Scanner', 'La scansione barcode è disponibile solo sull\'app mobile');
+      return;
+    }
+    
+    if (!permission?.granted) {
+      const result = await requestPermission();
+      if (!result.granted) {
+        showAlert('Permesso negato', 'Serve il permesso della fotocamera per scansionare');
+        return;
+      }
+    }
+    setShowScanner(true);
   };
 
-  if (loading) {
+  // ==================== CERCA FUNCTIONS ====================
+
+  const handleCercaSearch = async () => {
+    if (!cercaIsbn || cercaIsbn.length < 10) {
+      showAlert('Errore', 'Inserisci un ISBN valido (10 o 13 cifre)');
+      return;
+    }
+    
+    Keyboard.dismiss();
+    setCercaLoading(true);
+    setCercaResults([]);
+    setCercaBook(null);
+    
+    try {
+      // Cerca il libro
+      const bookResponse = await axios.get(`${API_URL}/api/books/search?isbn=${cercaIsbn}`);
+      if (bookResponse.data && bookResponse.data.length > 0) {
+        setCercaBook(bookResponse.data[0]);
+      }
+      
+      // Cerca le copie disponibili
+      const listingsResponse = await axios.get(`${API_URL}/api/listings/isbn/${cercaIsbn}`);
+      if (listingsResponse.data && listingsResponse.data.length > 0) {
+        const copie = listingsResponse.data.length;
+        const prezzoMinimo = Math.min(...listingsResponse.data.map((l: any) => l.prezzo_vendita || l.price || 999));
+        setCercaResults([{
+          book: bookResponse.data?.[0] || { id: cercaIsbn, isbn: cercaIsbn, titolo: 'Libro' },
+          copie_disponibili: copie,
+          prezzo_minimo: prezzoMinimo,
+        }]);
+      } else {
+        setCercaResults([]);
+      }
+    } catch (error) {
+      console.error('Error searching:', error);
+      showAlert('Errore', 'Impossibile cercare il libro');
+    } finally {
+      setCercaLoading(false);
+    }
+  };
+
+  const goToBookSellers = () => {
+    if (cercaIsbn) {
+      router.push(`/book-sellers/${cercaIsbn}`);
+    }
+  };
+
+  // ==================== RENDER ====================
+
+  if (showScanner) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#1a472a" />
+      <View style={styles.scannerContainer}>
+        <CameraView
+          style={styles.scanner}
+          barcodeScannerSettings={{
+            barcodeTypes: ['ean13', 'ean8'],
+          }}
+          onBarcodeScanned={handleBarCodeScanned}
+        />
+        <View style={styles.scannerOverlay}>
+          <View style={styles.scannerFrame} />
+          <Text style={styles.scannerText}>Inquadra il codice a barre del libro</Text>
+        </View>
+        <TouchableOpacity 
+          style={styles.scannerCloseBtn}
+          onPress={() => setShowScanner(false)}
+        >
+          <Ionicons name="close" size={30} color="#fff" />
+        </TouchableOpacity>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      {/* Profile Selector - Ricerca Guidata */}
-      <TouchableOpacity
-        style={styles.profileSelector}
-        onPress={() => setShowChildPicker(true)}
-      >
-        <View style={styles.profileSelectorContent}>
-          <Ionicons name="person-circle" size={24} color="#1a472a" />
-          <View style={styles.profileSelectorText}>
-            {selectedChild ? (
-              <>
-                <Text style={styles.profileName}>{selectedChild.nome_figlio}</Text>
-                <Text style={styles.profileSchool}>
-                  {selectedChild.classe}ª - {selectedChild.scuola.substring(0, 30)}...
-                </Text>
-              </>
-            ) : (
-              <>
-                <Text style={styles.profileName}>Seleziona profilo per ricerca guidata</Text>
-                <Text style={styles.profileSchool}>Tocca per scegliere il figlio</Text>
-              </>
-            )}
-          </View>
+    <ScrollView style={styles.container}>
+      {/* ==================== SEZIONE VENDI ==================== */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="pricetag" size={24} color="#2196F3" />
+          <Text style={styles.sectionTitle}>VENDI UN LIBRO</Text>
         </View>
-        <Ionicons name="chevron-down" size={24} color="#666" />
-      </TouchableOpacity>
-
-      {/* Generic Search Box - Always visible */}
-      <View style={styles.genericSearchContainer}>
-        <Text style={styles.genericSearchLabel}>Cerca per ISBN:</Text>
-        <View style={styles.genericSearchInputWrapper}>
-          <Ionicons name="barcode-outline" size={20} color="#666" />
+        
+        <View style={styles.inputRow}>
           <TextInput
-            style={styles.genericSearchInput}
-            placeholder="Inserisci codice ISBN (es: 9788808520234)"
-            placeholderTextColor="#b0b0b0"
-            value={genericSearchQuery}
-            onChangeText={handleGenericSearch}
-            onFocus={() => {
-              // Quando si seleziona la barra di ricerca generica, resetta il profilo
-              setSelectedChild(null);
-              setBooks([]);
-            }}
-            autoCapitalize="none"
+            style={styles.isbnInput}
+            placeholder="Inserisci ISBN o scansiona"
+            placeholderTextColor="#999"
+            value={vendiIsbn}
+            onChangeText={setVendiIsbn}
             keyboardType="numeric"
+            maxLength={13}
           />
-          {genericSearchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => { setGenericSearchQuery(''); setGenericResults([]); }}>
-              <Ionicons name="close-circle" size={20} color="#666" />
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity style={styles.scanButton} onPress={openScanner}>
+            <Ionicons name="barcode" size={24} color="#fff" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.searchButton} onPress={handleVendiSearch}>
+            {vendiLoading ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Ionicons name="search" size={20} color="#fff" />
+            )}
+          </TouchableOpacity>
         </View>
-        {!selectedChild && genericResults.length === 0 && (
-          <>
-            <Text style={styles.searchHintText}>
-              Per essere più precisi è preferibile cercare il testo per codice ISBN che potrai trovare visualizzando la lista dei testi nella sezione{' '}
-              <Text 
-                style={styles.searchHintLink}
-                onPress={() => router.push('/(tabs)/profile')}
-              >
-                Profilo
-              </Text>
-              .
-            </Text>
-            <Text style={styles.miurInfoText}>
-              I testi selezionati per l'acquisto dalla ricerca guidata sono ricavati dai dati del MIUR. Se hai qualche dubbio visualizza la lista e utilizza la ricerca generica per codice ISBN.
-            </Text>
-          </>
-        )}
-        {genericSearchLoading && (
-          <ActivityIndicator size="small" color="#1a472a" style={{ marginTop: 8 }} />
+
+        {vendiBook && (
+          <View style={styles.resultCard}>
+            <Image
+              source={{ uri: `https://www.ibs.it/images/${vendiBook.isbn}_0_0_0_536_0.jpg` }}
+              style={styles.bookCover}
+              resizeMode="contain"
+            />
+            <View style={styles.bookInfo}>
+              <Text style={styles.bookTitle} numberOfLines={2}>{vendiBook.titolo}</Text>
+              {vendiBook.autori && <Text style={styles.bookAuthor}>{vendiBook.autori}</Text>}
+              <Text style={styles.bookIsbn}>ISBN: {vendiBook.isbn}</Text>
+              {vendiBook.prezzo_copertina && vendiBook.prezzo_copertina > 0 && (
+                <Text style={styles.bookPrice}>Prezzo copertina: €{vendiBook.prezzo_copertina.toFixed(2)}</Text>
+              )}
+            </View>
+            <TouchableOpacity style={styles.actionButton} onPress={goToSellBook}>
+              <Text style={styles.actionButtonText}>Vendi</Text>
+              <Ionicons name="arrow-forward" size={18} color="#fff" />
+            </TouchableOpacity>
+          </View>
         )}
       </View>
 
-      {/* Generic Search Results */}
-      {!selectedChild && genericResults.length > 0 && (
-        <View style={styles.genericResultsContainer}>
-          <Text style={styles.genericResultsTitle}>
-            Risultati ricerca ({genericResults.length}):
-          </Text>
-          <FlatList
-            data={genericResults}
-            renderItem={renderBook}
-            keyExtractor={(item) => item.id || item.isbn}
-            style={{ maxHeight: 300 }}
-            showsVerticalScrollIndicator={true}
-          />
-        </View>
-      )}
+      {/* Divider */}
+      <View style={styles.divider} />
 
-      {/* Target Class Info */}
-      {selectedChild && targetClasse && (
-        <View style={styles.targetInfo}>
-          <Ionicons name="cart" size={20} color="#4CAF50" />
-          <Text style={styles.targetText}>
-            Libri da comprare per {selectedChild.nome_figlio} dalla {targetClasse}ª classe
-          </Text>
+      {/* ==================== SEZIONE CERCA ==================== */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="search" size={24} color="#4CAF50" />
+          <Text style={[styles.sectionTitle, { color: '#4CAF50' }]}>CERCA UN LIBRO</Text>
         </View>
-      )}
-
-      {/* Search Box */}
-      {selectedChild && (
-        <View style={styles.searchContainer}>
-          <Ionicons name="search" size={20} color="#666" />
+        
+        <View style={styles.inputRow}>
           <TextInput
-            style={styles.searchInput}
-            placeholder="Filtra per titolo, autore, materia..."
-            placeholderTextColor="#b0b0b0"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
+            style={styles.isbnInput}
+            placeholder="Inserisci ISBN del libro"
+            placeholderTextColor="#999"
+            value={cercaIsbn}
+            onChangeText={setCercaIsbn}
+            keyboardType="numeric"
+            maxLength={13}
           />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Ionicons name="close-circle" size={20} color="#666" />
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity style={[styles.searchButton, { backgroundColor: '#4CAF50' }]} onPress={handleCercaSearch}>
+            {cercaLoading ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Ionicons name="search" size={20} color="#fff" />
+            )}
+          </TouchableOpacity>
         </View>
-      )}
 
-      {/* Content */}
-      {!selectedChild && genericResults.length === 0 ? (
-        null /* Rimosso placeholder profilo - ora mostra solo area vuota */
-      ) : loadingBooks ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#1a472a" />
-          <Text style={styles.loadingText}>Caricamento libri...</Text>
-        </View>
-      ) : filteredBooks.length === 0 && genericResults.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Ionicons name="book-outline" size={48} color="#ccc" />
-          <Text style={styles.emptyText}>Nessun libro trovato</Text>
-          <Text style={styles.emptySubtext}>
-            {targetClasse ? 'Nessun libro disponibile per questa classe' : 'Fine ciclo scolastico'}
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={filteredBooks}
-          renderItem={renderBook}
-          keyExtractor={(item) => item.id || item.isbn}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-        />
-      )}
-
-      {/* Child Picker Modal */}
-      <Modal
-        visible={showChildPicker}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowChildPicker(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity
-            style={{ flex: 1 }}
-            activeOpacity={1}
-            onPress={() => setShowChildPicker(false)}
-          />
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Seleziona Profilo</Text>
-              <TouchableOpacity onPress={() => setShowChildPicker(false)}>
-                <Ionicons name="close" size={24} color="#333" />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.modalSubtitle}>
-              Per chi vuoi cercare i libri da comprare?
-            </Text>
-
-            <ScrollView 
-              style={{ maxHeight: 300 }} 
-              showsVerticalScrollIndicator={true}
-              nestedScrollEnabled={true}
-            >
-              {childProfiles.length === 0 ? (
-                <View style={styles.noChildrenContainer}>
-                  <Ionicons name="person-add-outline" size={48} color="#ccc" />
-                  <Text style={styles.noChildrenText}>Nessun profilo figlio</Text>
-                  <Text style={styles.noChildrenSubtext}>
-                    Vai al Profilo per aggiungere i tuoi figli
+        {cercaBook && (
+          <View style={styles.resultCard}>
+            <Image
+              source={{ uri: `https://www.ibs.it/images/${cercaBook.isbn}_0_0_0_536_0.jpg` }}
+              style={styles.bookCover}
+              resizeMode="contain"
+            />
+            <View style={styles.bookInfo}>
+              <Text style={styles.bookTitle} numberOfLines={2}>{cercaBook.titolo}</Text>
+              {cercaBook.autori && <Text style={styles.bookAuthor}>{cercaBook.autori}</Text>}
+              <Text style={styles.bookIsbn}>ISBN: {cercaBook.isbn}</Text>
+              
+              {cercaResults.length > 0 ? (
+                <View style={styles.availabilityBadge}>
+                  <Text style={styles.availabilityText}>
+                    {cercaResults[0].copie_disponibili} {cercaResults[0].copie_disponibili === 1 ? 'copia' : 'copie'} disponibili
                   </Text>
-                  <TouchableOpacity
-                    style={styles.addChildButton}
-                    onPress={() => {
-                      setShowChildPicker(false);
-                      router.push('/(tabs)/profile');
-                    }}
-                  >
-                    <Text style={styles.addChildButtonText}>Vai al Profilo</Text>
-                  </TouchableOpacity>
+                  {cercaResults[0].prezzo_minimo && (
+                    <Text style={styles.priceText}>da €{cercaResults[0].prezzo_minimo.toFixed(2)}</Text>
+                  )}
                 </View>
               ) : (
-                childProfiles.map((child) => {
-                  const isMedia = child.tipo_scuola === 'primo_grado';
-                  const childClasse = parseInt(child.classe);
-                  const maxClasse = isMedia ? 3 : (childClasse <= 2 ? 2 : 5);
-                  const canBuy = childClasse < maxClasse;
-
-                  return (
-                    <TouchableOpacity
-                      key={child.id}
-                      style={styles.childOption}
-                      onPress={() => selectChildProfile(child)}
-                    >
-                      <View style={styles.childOptionIcon}>
-                        <Ionicons 
-                          name="person" 
-                          size={24} 
-                          color="#1a472a" 
-                        />
-                      </View>
-                      <View style={styles.childOptionInfo}>
-                        <Text style={styles.childOptionName}>
-                          {child.nome_figlio}
-                        </Text>
-                        <Text style={styles.childOptionSchool}>
-                          {child.classe}ª {isMedia ? 'Media' : 'Superiore'} - {child.scuola.substring(0, 25)}...
-                        </Text>
-                        <Text style={styles.childOptionHint}>
-                          → Cerca libri per {child.nome_figlio}
-                        </Text>
-                      </View>
-                      <Ionicons name="chevron-forward" size={20} color="#666" />
-                    </TouchableOpacity>
-                  );
-                })
+                <View style={[styles.availabilityBadge, { backgroundColor: '#ffebee' }]}>
+                  <Text style={[styles.availabilityText, { color: '#F44336' }]}>
+                    Nessuna copia disponibile
+                  </Text>
+                </View>
               )}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Listings Modal */}
-      <Modal
-        visible={showListingsModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowListingsModal(false)}
-      >
-        <View style={styles.listingsModalOverlay}>
-          <View style={styles.listingsModalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Annunci Disponibili</Text>
-              <TouchableOpacity onPress={() => setShowListingsModal(false)}>
-                <Ionicons name="close" size={24} color="#333" />
-              </TouchableOpacity>
             </View>
-
-            {selectedBook && (
-              <View style={styles.selectedBookHeader}>
-                <Text style={styles.selectedBookTitle} numberOfLines={2}>
-                  {selectedBook.titolo}
-                </Text>
-                <Text style={styles.selectedBookSubject}>
-                  {getBookSubject(selectedBook)}
-                </Text>
-                <Text style={styles.selectedBookNewPrice}>
-                  Prezzo nuovo: €{getBookPrice(selectedBook).toFixed(2)}
-                </Text>
-              </View>
-            )}
-
-            {loadingListings ? (
-              <View style={styles.listingsLoading}>
-                <ActivityIndicator size="large" color="#1a472a" />
-                <Text style={styles.listingsLoadingText}>Cercando annunci...</Text>
-              </View>
-            ) : bookListings.length > 0 ? (
-              <FlatList
-                data={bookListings}
-                keyExtractor={(item) => item.id}
-                style={styles.listingsList}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={styles.listingCard}
-                    onPress={() => handleSelectListing(item)}
-                  >
-                    <View style={styles.listingHeader}>
-                      <View style={styles.listingSellerInfo}>
-                        <Ionicons name="person-circle" size={32} color="#1a472a" />
-                        <View>
-                          <Text style={styles.listingSellerName}>
-                            {item.seller_name || 'Venditore'}
-                          </Text>
-                          <View style={styles.listingRating}>
-                            <Ionicons name="star" size={12} color="#FFD700" />
-                            <Text style={styles.listingRatingText}>
-                              {(item.seller_rating || 5).toFixed(1)}
-                            </Text>
-                          </View>
-                        </View>
-                      </View>
-                      <View style={styles.listingPriceContainer}>
-                        <Text style={styles.listingPrice}>€{item.prezzo?.toFixed(2)}</Text>
-                        <View style={[
-                          styles.listingConditionBadge,
-                          { backgroundColor: getConditionColor(item.condizione) }
-                        ]}>
-                          <Text style={styles.listingConditionText}>
-                            {item.condizione?.charAt(0).toUpperCase() + item.condizione?.slice(1)}
-                          </Text>
-                        </View>
-                      </View>
-                    </View>
-                    {item.punto_scambio && (
-                      <View style={styles.listingLocation}>
-                        <Ionicons name="location-outline" size={14} color="#666" />
-                        <Text style={styles.listingLocationText}>{item.punto_scambio}</Text>
-                      </View>
-                    )}
-                    {item.note && (
-                      <Text style={styles.listingNote} numberOfLines={2}>
-                        "{item.note}"
-                      </Text>
-                    )}
-                    <View style={styles.listingAction}>
-                      <Text style={styles.listingActionText}>Vedi dettagli</Text>
-                      <Ionicons name="chevron-forward" size={16} color="#1a472a" />
-                    </View>
-                  </TouchableOpacity>
-                )}
-              />
-            ) : (
-              <View style={styles.noListingsContainer}>
-                <Ionicons name="book-outline" size={64} color="#ccc" />
-                <Text style={styles.noListingsTitle}>Nessun annuncio disponibile</Text>
-                <Text style={styles.noListingsSubtext}>
-                  Al momento non ci sono venditori per questo libro.
-                </Text>
-              </View>
+            {cercaResults.length > 0 && (
+              <TouchableOpacity style={[styles.actionButton, { backgroundColor: '#4CAF50' }]} onPress={goToBookSellers}>
+                <Text style={styles.actionButtonText}>Vedi</Text>
+                <Ionicons name="arrow-forward" size={18} color="#fff" />
+              </TouchableOpacity>
             )}
           </View>
-        </View>
-      </Modal>
-    </View>
+        )}
+      </View>
+
+      <View style={{ height: 100 }} />
+    </ScrollView>
   );
 }
 
@@ -633,120 +366,71 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f5f5f5',
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 12,
-    color: '#666',
-    fontSize: 14,
-  },
-  profileSelector: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#fff',
-    margin: 16,
-    marginBottom: 8,
+  section: {
     padding: 16,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
   },
-  profileSelectorContent: {
+  sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
+    gap: 10,
+    marginBottom: 16,
   },
-  profileSelectorText: {
-    marginLeft: 12,
-    flex: 1,
-  },
-  profileName: {
-    fontSize: 16,
+  sectionTitle: {
+    fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#2196F3',
   },
-  profileSchool: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 2,
-  },
-  targetInfo: {
+  inputRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#e8f5e9',
-    marginHorizontal: 16,
-    marginBottom: 8,
-    padding: 12,
-    borderRadius: 8,
     gap: 8,
   },
-  targetText: {
-    fontSize: 13,
-    color: '#2e7d32',
+  isbnInput: {
     flex: 1,
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
     backgroundColor: '#fff',
-    marginHorizontal: 16,
-    marginBottom: 8,
+    borderRadius: 10,
     paddingHorizontal: 16,
-    borderRadius: 12,
-    height: 48,
-    gap: 8,
+    paddingVertical: 14,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
   },
-  searchInput: {
-    flex: 1,
-    fontSize: 15,
-    color: '#333',
-  },
-  activeSearchBanner: {
-    flexDirection: 'row',
+  scanButton: {
+    backgroundColor: '#FF9800',
+    borderRadius: 10,
+    width: 50,
     alignItems: 'center',
-    backgroundColor: '#e8f5e9',
-    marginHorizontal: 16,
-    marginBottom: 8,
-    padding: 12,
-    borderRadius: 8,
-    gap: 8,
+    justifyContent: 'center',
   },
-  activeSearchText: {
-    flex: 1,
-    fontSize: 13,
-    color: '#1a472a',
+  searchButton: {
+    backgroundColor: '#2196F3',
+    borderRadius: 10,
+    width: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  viewRadarLink: {
-    fontSize: 13,
-    color: '#1a472a',
-    fontWeight: 'bold',
-    textDecorationLine: 'underline',
+  divider: {
+    height: 8,
+    backgroundColor: '#e0e0e0',
   },
-  listContent: {
-    padding: 16,
-    paddingTop: 8,
-  },
-  bookCard: {
-    flexDirection: 'row',
+  resultCard: {
     backgroundColor: '#fff',
     borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    padding: 12,
+    marginTop: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  bookCover: {
+    width: 60,
+    height: 85,
+    borderRadius: 6,
+    backgroundColor: '#f0f0f0',
   },
   bookInfo: {
     flex: 1,
+    marginLeft: 12,
   },
   bookTitle: {
     fontSize: 15,
@@ -757,467 +441,91 @@ const styles = StyleSheet.create({
   bookAuthor: {
     fontSize: 13,
     color: '#666',
-    marginBottom: 8,
+    marginBottom: 2,
   },
-  bookMeta: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 8,
-  },
-  metaBadge: {
-    backgroundColor: '#f0f0f0',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  metaText: {
-    fontSize: 11,
-    color: '#666',
-  },
-  isbnText: {
-    fontSize: 11,
+  bookIsbn: {
+    fontSize: 12,
     color: '#888',
-    marginBottom: 6,
     fontFamily: 'monospace',
-  },
-  priceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+    marginBottom: 4,
   },
   bookPrice: {
-    fontSize: 14,
-    color: '#666',
-  },
-  usedPrice: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#4CAF50',
-  },
-  bookActions: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 12,
-  },
-  addButton: {
-    alignItems: 'center',
-    padding: 8,
-  },
-  addButtonActive: {
-    opacity: 0.7,
-  },
-  addButtonText: {
-    fontSize: 11,
+    fontSize: 13,
     color: '#1a472a',
-    marginTop: 4,
-  },
-  addButtonTextActive: {
-    color: '#4CAF50',
-  },
-  // Disponibile button
-  availableButton: {
-    alignItems: 'center',
-    padding: 8,
-  },
-  availableBadge: {
-    backgroundColor: '#4CAF50',
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  availableBadgeText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  availableButtonText: {
-    fontSize: 11,
-    color: '#4CAF50',
-    marginTop: 4,
     fontWeight: '600',
   },
-  // Crea richiesta button
-  createRequestButton: {
-    backgroundColor: '#f5f5f5',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    minWidth: 80,
-    alignItems: 'center',
-  },
-  createRequestButtonDisabled: {
-    opacity: 0.6,
-  },
-  createRequestButtonText: {
-    fontSize: 12,
-    color: '#666',
-    fontWeight: '500',
-  },
-  noCopiesContainer: {
-    alignItems: 'center',
-    padding: 8,
-  },
-  noCopiesText: {
-    fontSize: 11,
-    color: '#999',
-    marginTop: 4,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 32,
-  },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#666',
-    marginTop: 16,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#999',
-    textAlign: 'center',
-    marginTop: 8,
-  },
-  // Modal styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-    maxHeight: '70%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  modalSubtitle: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 20,
-  },
-  childOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#f8f9fa',
-    borderRadius: 12,
-    marginBottom: 12,
-  },
-  childOptionDisabled: {
-    opacity: 0.5,
-  },
-  childOptionIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  availabilityBadge: {
     backgroundColor: '#e8f5e9',
-    justifyContent: 'center',
-    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginTop: 4,
   },
-  childOptionInfo: {
-    flex: 1,
-    marginLeft: 12,
+  availabilityText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#4CAF50',
   },
-  childOptionName: {
-    fontSize: 16,
+  priceText: {
+    fontSize: 14,
     fontWeight: 'bold',
-    color: '#333',
-  },
-  childOptionNameDisabled: {
-    color: '#999',
-  },
-  childOptionSchool: {
-    fontSize: 12,
-    color: '#666',
+    color: '#4CAF50',
     marginTop: 2,
   },
-  childOptionHint: {
-    fontSize: 11,
-    color: '#4CAF50',
-    marginTop: 4,
-    fontWeight: '500',
-  },
-  noChildrenContainer: {
-    alignItems: 'center',
-    padding: 24,
-  },
-  noChildrenText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#666',
-    marginTop: 12,
-  },
-  noChildrenSubtext: {
-    fontSize: 13,
-    color: '#999',
-    textAlign: 'center',
-    marginTop: 4,
-  },
-  addChildButton: {
-    marginTop: 16,
-    backgroundColor: '#1a472a',
-    paddingHorizontal: 24,
+  actionButton: {
+    backgroundColor: '#2196F3',
+    borderRadius: 8,
+    paddingHorizontal: 16,
     paddingVertical: 12,
-    borderRadius: 8,
-  },
-  addChildButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-  },
-  // Listings Modal Styles
-  listingsModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  listingsModalContent: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: '90%',
-    paddingBottom: 40,
-  },
-  selectedBookHeader: {
-    padding: 16,
-    backgroundColor: '#f8f9fa',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  selectedBookTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  selectedBookSubject: {
-    fontSize: 13,
-    color: '#666',
-    marginTop: 4,
-  },
-  selectedBookNewPrice: {
-    fontSize: 12,
-    color: '#999',
-    marginTop: 4,
-  },
-  listingsLoading: {
-    padding: 48,
-    alignItems: 'center',
-  },
-  listingsLoadingText: {
-    marginTop: 12,
-    color: '#666',
-    fontSize: 14,
-  },
-  listingsList: {
-    maxHeight: 400,
-  },
-  listingCard: {
-    margin: 12,
-    marginBottom: 0,
-    padding: 16,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-  },
-  listingHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  listingSellerInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
+    gap: 6,
   },
-  listingSellerName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    marginLeft: 8,
-  },
-  listingRating: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginLeft: 8,
-  },
-  listingRatingText: {
-    fontSize: 12,
-    color: '#666',
-    marginLeft: 2,
-  },
-  listingPriceContainer: {
-    alignItems: 'flex-end',
-  },
-  listingPrice: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1a472a',
-  },
-  listingConditionBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 4,
-    marginTop: 4,
-  },
-  listingConditionText: {
-    fontSize: 11,
+  actionButtonText: {
     color: '#fff',
     fontWeight: '600',
-  },
-  listingLocation: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-  },
-  listingLocationText: {
-    fontSize: 12,
-    color: '#666',
-    marginLeft: 4,
-  },
-  listingNote: {
-    fontSize: 12,
-    color: '#666',
-    fontStyle: 'italic',
-    marginTop: 8,
-  },
-  listingAction: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-  },
-  listingActionText: {
-    fontSize: 13,
-    color: '#1a472a',
-    fontWeight: '600',
-  },
-  noListingsContainer: {
-    padding: 32,
-    alignItems: 'center',
-  },
-  noListingsTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginTop: 16,
-  },
-  noListingsSubtext: {
     fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
-    marginTop: 8,
-    lineHeight: 20,
   },
-  createRequestButtonModal: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1a472a',
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-    borderRadius: 12,
-    marginTop: 24,
-    gap: 8,
-  },
-  createRequestButtonModalText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  // Generic Search styles
-  genericSearchContainer: {
-    backgroundColor: '#fff',
-    marginHorizontal: 16,
-    marginTop: 12,
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-  },
-  genericSearchLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 10,
-  },
-  genericSearchInputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f5f5f5',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 8,
-  },
-  genericSearchInput: {
+  // Scanner styles
+  scannerContainer: {
     flex: 1,
-    fontSize: 15,
-    color: '#333',
+    backgroundColor: '#000',
   },
-  genericResultsContainer: {
-    backgroundColor: '#fff',
-    marginHorizontal: 16,
-    marginTop: 8,
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
+  scanner: {
+    flex: 1,
+  },
+  scannerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scannerFrame: {
+    width: 280,
+    height: 150,
+    borderWidth: 2,
     borderColor: '#4CAF50',
-    maxHeight: 350,
+    borderRadius: 12,
+    backgroundColor: 'transparent',
   },
-  genericResultsTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#4CAF50',
-    marginBottom: 8,
+  scannerText: {
+    color: '#fff',
+    fontSize: 16,
+    marginTop: 20,
+    textAlign: 'center',
   },
-  searchHintText: {
-    fontSize: 14,
-    color: '#555',
-    marginTop: 14,
-    lineHeight: 22,
-  },
-  searchHintLink: {
-    color: '#1a472a',
-    fontWeight: 'bold',
-    textDecorationLine: 'underline',
-  },
-  miurInfoText: {
-    fontSize: 13,
-    color: '#777',
-    marginTop: 16,
-    lineHeight: 20,
-    fontStyle: 'italic',
-    backgroundColor: '#f5f5f5',
-    padding: 12,
-    borderRadius: 8,
-    borderLeftWidth: 3,
-    borderLeftColor: '#1a472a',
-  },
-  profileSelectorEmpty: {
-    height: 8,
+  scannerCloseBtn: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 25,
+    width: 50,
+    height: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

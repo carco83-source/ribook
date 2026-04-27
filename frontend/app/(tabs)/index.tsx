@@ -275,45 +275,11 @@ export default function RadarScreen() {
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
     >
-      {/* Header with Cart and Notifications */}
+      {/* Header semplificato */}
       <View style={styles.headerRow}>
         <View style={styles.headerLeft}>
-          <Ionicons name="book" size={28} color="#1a472a" />
+          <Ionicons name="school" size={28} color="#1a472a" />
           <Text style={styles.headerTitle}>RiLiBro</Text>
-        </View>
-        <View style={styles.headerRight}>
-          {/* Cart Button */}
-          <TouchableOpacity 
-            style={styles.headerButton}
-            onPress={() => router.push('/cart')}
-          >
-            <Ionicons name="cart" size={24} color="#1a472a" />
-            {cartData && (cartData.total_confirmed + cartData.total_pending) > 0 && (
-              <View style={[
-                styles.headerBadge,
-                cartData.total_confirmed > 0 ? styles.headerBadgeGreen : styles.headerBadgeOrange
-              ]}>
-                <Text style={styles.headerBadgeText}>
-                  {(cartData.total_confirmed + cartData.total_pending) > 9 ? '9+' : (cartData.total_confirmed + cartData.total_pending)}
-                </Text>
-              </View>
-            )}
-          </TouchableOpacity>
-          
-          {/* Notifications Button */}
-          <TouchableOpacity 
-            style={styles.headerButton}
-            onPress={() => router.push('/notifications')}
-          >
-            <Ionicons name="notifications" size={24} color="#1a472a" />
-            {unreadCount > 0 && (
-              <View style={styles.notificationBadge}>
-                <Text style={styles.notificationBadgeText}>
-                  {unreadCount > 9 ? '9+' : unreadCount}
-                </Text>
-              </View>
-            )}
-          </TouchableOpacity>
         </View>
       </View>
 
