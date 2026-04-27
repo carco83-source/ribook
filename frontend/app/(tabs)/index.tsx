@@ -532,6 +532,8 @@ export default function RadarScreen() {
                 <View style={styles.booksGrid}>
                   {compatibility.vendere.libri_vendibili.map((book: any, idx: number) => {
                     const coverUrl = book.isbn ? `https://www.ibs.it/images/${book.isbn}_0_0_0_536_0.jpg` : null;
+                    const prezzoNuovo = book.prezzo_copertina || book.prezzo_ministeriale || 0;
+                    const prezzoUsato = book.prezzo_consigliato || (prezzoNuovo * 0.6);
                     return (
                       <View key={idx} style={styles.sampleBookItem}>
                         {coverUrl && (
@@ -541,19 +543,22 @@ export default function RadarScreen() {
                             resizeMode="contain"
                           />
                         )}
-                        <Text style={styles.sampleBookTitle} numberOfLines={2}>
-                          {book.titolo}
-                        </Text>
-                        <Text style={styles.sampleBookSubject}>
-                          {book.disciplina}
-                        </Text>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
-                          <Text style={{ fontSize: 12, color: '#4CAF50' }}>
-                            vendibile
-                          </Text>
-                          <Text style={[styles.sampleBookPrice, { color: '#2196F3' }]}>
-                            €{book.prezzo_consigliato?.toFixed(2)}
-                          </Text>
+                        <View style={styles.bookDetailsContainer}>
+                          <Text style={styles.sampleBookSubject}>{book.disciplina}</Text>
+                          <Text style={styles.sampleBookTitle}>{book.titolo}</Text>
+                          {book.autori && <Text style={styles.sampleBookAuthor}>{book.autori}</Text>}
+                          {book.editore && <Text style={styles.sampleBookEdition}>{book.editore}</Text>}
+                          <View style={styles.priceContainer}>
+                            <View>
+                              <Text style={styles.priceNewLabel}>Nuovo: <Text style={styles.priceNewValue}>€{prezzoNuovo.toFixed(2)}</Text></Text>
+                              <Text style={styles.priceUsedLabel}>Vendi a: <Text style={styles.priceUsedValue}>€{prezzoUsato.toFixed(2)}</Text></Text>
+                            </View>
+                            <View style={{ alignItems: 'center' }}>
+                              <View style={[styles.copieBadge, { backgroundColor: '#e3f2fd', borderColor: '#2196F3' }]}>
+                                <Text style={[styles.copieBadgeText, { color: '#2196F3' }]}>vendibile</Text>
+                              </View>
+                            </View>
+                          </View>
                         </View>
                       </View>
                     );
@@ -591,6 +596,8 @@ export default function RadarScreen() {
                     {tuttiLibriUsati.map((book: any, idx: number) => {
                       const copie = book.copie_disponibili || book.copie_usate_disponibili || 0;
                       const coverUrl = book.isbn ? `https://www.ibs.it/images/${book.isbn}_0_0_0_536_0.jpg` : null;
+                      const prezzoNuovo = book.prezzo_copertina || book.prezzo_ministeriale || 0;
+                      const prezzoUsato = book.prezzo_minimo_usato || book.prezzo_usato_minimo || (prezzoNuovo * 0.6);
                       return (
                         <TouchableOpacity 
                           key={idx} 
@@ -612,27 +619,30 @@ export default function RadarScreen() {
                               resizeMode="contain"
                             />
                           )}
-                          <Text style={styles.sampleBookTitle} numberOfLines={2}>
-                            {book.titolo}
-                          </Text>
-                          <Text style={styles.sampleBookSubject}>
-                            {book.disciplina}
-                          </Text>
-                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
-                            <View style={[
-                              styles.copieBadge,
-                              copie > 0 ? styles.copieBadgeAvailable : styles.copieBadgeNone
-                            ]}>
-                              <Text style={[
-                                styles.copieBadgeText,
-                                copie > 0 ? styles.copieBadgeTextAvailable : styles.copieBadgeTextNone
-                              ]}>
-                                {copie} {copie === 1 ? 'copia' : 'copie'}
-                              </Text>
+                          <View style={styles.bookDetailsContainer}>
+                            <Text style={styles.sampleBookSubject}>{book.disciplina}</Text>
+                            <Text style={styles.sampleBookTitle}>{book.titolo}</Text>
+                            {book.autori && <Text style={styles.sampleBookAuthor}>{book.autori}</Text>}
+                            {book.editore && <Text style={styles.sampleBookEdition}>{book.editore}</Text>}
+                            <View style={styles.priceContainer}>
+                              <View>
+                                <Text style={styles.priceNewLabel}>Nuovo: <Text style={styles.priceNewValue}>€{prezzoNuovo.toFixed(2)}</Text></Text>
+                                <Text style={styles.priceUsedLabel}>Usato da: <Text style={styles.priceUsedValue}>€{prezzoUsato.toFixed(2)}</Text></Text>
+                              </View>
+                              <View style={{ alignItems: 'center' }}>
+                                <View style={[
+                                  styles.copieBadge,
+                                  copie > 0 ? styles.copieBadgeAvailable : styles.copieBadgeNone
+                                ]}>
+                                  <Text style={[
+                                    styles.copieBadgeText,
+                                    copie > 0 ? styles.copieBadgeTextAvailable : styles.copieBadgeTextNone
+                                  ]}>
+                                    {copie} {copie === 1 ? 'copia' : 'copie'}
+                                  </Text>
+                                </View>
+                              </View>
                             </View>
-                            {copie > 0 && (
-                              <Ionicons name="chevron-forward" size={20} color="#4CAF50" />
-                            )}
                           </View>
                         </TouchableOpacity>
                       );
@@ -689,6 +699,7 @@ export default function RadarScreen() {
                   <View style={styles.booksGrid}>
                     {tuttiLibriInUso.map((book: any, idx: number) => {
                       const coverUrl = book.isbn ? `https://www.ibs.it/images/${book.isbn}_0_0_0_536_0.jpg` : null;
+                      const prezzoNuovo = book.prezzo_copertina || book.prezzo_ministeriale || 0;
                       return (
                         <View key={idx} style={styles.sampleBookItem}>
                           {coverUrl && (
@@ -698,18 +709,19 @@ export default function RadarScreen() {
                               resizeMode="contain"
                             />
                           )}
-                          <Text style={styles.sampleBookTitle} numberOfLines={2}>
-                            {book.titolo || book.titolo_vecchio || book.disciplina}
-                          </Text>
-                          <Text style={styles.sampleBookSubject}>
-                            {book.disciplina}
-                          </Text>
-                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
-                            <Text style={{ fontSize: 12, color: '#9C27B0' }}>
-                              {book.motivo || book.status || 'Già in tuo possesso'}
-                            </Text>
-                            <View style={{ alignItems: 'center' }}>
-                              <Ionicons name="checkmark-circle" size={20} color="#9C27B0" />
+                          <View style={styles.bookDetailsContainer}>
+                            <Text style={styles.sampleBookSubject}>{book.disciplina}</Text>
+                            <Text style={styles.sampleBookTitle}>{book.titolo || book.titolo_vecchio}</Text>
+                            {book.autori && <Text style={styles.sampleBookAuthor}>{book.autori}</Text>}
+                            {book.editore && <Text style={styles.sampleBookEdition}>{book.editore}</Text>}
+                            <View style={styles.priceContainer}>
+                              <View>
+                                <Text style={styles.priceNewLabel}>Nuovo: <Text style={styles.priceNewValue}>€{prezzoNuovo.toFixed(2)}</Text></Text>
+                                <Text style={{ fontSize: 12, color: '#9C27B0' }}>{book.motivo || 'Già in tuo possesso'}</Text>
+                              </View>
+                              <View style={{ alignItems: 'center' }}>
+                                <Ionicons name="checkmark-circle" size={24} color="#9C27B0" />
+                              </View>
                             </View>
                           </View>
                         </View>
@@ -737,6 +749,7 @@ export default function RadarScreen() {
                   <View style={styles.booksGrid}>
                     {libriNuovi.map((book: any, idx: number) => {
                       const coverUrl = book.isbn ? `https://www.ibs.it/images/${book.isbn}_0_0_0_536_0.jpg` : null;
+                      const prezzoNuovo = book.prezzo_copertina || book.prezzo_ministeriale || 0;
                       return (
                         <View key={idx} style={styles.sampleBookItem}>
                           {coverUrl && (
@@ -746,19 +759,22 @@ export default function RadarScreen() {
                               resizeMode="contain"
                             />
                           )}
-                          <Text style={styles.sampleBookTitle} numberOfLines={2}>
-                            {book.titolo}
-                          </Text>
-                          <Text style={styles.sampleBookSubject}>
-                            {book.disciplina}
-                          </Text>
-                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
-                            <Text style={{ fontSize: 12, color: '#F44336' }}>
-                              {book.motivo || 'Da acquistare nuovo'}
-                            </Text>
-                            <Text style={[styles.sampleBookPrice, { color: '#F44336' }]}>
-                              €{(book.prezzo_copertina || 0).toFixed(2)}
-                            </Text>
+                          <View style={styles.bookDetailsContainer}>
+                            <Text style={styles.sampleBookSubject}>{book.disciplina}</Text>
+                            <Text style={styles.sampleBookTitle}>{book.titolo}</Text>
+                            {book.autori && <Text style={styles.sampleBookAuthor}>{book.autori}</Text>}
+                            {book.editore && <Text style={styles.sampleBookEdition}>{book.editore}</Text>}
+                            <View style={styles.priceContainer}>
+                              <View>
+                                <Text style={styles.priceNewLabel}>Nuovo: <Text style={styles.priceNewValue}>€{prezzoNuovo.toFixed(2)}</Text></Text>
+                                <Text style={{ fontSize: 12, color: '#F44336' }}>{book.motivo || 'Da acquistare nuovo'}</Text>
+                              </View>
+                              <View style={{ alignItems: 'center' }}>
+                                <View style={[styles.copieBadge, { backgroundColor: '#ffebee', borderColor: '#F44336' }]}>
+                                  <Text style={[styles.copieBadgeText, { color: '#F44336' }]}>nuovo</Text>
+                                </View>
+                              </View>
+                            </View>
                           </View>
                         </View>
                       );
@@ -1234,14 +1250,14 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   sampleBookItem: {
-    width: '48%',
+    width: '100%',
     backgroundColor: '#fff',
-    borderRadius: 10,
+    borderRadius: 12,
     padding: 12,
-    marginBottom: 10,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: '#e0e0e0',
-    minHeight: 180,
+    flexDirection: 'row',
   },
   sampleBookItemClickable: {
     borderColor: '#1a472a',
@@ -1252,31 +1268,71 @@ const styles = StyleSheet.create({
     borderColor: '#4CAF50',
   },
   bookCoverImage: {
-    width: '100%',
-    height: 100,
+    width: 80,
+    height: 110,
     borderRadius: 6,
-    marginBottom: 8,
     backgroundColor: '#f5f5f5',
+  },
+  bookDetailsContainer: {
+    flex: 1,
+    marginLeft: 12,
+    justifyContent: 'space-between',
   },
   sampleBookInfo: {
     flex: 1,
   },
-  sampleBookTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#333',
-    marginBottom: 4,
-    lineHeight: 20,
-  },
   sampleBookSubject: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#000',
+    marginBottom: 4,
+    textTransform: 'uppercase',
+  },
+  sampleBookTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 2,
+    lineHeight: 18,
+  },
+  sampleBookAuthor: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 2,
+  },
+  sampleBookEdition: {
+    fontSize: 11,
+    color: '#888',
+    marginBottom: 6,
+  },
+  priceContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 6,
+  },
+  priceNewLabel: {
     fontSize: 13,
     color: '#666',
-    marginTop: 2,
+  },
+  priceNewValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#F44336',
+  },
+  priceUsedLabel: {
+    fontSize: 13,
+    color: '#666',
+  },
+  priceUsedValue: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#4CAF50',
   },
   isbnText: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#888',
-    marginTop: 4,
+    marginTop: 2,
     fontFamily: 'monospace',
   },
   sampleBookSeller: {
