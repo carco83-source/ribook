@@ -529,29 +529,36 @@ export default function RadarScreen() {
                 <Text style={styles.sectionTitleBlue}>
                   LIBRI VENDIBILI ({compatibility.vendere.libri_vendibili.length})
                 </Text>
-                {compatibility.vendere.libri_vendibili.map((book: any, idx: number) => (
-                  <View key={idx} style={styles.sampleBookItem}>
-                    <View style={styles.sampleBookInfo}>
-                      <Text style={styles.sampleBookTitle}>
-                        {book.titolo}
-                      </Text>
-                      <Text style={styles.sampleBookSubject}>
-                        {book.disciplina}
-                      </Text>
-                      <Text style={styles.isbnText}>
-                        ISBN: {book.isbn}
-                      </Text>
-                    </View>
-                    <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={[styles.sampleBookPrice, { color: '#2196F3' }]}>
-                        €{book.prezzo_consigliato?.toFixed(2)}
-                      </Text>
-                      <Text style={{ fontSize: 10, color: '#4CAF50' }}>
-                        vendibile
-                      </Text>
-                    </View>
-                  </View>
-                ))}
+                <View style={styles.booksGrid}>
+                  {compatibility.vendere.libri_vendibili.map((book: any, idx: number) => {
+                    const coverUrl = book.isbn ? `https://www.ibs.it/images/${book.isbn}_0_0_0_536_0.jpg` : null;
+                    return (
+                      <View key={idx} style={styles.sampleBookItem}>
+                        {coverUrl && (
+                          <Image 
+                            source={{ uri: coverUrl }} 
+                            style={styles.bookCoverImage}
+                            resizeMode="contain"
+                          />
+                        )}
+                        <Text style={styles.sampleBookTitle} numberOfLines={2}>
+                          {book.titolo}
+                        </Text>
+                        <Text style={styles.sampleBookSubject}>
+                          {book.disciplina}
+                        </Text>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+                          <Text style={{ fontSize: 12, color: '#4CAF50' }}>
+                            vendibile
+                          </Text>
+                          <Text style={[styles.sampleBookPrice, { color: '#2196F3' }]}>
+                            €{book.prezzo_consigliato?.toFixed(2)}
+                          </Text>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
                 {/* Link per vendere */}
                 <TouchableOpacity
                   style={[styles.viewSellersButton, { backgroundColor: '#2196F3', marginTop: 12 }]}
