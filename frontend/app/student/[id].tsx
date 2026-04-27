@@ -47,6 +47,14 @@ interface CompatibilityData {
     classe_origine: number;
     libri_usati?: any[];
   };
+  nuove_adozioni?: {
+    totale: number;
+    libri?: any[];
+  };
+  gia_posseduti?: {
+    totale: number;
+    libri?: any[];
+  };
   tetto_spesa?: {
     tetto_ministeriale: number;
     tetto_con_deroga_10: number;
@@ -484,45 +492,89 @@ export default function StudentDetailScreen() {
           </View>
         </View>
 
-        {/* Riepilogo Flusso Libri */}
+        {/* 4 Categorie Libri - Cliccabili per tornare al Radar */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="swap-horizontal" size={22} color="#1a472a" />
-            <Text style={styles.sectionTitle}>Flusso Libri</Text>
+            <Ionicons name="library" size={22} color="#1a472a" />
+            <Text style={styles.sectionTitle}>Situazione Libri</Text>
           </View>
           
-          <View style={styles.flowGrid}>
-            <View style={[styles.flowCard, { borderTopColor: '#2196F3' }]}>
-              <Ionicons name="arrow-up-circle" size={32} color="#2196F3" />
-              <Text style={styles.flowNumber}>{compatibility?.vendere?.totale_vendibili || 0}</Text>
-              <Text style={styles.flowLabel}>Libri vendibili</Text>
-              {compatibility?.vendere?.classe_destinazione && (
-                <Text style={styles.flowHint}>
-                  alla {getClasseLabel(compatibility.vendere.classe_destinazione)}
+          <View style={styles.categoryGrid}>
+            {/* 1. VENDIBILI */}
+            <TouchableOpacity 
+              style={[styles.categoryCard, { borderLeftColor: '#2196F3' }]}
+              onPress={() => router.replace('/(tabs)')}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.categoryIcon, { backgroundColor: '#e3f2fd' }]}>
+                <Ionicons name="arrow-up-circle" size={28} color="#2196F3" />
+              </View>
+              <View style={styles.categoryInfo}>
+                <Text style={styles.categoryNumber}>{compatibility?.vendere?.totale_vendibili || 0}</Text>
+                <Text style={styles.categoryLabel}>Vendibili</Text>
+                <Text style={styles.categoryHint}>
+                  Libri dell'anno scorso che puoi vendere
                 </Text>
-              )}
-              <Text style={[styles.flowHint, { color: '#2196F3', fontWeight: '600' }]}>
-                Ricavo €{((compatibility?.vendere?.totale_vendibili || 0) * 8)}
-              </Text>
-            </View>
-            
-            <View style={[styles.flowCard, { borderTopColor: '#FF9800' }]}>
-              <Ionicons name="book" size={32} color="#FF9800" />
-              <Text style={styles.flowNumber}>{totals?.numLibriNuovi || 0}</Text>
-              <Text style={styles.flowLabel}>Da comprare nuovi</Text>
-              <Text style={styles.flowHint}>per quest'anno</Text>
-            </View>
-            
-            <View style={[styles.flowCard, { borderTopColor: '#4CAF50' }]}>
-              <Ionicons name="cart" size={32} color="#4CAF50" />
-              <Text style={styles.flowNumber}>{totals?.numLibriUsati || 0}</Text>
-              <Text style={styles.flowLabel}>Usati disponibili</Text>
-              {totals && totals.costoUsatiReale > 0 && (
-                <Text style={[styles.flowHint, { color: '#4CAF50' }]}>
-                  Spesa €{totals.costoUsatiReale.toFixed(0)}
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#ccc" />
+            </TouchableOpacity>
+
+            {/* 2. ACQUISTABILI USATI */}
+            <TouchableOpacity 
+              style={[styles.categoryCard, { borderLeftColor: '#4CAF50' }]}
+              onPress={() => router.replace('/(tabs)')}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.categoryIcon, { backgroundColor: '#e8f5e9' }]}>
+                <Ionicons name="cart" size={28} color="#4CAF50" />
+              </View>
+              <View style={styles.categoryInfo}>
+                <Text style={styles.categoryNumber}>{compatibility?.comprare?.totale_usati || 0}</Text>
+                <Text style={styles.categoryLabel}>Acquistabili usati</Text>
+                <Text style={styles.categoryHint}>
+                  Libri che puoi comprare usati da altri studenti
                 </Text>
-              )}
-            </View>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#ccc" />
+            </TouchableOpacity>
+
+            {/* 3. NUOVE ADOZIONI */}
+            <TouchableOpacity 
+              style={[styles.categoryCard, { borderLeftColor: '#FF9800' }]}
+              onPress={() => router.replace('/(tabs)')}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.categoryIcon, { backgroundColor: '#fff3e0' }]}>
+                <Ionicons name="sparkles" size={28} color="#FF9800" />
+              </View>
+              <View style={styles.categoryInfo}>
+                <Text style={styles.categoryNumber}>{compatibility?.nuove_adozioni?.totale || totals?.numLibriNuovi || 0}</Text>
+                <Text style={styles.categoryLabel}>Nuove adozioni</Text>
+                <Text style={styles.categoryHint}>
+                  Libri nuovi da acquistare (cambi edizione)
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#ccc" />
+            </TouchableOpacity>
+
+            {/* 4. TRIENNALI GIÀ IN USO */}
+            <TouchableOpacity 
+              style={[styles.categoryCard, { borderLeftColor: '#9C27B0' }]}
+              onPress={() => router.replace('/(tabs)')}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.categoryIcon, { backgroundColor: '#f3e5f5' }]}>
+                <Ionicons name="checkmark-done-circle" size={28} color="#9C27B0" />
+              </View>
+              <View style={styles.categoryInfo}>
+                <Text style={styles.categoryNumber}>{compatibility?.gia_posseduti?.totale || 0}</Text>
+                <Text style={styles.categoryLabel}>Già in possesso</Text>
+                <Text style={styles.categoryHint}>
+                  Triennali o libri che hai già dall'anno scorso
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#ccc" />
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -1006,5 +1058,49 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '600',
     color: '#4CAF50',
+  },
+  // Category Grid styles (4 categorie)
+  categoryGrid: {
+    gap: 10,
+  },
+  categoryCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    borderLeftWidth: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  categoryIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  categoryInfo: {
+    flex: 1,
+  },
+  categoryNumber: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  categoryLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#333',
+    marginTop: 2,
+  },
+  categoryHint: {
+    fontSize: 12,
+    color: '#888',
+    marginTop: 4,
   },
 });
