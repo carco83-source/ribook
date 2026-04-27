@@ -416,7 +416,7 @@ export default function SearchScreen() {
           <ActivityIndicator size="large" color="#1a472a" />
           <Text style={styles.loadingText}>Caricamento libri...</Text>
         </View>
-      ) : filteredBooks.length === 0 ? (
+      ) : filteredBooks.length === 0 && genericResults.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Ionicons name="book-outline" size={48} color="#ccc" />
           <Text style={styles.emptyText}>Nessun libro trovato</Text>
