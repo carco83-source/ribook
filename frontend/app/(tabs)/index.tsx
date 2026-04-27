@@ -597,7 +597,7 @@ export default function RadarScreen() {
                       const copie = book.copie_disponibili || book.copie_usate_disponibili || 0;
                       const coverUrl = book.isbn ? `https://www.ibs.it/images/${book.isbn}_0_0_0_536_0.jpg` : null;
                       const prezzoNuovo = book.prezzo_copertina || book.prezzo_ministeriale || 0;
-                      const prezzoUsato = book.prezzo_minimo_usato || book.prezzo_usato_minimo || (prezzoNuovo * 0.6);
+                      const prezzoUsato = copie > 0 ? (book.prezzo_minimo_usato || book.prezzo_usato_minimo || (prezzoNuovo * 0.6)) : 0;
                       return (
                         <TouchableOpacity 
                           key={idx} 
