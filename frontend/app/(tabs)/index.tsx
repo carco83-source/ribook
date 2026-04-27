@@ -535,7 +535,11 @@ export default function RadarScreen() {
                     const prezzoNuovo = book.prezzo_copertina || book.prezzo_ministeriale || 0;
                     const prezzoUsato = book.prezzo_consigliato || (prezzoNuovo * 0.6);
                     return (
-                      <View key={idx} style={styles.sampleBookItem}>
+                      <TouchableOpacity 
+                        key={idx} 
+                        style={[styles.sampleBookItem, styles.sampleBookItemClickable]}
+                        onPress={() => router.push('/(tabs)/sell')}
+                      >
                         {coverUrl && (
                           <Image 
                             source={{ uri: coverUrl }} 
@@ -560,19 +564,10 @@ export default function RadarScreen() {
                             </View>
                           </View>
                         </View>
-                      </View>
+                      </TouchableOpacity>
                     );
                   })}
                 </View>
-                {/* Link per vendere */}
-                <TouchableOpacity
-                  style={[styles.viewSellersButton, { backgroundColor: '#2196F3', marginTop: 12 }]}
-                  onPress={() => router.push('/(tabs)/sell')}
-                >
-                  <Ionicons name="pricetag" size={18} color="#fff" />
-                  <Text style={styles.viewSellersButtonText}>Vendi questi libri</Text>
-                  <Ionicons name="arrow-forward" size={14} color="#fff" />
-                </TouchableOpacity>
               </View>
             )}
 
@@ -700,8 +695,23 @@ export default function RadarScreen() {
                     {tuttiLibriInUso.map((book: any, idx: number) => {
                       const coverUrl = book.isbn ? `https://www.ibs.it/images/${book.isbn}_0_0_0_536_0.jpg` : null;
                       const prezzoNuovo = book.prezzo_copertina || book.prezzo_ministeriale || 0;
+                      const copie = book.copie_disponibili || book.copie_usate_disponibili || 0;
+                      const prezzoUsato = copie > 0 ? (book.prezzo_minimo_usato || book.prezzo_usato_minimo || (prezzoNuovo * 0.6)) : 0;
+                      const isClickable = copie > 0 && book.isbn;
+                      
+                      const CardComponent = isClickable ? TouchableOpacity : View;
+                      
                       return (
-                        <View key={idx} style={styles.sampleBookItem}>
+                        <CardComponent 
+                          key={idx} 
+                          style={[
+                            styles.sampleBookItem,
+                            isClickable && styles.sampleBookItemClickable
+                          ]}
+                          {...(isClickable ? {
+                            onPress: () => router.push(`/book-sellers/${book.isbn}`)
+                          } : {})}
+                        >
                           {coverUrl && (
                             <Image 
                               source={{ uri: coverUrl }} 
@@ -717,14 +727,22 @@ export default function RadarScreen() {
                             <View style={styles.priceContainer}>
                               <View>
                                 <Text style={styles.priceNewLabel}>Nuovo: <Text style={styles.priceNewValue}>€{prezzoNuovo.toFixed(2)}</Text></Text>
-                                <Text style={{ fontSize: 12, color: '#9C27B0' }}>{book.motivo || 'Già in tuo possesso'}</Text>
+                                <Text style={styles.priceUsedLabel}>Usato da: <Text style={styles.priceUsedValue}>€{prezzoUsato.toFixed(2)}</Text></Text>
                               </View>
                               <View style={{ alignItems: 'center' }}>
-                                <Ionicons name="checkmark-circle" size={24} color="#9C27B0" />
+                                {copie > 0 ? (
+                                  <View style={[styles.copieBadge, styles.copieBadgeAvailable]}>
+                                    <Text style={[styles.copieBadgeText, styles.copieBadgeTextAvailable]}>
+                                      {copie} {copie === 1 ? 'copia' : 'copie'}
+                                    </Text>
+                                  </View>
+                                ) : (
+                                  <Ionicons name="checkmark-circle" size={24} color="#9C27B0" />
+                                )}
                               </View>
                             </View>
                           </View>
-                        </View>
+                        </CardComponent>
                       );
                     })}
                   </View>

@@ -273,7 +273,7 @@ export default function BookSellersScreen() {
                   <Text style={styles.bookPriceLabel}>Prezzo di copertina:</Text>
                   <Text style={styles.bookPrice}>€{bookInfo.prezzo_copertina?.toFixed(2)}</Text>
                 </View>
-                <Text style={styles.bookIsbn}>ISBN: {isbn}</Text>
+                <Text style={styles.bookIsbn} selectable={true}>ISBN: {isbn}</Text>
               </View>
             </View>
           </View>
@@ -496,8 +496,17 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   bookIsbn: {
-    fontSize: 11,
-    color: '#999',
+    fontSize: 16,
+    color: '#1a472a',
+    fontFamily: 'monospace',
+    fontWeight: '600',
+    backgroundColor: '#f0f4f0',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    marginTop: 8,
+    overflow: 'hidden',
+  },
     fontFamily: 'monospace',
   },
   sellersSection: {
