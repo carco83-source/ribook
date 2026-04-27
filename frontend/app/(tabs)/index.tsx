@@ -679,28 +679,36 @@ export default function RadarScreen() {
                   <Text style={[styles.sectionTitlePurple, { marginBottom: 8 }]}>
                     LIBRI NON VENDIBILI GIÀ IN TUO POSSESSO - ANCORA IN USO ({tuttiLibriInUso.length})
                   </Text>
-                  {tuttiLibriInUso.map((book: any, idx: number) => (
-                    <View key={idx} style={styles.sampleBookItem}>
-                      <View style={styles.sampleBookInfo}>
-                        <Text style={styles.sampleBookTitle}>
-                          {book.titolo || book.titolo_vecchio || book.disciplina}
-                        </Text>
-                        <Text style={styles.sampleBookSubject}>
-                          {book.disciplina}
-                        </Text>
-                        <Text style={styles.isbnText}>
-                          ISBN: {book.isbn}
-                        </Text>
-                        <Text style={{ fontSize: 10, color: '#9C27B0' }}>
-                          {book.motivo || book.status || 'Già in tuo possesso'}
-                        </Text>
-                      </View>
-                      <View style={{ alignItems: 'center' }}>
-                        <Ionicons name="checkmark-circle" size={20} color="#9C27B0" />
-                        <Text style={{ fontSize: 9, color: '#9C27B0' }}>In uso</Text>
-                      </View>
-                    </View>
-                  ))}
+                  <View style={styles.booksGrid}>
+                    {tuttiLibriInUso.map((book: any, idx: number) => {
+                      const coverUrl = book.isbn ? `https://www.ibs.it/images/${book.isbn}_0_0_0_536_0.jpg` : null;
+                      return (
+                        <View key={idx} style={styles.sampleBookItem}>
+                          {coverUrl && (
+                            <Image 
+                              source={{ uri: coverUrl }} 
+                              style={styles.bookCoverImage}
+                              resizeMode="contain"
+                            />
+                          )}
+                          <Text style={styles.sampleBookTitle} numberOfLines={2}>
+                            {book.titolo || book.titolo_vecchio || book.disciplina}
+                          </Text>
+                          <Text style={styles.sampleBookSubject}>
+                            {book.disciplina}
+                          </Text>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+                            <Text style={{ fontSize: 12, color: '#9C27B0' }}>
+                              {book.motivo || book.status || 'Già in tuo possesso'}
+                            </Text>
+                            <View style={{ alignItems: 'center' }}>
+                              <Ionicons name="checkmark-circle" size={20} color="#9C27B0" />
+                            </View>
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
                 </View>
               );
             })()}
@@ -719,30 +727,36 @@ export default function RadarScreen() {
                   <Text style={{ fontSize: 11, color: '#D32F2F', marginBottom: 12, fontStyle: 'italic' }}>
                     Non disponibili usati - da comprare nuovi
                   </Text>
-                  {libriNuovi.map((book: any, idx: number) => (
-                    <View key={idx} style={styles.sampleBookItem}>
-                      <View style={styles.sampleBookInfo}>
-                        <Text style={styles.sampleBookTitle}>
-                          {book.titolo}
-                        </Text>
-                        <Text style={styles.sampleBookSubject}>
-                          {book.disciplina}
-                        </Text>
-                        <Text style={styles.isbnText}>
-                          ISBN: {book.isbn}
-                        </Text>
-                        <Text style={{ fontSize: 10, color: '#F44336' }}>
-                          {book.motivo || 'Da acquistare nuovo'}
-                        </Text>
-                      </View>
-                      <View style={{ alignItems: 'flex-end' }}>
-                        <Text style={[styles.sampleBookPrice, { color: '#F44336' }]}>
-                          €{(book.prezzo_copertina || 0).toFixed(2)}
-                        </Text>
-                        <Text style={{ fontSize: 9, color: '#F44336' }}>nuovo</Text>
-                      </View>
-                    </View>
-                  ))}
+                  <View style={styles.booksGrid}>
+                    {libriNuovi.map((book: any, idx: number) => {
+                      const coverUrl = book.isbn ? `https://www.ibs.it/images/${book.isbn}_0_0_0_536_0.jpg` : null;
+                      return (
+                        <View key={idx} style={styles.sampleBookItem}>
+                          {coverUrl && (
+                            <Image 
+                              source={{ uri: coverUrl }} 
+                              style={styles.bookCoverImage}
+                              resizeMode="contain"
+                            />
+                          )}
+                          <Text style={styles.sampleBookTitle} numberOfLines={2}>
+                            {book.titolo}
+                          </Text>
+                          <Text style={styles.sampleBookSubject}>
+                            {book.disciplina}
+                          </Text>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+                            <Text style={{ fontSize: 12, color: '#F44336' }}>
+                              {book.motivo || 'Da acquistare nuovo'}
+                            </Text>
+                            <Text style={[styles.sampleBookPrice, { color: '#F44336' }]}>
+                              €{(book.prezzo_copertina || 0).toFixed(2)}
+                            </Text>
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
                 </View>
               );
             })()}
