@@ -55,12 +55,17 @@ export default function SearchSellScreen() {
 
   useEffect(() => {
     loadUserId();
+    // Log platform info on mount for debugging
+    console.log('Search screen mounted - Platform.OS:', Platform.OS);
   }, []);
 
   const loadUserId = async () => {
     const id = await AsyncStorage.getItem('user_id');
     setUserId(id);
   };
+
+  // Check if we're running on native (not web)
+  const isNative = Platform.OS === 'ios' || Platform.OS === 'android';
 
   const showAlert = (title: string, message: string) => {
     if (Platform.OS === 'web') {
@@ -198,18 +203,37 @@ export default function SearchSellScreen() {
   };
 
   const openScanner = async () => {
-    if (Platform.OS === 'web') {
+    // Debug: Log platform info
+    console.log('Platform.OS:', Platform.OS);
+    console.log('isNative:', isNative);
+    console.log('Permission status:', permission);
+    
+    // Check if we're on web (not iOS/Android)
+    if (!isNative) {
       showAlert('Scanner', 'La scansione barcode è disponibile solo sull\'app mobile');
       return;
     }
     
-    if (!permission?.granted) {
+    // Request camera permission if not granted
+    if (!permission) {
+      console.log('Permission is null, requesting...');
       const result = await requestPermission();
+      console.log('Permission result:', result);
       if (!result.granted) {
-        showAlert('Permesso negato', 'Serve il permesso della fotocamera per scansionare');
+        showAlert('Permesso negato', 'Serve il permesso della fotocamera per scansionare. Vai nelle Impostazioni > RiLiBro > Fotocamera');
+        return;
+      }
+    } else if (!permission.granted) {
+      console.log('Permission not granted, requesting...');
+      const result = await requestPermission();
+      console.log('Permission result:', result);
+      if (!result.granted) {
+        showAlert('Permesso negato', 'Serve il permesso della fotocamera per scansionare. Vai nelle Impostazioni > RiLiBro > Fotocamera');
         return;
       }
     }
+    
+    console.log('Opening scanner...');
     setShowScanner(true);
   };
 
