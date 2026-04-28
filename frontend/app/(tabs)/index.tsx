@@ -13,6 +13,7 @@ import {
   TextInput,
   Platform,
   KeyboardAvoidingView,
+  ImageBackground,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -413,8 +414,13 @@ export default function RadarScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-      {/* Sezione Alunni - Rettangoli con info complete */}
-      <View style={styles.profileSelectorCard}>
+      {/* Sezione Alunni con Logo RiBook come sfondo */}
+      <ImageBackground 
+        source={require('../../assets/images/ribook-text-only.png')}
+        style={styles.profileSelectorCard}
+        imageStyle={styles.profileSelectorBgImage}
+        resizeMode="contain"
+      >
         <Text style={styles.profileSelectorLabel}>Alunni</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View style={styles.childTabs}>
@@ -423,11 +429,11 @@ export default function RadarScreen() {
               style={styles.addProfileRect}
               onPress={() => setShowAddProfileModal(true)}
             >
-              <Ionicons name="add" size={24} color="#1a472a" />
+              <Ionicons name="add" size={28} color="#1a472a" />
               <Text style={styles.addProfileRectText}>Aggiungi</Text>
             </TouchableOpacity>
             
-            {/* Profili esistenti - Rettangoli con info */}
+            {/* Profili esistenti - Rettangoli bianchi con info */}
             {childProfiles.map((child) => {
               const isSelected = selectedChildId === child.id;
               const schoolColor = getSchoolColor(child.codice_scuola);
@@ -439,7 +445,7 @@ export default function RadarScreen() {
                   key={child.id}
                   style={[
                     styles.childRect,
-                    { borderColor: schoolColor, borderWidth: 3 },
+                    { borderColor: schoolColor, borderWidth: 4 },
                     isSelected && styles.childRectSelected
                   ]}
                   onPress={() => setSelectedChildId(child.id)}
@@ -447,7 +453,7 @@ export default function RadarScreen() {
                   <Text style={styles.childRectName}>{child.nome_figlio}</Text>
                   <Text style={styles.childRectClasse}>Classe {classeLabel}</Text>
                   <Text style={styles.childRectSezione}>Sezione {sezioneLabel}</Text>
-                  <Text style={styles.childRectSchool} numberOfLines={2}>
+                  <Text style={styles.childRectSchool} numberOfLines={3}>
                     {child.scuola}
                   </Text>
                 </TouchableOpacity>
@@ -455,7 +461,7 @@ export default function RadarScreen() {
             })}
           </View>
         </ScrollView>
-      </View>
+      </ImageBackground>
 
       {/* Barra Dettagli Scuola e Spesa */}
       {selectedChildId && (
@@ -1743,67 +1749,66 @@ const styles = StyleSheet.create({
   },
   // Nuovo design rettangoli Alunni
   addProfileRect: {
-    width: 70,
-    height: 110,
-    borderRadius: 10,
-    backgroundColor: '#f5f5f5',
+    width: 80,
+    height: 140,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.95)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: '#ddd',
+    borderColor: '#ccc',
     borderStyle: 'dashed',
-    marginRight: 10,
+    marginRight: 12,
   },
   addProfileRectText: {
-    fontSize: 10,
-    fontWeight: '500',
+    fontSize: 11,
+    fontWeight: '600',
     color: '#1a472a',
-    marginTop: 4,
+    marginTop: 6,
   },
   childRect: {
-    width: 130,
-    height: 110,
-    borderRadius: 10,
+    width: 150,
+    height: 140,
+    borderRadius: 12,
     backgroundColor: '#fff',
-    padding: 10,
-    marginRight: 10,
+    padding: 12,
+    marginRight: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 4,
     justifyContent: 'space-between',
   },
   childRectSelected: {
-    backgroundColor: '#f8f9fa',
-    shadowOpacity: 0.2,
+    backgroundColor: '#f0fff0',
+    shadowOpacity: 0.25,
   },
   childRectName: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: '700',
     color: '#1a472a',
   },
   childRectClasse: {
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: 15,
+    fontWeight: '600',
     color: '#333',
   },
   childRectSezione: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '500',
-    color: '#333',
+    color: '#444',
   },
   childRectInfo: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '500',
     color: '#333',
-    marginBottom: 4,
   },
   childRectSchool: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '500',
     color: '#666',
-    lineHeight: 13,
+    lineHeight: 14,
   },
   childInfoButtonNew: {
     flexDirection: 'row',
@@ -1891,9 +1896,10 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   profileSelectorLabel: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 8,
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#fff',
+    marginBottom: 12,
   },
   childTabSmall: {
     paddingHorizontal: 16,
@@ -2010,7 +2016,7 @@ const styles = StyleSheet.create({
   },
   // Profile selector card
   profileSelectorCard: {
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(26, 71, 42, 0.9)',
     marginHorizontal: 16,
     marginBottom: 16,
     borderRadius: 16,
@@ -2020,6 +2026,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    overflow: 'hidden',
+  },
+  profileSelectorBgImage: {
+    opacity: 0.15,
+    borderRadius: 16,
   },
   // Badge copie disponibili
   copieBadge: {

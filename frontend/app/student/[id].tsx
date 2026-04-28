@@ -309,10 +309,10 @@ export default function StudentDetailScreen() {
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         {/* Header Alunno con Logo RiBook */}
         <ImageBackground 
-          source={require('../../assets/images/ribook-logo.png')}
+          source={require('../../assets/images/ribook-text-only.png')}
           style={styles.studentHeaderBg}
           imageStyle={styles.studentHeaderImage}
-          resizeMode="cover"
+          resizeMode="contain"
         >
           <View style={styles.studentHeaderOverlay}>
             <View style={styles.studentAvatar}>

@@ -178,7 +178,7 @@ export default function ProfileScreen() {
     <ScrollView style={styles.container}>
       {/* Profile Header con Logo RiBook */}
       <ImageBackground 
-        source={require('../../assets/images/ribook-logo.png')}
+        source={require('../../assets/images/ribook-text-only.png')}
         style={styles.profileHeader}
         imageStyle={styles.profileHeaderImage}
         resizeMode="contain"
