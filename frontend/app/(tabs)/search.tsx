@@ -17,7 +17,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
-import { Camera, CameraView } from 'expo-camera';
+import { BarCodeScanner } from 'expo-barcode-scanner';
 import * as Device from 'expo-device';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:8001';
@@ -240,8 +240,8 @@ export default function SearchSellScreen() {
     }
     
     try {
-      console.log('Requesting Camera permissions...');
-      const { status } = await Camera.requestCameraPermissionsAsync();
+      console.log('Requesting BarCodeScanner permissions...');
+      const { status } = await BarCodeScanner.requestPermissionsAsync();
       console.log('Permission status:', status);
       
       setHasPermission(status === 'granted');
@@ -253,7 +253,6 @@ export default function SearchSellScreen() {
       
       console.log('Opening scanner...');
       setScanned(false);
-      setIsCameraReady(false);
       setCameraKey(prev => prev + 1);
       setShowScanner(true);
     } catch (error) {
@@ -355,32 +354,21 @@ export default function SearchSellScreen() {
     
     return (
       <View style={[styles.scannerContainer, { width, height }]}>
-        <CameraView
+        <BarCodeScanner
           key={cameraKey}
           style={{ flex: 1, width: '100%', height: '100%' }}
-          facing="back"
-          onCameraReady={() => {
-            console.log('Camera ready!');
-            setIsCameraReady(true);
-          }}
-          barcodeScannerSettings={{
-            barcodeTypes: ['ean13', 'ean8', 'qr', 'code128', 'code39'],
-          }}
-          onBarcodeScanned={isCameraReady && !scanned ? handleBarCodeScanned : undefined}
+          onBarCodeScanned={scanned ? undefined : handleBarCodeScanned}
         />
         <View style={styles.scannerOverlay}>
           <View style={styles.scannerFrame} />
           <Text style={styles.scannerText}>Inquadra il codice a barre ISBN</Text>
-          <Text style={styles.scannerHint}>
-            {isCameraReady ? 'Tieni fermo il libro' : 'Avvio fotocamera...'}
-          </Text>
+          <Text style={styles.scannerHint}>Tieni fermo il libro</Text>
         </View>
         <TouchableOpacity 
           style={styles.scannerCloseBtn}
           onPress={() => {
             setShowScanner(false);
             setScanned(false);
-            setIsCameraReady(false);
           }}
         >
           <Ionicons name="close" size={30} color="#fff" />
