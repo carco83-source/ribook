@@ -49,6 +49,8 @@ export default function SearchSellScreen() {
   const [showScanner, setShowScanner] = useState(false);
   const [scanned, setScanned] = useState(false);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [isCameraReady, setIsCameraReady] = useState(false);
+  const [cameraKey, setCameraKey] = useState(0);
   
   // Cerca states
   const [cercaIsbn, setCercaIsbn] = useState('');
@@ -254,7 +256,10 @@ export default function SearchSellScreen() {
       }
       
       console.log('Opening scanner...');
-      setScanned(false); // Reset scanned state
+      // Reset all scanner states
+      setScanned(false);
+      setIsCameraReady(false);
+      setCameraKey(prev => prev + 1); // Force camera remount
       setShowScanner(true);
     } catch (error) {
       console.error('Error opening scanner:', error);
@@ -353,24 +358,32 @@ export default function SearchSellScreen() {
   if (showScanner) {
     return (
       <View style={styles.scannerContainer}>
-        <BarCodeScanner
-          style={styles.scanner}
-          barCodeTypes={[
-            BarCodeScanner.Constants.BarCodeType.ean13,
-            BarCodeScanner.Constants.BarCodeType.ean8,
-            BarCodeScanner.Constants.BarCodeType.code128,
-            BarCodeScanner.Constants.BarCodeType.code39,
-          ]}
-          onBarCodeScanned={handleBarCodeScanned}
+        <CameraView
+          key={cameraKey}
+          style={StyleSheet.absoluteFillObject}
+          facing="back"
+          onCameraReady={() => {
+            console.log('Camera is ready!');
+            setIsCameraReady(true);
+          }}
+          barcodeScannerSettings={{
+            barcodeTypes: ['ean13', 'ean8', 'code128', 'code39', 'upc_a', 'upc_e'],
+          }}
+          onBarcodeScanned={isCameraReady && !scanned ? handleBarCodeScanned : undefined}
         />
         <View style={styles.scannerOverlay}>
           <View style={styles.scannerFrame} />
           <Text style={styles.scannerText}>Inquadra il codice a barre ISBN</Text>
-          <Text style={styles.scannerHint}>Tieni fermo il libro a 15-20cm</Text>
+          <Text style={styles.scannerHint}>
+            {isCameraReady ? 'Tieni fermo il libro a 15-20cm' : 'Avvio fotocamera...'}
+          </Text>
         </View>
         <TouchableOpacity 
           style={styles.scannerCloseBtn}
-          onPress={() => setShowScanner(false)}
+          onPress={() => {
+            setShowScanner(false);
+            setIsCameraReady(false);
+          }}
         >
           <Ionicons name="close" size={30} color="#fff" />
         </TouchableOpacity>
