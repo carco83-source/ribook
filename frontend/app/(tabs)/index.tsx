@@ -2016,7 +2016,7 @@ const styles = StyleSheet.create({
   },
   // Profile selector card
   profileSelectorCard: {
-    backgroundColor: 'rgba(26, 71, 42, 0.9)',
+    backgroundColor: 'rgba(26, 71, 42, 0.95)',
     marginHorizontal: 16,
     marginBottom: 16,
     borderRadius: 16,
@@ -2029,8 +2029,11 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   profileSelectorBgImage: {
-    opacity: 0.15,
+    opacity: 0.25,
     borderRadius: 16,
+    resizeMode: 'cover',
+    width: '100%',
+    height: '100%',
   },
   // Badge copie disponibili
   copieBadge: {
