@@ -355,12 +355,13 @@ export default function RadarScreen() {
   }
 
   return (
-    <ScrollView
-      style={styles.container}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-      }
-    >
+    <>
+      <ScrollView
+        style={styles.container}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
       {/* Sezione Alunni - Cerchi con nome e info sotto */}
       <View style={styles.profileSelectorCard}>
         <Text style={styles.profileSelectorLabel}>Alunni</Text>
@@ -734,7 +735,6 @@ export default function RadarScreen() {
           style={styles.modalOverlay}
         >
           <View style={styles.modalContent}>
-            {/* Header Modal */}
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Aggiungi Alunno</Text>
               <TouchableOpacity 
@@ -746,7 +746,6 @@ export default function RadarScreen() {
             </View>
 
             <ScrollView style={styles.modalScrollContent} showsVerticalScrollIndicator={false}>
-              {/* Nome Alunno */}
               <View style={styles.formGroup}>
                 <Text style={styles.formLabel}>Nome Alunno *</Text>
                 <TextInput
@@ -759,7 +758,6 @@ export default function RadarScreen() {
                 />
               </View>
 
-              {/* Nome Scuola */}
               <View style={styles.formGroup}>
                 <Text style={styles.formLabel}>Nome Scuola *</Text>
                 <TextInput
@@ -771,7 +769,6 @@ export default function RadarScreen() {
                 />
               </View>
 
-              {/* Codice Ministeriale */}
               <View style={styles.formGroup}>
                 <Text style={styles.formLabel}>Codice Ministeriale</Text>
                 <TextInput
@@ -784,7 +781,6 @@ export default function RadarScreen() {
                 />
               </View>
 
-              {/* Tipo Scuola */}
               <View style={styles.formGroup}>
                 <Text style={styles.formLabel}>Tipo Scuola *</Text>
                 <View style={styles.tipoScuolaButtons}>
@@ -815,7 +811,6 @@ export default function RadarScreen() {
                 </View>
               </View>
 
-              {/* Classe */}
               <View style={styles.formGroup}>
                 <Text style={styles.formLabel}>Classe *</Text>
                 <View style={styles.classeButtons}>
@@ -837,7 +832,6 @@ export default function RadarScreen() {
                 </View>
               </View>
 
-              {/* Sezione */}
               <View style={styles.formGroup}>
                 <Text style={styles.formLabel}>Sezione *</Text>
                 <TextInput
@@ -851,7 +845,6 @@ export default function RadarScreen() {
                 />
               </View>
 
-              {/* Bottone Salva */}
               <TouchableOpacity
                 style={[styles.saveProfileButton, savingProfile && styles.saveProfileButtonDisabled]}
                 onPress={saveNewProfile}
@@ -872,6 +865,8 @@ export default function RadarScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+    </>
   );
 }
 
