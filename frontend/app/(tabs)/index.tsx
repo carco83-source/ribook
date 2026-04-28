@@ -275,40 +275,55 @@ export default function RadarScreen() {
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
     >
-      {/* Sezione Alunni - Profili cliccabili per aprire dettaglio */}
+      {/* Sezione Alunni - Cerchi con nome e info sotto */}
       {childProfiles.length > 0 && (
         <View style={styles.profileSelectorCard}>
           <Text style={styles.profileSelectorLabel}>Alunni</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View style={styles.childTabs}>
-              {childProfiles.map((child) => (
-                <View key={child.id} style={styles.childTabContainer}>
-                  {/* Tab per selezionare */}
-                  <TouchableOpacity
-                    style={[
-                      styles.childTab,
-                      selectedChildId === child.id && styles.childTabActive
-                    ]}
-                    onPress={() => setSelectedChildId(child.id)}
-                  >
-                    <Text style={[
-                      styles.childTabText,
-                      selectedChildId === child.id && styles.childTabTextActive
-                    ]}>
-                      {child.nome_figlio}
-                    </Text>
-                  </TouchableOpacity>
-                  {/* Pulsante info per aprire dettaglio */}
-                  {selectedChildId === child.id && (
+              {childProfiles.map((child) => {
+                const isSelected = selectedChildId === child.id;
+                const initial = child.nome_figlio?.charAt(0)?.toUpperCase() || '?';
+                
+                return (
+                  <View key={child.id} style={styles.childCircleContainer}>
+                    {/* Cerchio con nome */}
                     <TouchableOpacity
-                      style={styles.childInfoButton}
+                      style={[
+                        styles.childCircle,
+                        isSelected && styles.childCircleSelected
+                      ]}
+                      onPress={() => setSelectedChildId(child.id)}
+                    >
+                      <Text style={styles.childCircleInitial}>{initial}</Text>
+                      <Text style={styles.childCircleName} numberOfLines={1}>
+                        {child.nome_figlio}
+                      </Text>
+                    </TouchableOpacity>
+                    
+                    {/* Pulsante Info sotto il cerchio */}
+                    <TouchableOpacity
+                      style={[
+                        styles.childInfoButtonNew,
+                        isSelected && styles.childInfoButtonNewActive
+                      ]}
                       onPress={() => router.push(`/student/${child.id}`)}
                     >
-                      <Ionicons name="information-circle" size={22} color="#1a472a" />
+                      <Ionicons 
+                        name="information-circle-outline" 
+                        size={16} 
+                        color={isSelected ? '#FF9800' : '#888'} 
+                      />
+                      <Text style={[
+                        styles.childInfoText,
+                        isSelected && styles.childInfoTextActive
+                      ]}>
+                        info
+                      </Text>
                     </TouchableOpacity>
-                  )}
-                </View>
-              ))}
+                  </View>
+                );
+              })}
             </View>
           </ScrollView>
         </View>
@@ -1344,6 +1359,63 @@ const styles = StyleSheet.create({
   childInfoButton: {
     marginLeft: 6,
     padding: 6,
+  },
+  // Nuovo design cerchi Alunni
+  childCircleContainer: {
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  childCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: '#e0e0e0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  childCircleSelected: {
+    borderColor: '#FF9800',
+    borderWidth: 4,
+  },
+  childCircleInitial: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  childCircleName: {
+    fontSize: 11,
+    color: '#666',
+    marginTop: 2,
+    maxWidth: 70,
+    textAlign: 'center',
+  },
+  childInfoButtonNew: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: '#f5f5f5',
+    gap: 4,
+  },
+  childInfoButtonNewActive: {
+    backgroundColor: '#fff3e0',
+  },
+  childInfoText: {
+    fontSize: 12,
+    color: '#888',
+  },
+  childInfoTextActive: {
+    color: '#FF9800',
+    fontWeight: '600',
   },
   // New Purchasable Books Styles
   purchasableCounters: {
