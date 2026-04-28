@@ -11,13 +11,13 @@ import {
   Image,
   Platform,
   Keyboard,
+  Dimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
-import { CameraView } from 'expo-camera';
-import { BarCodeScanner } from 'expo-barcode-scanner';
+import { Camera, CameraView } from 'expo-camera';
 import * as Device from 'expo-device';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:8001';
@@ -228,13 +228,10 @@ export default function SearchSellScreen() {
   };
 
   const openScanner = async () => {
-    // Debug: Log platform info
     console.log('=== SCANNER DEBUG ===');
     console.log('Platform.OS:', Platform.OS);
     console.log('Device.isDevice:', Device.isDevice);
-    console.log('Device.modelName:', Device.modelName);
     
-    // Use Device.isDevice to check if we're on a real device (not web)
     const isPhysicalDevice = Device.isDevice;
     
     if (!isPhysicalDevice) {
@@ -242,10 +239,9 @@ export default function SearchSellScreen() {
       return;
     }
     
-    // Request camera permission using BarCodeScanner's permission system
     try {
-      console.log('Requesting BarCodeScanner permissions...');
-      const { status } = await BarCodeScanner.requestPermissionsAsync();
+      console.log('Requesting Camera permissions...');
+      const { status } = await Camera.requestCameraPermissionsAsync();
       console.log('Permission status:', status);
       
       setHasPermission(status === 'granted');
@@ -256,10 +252,9 @@ export default function SearchSellScreen() {
       }
       
       console.log('Opening scanner...');
-      // Reset all scanner states
       setScanned(false);
       setIsCameraReady(false);
-      setCameraKey(prev => prev + 1); // Force camera remount
+      setCameraKey(prev => prev + 1);
       setShowScanner(true);
     } catch (error) {
       console.error('Error opening scanner:', error);
@@ -356,28 +351,36 @@ export default function SearchSellScreen() {
   // ==================== RENDER ====================
 
   if (showScanner) {
+    const { width, height } = Dimensions.get('window');
+    
     return (
-      <View style={styles.scannerContainer}>
-        <BarCodeScanner
+      <View style={[styles.scannerContainer, { width, height }]}>
+        <CameraView
           key={cameraKey}
-          style={StyleSheet.absoluteFillObject}
-          type={BarCodeScanner.Constants.Type.back}
-          barCodeTypes={[
-            BarCodeScanner.Constants.BarCodeType.ean13,
-            BarCodeScanner.Constants.BarCodeType.ean8,
-          ]}
-          onBarCodeScanned={scanned ? undefined : handleBarCodeScanned}
+          style={{ flex: 1, width: '100%', height: '100%' }}
+          facing="back"
+          onCameraReady={() => {
+            console.log('Camera ready!');
+            setIsCameraReady(true);
+          }}
+          barcodeScannerSettings={{
+            barcodeTypes: ['ean13', 'ean8', 'qr', 'code128', 'code39'],
+          }}
+          onBarcodeScanned={isCameraReady && !scanned ? handleBarCodeScanned : undefined}
         />
         <View style={styles.scannerOverlay}>
           <View style={styles.scannerFrame} />
           <Text style={styles.scannerText}>Inquadra il codice a barre ISBN</Text>
-          <Text style={styles.scannerHint}>Tieni fermo il libro a 15-20cm</Text>
+          <Text style={styles.scannerHint}>
+            {isCameraReady ? 'Tieni fermo il libro' : 'Avvio fotocamera...'}
+          </Text>
         </View>
         <TouchableOpacity 
           style={styles.scannerCloseBtn}
           onPress={() => {
             setShowScanner(false);
             setScanned(false);
+            setIsCameraReady(false);
           }}
         >
           <Ionicons name="close" size={30} color="#fff" />
