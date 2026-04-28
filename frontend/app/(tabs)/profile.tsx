@@ -8,30 +8,13 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
-  Linking,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
-import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
-import * as WebBrowser from 'expo-web-browser';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
-
-// Helper function per convertire numeri in parole italiane
-const getClasseLabel = (classe: number | string): string => {
-  const classeNum = typeof classe === 'string' ? parseInt(classe) : classe;
-  const nomiClassi: { [key: number]: string } = {
-    1: 'PRIMA',
-    2: 'SECONDA', 
-    3: 'TERZA',
-    4: 'QUARTA',
-    5: 'QUINTA',
-  };
-  return nomiClassi[classeNum] || `${classeNum}ª`;
-};
 
 // Cross-platform confirm dialog
 const showConfirm = (title: string, message: string, onConfirm: () => void, destructive = false) => {
@@ -61,9 +44,8 @@ export default function ProfileScreen() {
   const [upgrading, setUpgrading] = useState(false);
   const [userData, setUserData] = useState<any>(null);
   const [stats, setStats] = useState<any>(null);
-  const [childProfiles, setChildProfiles] = useState<any[]>([]);
-  const [childrenCompatibility, setChildrenCompatibility] = useState<{[key: string]: any}>({});
-  const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
+  const [trades, setTrades] = useState<any[]>([]);
+  const [tradesLoading, setTradesLoading] = useState(false);
 
   useEffect(() => {
     loadUserData();
@@ -88,23 +70,8 @@ export default function ProfileScreen() {
       const statsRes = await axios.get(`${API_URL}/api/users/${userId}/stats`);
       setStats(statsRes.data);
 
-      // Get child profiles from user data
-      const profili = response.data.profili_figli || [];
-      setChildProfiles(profili);
-
-      // Load analysis for each child profile (usa /analysis come il Radar)
-      const compatibilityData: {[key: string]: any} = {};
-      for (const child of profili) {
-        try {
-          const compRes = await axios.get(
-            `${API_URL}/api/profiles/${userId}/children/${child.id}/analysis`
-          );
-          compatibilityData[child.id] = compRes.data;
-        } catch (e) {
-          console.log(`Failed to load analysis for ${child.nome_figlio}`);
-        }
-      }
-      setChildrenCompatibility(compatibilityData);
+      // Load user trades/exchanges
+      loadTrades(userId);
 
       setUserData({
         ...response.data,
@@ -115,6 +82,35 @@ export default function ProfileScreen() {
       console.error('Error loading user data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadTrades = async (userId: string) => {
+    setTradesLoading(true);
+    try {
+      // Get user's listings (what they're selling)
+      const listingsRes = await axios.get(`${API_URL}/api/listings?seller_id=${userId}`);
+      
+      // Get user's conversations (potential trades)
+      const conversationsRes = await axios.get(`${API_URL}/api/conversations/${userId}`);
+      
+      // Combine into trades format
+      const userTrades = [
+        ...listingsRes.data.map((listing: any) => ({
+          id: listing._id || listing.id,
+          type: 'vendita',
+          book_title: listing.book_title,
+          price: listing.price,
+          status: listing.status,
+          created_at: listing.created_at,
+        })),
+      ];
+      
+      setTrades(userTrades);
+    } catch (error) {
+      console.error('Error loading trades:', error);
+    } finally {
+      setTradesLoading(false);
     }
   };
 
@@ -166,64 +162,20 @@ export default function ProfileScreen() {
     );
   };
 
-  // Download PDF lista libri
-  const downloadPdf = async (childId: string, childName: string, childClasse: string) => {
-    setDownloadingPdf(childId);
-    try {
-      const userId = await AsyncStorage.getItem('user_id');
-      const pdfUrl = `${API_URL}/api/profiles/${userId}/children/${childId}/books-pdf`;
-      
-      if (Platform.OS === 'web') {
-        // On web, open PDF in new tab
-        window.open(pdfUrl, '_blank');
-      } else {
-        // On mobile, download and share
-        const filename = `lista_libri_${childName}_${childClasse}.pdf`;
-        const fileUri = FileSystem.documentDirectory + filename;
-        
-        const downloadResult = await FileSystem.downloadAsync(pdfUrl, fileUri);
-        
-        if (downloadResult.status === 200) {
-          if (await Sharing.isAvailableAsync()) {
-            await Sharing.shareAsync(downloadResult.uri, {
-              mimeType: 'application/pdf',
-              dialogTitle: 'Condividi Lista Libri'
-            });
-          } else {
-            showAlert('PDF Scaricato', `File salvato: ${filename}`);
-          }
-        } else {
-          showAlert('Errore', 'Impossibile scaricare il PDF');
-        }
-      }
-    } catch (error) {
-      console.error('Error downloading PDF:', error);
-      showAlert('Errore', 'Impossibile generare il PDF');
-    } finally {
-      setDownloadingPdf(null);
+  // Get status color and label
+  const getStatusInfo = (status: string) => {
+    switch (status) {
+      case 'available':
+        return { color: '#4CAF50', label: 'In vendita', icon: 'pricetag' };
+      case 'reserved':
+        return { color: '#FF9800', label: 'Riservato', icon: 'time' };
+      case 'sold':
+        return { color: '#2196F3', label: 'Venduto', icon: 'checkmark-circle' };
+      case 'cancelled':
+        return { color: '#999', label: 'Annullato', icon: 'close-circle' };
+      default:
+        return { color: '#666', label: status, icon: 'help-circle' };
     }
-  };
-
-  // Elimina profilo figlio
-  const handleDeleteProfile = async (childId: string, childName: string) => {
-    showConfirm(
-      'Elimina Profilo',
-      `Sei sicuro di voler eliminare il profilo di ${childName}?\n\nQuesta azione non può essere annullata.`,
-      async () => {
-        try {
-          const userId = await AsyncStorage.getItem('user_id');
-          await axios.delete(`${API_URL}/api/users/${userId}/profiles/${childId}`);
-          
-          // Ricarica i dati
-          loadUserData();
-          showAlert('Successo', `Profilo di ${childName} eliminato`);
-        } catch (error: any) {
-          console.error('Error deleting profile:', error);
-          showAlert('Errore', error.response?.data?.detail || 'Impossibile eliminare il profilo');
-        }
-      },
-      true
-    );
   };
 
   if (loading) {
@@ -268,337 +220,77 @@ export default function ProfileScreen() {
         </View>
       </View>
 
-      {/* Child Profiles with Book Flow */}
-      {childProfiles.length > 0 && (
-        <View style={styles.bookFlowSection}>
-          {childProfiles.map((child) => {
-            const compatibility = childrenCompatibility[child.id];
-            if (!compatibility) return null;
-            
-            const isMedia = child.tipo_scuola === 'primo_grado';
-            const tipoLabel = isMedia ? 'MEDIA' : 'SUP';
-            const tipoScuolaLabel = isMedia ? 'Scuola Media' : 'Scuola Superiore';
-            
-            return (
-              <View key={child.id} style={styles.childBookFlowCard}>
-                {/* Child Header - Nome scuola prima riga, classe/sezione seconda riga */}
-                <View style={styles.childHeader}>
-                  <View style={styles.childNameBadge}>
-                    <Ionicons name="person" size={16} color="#fff" />
-                    <Text style={styles.childNameText}>{child.nome_figlio}</Text>
-                  </View>
-                  <Text style={styles.childSchoolTextBold} numberOfLines={1}>
-                    {child.scuola}
-                  </Text>
-                  <Text style={styles.childClassText}>
-                    classe {child.classe}ª sezione {child.sezione}
-                  </Text>
-                </View>
-                
-                {/* Three Column Layout */}
-                <View style={styles.bookFlowContainer}>
-                  {/* LEFT - VENDI (Cliccabile → vai a Cerca Tab) */}
-                  <TouchableOpacity 
-                    style={styles.bookFlowColumn}
-                    onPress={() => router.push('/(tabs)/search')}
-                    activeOpacity={0.7}
-                  >
-                    <View style={[styles.bookFlowHeader, { backgroundColor: '#2196F3' }]}>
-                      <Text style={styles.bookFlowHeaderClass}>
-                        {compatibility.vendere?.classe_destinazione 
-                          ? getClasseLabel(compatibility.vendere.classe_destinazione)
-                          : 'N/A'}
-                      </Text>
-                    </View>
-                    <View style={styles.bookFlowBody}>
-                      <Ionicons name="arrow-up-circle" size={24} color="#2196F3" />
-                      <Text style={[styles.bookFlowAction, { color: '#2196F3' }]}>VENDI</Text>
-                      <Text style={[styles.bookFlowNumber, { color: '#2196F3' }]}>
-                        {compatibility.vendere?.totale_vendibili || 0}
-                      </Text>
-                      <Text style={styles.bookFlowLabel}>libri</Text>
-                    </View>
-                    {/* Totale ipotetico ricavo */}
-                    <Text style={[styles.bookFlowHint, { color: '#2196F3', fontWeight: '600' }]}>
-                      Ricavo: €{((compatibility.vendere?.totale_vendibili || 0) * 8).toFixed(0)}
-                    </Text>
-                    {(compatibility.vendere?.totale_non_vendibili || 0) > 0 && (
-                      <Text style={[styles.bookFlowHint, { color: '#f44336' }]}>
-                        {compatibility.vendere?.totale_non_vendibili} ed. cambiate
-                      </Text>
-                    )}
-                  </TouchableOpacity>
-
-                  {/* CENTER - Iniziale del nome nel header */}
-                  <View style={styles.bookFlowColumn}>
-                    <View style={[styles.bookFlowHeader, { backgroundColor: '#1a472a' }]}>
-                      <Text style={styles.bookFlowHeaderClass}>
-                        {child.nome_figlio?.charAt(0) || '?'}
-                      </Text>
-                    </View>
-                    <View style={styles.bookFlowBody}>
-                      <Ionicons name="book" size={28} color="#FF9800" />
-                      <Text style={[styles.bookFlowAction, { color: '#FF9800' }]}>NUOVI</Text>
-                      <Text style={[styles.bookFlowNumber, { color: '#FF9800' }]}>
-                        {compatibility.nuovi?.totale || 0}
-                      </Text>
-                      <Text style={styles.bookFlowLabel}>da comprare</Text>
-                    </View>
-                    <Text style={styles.bookFlowHint}>
-                      €{compatibility.nuovi?.costo_totale?.toFixed(0) || 0}
-                    </Text>
-                  </View>
-
-                  {/* RIGHT - COMPRA (Cliccabile → vai a Search Tab) */}
-                  <TouchableOpacity 
-                    style={styles.bookFlowColumn}
-                    onPress={() => router.push('/(tabs)/search')}
-                    activeOpacity={0.7}
-                  >
-                    <View style={[styles.bookFlowHeader, { backgroundColor: '#4CAF50' }]}>
-                      <Text style={styles.bookFlowHeaderClass}>
-                        {compatibility.comprare?.classe_origine 
-                          ? getClasseLabel(compatibility.comprare.classe_origine)
-                          : 'N/A'}
-                      </Text>
-                    </View>
-                    <View style={styles.bookFlowBody}>
-                      <Ionicons name="cart" size={24} color="#4CAF50" />
-                      <Text style={[styles.bookFlowAction, { color: '#4CAF50' }]}>COMPRA</Text>
-                      <Text style={[styles.bookFlowNumber, { color: '#4CAF50' }]}>
-                        {compatibility.comprare?.totale_usati || 0}
-                      </Text>
-                      <Text style={styles.bookFlowLabel}>usati</Text>
-                    </View>
-                    {/* Spesa ipotetica per libri usati */}
-                    <Text style={[styles.bookFlowHint, { color: '#4CAF50', fontWeight: '600' }]}>
-                      Spesa: €{((compatibility.comprare?.totale_usati || 0) * 10).toFixed(0)}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-                
-                {/* TOTALE PARZIALE SPESA per questo profilo */}
-                {(() => {
-                  // Calcola il COSTO TOTALE SE TUTTI I TESTI FOSSERO ACQUISTATI NUOVI
-                  // Somma i prezzi di copertina di tutti i libri da comprare (usati + nuovi)
-                  
-                  // Libri che possono essere comprati usati (ma calcoliamo il prezzo nuovo)
-                  const libriUsati = compatibility.comprare?.libri_usati || compatibility.comprare?.usati?.libri || [];
-                  const costoUsatiSeNuovi = libriUsati.reduce((sum: number, libro: any) => 
-                    sum + (libro.prezzo_copertina || libro.prezzo_nuovo || 0), 0);
-                  
-                  // Libri che devono essere comprati nuovi
-                  const libriNuovi = compatibility.nuovi?.libri || [];
-                  const costoNuovi = libriNuovi.reduce((sum: number, libro: any) => 
-                    sum + (libro.prezzo_copertina || libro.prezzo || 0), 0);
-                  
-                  // TOTALE SE TUTTI NUOVI = somma prezzi copertina
-                  const totaleSeTuttiNuovi = costoUsatiSeNuovi + costoNuovi;
-                  
-                  // Numero totale libri da acquistare
-                  const numLibriUsati = compatibility.comprare?.totale_usati || libriUsati.length || 0;
-                  const numLibriNuovi = compatibility.nuovi?.totale || libriNuovi.length || 0;
-                  const totaleLibriDaComprare = numLibriUsati + numLibriNuovi;
-                  
-                  // SPESA STIMATA: con libri usati (risparmio usando usati)
-                  // Costo usati al prezzo usato (50% del nuovo)
-                  const costoUsatiReale = libriUsati.reduce((sum: number, libro: any) => 
-                    sum + (libro.prezzo_usato || (libro.prezzo_copertina || 0) * 0.5), 0);
-                  const costoNuoviReale = costoNuovi; // I nuovi si pagano a prezzo pieno
-                  const ricavoParziale = (compatibility.vendere?.totale_vendibili || 0) * 8; // €8 ricavo per libro venduto
-                  const spesaNettaParziale = costoUsatiReale + costoNuoviReale - ricavoParziale;
-                  
-                  return (
-                    <View style={styles.partialTotalBoxExpanded}>
-                      {/* TOTALE SE TUTTI NUOVI */}
-                      <View style={styles.totalNuoviRow}>
-                        <Ionicons name="book" size={18} color="#1a472a" />
-                        <Text style={styles.totalNuoviLabelBold}>
-                          TOTALE TESTI NUOVI ({totaleLibriDaComprare}):
-                        </Text>
-                        <Text style={styles.totalNuoviValueBold}>
-                          €{totaleSeTuttiNuovi.toFixed(2)}
-                        </Text>
-                      </View>
-                      <Text style={[styles.partialTotalDetail, { marginBottom: 8, color: '#666' }]}>
-                        (se acquistati tutti a prezzo di copertina)
-                      </Text>
-                      
-                      {/* SPESA STIMATA - con libri usati */}
-                      <View style={[styles.partialTotalRow, { paddingTop: 8, borderTopWidth: 1, borderTopColor: '#eee' }]}>
-                        <Ionicons name="calculator-outline" size={18} color="#4CAF50" />
-                        <Text style={[styles.partialTotalLabel, { color: '#4CAF50' }]}>SPESA STIMATA:</Text>
-                        <Text style={[styles.partialTotalValue, { color: '#4CAF50', fontWeight: 'bold' }]}>
-                          €{Math.abs(spesaNettaParziale).toFixed(0)} {spesaNettaParziale < 0 ? '(guadagno)' : ''}
-                        </Text>
-                      </View>
-                      <Text style={styles.partialTotalDetail}>
-                        (Usati €{costoUsatiReale.toFixed(0)} + Nuovi €{costoNuoviReale.toFixed(0)} - Ricavo €{ricavoParziale})
-                      </Text>
-                    </View>
-                  );
-                })()}
-                
-                {/* PDF Download Button */}
-                <TouchableOpacity
-                  style={styles.pdfDownloadButton}
-                  onPress={() => downloadPdf(child.id, child.nome_figlio, `${child.classe}${tipoLabel}`)}
-                  disabled={downloadingPdf === child.id}
-                >
-                  {downloadingPdf === child.id ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <>
-                      <Ionicons name="document-text" size={20} color="#fff" />
-                      <Text style={styles.pdfDownloadButtonText}>Scarica Lista Libri</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-                
-                {/* Delete Profile Button */}
-                <TouchableOpacity
-                  style={styles.deleteProfileButton}
-                  onPress={() => handleDeleteProfile(child.id, child.nome_figlio)}
-                >
-                  <Ionicons name="trash-outline" size={18} color="#f44336" />
-                  <Text style={styles.deleteProfileButtonText}>Elimina Profilo</Text>
-                </TouchableOpacity>
-              </View>
-            );
-          })}
-
-          {/* Riepilogo Totale con 3 caselle come i figli */}
-          {childProfiles.length > 0 && (
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryTitle}>📊 Riepilogo Totale</Text>
-              
-              {(() => {
-                // Calculate totals across all children
-                let totaleVendibili = 0;
-                let totaleAcquistabili = 0;
-                let totaleNuovi = 0;
-                let costoUsati = 0;
-                let costoNuovi = 0;
-                let guadagnoVendite = 0;
-
-                Object.values(childrenCompatibility).forEach((comp: any) => {
-                  totaleVendibili += comp.vendere?.totale_vendibili || 0;
-                  totaleAcquistabili += comp.comprare?.totale_usati || 0;
-                  totaleNuovi += comp.nuovi?.totale || 0;
-                  
-                  // Costo libri usati (somma prezzo_usato)
-                  if (comp.comprare?.libri_usati) {
-                    comp.comprare.libri_usati.forEach((libro: any) => {
-                      costoUsati += libro.prezzo_usato || 0;
-                    });
-                  }
-                  
-                  costoNuovi += comp.nuovi?.costo_totale || 0;
-                  
-                  // Guadagno dalla vendita (somma prezzo_consigliato)
-                  if (comp.vendere?.libri_vendibili) {
-                    comp.vendere.libri_vendibili.forEach((libro: any) => {
-                      guadagnoVendite += libro.prezzo_consigliato || 0;
-                    });
-                  }
-                });
-
-                const totaleSpesa = costoUsati + costoNuovi - guadagnoVendite;
-
-                return (
-                  <>
-                    {/* Three Column Layout - same style as child cards */}
-                    <View style={styles.bookFlowContainer}>
-                      {/* VENDI - BLU (GUADAGNO +) */}
-                      <View style={styles.bookFlowColumn}>
-                        <View style={[styles.bookFlowHeader, { backgroundColor: '#2196F3' }]}>
-                          <Text style={styles.bookFlowHeaderClass}>VENDI</Text>
-                        </View>
-                        <View style={styles.bookFlowBody}>
-                          <Ionicons name="arrow-up-circle" size={24} color="#2196F3" />
-                          <Text style={[styles.bookFlowNumber, { color: '#2196F3' }]}>
-                            {totaleVendibili}
-                          </Text>
-                          <Text style={styles.bookFlowLabel}>libri</Text>
-                        </View>
-                        <Text style={[styles.bookFlowHint, { color: '#4CAF50', fontWeight: '600' }]}>
-                          {guadagnoVendite > 0 ? `+ €${guadagnoVendite.toFixed(0)}` : '€0'}
-                        </Text>
-                      </View>
-
-                      {/* NUOVI - NERO (SPESA -) */}
-                      <View style={styles.bookFlowColumn}>
-                        <View style={[styles.bookFlowHeader, { backgroundColor: '#1a472a' }]}>
-                          <Text style={styles.bookFlowHeaderClass}>NUOVI</Text>
-                        </View>
-                        <View style={styles.bookFlowBody}>
-                          <Ionicons name="book" size={24} color="#FF9800" />
-                          <Text style={[styles.bookFlowNumber, { color: '#FF9800' }]}>
-                            {totaleNuovi}
-                          </Text>
-                          <Text style={styles.bookFlowLabel}>da comprare</Text>
-                        </View>
-                        <Text style={[styles.bookFlowHint, { color: '#f44336', fontWeight: '600' }]}>
-                          - €{costoNuovi.toFixed(0)}
-                        </Text>
-                      </View>
-
-                      {/* COMPRA USATI - VERDE (SPESA -) */}
-                      <View style={styles.bookFlowColumn}>
-                        <View style={[styles.bookFlowHeader, { backgroundColor: '#4CAF50' }]}>
-                          <Text style={styles.bookFlowHeaderClass}>USATI</Text>
-                        </View>
-                        <View style={styles.bookFlowBody}>
-                          <Ionicons name="cart" size={24} color="#4CAF50" />
-                          <Text style={[styles.bookFlowNumber, { color: '#4CAF50' }]}>
-                            {totaleAcquistabili}
-                          </Text>
-                          <Text style={styles.bookFlowLabel}>da comprare</Text>
-                        </View>
-                        <Text style={[styles.bookFlowHint, { color: '#f44336', fontWeight: '600' }]}>
-                          - €{costoUsati.toFixed(0)}
-                        </Text>
-                      </View>
-                    </View>
-
-                    {/* TOTALE SPESA sotto le caselle */}
-                    <View style={styles.totalBalanceRow}>
-                      <View style={styles.totalBalanceContent}>
-                        <Text style={styles.totalBalanceLabel}>TOTALE SPESA</Text>
-                        <Text style={[styles.totalBalanceAmount, { color: '#2196F3' }]}>
-                          €{totaleSpesa.toFixed(0)}
-                        </Text>
-                      </View>
-                    </View>
-                  </>
-                );
-              })()}
-            </View>
-          )}
-
-          {/* Pulsante Aggiungi Profilo */}
-          <TouchableOpacity 
-            style={styles.addProfileButton}
-            onPress={() => router.push('/profiles/manage')}
-          >
-            <Ionicons name="add-circle" size={24} color="#1a472a" />
-            <Text style={styles.addProfileButtonText}>Aggiungi profilo figlio</Text>
-          </TouchableOpacity>
+      {/* Sezione Scambi */}
+      <View style={styles.tradesSection}>
+        <View style={styles.tradesSectionHeader}>
+          <Ionicons name="swap-horizontal" size={24} color="#1a472a" />
+          <Text style={styles.tradesSectionTitle}>I Miei Scambi</Text>
         </View>
-      )}
-
-      {/* Add first child if no children */}
-      {childProfiles.length === 0 && (
-        <View style={styles.section}>
-          <TouchableOpacity 
-            style={styles.addProfileButton}
-            onPress={() => router.push('/profiles/manage')}
-          >
-            <Ionicons name="add-circle" size={24} color="#1a472a" />
-            <Text style={styles.addProfileButtonText}>Aggiungi profilo figlio</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+        
+        {tradesLoading ? (
+          <View style={styles.tradesLoading}>
+            <ActivityIndicator size="small" color="#1a472a" />
+            <Text style={styles.tradesLoadingText}>Caricamento scambi...</Text>
+          </View>
+        ) : trades.length === 0 ? (
+          <View style={styles.tradesEmpty}>
+            <Ionicons name="book-outline" size={48} color="#ccc" />
+            <Text style={styles.tradesEmptyTitle}>Nessuno scambio</Text>
+            <Text style={styles.tradesEmptySubtitle}>
+              Non hai ancora messo in vendita o acquistato libri
+            </Text>
+            <TouchableOpacity 
+              style={styles.tradesStartButton}
+              onPress={() => router.push('/(tabs)/search')}
+            >
+              <Ionicons name="add" size={20} color="#fff" />
+              <Text style={styles.tradesStartButtonText}>Inizia a vendere</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.tradesList}>
+            {trades.map((trade) => {
+              const statusInfo = getStatusInfo(trade.status);
+              return (
+                <TouchableOpacity 
+                  key={trade.id} 
+                  style={styles.tradeCard}
+                  onPress={() => router.push(`/listing/${trade.id}`)}
+                >
+                  <View style={styles.tradeCardLeft}>
+                    <View style={[styles.tradeTypeIcon, { 
+                      backgroundColor: trade.type === 'vendita' ? '#e3f2fd' : '#e8f5e9' 
+                    }]}>
+                      <Ionicons 
+                        name={trade.type === 'vendita' ? 'arrow-up' : 'arrow-down'} 
+                        size={20} 
+                        color={trade.type === 'vendita' ? '#2196F3' : '#4CAF50'} 
+                      />
+                    </View>
+                    <View style={styles.tradeCardInfo}>
+                      <Text style={styles.tradeCardTitle} numberOfLines={1}>
+                        {trade.book_title}
+                      </Text>
+                      <View style={styles.tradeCardMeta}>
+                        <View style={[styles.tradeStatusBadge, { backgroundColor: statusInfo.color + '20' }]}>
+                          <Ionicons name={statusInfo.icon as any} size={12} color={statusInfo.color} />
+                          <Text style={[styles.tradeStatusText, { color: statusInfo.color }]}>
+                            {statusInfo.label}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  </View>
+                  <View style={styles.tradeCardRight}>
+                    <Text style={styles.tradeCardPrice}>€{trade.price?.toFixed(2) || '0.00'}</Text>
+                    <Ionicons name="chevron-forward" size={20} color="#999" />
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+      </View>
 
       {/* Quick Actions */}
       <View style={styles.section}>
@@ -919,6 +611,131 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#ccc',
     marginTop: 4,
+  },
+  // Trades Section Styles
+  tradesSection: {
+    margin: 16,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  tradesSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 10,
+  },
+  tradesSectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1a472a',
+  },
+  tradesLoading: {
+    alignItems: 'center',
+    padding: 24,
+    gap: 12,
+  },
+  tradesLoadingText: {
+    color: '#666',
+    fontSize: 14,
+  },
+  tradesEmpty: {
+    alignItems: 'center',
+    padding: 32,
+  },
+  tradesEmptyTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginTop: 16,
+  },
+  tradesEmptySubtitle: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 8,
+    marginBottom: 20,
+  },
+  tradesStartButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1a472a',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 10,
+    gap: 8,
+  },
+  tradesStartButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  tradesList: {
+    gap: 12,
+  },
+  tradeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f8f9fa',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  tradeCardLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 12,
+  },
+  tradeTypeIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tradeCardInfo: {
+    flex: 1,
+  },
+  tradeCardTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  tradeCardMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  tradeStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  tradeStatusText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  tradeCardRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  tradeCardPrice: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1a472a',
   },
   menuItem: {
     flexDirection: 'row',
