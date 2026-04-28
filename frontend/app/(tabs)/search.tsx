@@ -17,7 +17,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
-import { Camera } from 'expo-camera';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Device from 'expo-device';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:8001';
@@ -41,6 +41,7 @@ interface SearchResult {
 export default function SearchSellScreen() {
   const router = useRouter();
   const [userId, setUserId] = useState<string | null>(null);
+  const [permission, requestPermission] = useCameraPermissions();
   
   // Vendi states
   const [vendiIsbn, setVendiIsbn] = useState('');
@@ -48,8 +49,6 @@ export default function SearchSellScreen() {
   const [vendiBook, setVendiBook] = useState<Book | null>(null);
   const [showScanner, setShowScanner] = useState(false);
   const [scanned, setScanned] = useState(false);
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
-  const [isCameraReady, setIsCameraReady] = useState(false);
   const [cameraKey, setCameraKey] = useState(0);
   
   // Cerca states
@@ -231,6 +230,7 @@ export default function SearchSellScreen() {
     console.log('=== SCANNER DEBUG ===');
     console.log('Platform.OS:', Platform.OS);
     console.log('Device.isDevice:', Device.isDevice);
+    console.log('Permission:', permission);
     
     const isPhysicalDevice = Device.isDevice;
     
@@ -240,15 +240,16 @@ export default function SearchSellScreen() {
     }
     
     try {
-      console.log('Requesting Camera permissions...');
-      const { status } = await Camera.requestCameraPermissionsAsync();
-      console.log('Permission status:', status);
-      
-      setHasPermission(status === 'granted');
-      
-      if (status !== 'granted') {
-        showAlert('Permesso Fotocamera', 'Per scansionare i codici a barre, consenti l\'accesso alla fotocamera nelle Impostazioni del telefono.');
-        return;
+      // Check if we already have permission
+      if (!permission?.granted) {
+        console.log('Requesting Camera permissions...');
+        const result = await requestPermission();
+        console.log('Permission result:', result);
+        
+        if (!result.granted) {
+          showAlert('Permesso Fotocamera', 'Per scansionare i codici a barre, consenti l\'accesso alla fotocamera nelle Impostazioni del telefono.');
+          return;
+        }
       }
       
       console.log('Opening scanner...');
@@ -354,14 +355,14 @@ export default function SearchSellScreen() {
     
     return (
       <View style={[styles.scannerContainer, { width, height }]}>
-        <Camera
+        <CameraView
           key={cameraKey}
           style={StyleSheet.absoluteFillObject}
-          type={Camera.Constants?.Type?.back || 'back'}
-          onBarCodeScanned={scanned ? undefined : handleBarCodeScanned}
-          barCodeScannerSettings={{
-            barCodeTypes: ['ean13', 'ean8', 'qr'],
+          facing="back"
+          barcodeScannerSettings={{
+            barcodeTypes: ['ean13', 'ean8', 'qr'],
           }}
+          onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
         />
         <View style={styles.scannerOverlay}>
           <View style={styles.scannerFrame} />
