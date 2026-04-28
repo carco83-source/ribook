@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as Device from 'expo-device';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:8001';
 
@@ -204,37 +205,47 @@ export default function SearchSellScreen() {
 
   const openScanner = async () => {
     // Debug: Log platform info
+    console.log('=== SCANNER DEBUG ===');
     console.log('Platform.OS:', Platform.OS);
-    console.log('isNative:', isNative);
+    console.log('Device.isDevice:', Device.isDevice);
+    console.log('Device.modelName:', Device.modelName);
     console.log('Permission status:', permission);
     
-    // Check if we're on web (not iOS/Android)
-    if (!isNative) {
-      showAlert('Scanner', 'La scansione barcode è disponibile solo sull\'app mobile');
+    // Use Device.isDevice to check if we're on a real device (not web)
+    // Device.isDevice is true on physical devices and simulators, false on web
+    const isPhysicalDevice = Device.isDevice;
+    
+    if (!isPhysicalDevice) {
+      showAlert('Scanner', 'La scansione barcode è disponibile solo sull\'app mobile.\n\nPuoi inserire l\'ISBN manualmente.');
       return;
     }
     
-    // Request camera permission if not granted
-    if (!permission) {
-      console.log('Permission is null, requesting...');
-      const result = await requestPermission();
-      console.log('Permission result:', result);
-      if (!result.granted) {
-        showAlert('Permesso negato', 'Serve il permesso della fotocamera per scansionare. Vai nelle Impostazioni > RiLiBro > Fotocamera');
-        return;
+    // Request camera permission
+    try {
+      if (!permission) {
+        console.log('Permission is null, requesting...');
+        const result = await requestPermission();
+        console.log('Permission result:', result);
+        if (!result.granted) {
+          showAlert('Permesso Fotocamera', 'Per scansionare i codici a barre, consenti l\'accesso alla fotocamera nelle Impostazioni del telefono.');
+          return;
+        }
+      } else if (!permission.granted) {
+        console.log('Permission not granted, requesting...');
+        const result = await requestPermission();
+        console.log('Permission result:', result);
+        if (!result.granted) {
+          showAlert('Permesso Fotocamera', 'Per scansionare i codici a barre, consenti l\'accesso alla fotocamera nelle Impostazioni del telefono.');
+          return;
+        }
       }
-    } else if (!permission.granted) {
-      console.log('Permission not granted, requesting...');
-      const result = await requestPermission();
-      console.log('Permission result:', result);
-      if (!result.granted) {
-        showAlert('Permesso negato', 'Serve il permesso della fotocamera per scansionare. Vai nelle Impostazioni > RiLiBro > Fotocamera');
-        return;
-      }
+      
+      console.log('Opening scanner...');
+      setShowScanner(true);
+    } catch (error) {
+      console.error('Error opening scanner:', error);
+      showAlert('Errore Scanner', 'Impossibile aprire lo scanner. Prova a inserire l\'ISBN manualmente.');
     }
-    
-    console.log('Opening scanner...');
-    setShowScanner(true);
   };
 
   // ==================== CERCA FUNCTIONS ====================
