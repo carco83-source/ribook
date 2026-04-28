@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import { BarCodeScanner } from 'expo-barcode-scanner';
 import * as Device from 'expo-device';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:8001';
@@ -46,6 +47,7 @@ export default function SearchSellScreen() {
   const [vendiLoading, setVendiLoading] = useState(false);
   const [vendiBook, setVendiBook] = useState<Book | null>(null);
   const [showScanner, setShowScanner] = useState(false);
+  const [scanned, setScanned] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
   
   // Cerca states
@@ -135,15 +137,35 @@ export default function SearchSellScreen() {
     }
   };
 
-  const handleBarCodeScanned = ({ data }: { data: string }) => {
-    setShowScanner(false);
+  const handleBarCodeScanned = ({ type, data }: { type: string; data: string }) => {
+    if (scanned) return; // Previene scansioni multiple
+    
+    setScanned(true);
+    console.log('=== BARCODE SCANNED ===');
+    console.log('Type:', type);
+    console.log('Data:', data);
+    
     // Clean the ISBN
     const cleanIsbn = data.replace(/[^0-9X]/gi, '');
+    console.log('Clean ISBN:', cleanIsbn);
+    
+    // Vibration feedback
+    if (Platform.OS !== 'web') {
+      try {
+        const { default: Haptics } = require('expo-haptics');
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } catch (e) {
+        // Haptics not available
+      }
+    }
+    
     setVendiIsbn(cleanIsbn);
-    // Auto search
+    setShowScanner(false);
+    
+    // Auto search after closing scanner
     setTimeout(() => {
       handleVendiSearchWithIsbn(cleanIsbn);
-    }, 500);
+    }, 300);
   };
 
   const handleVendiSearchWithIsbn = async (isbn: string) => {
@@ -241,6 +263,7 @@ export default function SearchSellScreen() {
       }
       
       console.log('Opening scanner...');
+      setScanned(false); // Reset scanned state
       setShowScanner(true);
     } catch (error) {
       console.error('Error opening scanner:', error);
@@ -339,18 +362,20 @@ export default function SearchSellScreen() {
   if (showScanner) {
     return (
       <View style={styles.scannerContainer}>
-        <CameraView
+        <BarCodeScanner
           style={styles.scanner}
-          facing="back"
-          barcodeScannerSettings={{
-            barcodeTypes: ['ean13', 'ean8', 'code128', 'code39', 'upc_a', 'upc_e'],
-          }}
-          onBarcodeScanned={handleBarCodeScanned}
+          barCodeTypes={[
+            BarCodeScanner.Constants.BarCodeType.ean13,
+            BarCodeScanner.Constants.BarCodeType.ean8,
+            BarCodeScanner.Constants.BarCodeType.code128,
+            BarCodeScanner.Constants.BarCodeType.code39,
+          ]}
+          onBarCodeScanned={handleBarCodeScanned}
         />
         <View style={styles.scannerOverlay}>
           <View style={styles.scannerFrame} />
-          <Text style={styles.scannerText}>Inquadra il codice a barre ISBN del libro</Text>
-          <Text style={styles.scannerHint}>Posiziona il codice all'interno del riquadro</Text>
+          <Text style={styles.scannerText}>Inquadra il codice a barre ISBN</Text>
+          <Text style={styles.scannerHint}>Tieni fermo il libro a 15-20cm</Text>
         </View>
         <TouchableOpacity 
           style={styles.scannerCloseBtn}
