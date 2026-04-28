@@ -17,7 +17,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
-import { BarCodeScanner } from 'expo-barcode-scanner';
+import { Camera } from 'expo-camera';
 import * as Device from 'expo-device';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:8001';
@@ -240,8 +240,8 @@ export default function SearchSellScreen() {
     }
     
     try {
-      console.log('Requesting BarCodeScanner permissions...');
-      const { status } = await BarCodeScanner.requestPermissionsAsync();
+      console.log('Requesting Camera permissions...');
+      const { status } = await Camera.requestCameraPermissionsAsync();
       console.log('Permission status:', status);
       
       setHasPermission(status === 'granted');
@@ -354,10 +354,14 @@ export default function SearchSellScreen() {
     
     return (
       <View style={[styles.scannerContainer, { width, height }]}>
-        <BarCodeScanner
+        <Camera
           key={cameraKey}
-          style={{ flex: 1, width: '100%', height: '100%' }}
+          style={StyleSheet.absoluteFillObject}
+          type={Camera.Constants?.Type?.back || 'back'}
           onBarCodeScanned={scanned ? undefined : handleBarCodeScanned}
+          barCodeScannerSettings={{
+            barCodeTypes: ['ean13', 'ean8', 'qr'],
+          }}
         />
         <View style={styles.scannerOverlay}>
           <View style={styles.scannerFrame} />
