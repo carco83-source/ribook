@@ -9,11 +9,16 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Modal,
+  TextInput,
+  Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import { Picker } from '@react-native-picker/picker';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -110,6 +115,17 @@ export default function RadarScreen() {
   // Notifications state
   const [notifications, setNotifications] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+
+  // Modal Aggiungi Profilo state
+  const [showAddProfileModal, setShowAddProfileModal] = useState(false);
+  const [newProfileName, setNewProfileName] = useState('');
+  const [newProfileSchool, setNewProfileSchool] = useState('');
+  const [newProfileSchoolCode, setNewProfileSchoolCode] = useState('');
+  const [newProfileClasse, setNewProfileClasse] = useState('1');
+  const [newProfileSezione, setNewProfileSezione] = useState('');
+  const [newProfileTipoScuola, setNewProfileTipoScuola] = useState('primo_grado');
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [schools, setSchools] = useState<any[]>([]);
 
   useFocusEffect(
     useCallback(() => {
@@ -260,6 +276,76 @@ export default function RadarScreen() {
     return labels[condition] || condition;
   };
 
+  // Funzione per salvare nuovo profilo
+  const saveNewProfile = async () => {
+    if (!newProfileName.trim()) {
+      if (Platform.OS === 'web') {
+        window.alert('Inserisci il nome dell\'alunno');
+      } else {
+        Alert.alert('Errore', 'Inserisci il nome dell\'alunno');
+      }
+      return;
+    }
+    if (!newProfileSchool.trim()) {
+      if (Platform.OS === 'web') {
+        window.alert('Inserisci il nome della scuola');
+      } else {
+        Alert.alert('Errore', 'Inserisci il nome della scuola');
+      }
+      return;
+    }
+    if (!newProfileSezione.trim()) {
+      if (Platform.OS === 'web') {
+        window.alert('Inserisci la sezione');
+      } else {
+        Alert.alert('Errore', 'Inserisci la sezione');
+      }
+      return;
+    }
+
+    setSavingProfile(true);
+    try {
+      const newProfile = {
+        nome_figlio: newProfileName.trim(),
+        scuola: newProfileSchool.trim(),
+        codice_scuola: newProfileSchoolCode.trim() || 'N/A',
+        classe: newProfileClasse,
+        sezione: newProfileSezione.trim().toUpperCase(),
+        tipo_scuola: newProfileTipoScuola,
+      };
+
+      await axios.post(`${API_URL}/api/profiles/${userId}/children`, newProfile);
+      
+      // Reset form
+      setNewProfileName('');
+      setNewProfileSchool('');
+      setNewProfileSchoolCode('');
+      setNewProfileClasse('1');
+      setNewProfileSezione('');
+      setNewProfileTipoScuola('primo_grado');
+      setShowAddProfileModal(false);
+      
+      // Ricarica dati
+      loadData();
+      
+      if (Platform.OS === 'web') {
+        window.alert('Profilo aggiunto con successo!');
+      } else {
+        Alert.alert('Successo', 'Profilo aggiunto con successo!');
+      }
+    } catch (error: any) {
+      console.error('Error saving profile:', error);
+      const message = error.response?.data?.detail || 'Errore nel salvataggio del profilo';
+      if (Platform.OS === 'web') {
+        window.alert(message);
+      } else {
+        Alert.alert('Errore', message);
+      }
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -276,58 +362,68 @@ export default function RadarScreen() {
       }
     >
       {/* Sezione Alunni - Cerchi con nome e info sotto */}
-      {childProfiles.length > 0 && (
-        <View style={styles.profileSelectorCard}>
-          <Text style={styles.profileSelectorLabel}>Alunni</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View style={styles.childTabs}>
-              {childProfiles.map((child) => {
-                const isSelected = selectedChildId === child.id;
-                const initial = child.nome_figlio?.charAt(0)?.toUpperCase() || '?';
-                
-                return (
-                  <View key={child.id} style={styles.childCircleContainer}>
-                    {/* Cerchio con nome */}
-                    <TouchableOpacity
-                      style={[
-                        styles.childCircle,
-                        isSelected && styles.childCircleSelected
-                      ]}
-                      onPress={() => setSelectedChildId(child.id)}
-                    >
-                      <Text style={styles.childCircleInitial}>{initial}</Text>
-                      <Text style={styles.childCircleName} numberOfLines={1}>
-                        {child.nome_figlio}
-                      </Text>
-                    </TouchableOpacity>
-                    
-                    {/* Pulsante Info sotto il cerchio */}
-                    <TouchableOpacity
-                      style={[
-                        styles.childInfoButtonNew,
-                        isSelected && styles.childInfoButtonNewActive
-                      ]}
-                      onPress={() => router.push(`/student/${child.id}`)}
-                    >
-                      <Ionicons 
-                        name="information-circle-outline" 
-                        size={16} 
-                        color={isSelected ? '#FF9800' : '#888'} 
-                      />
-                      <Text style={[
-                        styles.childInfoText,
-                        isSelected && styles.childInfoTextActive
-                      ]}>
-                        info
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                );
-              })}
+      <View style={styles.profileSelectorCard}>
+        <Text style={styles.profileSelectorLabel}>Alunni</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <View style={styles.childTabs}>
+            {/* Cerchio + per aggiungere profilo */}
+            <View style={styles.childCircleContainer}>
+              <TouchableOpacity
+                style={styles.addProfileCircle}
+                onPress={() => setShowAddProfileModal(true)}
+              >
+                <Ionicons name="add" size={36} color="#000" />
+              </TouchableOpacity>
+              <Text style={styles.addProfileText}>Aggiungi</Text>
             </View>
-          </ScrollView>
-        </View>
-      )}
+            
+            {/* Profili esistenti */}
+            {childProfiles.map((child) => {
+              const isSelected = selectedChildId === child.id;
+              const initial = child.nome_figlio?.charAt(0)?.toUpperCase() || '?';
+              
+              return (
+                <View key={child.id} style={styles.childCircleContainer}>
+                  {/* Cerchio con nome */}
+                  <TouchableOpacity
+                    style={[
+                      styles.childCircle,
+                      isSelected && styles.childCircleSelected
+                    ]}
+                    onPress={() => setSelectedChildId(child.id)}
+                  >
+                    <Text style={styles.childCircleInitial}>{initial}</Text>
+                    <Text style={styles.childCircleName} numberOfLines={1}>
+                      {child.nome_figlio}
+                    </Text>
+                  </TouchableOpacity>
+                  
+                  {/* Pulsante Info sotto il cerchio */}
+                  <TouchableOpacity
+                    style={[
+                      styles.childInfoButtonNew,
+                      isSelected && styles.childInfoButtonNewActive
+                    ]}
+                    onPress={() => router.push(`/student/${child.id}`)}
+                  >
+                    <Ionicons 
+                      name="information-circle-outline" 
+                      size={16} 
+                      color={isSelected ? '#FF9800' : '#888'} 
+                    />
+                    <Text style={[
+                      styles.childInfoText,
+                      isSelected && styles.childInfoTextActive
+                    ]}>
+                      info
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
+          </View>
+        </ScrollView>
+      </View>
 
       {/* Sezione Libri per il profilo selezionato */}
       {selectedChildId && childrenCompatibility[selectedChildId] && (() => {
@@ -369,6 +465,7 @@ export default function RadarScreen() {
                           <Text style={styles.sampleBookTitle}>{book.titolo}</Text>
                           {book.autori && <Text style={styles.sampleBookAuthor}>{book.autori}</Text>}
                           {book.editore && <Text style={styles.sampleBookEdition}>{book.editore}</Text>}
+                          {book.isbn && <Text style={styles.bookIsbnText}>ISBN: {book.isbn}</Text>}
                           <View style={styles.priceContainer}>
                             <View>
                               <Text style={styles.priceNewLabel}>Nuovo: <Text style={styles.priceNewValue}>€{prezzoNuovo.toFixed(2)}</Text></Text>
@@ -436,6 +533,7 @@ export default function RadarScreen() {
                             <Text style={styles.sampleBookTitle}>{book.titolo}</Text>
                             {book.autori && <Text style={styles.sampleBookAuthor}>{book.autori}</Text>}
                             {book.editore && <Text style={styles.sampleBookEdition}>{book.editore}</Text>}
+                            {book.isbn && <Text style={styles.bookIsbnText}>ISBN: {book.isbn}</Text>}
                             <View style={styles.priceContainer}>
                               <View>
                                 <Text style={styles.priceNewLabel}>Nuovo: <Text style={styles.priceNewValue}>€{prezzoNuovo.toFixed(2)}</Text></Text>
@@ -623,6 +721,157 @@ export default function RadarScreen() {
       })()}
 
       </ScrollView>
+
+      {/* Modal Aggiungi Profilo */}
+      <Modal
+        visible={showAddProfileModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowAddProfileModal(false)}
+      >
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.modalContent}>
+            {/* Header Modal */}
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Aggiungi Alunno</Text>
+              <TouchableOpacity 
+                onPress={() => setShowAddProfileModal(false)}
+                style={styles.modalCloseButton}
+              >
+                <Ionicons name="close" size={28} color="#333" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalScrollContent} showsVerticalScrollIndicator={false}>
+              {/* Nome Alunno */}
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Nome Alunno *</Text>
+                <TextInput
+                  style={styles.formInputLarge}
+                  placeholder="Es: Mario"
+                  placeholderTextColor="#999"
+                  value={newProfileName}
+                  onChangeText={setNewProfileName}
+                  autoCapitalize="words"
+                />
+              </View>
+
+              {/* Nome Scuola */}
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Nome Scuola *</Text>
+                <TextInput
+                  style={styles.formInputLarge}
+                  placeholder="Es: I.C. Manzoni"
+                  placeholderTextColor="#999"
+                  value={newProfileSchool}
+                  onChangeText={setNewProfileSchool}
+                />
+              </View>
+
+              {/* Codice Ministeriale */}
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Codice Ministeriale</Text>
+                <TextInput
+                  style={styles.formInputLarge}
+                  placeholder="Es: CZMM123456"
+                  placeholderTextColor="#999"
+                  value={newProfileSchoolCode}
+                  onChangeText={setNewProfileSchoolCode}
+                  autoCapitalize="characters"
+                />
+              </View>
+
+              {/* Tipo Scuola */}
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Tipo Scuola *</Text>
+                <View style={styles.tipoScuolaButtons}>
+                  <TouchableOpacity
+                    style={[
+                      styles.tipoScuolaButton,
+                      newProfileTipoScuola === 'primo_grado' && styles.tipoScuolaButtonActive
+                    ]}
+                    onPress={() => setNewProfileTipoScuola('primo_grado')}
+                  >
+                    <Text style={[
+                      styles.tipoScuolaButtonText,
+                      newProfileTipoScuola === 'primo_grado' && styles.tipoScuolaButtonTextActive
+                    ]}>Scuola Media</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.tipoScuolaButton,
+                      newProfileTipoScuola === 'secondo_grado' && styles.tipoScuolaButtonActive
+                    ]}
+                    onPress={() => setNewProfileTipoScuola('secondo_grado')}
+                  >
+                    <Text style={[
+                      styles.tipoScuolaButtonText,
+                      newProfileTipoScuola === 'secondo_grado' && styles.tipoScuolaButtonTextActive
+                    ]}>Scuola Superiore</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Classe */}
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Classe *</Text>
+                <View style={styles.classeButtons}>
+                  {['1', '2', '3', '4', '5'].map((classe) => (
+                    <TouchableOpacity
+                      key={classe}
+                      style={[
+                        styles.classeButton,
+                        newProfileClasse === classe && styles.classeButtonActive
+                      ]}
+                      onPress={() => setNewProfileClasse(classe)}
+                    >
+                      <Text style={[
+                        styles.classeButtonText,
+                        newProfileClasse === classe && styles.classeButtonTextActive
+                      ]}>{classe}ª</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* Sezione */}
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Sezione *</Text>
+                <TextInput
+                  style={styles.formInputLarge}
+                  placeholder="Es: A, B, C..."
+                  placeholderTextColor="#999"
+                  value={newProfileSezione}
+                  onChangeText={setNewProfileSezione}
+                  autoCapitalize="characters"
+                  maxLength={3}
+                />
+              </View>
+
+              {/* Bottone Salva */}
+              <TouchableOpacity
+                style={[styles.saveProfileButton, savingProfile && styles.saveProfileButtonDisabled]}
+                onPress={saveNewProfile}
+                disabled={savingProfile}
+              >
+                {savingProfile ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="checkmark-circle" size={24} color="#fff" />
+                    <Text style={styles.saveProfileButtonText}>Salva Profilo</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              <View style={{ height: 40 }} />
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
   );
 }
 
@@ -1629,5 +1878,154 @@ const styles = StyleSheet.create({
   },
   childTabSubtextActive: {
     color: '#fff',
+  },
+  // Cerchio + Aggiungi Profilo
+  addProfileCircle: {
+    width: 65,
+    height: 65,
+    borderRadius: 35,
+    backgroundColor: '#FF9800',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  addProfileText: {
+    fontSize: 11,
+    color: '#FF9800',
+    fontWeight: '600',
+    marginTop: 6,
+  },
+  // ISBN Text
+  bookIsbnText: {
+    fontSize: 11,
+    color: '#888',
+    fontFamily: 'monospace',
+    marginTop: 4,
+    marginBottom: 6,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '90%',
+    paddingBottom: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#1a472a',
+  },
+  modalCloseButton: {
+    padding: 4,
+  },
+  modalScrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+  },
+  formGroup: {
+    marginBottom: 20,
+  },
+  formLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 10,
+  },
+  formInputLarge: {
+    backgroundColor: '#f5f5f5',
+    borderRadius: 12,
+    padding: 18,
+    fontSize: 18,
+    color: '#333',
+    borderWidth: 2,
+    borderColor: '#e0e0e0',
+  },
+  tipoScuolaButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  tipoScuolaButton: {
+    flex: 1,
+    paddingVertical: 16,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#e0e0e0',
+    alignItems: 'center',
+    backgroundColor: '#f9f9f9',
+  },
+  tipoScuolaButtonActive: {
+    borderColor: '#FF9800',
+    backgroundColor: '#fff3e0',
+  },
+  tipoScuolaButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#666',
+  },
+  tipoScuolaButtonTextActive: {
+    color: '#FF9800',
+  },
+  classeButtons: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  classeButton: {
+    flex: 1,
+    paddingVertical: 16,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#e0e0e0',
+    alignItems: 'center',
+    backgroundColor: '#f9f9f9',
+  },
+  classeButtonActive: {
+    borderColor: '#1a472a',
+    backgroundColor: '#e8f5e9',
+  },
+  classeButtonText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#666',
+  },
+  classeButtonTextActive: {
+    color: '#1a472a',
+  },
+  saveProfileButton: {
+    backgroundColor: '#1a472a',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 18,
+    borderRadius: 14,
+    marginTop: 20,
+    gap: 10,
+  },
+  saveProfileButtonDisabled: {
+    opacity: 0.7,
+  },
+  saveProfileButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
   },
 });
