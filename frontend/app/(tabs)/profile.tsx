@@ -44,6 +44,8 @@ export default function ProfileScreen() {
   const [upgrading, setUpgrading] = useState(false);
   const [userData, setUserData] = useState<any>(null);
   const [stats, setStats] = useState<any>(null);
+  const [transactions, setTransactions] = useState<{acquisti: any[], vendite: any[]}>({ acquisti: [], vendite: [] });
+  const [showAllTransactions, setShowAllTransactions] = useState(false);
 
   useEffect(() => {
     loadUserData();
@@ -68,6 +70,14 @@ export default function ProfileScreen() {
       const statsRes = await axios.get(`${API_URL}/api/users/${userId}/stats`);
       setStats(statsRes.data);
 
+      // Get user transactions
+      try {
+        const transRes = await axios.get(`${API_URL}/api/transactions/user/${userId}`);
+        setTransactions(transRes.data);
+      } catch (e) {
+        console.log('No transactions found');
+      }
+
       setUserData({
         ...response.data,
         nome,
@@ -78,6 +88,16 @@ export default function ProfileScreen() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const getStatoLabel = (stato: string) => {
+    const labels: { [key: string]: { text: string; color: string } } = {
+      in_attesa_consegna: { text: 'In attesa', color: '#FFC107' },
+      in_custodia: { text: 'In custodia', color: '#2196F3' },
+      completato: { text: 'Completato', color: '#4CAF50' },
+      annullato: { text: 'Annullato', color: '#f44336' },
+    };
+    return labels[stato] || { text: stato, color: '#666' };
   };
 
   const handleUpgradePremium = async () => {
@@ -188,25 +208,89 @@ export default function ProfileScreen() {
 
       {/* Sezione Scambi */}
       <View style={styles.tradesSection}>
-        <View style={styles.tradesSectionHeader}>
-          <Ionicons name="swap-horizontal" size={24} color="#1a472a" />
-          <Text style={styles.tradesSectionTitle}>I Miei Scambi</Text>
-        </View>
+        <TouchableOpacity 
+          style={styles.tradesSectionHeader}
+          onPress={() => router.push('/(tabs)/transactions')}
+        >
+          <View style={styles.tradesSectionHeaderLeft}>
+            <Ionicons name="swap-horizontal" size={24} color="#1a472a" />
+            <Text style={styles.tradesSectionTitle}>I Miei Scambi</Text>
+          </View>
+          <View style={styles.tradesSectionHeaderRight}>
+            <Text style={styles.tradesSectionCount}>
+              {transactions.acquisti.length + transactions.vendite.length}
+            </Text>
+            <Ionicons name="chevron-forward" size={20} color="#999" />
+          </View>
+        </TouchableOpacity>
         
-        <View style={styles.tradesEmpty}>
-          <Ionicons name="book-outline" size={48} color="#ccc" />
-          <Text style={styles.tradesEmptyTitle}>Nessuno scambio</Text>
-          <Text style={styles.tradesEmptySubtitle}>
-            Non hai ancora messo in vendita o acquistato libri
-          </Text>
-          <TouchableOpacity 
-            style={styles.tradesStartButton}
-            onPress={() => router.push('/(tabs)/search')}
-          >
-            <Ionicons name="add" size={20} color="#fff" />
-            <Text style={styles.tradesStartButtonText}>Inizia a vendere</Text>
-          </TouchableOpacity>
-        </View>
+        {(transactions.acquisti.length + transactions.vendite.length) === 0 ? (
+          <View style={styles.tradesEmpty}>
+            <Ionicons name="book-outline" size={48} color="#ccc" />
+            <Text style={styles.tradesEmptyTitle}>Nessuno scambio</Text>
+            <Text style={styles.tradesEmptySubtitle}>
+              Non hai ancora messo in vendita o acquistato libri
+            </Text>
+            <TouchableOpacity 
+              style={styles.tradesStartButton}
+              onPress={() => router.push('/(tabs)/search')}
+            >
+              <Ionicons name="add" size={20} color="#fff" />
+              <Text style={styles.tradesStartButtonText}>Inizia a vendere</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.tradesList}>
+            {/* Mostra max 3 transazioni */}
+            {[...transactions.acquisti, ...transactions.vendite]
+              .slice(0, showAllTransactions ? undefined : 3)
+              .map((trans: any, index: number) => {
+                const isAcquisto = transactions.acquisti.includes(trans);
+                const statoInfo = getStatoLabel(trans.stato);
+                return (
+                  <View key={trans.id || index} style={styles.tradeCard}>
+                    <View style={styles.tradeCardHeader}>
+                      <View style={[styles.tradeStatusBadge, { backgroundColor: statoInfo.color }]}>
+                        <Text style={styles.tradeStatusText}>{statoInfo.text}</Text>
+                      </View>
+                      <Text style={styles.tradeCardPrice}>€{trans.prezzo_totale?.toFixed(2)}</Text>
+                    </View>
+                    <Text style={styles.tradeCardTitle} numberOfLines={1}>
+                      {trans.book_titolo}
+                    </Text>
+                    <Text style={styles.tradeCardIsbn}>ISBN: {trans.book_isbn}</Text>
+                    <View style={styles.tradeCardMeta}>
+                      <Ionicons 
+                        name={isAcquisto ? "person" : "pricetag"} 
+                        size={14} 
+                        color="#666" 
+                      />
+                      <Text style={styles.tradeCardMetaText}>
+                        {isAcquisto ? `Venditore: ${trans.seller_username}` : `Acquirente: ${trans.buyer_username}`}
+                      </Text>
+                    </View>
+                    <View style={styles.tradeCardMeta}>
+                      <Ionicons name="storefront" size={14} color="#666" />
+                      <Text style={styles.tradeCardMetaText}>{trans.bookstore_nome}</Text>
+                    </View>
+                  </View>
+                );
+              })}
+            
+            {/* Pulsante Mostra altri */}
+            {(transactions.acquisti.length + transactions.vendite.length) > 3 && !showAllTransactions && (
+              <TouchableOpacity 
+                style={styles.showMoreButton}
+                onPress={() => router.push('/(tabs)/transactions')}
+              >
+                <Text style={styles.showMoreButtonText}>
+                  Vedi tutti ({transactions.acquisti.length + transactions.vendite.length})
+                </Text>
+                <Ionicons name="chevron-forward" size={18} color="#1a472a" />
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
       </View>
 
       {/* Quick Actions */}
@@ -544,13 +628,35 @@ const styles = StyleSheet.create({
   tradesSectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  tradesSectionHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 10,
   },
+  tradesSectionHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   tradesSectionTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#1a472a',
+  },
+  tradesSectionCount: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1a472a',
+    backgroundColor: '#e8f5e9',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
   tradesLoading: {
     alignItems: 'center',
@@ -563,47 +669,101 @@ const styles = StyleSheet.create({
   },
   tradesEmpty: {
     alignItems: 'center',
-    padding: 32,
+    padding: 24,
   },
   tradesEmptyTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
     color: '#333',
-    marginTop: 16,
+    marginTop: 12,
   },
   tradesEmptySubtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#666',
     textAlign: 'center',
-    marginTop: 8,
-    marginBottom: 20,
+    marginTop: 6,
+    marginBottom: 16,
   },
   tradesStartButton: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#1a472a',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 10,
-    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    gap: 6,
   },
   tradesStartButtonText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
   },
   tradesList: {
-    gap: 12,
+    gap: 10,
   },
   tradeCard: {
+    backgroundColor: '#f8f9fa',
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  tradeCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#f8f9fa',
-    padding: 12,
+    marginBottom: 8,
+  },
+  tradeStatusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
+  },
+  tradeStatusText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  tradeCardPrice: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1a472a',
+  },
+  tradeCardTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  tradeCardIsbn: {
+    fontSize: 11,
+    color: '#888',
+    marginBottom: 8,
+  },
+  tradeCardMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+  },
+  tradeCardMetaText: {
+    fontSize: 12,
+    color: '#666',
+  },
+  showMoreButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    marginTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+    gap: 4,
+  },
+  showMoreButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1a472a',
   },
   tradeCardLeft: {
     flexDirection: 'row',

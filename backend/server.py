@@ -4332,6 +4332,58 @@ async def get_child_compatibility(user_id: str, child_id: str):
     }
 
 
+def calcola_tetto_spesa(tipo_scuola: str, classe: int, costo_totale_libri: float) -> dict:
+    """
+    Calcola il tetto di spesa ministeriale per una determinata classe/scuola.
+    Riferimento: D.M. n. 781 del 27/09/2013 - Art. 3
+    """
+    TETTI_SPESA = {
+        "primo_grado": {  # Scuola Media (Secondaria I grado)
+            1: 299.00,
+            2: 119.00,
+            3: 134.00
+        },
+        "secondo_grado": {  # Superiori - default liceo
+            1: 310.00,
+            2: 215.00,
+            3: 300.00,
+            4: 260.00,
+            5: 280.00
+        }
+    }
+    
+    # Determina il tetto base
+    if tipo_scuola == "primo_grado":
+        tetto_base = TETTI_SPESA["primo_grado"].get(classe, 299.00)
+        nome_scuola = "Scuola Secondaria di I Grado"
+    else:
+        tetto_base = TETTI_SPESA["secondo_grado"].get(classe, 310.00)
+        nome_scuola = "Scuola Secondaria di II Grado"
+    
+    # Calcola deroghe
+    tetto_deroga_10 = round(tetto_base * 1.10, 2)
+    tetto_deroga_15 = round(tetto_base * 1.15, 2)
+    
+    # Calcola differenza
+    differenza = round(costo_totale_libri - tetto_base, 2)
+    percentuale = round((costo_totale_libri / tetto_base * 100) - 100, 1) if tetto_base > 0 else 0
+    
+    return {
+        "tetto_ministeriale": tetto_base,
+        "tetto_con_deroga_10": tetto_deroga_10,
+        "tetto_con_deroga_15": tetto_deroga_15,
+        "costo_libri": round(costo_totale_libri, 2),
+        "differenza": differenza,
+        "percentuale_sforamento": percentuale,
+        "entro_limite": costo_totale_libri <= tetto_base,
+        "entro_deroga_10": costo_totale_libri <= tetto_deroga_10,
+        "entro_deroga_15": costo_totale_libri <= tetto_deroga_15,
+        "riferimento_normativo": "D.M. n. 781 del 27/09/2013 - Art. 3",
+        "nome_scuola": nome_scuola,
+        "classe": classe
+    }
+
+
 @api_router.get("/profiles/{user_id}/children/{child_id}/analysis")
 async def get_child_analysis_v2(user_id: str, child_id: str):
     """
@@ -4655,6 +4707,9 @@ async def get_child_analysis_v2(user_id: str, child_id: str):
         
         # GIÀ POSSEDUTI - per compatibilità
         "libri_gia_posseduti": gia_posseduti,
+        
+        # TETTO DI SPESA MINISTERIALE
+        "tetto_spesa": calcola_tetto_spesa(child_tipo, child_classe, costo_nuovi + costo_usati),
         
         "summary": {
             "totale_libri": len(libri_correnti),
