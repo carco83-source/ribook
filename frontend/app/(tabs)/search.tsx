@@ -341,14 +341,16 @@ export default function SearchSellScreen() {
       <View style={styles.scannerContainer}>
         <CameraView
           style={styles.scanner}
+          facing="back"
           barcodeScannerSettings={{
-            barcodeTypes: ['ean13', 'ean8'],
+            barcodeTypes: ['ean13', 'ean8', 'code128', 'code39', 'upc_a', 'upc_e'],
           }}
           onBarcodeScanned={handleBarCodeScanned}
         />
         <View style={styles.scannerOverlay}>
           <View style={styles.scannerFrame} />
-          <Text style={styles.scannerText}>Inquadra il codice a barre del libro</Text>
+          <Text style={styles.scannerText}>Inquadra il codice a barre ISBN del libro</Text>
+          <Text style={styles.scannerHint}>Posiziona il codice all'interno del riquadro</Text>
         </View>
         <TouchableOpacity 
           style={styles.scannerCloseBtn}
@@ -630,24 +632,32 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   scannerFrame: {
-    width: 280,
-    height: 150,
-    borderWidth: 2,
+    width: 300,
+    height: 180,
+    borderWidth: 3,
     borderColor: '#4CAF50',
-    borderRadius: 12,
+    borderRadius: 16,
     backgroundColor: 'transparent',
   },
   scannerText: {
     color: '#fff',
-    fontSize: 16,
-    marginTop: 20,
+    fontSize: 18,
+    fontWeight: '600',
+    marginTop: 24,
+    textAlign: 'center',
+    paddingHorizontal: 20,
+  },
+  scannerHint: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 14,
+    marginTop: 8,
     textAlign: 'center',
   },
   scannerCloseBtn: {
     position: 'absolute',
-    top: 50,
+    top: 60,
     right: 20,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(255,255,255,0.2)',
     borderRadius: 25,
     width: 50,
     height: 50,
