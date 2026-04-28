@@ -83,21 +83,47 @@ export default function SearchSellScreen() {
     setVendiBook(null);
     
     try {
-      const response = await axios.get(`${API_URL}/api/books/search?isbn=${vendiIsbn}`);
-      if (response.data && response.data.length > 0) {
-        setVendiBook(response.data[0]);
-      } else {
-        // Prova a cercare con l'API IBS
+      // Prima prova con l'endpoint specifico per ISBN
+      let bookFound = false;
+      try {
+        const response = await axios.get(`${API_URL}/api/books/search/${vendiIsbn}`);
+        if (response.data) {
+          setVendiBook(response.data);
+          bookFound = true;
+        }
+      } catch (e) {
+        // L'endpoint specifico non ha trovato nulla, prova con la ricerca generica
+      }
+      
+      if (!bookFound) {
+        // Prova con la ricerca generica
+        const genericResponse = await axios.get(`${API_URL}/api/books/search`, {
+          params: { q: vendiIsbn }
+        });
+        if (genericResponse.data?.books && genericResponse.data.books.length > 0) {
+          setVendiBook(genericResponse.data.books[0]);
+          bookFound = true;
+        }
+      }
+      
+      if (!bookFound) {
+        // Crea libro manuale con dati base
         setVendiBook({
           id: `manual-${vendiIsbn}`,
           isbn: vendiIsbn,
-          titolo: 'Libro trovato',
+          titolo: 'Libro non trovato - Inserisci i dati',
           prezzo_copertina: 0,
         });
       }
     } catch (error) {
       console.error('Error searching book:', error);
-      showAlert('Errore', 'Impossibile cercare il libro');
+      // Anche in caso di errore, permetti di procedere con dati manuali
+      setVendiBook({
+        id: `manual-${vendiIsbn}`,
+        isbn: vendiIsbn,
+        titolo: 'Libro non trovato - Inserisci i dati',
+        prezzo_copertina: 0,
+      });
     } finally {
       setVendiLoading(false);
     }
@@ -121,19 +147,45 @@ export default function SearchSellScreen() {
     setVendiBook(null);
     
     try {
-      const response = await axios.get(`${API_URL}/api/books/search?isbn=${isbn}`);
-      if (response.data && response.data.length > 0) {
-        setVendiBook(response.data[0]);
-      } else {
+      // Prima prova con l'endpoint specifico per ISBN
+      let bookFound = false;
+      try {
+        const response = await axios.get(`${API_URL}/api/books/search/${isbn}`);
+        if (response.data) {
+          setVendiBook(response.data);
+          bookFound = true;
+        }
+      } catch (e) {
+        // L'endpoint specifico non ha trovato nulla
+      }
+      
+      if (!bookFound) {
+        // Prova con la ricerca generica
+        const genericResponse = await axios.get(`${API_URL}/api/books/search`, {
+          params: { q: isbn }
+        });
+        if (genericResponse.data?.books && genericResponse.data.books.length > 0) {
+          setVendiBook(genericResponse.data.books[0]);
+          bookFound = true;
+        }
+      }
+      
+      if (!bookFound) {
         setVendiBook({
           id: `manual-${isbn}`,
           isbn: isbn,
-          titolo: 'Libro trovato',
+          titolo: 'Libro non trovato - Inserisci i dati',
           prezzo_copertina: 0,
         });
       }
     } catch (error) {
       console.error('Error searching book:', error);
+      setVendiBook({
+        id: `manual-${isbn}`,
+        isbn: isbn,
+        titolo: 'Libro non trovato - Inserisci i dati',
+        prezzo_copertina: 0,
+      });
     } finally {
       setVendiLoading(false);
     }
@@ -175,24 +227,63 @@ export default function SearchSellScreen() {
     setCercaBook(null);
     
     try {
-      // Cerca il libro
-      const bookResponse = await axios.get(`${API_URL}/api/books/search?isbn=${cercaIsbn}`);
-      if (bookResponse.data && bookResponse.data.length > 0) {
-        setCercaBook(bookResponse.data[0]);
+      // Prima cerca il libro
+      let bookData = null;
+      
+      // Prova endpoint specifico
+      try {
+        const bookResponse = await axios.get(`${API_URL}/api/books/search/${cercaIsbn}`);
+        if (bookResponse.data) {
+          bookData = bookResponse.data;
+          setCercaBook(bookData);
+        }
+      } catch (e) {
+        // Prova ricerca generica
+        try {
+          const genericResponse = await axios.get(`${API_URL}/api/books/search`, {
+            params: { q: cercaIsbn }
+          });
+          if (genericResponse.data?.books && genericResponse.data.books.length > 0) {
+            bookData = genericResponse.data.books[0];
+            setCercaBook(bookData);
+          }
+        } catch (e2) {
+          console.log('Book not found in database');
+        }
       }
       
       // Cerca le copie disponibili
-      const listingsResponse = await axios.get(`${API_URL}/api/listings/isbn/${cercaIsbn}`);
-      if (listingsResponse.data && listingsResponse.data.length > 0) {
-        const copie = listingsResponse.data.length;
-        const prezzoMinimo = Math.min(...listingsResponse.data.map((l: any) => l.prezzo_vendita || l.price || 999));
-        setCercaResults([{
-          book: bookResponse.data?.[0] || { id: cercaIsbn, isbn: cercaIsbn, titolo: 'Libro' },
-          copie_disponibili: copie,
-          prezzo_minimo: prezzoMinimo,
-        }]);
-      } else {
-        setCercaResults([]);
+      try {
+        const listingsResponse = await axios.get(`${API_URL}/api/listings/isbn/${cercaIsbn}`);
+        if (listingsResponse.data && listingsResponse.data.length > 0) {
+          const copie = listingsResponse.data.length;
+          const prezzoMinimo = Math.min(...listingsResponse.data.map((l: any) => l.prezzo_vendita || l.price || 999));
+          setCercaResults([{
+            book: bookData || { id: cercaIsbn, isbn: cercaIsbn, titolo: 'Libro' },
+            copie_disponibili: copie,
+            prezzo_minimo: prezzoMinimo,
+          }]);
+        } else {
+          // Nessuna copia disponibile ma mostra comunque il libro se trovato
+          if (bookData) {
+            setCercaResults([{
+              book: bookData,
+              copie_disponibili: 0,
+              prezzo_minimo: undefined,
+            }]);
+          } else {
+            setCercaResults([]);
+          }
+        }
+      } catch (e) {
+        // Anche se non ci sono listings, mostra il libro se trovato
+        if (bookData) {
+          setCercaResults([{
+            book: bookData,
+            copie_disponibili: 0,
+            prezzo_minimo: undefined,
+          }]);
+        }
       }
     } catch (error) {
       console.error('Error searching:', error);
