@@ -16,7 +16,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { CameraView } from 'expo-camera';
 import { BarCodeScanner } from 'expo-barcode-scanner';
 import * as Device from 'expo-device';
 
@@ -48,7 +48,7 @@ export default function SearchSellScreen() {
   const [vendiBook, setVendiBook] = useState<Book | null>(null);
   const [showScanner, setShowScanner] = useState(false);
   const [scanned, setScanned] = useState(false);
-  const [permission, requestPermission] = useCameraPermissions();
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   
   // Cerca states
   const [cercaIsbn, setCercaIsbn] = useState('');
@@ -231,10 +231,8 @@ export default function SearchSellScreen() {
     console.log('Platform.OS:', Platform.OS);
     console.log('Device.isDevice:', Device.isDevice);
     console.log('Device.modelName:', Device.modelName);
-    console.log('Permission status:', permission);
     
     // Use Device.isDevice to check if we're on a real device (not web)
-    // Device.isDevice is true on physical devices and simulators, false on web
     const isPhysicalDevice = Device.isDevice;
     
     if (!isPhysicalDevice) {
@@ -242,24 +240,17 @@ export default function SearchSellScreen() {
       return;
     }
     
-    // Request camera permission
+    // Request camera permission using BarCodeScanner's permission system
     try {
-      if (!permission) {
-        console.log('Permission is null, requesting...');
-        const result = await requestPermission();
-        console.log('Permission result:', result);
-        if (!result.granted) {
-          showAlert('Permesso Fotocamera', 'Per scansionare i codici a barre, consenti l\'accesso alla fotocamera nelle Impostazioni del telefono.');
-          return;
-        }
-      } else if (!permission.granted) {
-        console.log('Permission not granted, requesting...');
-        const result = await requestPermission();
-        console.log('Permission result:', result);
-        if (!result.granted) {
-          showAlert('Permesso Fotocamera', 'Per scansionare i codici a barre, consenti l\'accesso alla fotocamera nelle Impostazioni del telefono.');
-          return;
-        }
+      console.log('Requesting BarCodeScanner permissions...');
+      const { status } = await BarCodeScanner.requestPermissionsAsync();
+      console.log('Permission status:', status);
+      
+      setHasPermission(status === 'granted');
+      
+      if (status !== 'granted') {
+        showAlert('Permesso Fotocamera', 'Per scansionare i codici a barre, consenti l\'accesso alla fotocamera nelle Impostazioni del telefono.');
+        return;
       }
       
       console.log('Opening scanner...');
