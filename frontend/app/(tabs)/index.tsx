@@ -419,7 +419,7 @@ export default function RadarScreen() {
         source={require('../../assets/images/ribook-text-only.png')}
         style={styles.profileSelectorCard}
         imageStyle={styles.profileSelectorBgImage}
-        resizeMode="stretch"
+        resizeMode="contain"
       >
         <Text style={styles.profileSelectorLabel}>Alunni</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -2030,13 +2030,12 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   profileSelectorBgImage: {
-    opacity: 0.35,
-    borderRadius: 0,
+    opacity: 0.2,
     position: 'absolute',
-    top: '30%',
+    top: 0,
+    bottom: 0,
     left: 0,
     right: 0,
-    width: '100%',
   },
   // Badge copie disponibili
   copieBadge: {

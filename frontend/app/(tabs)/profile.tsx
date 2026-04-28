@@ -386,11 +386,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   profileHeaderImage: {
-    resizeMode: 'cover',
-    opacity: 1,
+    opacity: 0.2,
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
   },
   profileHeaderOverlay: {
-    backgroundColor: 'rgba(26, 71, 42, 0.75)',
+    backgroundColor: 'rgba(26, 71, 42, 0.85)',
     alignItems: 'center',
     paddingVertical: 32,
     paddingHorizontal: 24,
