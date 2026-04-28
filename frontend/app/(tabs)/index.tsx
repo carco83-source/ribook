@@ -19,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { Picker } from '@react-native-picker/picker';
+import { SCUOLE_PRIMO_GRADO, SCUOLE_SECONDO_GRADO, getClassiByType, SEZIONI } from '../../src/constants/schools';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -118,14 +119,18 @@ export default function RadarScreen() {
 
   // Modal Aggiungi Profilo state
   const [showAddProfileModal, setShowAddProfileModal] = useState(false);
-  const [newProfileName, setNewProfileName] = useState('');
-  const [newProfileSchool, setNewProfileSchool] = useState('');
-  const [newProfileSchoolCode, setNewProfileSchoolCode] = useState('');
-  const [newProfileClasse, setNewProfileClasse] = useState('1');
-  const [newProfileSezione, setNewProfileSezione] = useState('');
-  const [newProfileTipoScuola, setNewProfileTipoScuola] = useState('primo_grado');
+  const [newProfile, setNewProfile] = useState({
+    nome_figlio: '',
+    tipo_scuola: 'primo_grado',
+    scuola: '',
+    codice_scuola: '',
+    classe: '',
+    sezione: '',
+  });
   const [savingProfile, setSavingProfile] = useState(false);
-  const [schools, setSchools] = useState<any[]>([]);
+  const [availableSections, setAvailableSections] = useState<string[]>([]);
+  const [sectionsByClass, setSectionsByClass] = useState<{[key: string]: string[]}>({});
+  const [loadingSections, setLoadingSections] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -276,9 +281,22 @@ export default function RadarScreen() {
     return labels[condition] || condition;
   };
 
+  // Helper per ottenere scuole per tipo
+  const getScuoleByTipo = () => {
+    if (newProfile.tipo_scuola === 'primo_grado') {
+      return SCUOLE_PRIMO_GRADO;
+    } else {
+      return SCUOLE_SECONDO_GRADO;
+    }
+  };
+
+  const getClassi = () => {
+    return getClassiByType(newProfile.tipo_scuola as 'primo_grado' | 'secondo_grado');
+  };
+
   // Funzione per salvare nuovo profilo
   const saveNewProfile = async () => {
-    if (!newProfileName.trim()) {
+    if (!newProfile.nome_figlio.trim()) {
       if (Platform.OS === 'web') {
         window.alert('Inserisci il nome dell\'alunno');
       } else {
@@ -286,43 +304,46 @@ export default function RadarScreen() {
       }
       return;
     }
-    if (!newProfileSchool.trim()) {
+    if (!newProfile.scuola) {
       if (Platform.OS === 'web') {
-        window.alert('Inserisci il nome della scuola');
+        window.alert('Seleziona la scuola');
       } else {
-        Alert.alert('Errore', 'Inserisci il nome della scuola');
+        Alert.alert('Errore', 'Seleziona la scuola');
       }
       return;
     }
-    if (!newProfileSezione.trim()) {
+    if (!newProfile.classe) {
       if (Platform.OS === 'web') {
-        window.alert('Inserisci la sezione');
+        window.alert('Seleziona la classe');
       } else {
-        Alert.alert('Errore', 'Inserisci la sezione');
+        Alert.alert('Errore', 'Seleziona la classe');
+      }
+      return;
+    }
+    if (!newProfile.sezione) {
+      if (Platform.OS === 'web') {
+        window.alert('Seleziona la sezione');
+      } else {
+        Alert.alert('Errore', 'Seleziona la sezione');
       }
       return;
     }
 
     setSavingProfile(true);
     try {
-      const newProfile = {
-        nome_figlio: newProfileName.trim(),
-        scuola: newProfileSchool.trim(),
-        codice_scuola: newProfileSchoolCode.trim() || 'N/A',
-        classe: newProfileClasse,
-        sezione: newProfileSezione.trim().toUpperCase(),
-        tipo_scuola: newProfileTipoScuola,
-      };
-
       await axios.post(`${API_URL}/api/profiles/${userId}/children`, newProfile);
       
       // Reset form
-      setNewProfileName('');
-      setNewProfileSchool('');
-      setNewProfileSchoolCode('');
-      setNewProfileClasse('1');
-      setNewProfileSezione('');
-      setNewProfileTipoScuola('primo_grado');
+      setNewProfile({
+        nome_figlio: '',
+        tipo_scuola: 'primo_grado',
+        scuola: '',
+        codice_scuola: '',
+        classe: '',
+        sezione: '',
+      });
+      setAvailableSections([]);
+      setSectionsByClass({});
       setShowAddProfileModal(false);
       
       // Ricarica dati
@@ -746,103 +767,136 @@ export default function RadarScreen() {
             </View>
 
             <ScrollView style={styles.modalScrollContent} showsVerticalScrollIndicator={false}>
+              {/* Nome Alunno */}
               <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Nome Alunno *</Text>
+                <Text style={styles.formLabelLarge}>Nome Alunno *</Text>
                 <TextInput
                   style={styles.formInputLarge}
                   placeholder="Es: Mario"
                   placeholderTextColor="#999"
-                  value={newProfileName}
-                  onChangeText={setNewProfileName}
+                  value={newProfile.nome_figlio}
+                  onChangeText={(value) => setNewProfile({ ...newProfile, nome_figlio: value })}
                   autoCapitalize="words"
                 />
               </View>
 
+              {/* Tipo Scuola */}
               <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Nome Scuola *</Text>
-                <TextInput
-                  style={styles.formInputLarge}
-                  placeholder="Es: I.C. Manzoni"
-                  placeholderTextColor="#999"
-                  value={newProfileSchool}
-                  onChangeText={setNewProfileSchool}
-                />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Codice Ministeriale</Text>
-                <TextInput
-                  style={styles.formInputLarge}
-                  placeholder="Es: CZMM123456"
-                  placeholderTextColor="#999"
-                  value={newProfileSchoolCode}
-                  onChangeText={setNewProfileSchoolCode}
-                  autoCapitalize="characters"
-                />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Tipo Scuola *</Text>
-                <View style={styles.tipoScuolaButtons}>
-                  <TouchableOpacity
-                    style={[
-                      styles.tipoScuolaButton,
-                      newProfileTipoScuola === 'primo_grado' && styles.tipoScuolaButtonActive
-                    ]}
-                    onPress={() => setNewProfileTipoScuola('primo_grado')}
+                <Text style={styles.formLabelLarge}>Tipo Scuola *</Text>
+                <View style={styles.pickerContainerLarge}>
+                  <Picker
+                    selectedValue={newProfile.tipo_scuola}
+                    onValueChange={(value) => setNewProfile({ 
+                      ...newProfile, 
+                      tipo_scuola: value, 
+                      scuola: '',
+                      codice_scuola: '',
+                      classe: '',
+                      sezione: ''
+                    })}
+                    style={styles.pickerLarge}
                   >
-                    <Text style={[
-                      styles.tipoScuolaButtonText,
-                      newProfileTipoScuola === 'primo_grado' && styles.tipoScuolaButtonTextActive
-                    ]}>Scuola Media</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.tipoScuolaButton,
-                      newProfileTipoScuola === 'secondo_grado' && styles.tipoScuolaButtonActive
-                    ]}
-                    onPress={() => setNewProfileTipoScuola('secondo_grado')}
-                  >
-                    <Text style={[
-                      styles.tipoScuolaButtonText,
-                      newProfileTipoScuola === 'secondo_grado' && styles.tipoScuolaButtonTextActive
-                    ]}>Scuola Superiore</Text>
-                  </TouchableOpacity>
+                    <Picker.Item label="Scuola Media" value="primo_grado" />
+                    <Picker.Item label="Scuola Superiore" value="secondo_grado" />
+                  </Picker>
                 </View>
               </View>
 
+              {/* Scuola */}
               <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Classe *</Text>
-                <View style={styles.classeButtons}>
-                  {['1', '2', '3', '4', '5'].map((classe) => (
-                    <TouchableOpacity
-                      key={classe}
-                      style={[
-                        styles.classeButton,
-                        newProfileClasse === classe && styles.classeButtonActive
-                      ]}
-                      onPress={() => setNewProfileClasse(classe)}
-                    >
-                      <Text style={[
-                        styles.classeButtonText,
-                        newProfileClasse === classe && styles.classeButtonTextActive
-                      ]}>{classe}ª</Text>
-                    </TouchableOpacity>
-                  ))}
+                <Text style={styles.formLabelLarge}>Scuola *</Text>
+                <View style={styles.pickerContainerLarge}>
+                  <Picker
+                    selectedValue={newProfile.scuola}
+                    onValueChange={async (value) => {
+                      const scuolaSelezionata = getScuoleByTipo().find(s => s.nome === value);
+                      const codice = scuolaSelezionata?.codice || '';
+                      setNewProfile({ 
+                        ...newProfile, 
+                        scuola: value,
+                        codice_scuola: codice,
+                        classe: '',
+                        sezione: ''
+                      });
+                      
+                      // Carica sezioni dinamicamente
+                      if (codice) {
+                        setLoadingSections(true);
+                        try {
+                          const response = await axios.get(`${API_URL}/api/schools/${codice}/sections`);
+                          setSectionsByClass(response.data.sezioni_per_classe || {});
+                          setAvailableSections([]);
+                        } catch (error) {
+                          console.error('Error loading sections:', error);
+                          setSectionsByClass({});
+                        } finally {
+                          setLoadingSections(false);
+                        }
+                      } else {
+                        setSectionsByClass({});
+                        setAvailableSections([]);
+                      }
+                    }}
+                    style={styles.pickerLarge}
+                  >
+                    <Picker.Item label="Seleziona scuola..." value="" />
+                    {getScuoleByTipo().map((scuola) => (
+                      <Picker.Item key={scuola.codice} label={scuola.nome} value={scuola.nome} />
+                    ))}
+                  </Picker>
                 </View>
               </View>
 
+              {/* Classe */}
               <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Sezione *</Text>
-                <TextInput
-                  style={styles.formInputLarge}
-                  placeholder="Es: A, B, C..."
-                  placeholderTextColor="#999"
-                  value={newProfileSezione}
-                  onChangeText={setNewProfileSezione}
-                  autoCapitalize="characters"
-                  maxLength={3}
-                />
+                <Text style={styles.formLabelLarge}>Classe *</Text>
+                <View style={styles.pickerContainerLarge}>
+                  <Picker
+                    selectedValue={newProfile.classe}
+                    onValueChange={(value) => {
+                      setNewProfile({ ...newProfile, classe: value, sezione: '' });
+                      // Aggiorna sezioni disponibili per questa classe
+                      const sezioniPerClasse = sectionsByClass[value] || SEZIONI;
+                      setAvailableSections(sezioniPerClasse);
+                    }}
+                    enabled={!!newProfile.codice_scuola}
+                    style={styles.pickerLarge}
+                  >
+                    <Picker.Item label="Seleziona classe..." value="" />
+                    {getClassi().map((c) => (
+                      <Picker.Item key={c} label={`${c}°`} value={c} />
+                    ))}
+                  </Picker>
+                </View>
+              </View>
+
+              {/* Sezione */}
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabelLarge}>
+                  Sezione * {loadingSections && '(caricamento...)'}
+                </Text>
+                <View style={styles.pickerContainerLarge}>
+                  <Picker
+                    selectedValue={newProfile.sezione}
+                    onValueChange={(value) => setNewProfile({ ...newProfile, sezione: value })}
+                    enabled={!loadingSections && (availableSections.length > 0 || !!newProfile.classe)}
+                    style={styles.pickerLarge}
+                  >
+                    <Picker.Item 
+                      label={
+                        loadingSections 
+                          ? "Caricamento..." 
+                          : !newProfile.classe
+                            ? "Seleziona prima la classe"
+                            : "Seleziona sezione..."
+                      } 
+                      value="" 
+                    />
+                    {(availableSections.length > 0 ? availableSections : SEZIONI).map((s) => (
+                      <Picker.Item key={s} label={s} value={s} />
+                    ))}
+                  </Picker>
+                </View>
               </View>
 
               <TouchableOpacity
@@ -1946,14 +2000,32 @@ const styles = StyleSheet.create({
     color: '#333',
     marginBottom: 10,
   },
+  formLabelLarge: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1a472a',
+    marginBottom: 12,
+  },
   formInputLarge: {
     backgroundColor: '#f5f5f5',
     borderRadius: 12,
     padding: 18,
-    fontSize: 18,
+    fontSize: 20,
     color: '#333',
     borderWidth: 2,
     borderColor: '#e0e0e0',
+  },
+  pickerContainerLarge: {
+    backgroundColor: '#f5f5f5',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#e0e0e0',
+    overflow: 'hidden',
+  },
+  pickerLarge: {
+    fontSize: 18,
+    height: 60,
+    color: '#333',
   },
   tipoScuolaButtons: {
     flexDirection: 'row',
