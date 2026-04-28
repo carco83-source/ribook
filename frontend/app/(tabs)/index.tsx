@@ -423,7 +423,7 @@ export default function RadarScreen() {
               style={styles.addProfileRect}
               onPress={() => setShowAddProfileModal(true)}
             >
-              <Ionicons name="add" size={32} color="#1a472a" />
+              <Ionicons name="add" size={24} color="#1a472a" />
               <Text style={styles.addProfileRectText}>Aggiungi</Text>
             </TouchableOpacity>
             
@@ -433,9 +433,6 @@ export default function RadarScreen() {
               const schoolColor = getSchoolColor(child.codice_scuola);
               const classeLabel = child.classe ? `${child.classe}ª` : '';
               const sezioneLabel = child.sezione || '';
-              const scuolaShort = child.scuola?.length > 25 
-                ? child.scuola.substring(0, 25) + '...' 
-                : child.scuola;
               
               return (
                 <TouchableOpacity
@@ -448,11 +445,10 @@ export default function RadarScreen() {
                   onPress={() => setSelectedChildId(child.id)}
                 >
                   <Text style={styles.childRectName}>{child.nome_figlio}</Text>
-                  <Text style={styles.childRectInfo}>
-                    Classe {classeLabel} - Sez. {sezioneLabel}
-                  </Text>
-                  <Text style={styles.childRectSchool} numberOfLines={1}>
-                    {scuolaShort}
+                  <Text style={styles.childRectClasse}>Classe {classeLabel}</Text>
+                  <Text style={styles.childRectSezione}>Sezione {sezioneLabel}</Text>
+                  <Text style={styles.childRectSchool} numberOfLines={2}>
+                    {child.scuola}
                   </Text>
                 </TouchableOpacity>
               );
@@ -1723,46 +1719,55 @@ const styles = StyleSheet.create({
   },
   // Nuovo design rettangoli Alunni
   addProfileRect: {
-    width: 100,
-    minHeight: 90,
-    borderRadius: 12,
-    backgroundColor: '#f0f0f0',
+    width: 70,
+    height: 110,
+    borderRadius: 10,
+    backgroundColor: '#f5f5f5',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: '#ddd',
     borderStyle: 'dashed',
-    marginRight: 12,
+    marginRight: 10,
   },
   addProfileRectText: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: '500',
     color: '#1a472a',
     marginTop: 4,
   },
   childRect: {
-    minWidth: 140,
-    maxWidth: 180,
-    minHeight: 90,
-    borderRadius: 12,
+    width: 130,
+    height: 110,
+    borderRadius: 10,
     backgroundColor: '#fff',
-    padding: 12,
-    marginRight: 12,
+    padding: 10,
+    marginRight: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    justifyContent: 'space-between',
   },
   childRectSelected: {
     backgroundColor: '#f8f9fa',
     shadowOpacity: 0.2,
   },
   childRectName: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
     color: '#1a472a',
-    marginBottom: 4,
+  },
+  childRectClasse: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#333',
+  },
+  childRectSezione: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#333',
   },
   childRectInfo: {
     fontSize: 12,
@@ -1771,9 +1776,10 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   childRectSchool: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '500',
     color: '#666',
+    lineHeight: 13,
   },
   childInfoButtonNew: {
     flexDirection: 'row',
