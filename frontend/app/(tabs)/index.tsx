@@ -331,7 +331,7 @@ export default function RadarScreen() {
 
     setSavingProfile(true);
     try {
-      await axios.post(`${API_URL}/api/profiles/${userId}/children`, newProfile);
+      await axios.post(`${API_URL}/api/users/${userId}/profiles`, newProfile);
       
       // Reset form
       setNewProfile({
