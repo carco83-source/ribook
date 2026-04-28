@@ -76,9 +76,9 @@ export default function TabLayout() {
       <Tabs.Screen
         name="search"
         options={{
-          title: 'Cerca',
+          title: 'Cerca/Vendi',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="search" size={size} color={color} />
+            <Ionicons name="pricetag" size={size} color={color} />
           ),
         }}
       />
