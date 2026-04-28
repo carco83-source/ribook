@@ -8,6 +8,8 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
+  Image,
+  ImageBackground,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -174,37 +176,44 @@ export default function ProfileScreen() {
 
   return (
     <ScrollView style={styles.container}>
-      {/* Profile Header */}
-      <View style={styles.profileHeader}>
-        <View style={styles.avatarContainer}>
-          <Ionicons name="person" size={48} color="#fff" />
-        </View>
-        <Text style={styles.userName}>{userData?.nome || 'Utente'}</Text>
-        <Text style={styles.userUsername}>{userData?.username}</Text>
-        {userData?.isPremium && (
-          <View style={styles.premiumBadge}>
-            <Ionicons name="diamond" size={16} color="#fff" />
-            <Text style={styles.premiumBadgeText}>Premium</Text>
+      {/* Profile Header con Logo RiBook */}
+      <ImageBackground 
+        source={require('../../assets/images/ribook-logo.png')}
+        style={styles.profileHeader}
+        imageStyle={styles.profileHeaderImage}
+        resizeMode="contain"
+      >
+        <View style={styles.profileHeaderOverlay}>
+          <View style={styles.avatarContainer}>
+            <Ionicons name="person" size={48} color="#fff" />
           </View>
-        )}
-        {/* Buttons Row: Modifica Profilo + Esci */}
-        <View style={styles.headerButtonsRow}>
-          <TouchableOpacity 
-            style={styles.editProfileButton}
-            onPress={() => router.push('/profile/edit')}
-          >
-            <Ionicons name="pencil" size={16} color="#1a472a" />
-            <Text style={styles.editProfileButtonText}>Modifica Profilo</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.logoutHeaderButton}
-            onPress={handleLogout}
-          >
-            <Ionicons name="log-out-outline" size={16} color="#ff4444" />
-            <Text style={styles.logoutHeaderButtonText}>Esci</Text>
-          </TouchableOpacity>
+          <Text style={styles.userName}>{userData?.nome || 'Utente'}</Text>
+          <Text style={styles.userUsername}>{userData?.username}</Text>
+          {userData?.isPremium && (
+            <View style={styles.premiumBadge}>
+              <Ionicons name="diamond" size={16} color="#fff" />
+              <Text style={styles.premiumBadgeText}>Premium</Text>
+            </View>
+          )}
+          {/* Buttons Row: Modifica Profilo + Esci */}
+          <View style={styles.headerButtonsRow}>
+            <TouchableOpacity 
+              style={styles.editProfileButton}
+              onPress={() => router.push('/profile/edit')}
+            >
+              <Ionicons name="pencil" size={16} color="#1a472a" />
+              <Text style={styles.editProfileButtonText}>Modifica Profilo</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.logoutHeaderButton}
+              onPress={handleLogout}
+            >
+              <Ionicons name="log-out-outline" size={16} color="#ff4444" />
+              <Text style={styles.logoutHeaderButtonText}>Esci</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
+      </ImageBackground>
 
       {/* Sezione Scambi */}
       <View style={styles.tradesSection}>
@@ -373,11 +382,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   profileHeader: {
-    backgroundColor: '#1a472a',
+    minHeight: 280,
+    justifyContent: 'center',
+  },
+  profileHeaderImage: {
+    resizeMode: 'cover',
+    opacity: 1,
+  },
+  profileHeaderOverlay: {
+    backgroundColor: 'rgba(26, 71, 42, 0.75)',
     alignItems: 'center',
     paddingVertical: 32,
     paddingHorizontal: 24,
-    position: 'relative',
+    width: '100%',
+    minHeight: 280,
+    justifyContent: 'center',
   },
   headerLogoutButton: {
     position: 'absolute',

@@ -498,9 +498,15 @@ export default function RadarScreen() {
                         style={[styles.sampleBookItem, styles.sampleBookItemClickable]}
                         onPress={() => router.push(`/sell-form?isbn=${book.isbn}&titolo=${encodeURIComponent(book.titolo || '')}&prezzo=${prezzoNuovo}`)}
                       >
-                        {coverUrl && (
+                        {coverUrl ? (
                           <Image 
                             source={{ uri: coverUrl }} 
+                            style={styles.bookCoverImage}
+                            resizeMode="contain"
+                          />
+                        ) : (
+                          <Image 
+                            source={require('../../assets/images/ribook-logo.png')} 
                             style={styles.bookCoverImage}
                             resizeMode="contain"
                           />
@@ -566,9 +572,15 @@ export default function RadarScreen() {
                           }}
                           disabled={copie === 0}
                         >
-                          {coverUrl && (
+                          {coverUrl ? (
                             <Image 
                               source={{ uri: coverUrl }} 
+                              style={styles.bookCoverImage}
+                              resizeMode="contain"
+                            />
+                          ) : (
+                            <Image 
+                              source={require('../../assets/images/ribook-logo.png')} 
                               style={styles.bookCoverImage}
                               resizeMode="contain"
                             />
@@ -672,9 +684,15 @@ export default function RadarScreen() {
                             onPress: () => router.push(`/book-sellers/${book.isbn}`)
                           } : {})}
                         >
-                          {coverUrl && (
+                          {coverUrl ? (
                             <Image 
                               source={{ uri: coverUrl }} 
+                              style={styles.bookCoverImage}
+                              resizeMode="contain"
+                            />
+                          ) : (
+                            <Image 
+                              source={require('../../assets/images/ribook-logo.png')} 
                               style={styles.bookCoverImage}
                               resizeMode="contain"
                             />
@@ -730,9 +748,15 @@ export default function RadarScreen() {
                       const prezzoNuovo = book.prezzo_copertina || book.prezzo_ministeriale || 0;
                       return (
                         <View key={idx} style={styles.sampleBookItem}>
-                          {coverUrl && (
+                          {coverUrl ? (
                             <Image 
                               source={{ uri: coverUrl }} 
+                              style={styles.bookCoverImage}
+                              resizeMode="contain"
+                            />
+                          ) : (
+                            <Image 
+                              source={require('../../assets/images/ribook-logo.png')} 
                               style={styles.bookCoverImage}
                               resizeMode="contain"
                             />

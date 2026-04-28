@@ -9,6 +9,7 @@ import {
   Linking,
   Platform,
   Alert,
+  ImageBackground,
 } from 'react-native';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -306,21 +307,28 @@ export default function StudentDetailScreen() {
       />
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Header Alunno */}
-        <View style={styles.studentHeader}>
-          <View style={styles.studentAvatar}>
-            <Text style={styles.studentInitial}>{child.nome_figlio.charAt(0).toUpperCase()}</Text>
-          </View>
-          <View style={styles.studentInfo}>
-            <Text style={styles.studentName}>{child.nome_figlio}</Text>
-            <Text style={styles.studentClass}>
-              Classe {getClasseLabel(child.classe)} sezione {child.sezione}
-            </Text>
-            <View style={styles.schoolTypeBadge}>
-              <Text style={styles.schoolTypeText}>{getTipoScuolaLabel(child.tipo_scuola)}</Text>
+        {/* Header Alunno con Logo RiBook */}
+        <ImageBackground 
+          source={require('../../assets/images/ribook-logo.png')}
+          style={styles.studentHeaderBg}
+          imageStyle={styles.studentHeaderImage}
+          resizeMode="cover"
+        >
+          <View style={styles.studentHeaderOverlay}>
+            <View style={styles.studentAvatar}>
+              <Text style={styles.studentInitial}>{child.nome_figlio.charAt(0).toUpperCase()}</Text>
+            </View>
+            <View style={styles.studentInfo}>
+              <Text style={styles.studentName}>{child.nome_figlio}</Text>
+              <Text style={styles.studentClass}>
+                Classe {getClasseLabel(child.classe)} sezione {child.sezione}
+              </Text>
+              <View style={styles.schoolTypeBadge}>
+                <Text style={styles.schoolTypeText}>{getTipoScuolaLabel(child.tipo_scuola)}</Text>
+              </View>
             </View>
           </View>
-        </View>
+        </ImageBackground>
 
         {/* Dati Scuola */}
         <View style={styles.section}>
@@ -734,6 +742,20 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
+  },
+  studentHeaderBg: {
+    width: '100%',
+  },
+  studentHeaderImage: {
+    resizeMode: 'cover',
+    opacity: 1,
+  },
+  studentHeaderOverlay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(26, 71, 42, 0.75)',
+    padding: 20,
+    paddingTop: 10,
   },
   studentHeader: {
     flexDirection: 'row',

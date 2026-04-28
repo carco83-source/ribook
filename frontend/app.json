@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "RiLiBro",
-    "slug": "rilibro",
+    "name": "RiBook",
+    "slug": "ribook",
     "version": "1.0.0",
     "orientation": "default",
     "icon": "./assets/icon.png",
-    "scheme": "rilibro",
+    "scheme": "ribook",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
