@@ -44,8 +44,6 @@ export default function ProfileScreen() {
   const [upgrading, setUpgrading] = useState(false);
   const [userData, setUserData] = useState<any>(null);
   const [stats, setStats] = useState<any>(null);
-  const [trades, setTrades] = useState<any[]>([]);
-  const [tradesLoading, setTradesLoading] = useState(false);
 
   useEffect(() => {
     loadUserData();
@@ -70,9 +68,6 @@ export default function ProfileScreen() {
       const statsRes = await axios.get(`${API_URL}/api/users/${userId}/stats`);
       setStats(statsRes.data);
 
-      // Load user trades/exchanges
-      loadTrades(userId);
-
       setUserData({
         ...response.data,
         nome,
@@ -82,35 +77,6 @@ export default function ProfileScreen() {
       console.error('Error loading user data:', error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const loadTrades = async (userId: string) => {
-    setTradesLoading(true);
-    try {
-      // Get user's listings (what they're selling)
-      const listingsRes = await axios.get(`${API_URL}/api/listings?seller_id=${userId}`);
-      
-      // Get user's conversations (potential trades)
-      const conversationsRes = await axios.get(`${API_URL}/api/conversations/${userId}`);
-      
-      // Combine into trades format
-      const userTrades = [
-        ...listingsRes.data.map((listing: any) => ({
-          id: listing._id || listing.id,
-          type: 'vendita',
-          book_title: listing.book_title,
-          price: listing.price,
-          status: listing.status,
-          created_at: listing.created_at,
-        })),
-      ];
-      
-      setTrades(userTrades);
-    } catch (error) {
-      console.error('Error loading trades:', error);
-    } finally {
-      setTradesLoading(false);
     }
   };
 
@@ -162,7 +128,7 @@ export default function ProfileScreen() {
     );
   };
 
-  // Get status color and label
+  // Get status color and label (kept for future use)
   const getStatusInfo = (status: string) => {
     switch (status) {
       case 'available':
@@ -227,69 +193,20 @@ export default function ProfileScreen() {
           <Text style={styles.tradesSectionTitle}>I Miei Scambi</Text>
         </View>
         
-        {tradesLoading ? (
-          <View style={styles.tradesLoading}>
-            <ActivityIndicator size="small" color="#1a472a" />
-            <Text style={styles.tradesLoadingText}>Caricamento scambi...</Text>
-          </View>
-        ) : trades.length === 0 ? (
-          <View style={styles.tradesEmpty}>
-            <Ionicons name="book-outline" size={48} color="#ccc" />
-            <Text style={styles.tradesEmptyTitle}>Nessuno scambio</Text>
-            <Text style={styles.tradesEmptySubtitle}>
-              Non hai ancora messo in vendita o acquistato libri
-            </Text>
-            <TouchableOpacity 
-              style={styles.tradesStartButton}
-              onPress={() => router.push('/(tabs)/search')}
-            >
-              <Ionicons name="add" size={20} color="#fff" />
-              <Text style={styles.tradesStartButtonText}>Inizia a vendere</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <View style={styles.tradesList}>
-            {trades.map((trade) => {
-              const statusInfo = getStatusInfo(trade.status);
-              return (
-                <TouchableOpacity 
-                  key={trade.id} 
-                  style={styles.tradeCard}
-                  onPress={() => router.push(`/listing/${trade.id}`)}
-                >
-                  <View style={styles.tradeCardLeft}>
-                    <View style={[styles.tradeTypeIcon, { 
-                      backgroundColor: trade.type === 'vendita' ? '#e3f2fd' : '#e8f5e9' 
-                    }]}>
-                      <Ionicons 
-                        name={trade.type === 'vendita' ? 'arrow-up' : 'arrow-down'} 
-                        size={20} 
-                        color={trade.type === 'vendita' ? '#2196F3' : '#4CAF50'} 
-                      />
-                    </View>
-                    <View style={styles.tradeCardInfo}>
-                      <Text style={styles.tradeCardTitle} numberOfLines={1}>
-                        {trade.book_title}
-                      </Text>
-                      <View style={styles.tradeCardMeta}>
-                        <View style={[styles.tradeStatusBadge, { backgroundColor: statusInfo.color + '20' }]}>
-                          <Ionicons name={statusInfo.icon as any} size={12} color={statusInfo.color} />
-                          <Text style={[styles.tradeStatusText, { color: statusInfo.color }]}>
-                            {statusInfo.label}
-                          </Text>
-                        </View>
-                      </View>
-                    </View>
-                  </View>
-                  <View style={styles.tradeCardRight}>
-                    <Text style={styles.tradeCardPrice}>€{trade.price?.toFixed(2) || '0.00'}</Text>
-                    <Ionicons name="chevron-forward" size={20} color="#999" />
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        )}
+        <View style={styles.tradesEmpty}>
+          <Ionicons name="book-outline" size={48} color="#ccc" />
+          <Text style={styles.tradesEmptyTitle}>Nessuno scambio</Text>
+          <Text style={styles.tradesEmptySubtitle}>
+            Non hai ancora messo in vendita o acquistato libri
+          </Text>
+          <TouchableOpacity 
+            style={styles.tradesStartButton}
+            onPress={() => router.push('/(tabs)/search')}
+          >
+            <Ionicons name="add" size={20} color="#fff" />
+            <Text style={styles.tradesStartButtonText}>Inizia a vendere</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Quick Actions */}
