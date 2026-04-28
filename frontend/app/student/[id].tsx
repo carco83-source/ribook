@@ -306,16 +306,8 @@ export default function StudentDetailScreen() {
       />
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Header Alunno con pulsante chiudi */}
+        {/* Header Alunno */}
         <View style={styles.studentHeader}>
-          {/* Pulsante Chiudi mobile */}
-          <TouchableOpacity 
-            style={styles.closeButtonMobile}
-            onPress={() => router.back()}
-          >
-            <Ionicons name="close-circle" size={32} color="rgba(255,255,255,0.9)" />
-          </TouchableOpacity>
-          
           <View style={styles.studentAvatar}>
             <Text style={styles.studentInitial}>{child.nome_figlio.charAt(0).toUpperCase()}</Text>
           </View>
@@ -712,12 +704,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#1a472a',
     padding: 20,
     paddingTop: 10,
-  },
-  closeButtonMobile: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    zIndex: 10,
   },
   studentAvatar: {
     width: 70,
