@@ -747,12 +747,8 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   studentHeaderImage: {
-    opacity: 0.2,
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: 0,
-    right: 0,
+    opacity: 0.4,
+    resizeMode: 'contain',
   },
   studentHeaderOverlay: {
     flexDirection: 'row',
