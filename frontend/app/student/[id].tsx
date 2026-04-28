@@ -371,26 +371,63 @@ export default function StudentDetailScreen() {
         {compatibility?.tetto_spesa && compatibility.tetto_spesa.tetto_ministeriale > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Ionicons name="wallet-outline" size={22} color="#1a472a" />
+              <Ionicons name="document-text-outline" size={22} color="#1a472a" />
               <Text style={styles.sectionTitle}>Tetto di Spesa Ministeriale</Text>
             </View>
             
             <View style={styles.tettoCard}>
-              <Text style={styles.tettoReference}>{compatibility.tetto_spesa.riferimento_normativo}</Text>
+              {/* Riferimento Normativo */}
+              <View style={styles.tettoLawBox}>
+                <Ionicons name="information-circle" size={20} color="#1976D2" />
+                <View style={styles.tettoLawContent}>
+                  <Text style={styles.tettoLawTitle}>Riferimento Normativo</Text>
+                  <Text style={styles.tettoLawText}>
+                    {compatibility.tetto_spesa.riferimento_normativo || 
+                     'D.M. n. 781 del 27/09/2013 - Art. 3'}
+                  </Text>
+                  <Text style={styles.tettoLawDesc}>
+                    Definizione dei tetti di spesa per i libri di testo della scuola secondaria
+                  </Text>
+                </View>
+              </View>
               
-              <View style={styles.tettoRow}>
-                <View style={styles.tettoItem}>
-                  <Text style={styles.tettoLabel}>Tetto base</Text>
-                  <Text style={styles.tettoValue}>€{compatibility.tetto_spesa.tetto_ministeriale.toFixed(2)}</Text>
+              {/* Valori del Tetto */}
+              <View style={styles.tettoValuesContainer}>
+                {/* Tetto Base */}
+                <View style={[styles.tettoValueBox, styles.tettoValuePrimary]}>
+                  <Text style={styles.tettoValueLabel}>TETTO BASE</Text>
+                  <Text style={styles.tettoValueAmount}>
+                    €{compatibility.tetto_spesa.tetto_ministeriale.toFixed(2)}
+                  </Text>
+                  <Text style={styles.tettoValueNote}>Limite ministeriale</Text>
                 </View>
-                <View style={styles.tettoItem}>
-                  <Text style={styles.tettoLabel}>Con deroga +10%</Text>
-                  <Text style={styles.tettoValueSmall}>€{compatibility.tetto_spesa.tetto_con_deroga_10.toFixed(2)}</Text>
+                
+                {/* Deroga +10% */}
+                <View style={[styles.tettoValueBox, styles.tettoValueSecondary]}>
+                  <Text style={styles.tettoValueLabel}>DEROGA +10%</Text>
+                  <Text style={styles.tettoValueAmountSmall}>
+                    €{compatibility.tetto_spesa.tetto_con_deroga_10.toFixed(2)}
+                  </Text>
+                  <Text style={styles.tettoValueNote}>Per nuove adozioni</Text>
                 </View>
-                <View style={styles.tettoItem}>
-                  <Text style={styles.tettoLabel}>Max +15%</Text>
-                  <Text style={styles.tettoValueSmall}>€{compatibility.tetto_spesa.tetto_con_deroga_15.toFixed(2)}</Text>
+                
+                {/* Deroga +15% */}
+                <View style={[styles.tettoValueBox, styles.tettoValueTertiary]}>
+                  <Text style={styles.tettoValueLabel}>DEROGA MAX +15%</Text>
+                  <Text style={styles.tettoValueAmountSmall}>
+                    €{compatibility.tetto_spesa.tetto_con_deroga_15.toFixed(2)}
+                  </Text>
+                  <Text style={styles.tettoValueNote}>Limite massimo</Text>
                 </View>
+              </View>
+              
+              {/* Info Aggiuntive */}
+              <View style={styles.tettoInfoBox}>
+                <Text style={styles.tettoInfoText}>
+                  Il tetto di spesa è stabilito dal Ministero dell'Istruzione e varia in base 
+                  alla classe e al tipo di scuola. Le deroghe sono consentite per nuove adozioni 
+                  o per particolari esigenze didattiche.
+                </Text>
               </View>
             </View>
           </View>
@@ -1117,5 +1154,100 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#888',
     marginTop: 4,
+  },
+  // Tetto Ministeriale Styles
+  tettoCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  tettoLawBox: {
+    flexDirection: 'row',
+    backgroundColor: '#e3f2fd',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 16,
+    gap: 10,
+    alignItems: 'flex-start',
+  },
+  tettoLawContent: {
+    flex: 1,
+  },
+  tettoLawTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1976D2',
+    marginBottom: 4,
+  },
+  tettoLawText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#1565C0',
+    marginBottom: 2,
+  },
+  tettoLawDesc: {
+    fontSize: 11,
+    color: '#1976D2',
+    lineHeight: 15,
+  },
+  tettoValuesContainer: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 12,
+  },
+  tettoValueBox: {
+    flex: 1,
+    borderRadius: 10,
+    padding: 12,
+    alignItems: 'center',
+  },
+  tettoValuePrimary: {
+    backgroundColor: '#1a472a',
+  },
+  tettoValueSecondary: {
+    backgroundColor: '#2e7d32',
+  },
+  tettoValueTertiary: {
+    backgroundColor: '#388e3c',
+  },
+  tettoValueLabel: {
+    fontSize: 9,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.8)',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  tettoValueAmount: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  tettoValueAmountSmall: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  tettoValueNote: {
+    fontSize: 9,
+    color: 'rgba(255,255,255,0.7)',
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  tettoInfoBox: {
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
+    padding: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: '#1a472a',
+  },
+  tettoInfoText: {
+    fontSize: 11,
+    color: '#666',
+    lineHeight: 16,
   },
 });
