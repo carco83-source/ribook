@@ -358,31 +358,26 @@ export default function SearchSellScreen() {
   if (showScanner) {
     return (
       <View style={styles.scannerContainer}>
-        <CameraView
+        <BarCodeScanner
           key={cameraKey}
           style={StyleSheet.absoluteFillObject}
-          facing="back"
-          onCameraReady={() => {
-            console.log('Camera is ready!');
-            setIsCameraReady(true);
-          }}
-          barcodeScannerSettings={{
-            barcodeTypes: ['ean13', 'ean8', 'code128', 'code39', 'upc_a', 'upc_e'],
-          }}
-          onBarcodeScanned={isCameraReady && !scanned ? handleBarCodeScanned : undefined}
+          type={BarCodeScanner.Constants.Type.back}
+          barCodeTypes={[
+            BarCodeScanner.Constants.BarCodeType.ean13,
+            BarCodeScanner.Constants.BarCodeType.ean8,
+          ]}
+          onBarCodeScanned={scanned ? undefined : handleBarCodeScanned}
         />
         <View style={styles.scannerOverlay}>
           <View style={styles.scannerFrame} />
           <Text style={styles.scannerText}>Inquadra il codice a barre ISBN</Text>
-          <Text style={styles.scannerHint}>
-            {isCameraReady ? 'Tieni fermo il libro a 15-20cm' : 'Avvio fotocamera...'}
-          </Text>
+          <Text style={styles.scannerHint}>Tieni fermo il libro a 15-20cm</Text>
         </View>
         <TouchableOpacity 
           style={styles.scannerCloseBtn}
           onPress={() => {
             setShowScanner(false);
-            setIsCameraReady(false);
+            setScanned(false);
           }}
         >
           <Ionicons name="close" size={30} color="#fff" />
