@@ -23,6 +23,36 @@ import { SCUOLE_PRIMO_GRADO, SCUOLE_SECONDO_GRADO, getClassiByType, SEZIONI } fr
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
+// Colori per le scuole - assegna un colore unico ad ogni scuola
+const SCHOOL_COLORS: { [key: string]: string } = {};
+const COLOR_PALETTE = [
+  '#FF6B6B', // Rosso corallo
+  '#4ECDC4', // Turchese
+  '#45B7D1', // Azzurro
+  '#96CEB4', // Verde menta
+  '#FFEAA7', // Giallo pastello
+  '#DDA0DD', // Viola chiaro
+  '#98D8C8', // Verde acqua
+  '#F7DC6F', // Giallo oro
+  '#BB8FCE', // Lilla
+  '#85C1E9', // Celeste
+  '#F8B500', // Arancione
+  '#00CED1', // Ciano scuro
+  '#FF7F50', // Corallo
+  '#9B59B6', // Viola
+  '#1ABC9C', // Smeraldo
+];
+
+const getSchoolColor = (codiceScuola: string): string => {
+  if (!codiceScuola) return '#FF9800'; // Default arancione
+  
+  if (!SCHOOL_COLORS[codiceScuola]) {
+    const colorIndex = Object.keys(SCHOOL_COLORS).length % COLOR_PALETTE.length;
+    SCHOOL_COLORS[codiceScuola] = COLOR_PALETTE[colorIndex];
+  }
+  return SCHOOL_COLORS[codiceScuola];
+};
+
 // Helper function per convertire numeri in parole italiane
 const getClasseLabel = (classe: number | string): string => {
   const classeNum = typeof classe === 'string' ? parseInt(classe) : classe;
@@ -383,43 +413,48 @@ export default function RadarScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-      {/* Sezione Alunni - Cerchi con nome e info sotto */}
+      {/* Sezione Alunni - Rettangoli con info complete */}
       <View style={styles.profileSelectorCard}>
         <Text style={styles.profileSelectorLabel}>Alunni</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View style={styles.childTabs}>
-            {/* Cerchio + per aggiungere profilo */}
-            <View style={styles.childCircleContainer}>
-              <TouchableOpacity
-                style={styles.addProfileCircle}
-                onPress={() => setShowAddProfileModal(true)}
-              >
-                <Ionicons name="add" size={36} color="#000" />
-              </TouchableOpacity>
-              <Text style={styles.addProfileText}>Aggiungi</Text>
-            </View>
+            {/* Rettangolo + per aggiungere profilo */}
+            <TouchableOpacity
+              style={styles.addProfileRect}
+              onPress={() => setShowAddProfileModal(true)}
+            >
+              <Ionicons name="add" size={32} color="#1a472a" />
+              <Text style={styles.addProfileRectText}>Aggiungi</Text>
+            </TouchableOpacity>
             
-            {/* Profili esistenti - Click apre dettaglio */}
+            {/* Profili esistenti - Rettangoli con info */}
             {childProfiles.map((child) => {
               const isSelected = selectedChildId === child.id;
-              const initial = child.nome_figlio?.charAt(0)?.toUpperCase() || '?';
+              const schoolColor = getSchoolColor(child.codice_scuola);
+              const classeLabel = child.classe ? `${child.classe}ª` : '';
+              const sezioneLabel = child.sezione || '';
+              const scuolaShort = child.scuola?.length > 25 
+                ? child.scuola.substring(0, 25) + '...' 
+                : child.scuola;
               
               return (
-                <View key={child.id} style={styles.childCircleContainer}>
-                  {/* Cerchio con nome - Click seleziona */}
-                  <TouchableOpacity
-                    style={[
-                      styles.childCircle,
-                      isSelected && styles.childCircleSelected
-                    ]}
-                    onPress={() => setSelectedChildId(child.id)}
-                  >
-                    <Text style={styles.childCircleInitial}>{initial}</Text>
-                    <Text style={styles.childCircleName} numberOfLines={1}>
-                      {child.nome_figlio}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
+                <TouchableOpacity
+                  key={child.id}
+                  style={[
+                    styles.childRect,
+                    { borderColor: schoolColor, borderWidth: 3 },
+                    isSelected && styles.childRectSelected
+                  ]}
+                  onPress={() => setSelectedChildId(child.id)}
+                >
+                  <Text style={styles.childRectName}>{child.nome_figlio}</Text>
+                  <Text style={styles.childRectInfo}>
+                    Classe {classeLabel} - Sez. {sezioneLabel}
+                  </Text>
+                  <Text style={styles.childRectSchool} numberOfLines={1}>
+                    {scuolaShort}
+                  </Text>
+                </TouchableOpacity>
               );
             })}
           </View>
@@ -1685,6 +1720,60 @@ const styles = StyleSheet.create({
     marginTop: 2,
     maxWidth: 70,
     textAlign: 'center',
+  },
+  // Nuovo design rettangoli Alunni
+  addProfileRect: {
+    width: 100,
+    minHeight: 90,
+    borderRadius: 12,
+    backgroundColor: '#f0f0f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#ddd',
+    borderStyle: 'dashed',
+    marginRight: 12,
+  },
+  addProfileRectText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#1a472a',
+    marginTop: 4,
+  },
+  childRect: {
+    minWidth: 140,
+    maxWidth: 180,
+    minHeight: 90,
+    borderRadius: 12,
+    backgroundColor: '#fff',
+    padding: 12,
+    marginRight: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  childRectSelected: {
+    backgroundColor: '#f8f9fa',
+    shadowOpacity: 0.2,
+  },
+  childRectName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1a472a',
+    marginBottom: 4,
+  },
+  childRectInfo: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#333',
+    marginBottom: 4,
+  },
+  childRectSchool: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#666',
   },
   childInfoButtonNew: {
     flexDirection: 'row',

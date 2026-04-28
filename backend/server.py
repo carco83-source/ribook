@@ -4645,6 +4645,10 @@ async def get_child_analysis_v2(user_id: str, child_id: str):
     # Potenziale guadagno dalla vendita
     potenziale_vendita = sum(v.get("prezzo_copertina", 0) * 0.5 for v in vendibili)
     
+    # TOTALE TESTI NUOVI per tetto ministeriale 
+    # = prezzo copertina di TUTTI i libri da comprare (sia quelli usati che nuovi)
+    totale_testi_nuovi_per_tetto = costo_nuovi + sum(l.get("prezzo_copertina", l.get("prezzo", 0)) for l in da_comprare_usati)
+    
     # Calcola classe origine per libri usati (classe successiva che può vendere)
     classe_origine = child_classe + 1 if child_classe < ciclo_info.get("classe_max", 3) else None
     
@@ -4709,7 +4713,8 @@ async def get_child_analysis_v2(user_id: str, child_id: str):
         "libri_gia_posseduti": gia_posseduti,
         
         # TETTO DI SPESA MINISTERIALE
-        "tetto_spesa": calcola_tetto_spesa(child_tipo, child_classe, costo_nuovi + costo_usati),
+        # Il tetto si applica al TOTALE TESTI NUOVI (prezzo copertina di tutti i libri da comprare)
+        "tetto_spesa": calcola_tetto_spesa(child_tipo, child_classe, totale_testi_nuovi_per_tetto),
         
         "summary": {
             "totale_libri": len(libri_correnti),

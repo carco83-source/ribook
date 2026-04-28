@@ -94,10 +94,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="transactions"
         options={{
-          title: 'Scambi',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="swap-horizontal" size={size} color={color} />
-          ),
+          href: null, // Nasconde dalla tab bar ma rimane accessibile
         }}
       />
       <Tabs.Screen
