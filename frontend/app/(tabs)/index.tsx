@@ -419,7 +419,7 @@ export default function RadarScreen() {
         source={require('../../assets/images/ribook-text-only.png')}
         style={styles.profileSelectorCard}
         imageStyle={styles.profileSelectorBgImage}
-        resizeMode="contain"
+        resizeMode="stretch"
       >
         <Text style={styles.profileSelectorLabel}>Alunni</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -2016,11 +2016,12 @@ const styles = StyleSheet.create({
   },
   // Profile selector card
   profileSelectorCard: {
-    backgroundColor: 'rgba(26, 71, 42, 0.95)',
+    backgroundColor: '#1a472a',
     marginHorizontal: 16,
     marginBottom: 16,
     borderRadius: 16,
     padding: 16,
+    paddingBottom: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -2029,11 +2030,13 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   profileSelectorBgImage: {
-    opacity: 0.25,
-    borderRadius: 16,
-    resizeMode: 'cover',
+    opacity: 0.35,
+    borderRadius: 0,
+    position: 'absolute',
+    top: '30%',
+    left: 0,
+    right: 0,
     width: '100%',
-    height: '100%',
   },
   // Badge copie disponibili
   copieBadge: {
