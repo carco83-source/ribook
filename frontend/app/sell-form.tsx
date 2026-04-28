@@ -100,35 +100,70 @@ export default function SellFormScreen() {
       }
       setUserId(storedUserId);
 
-      // Se c'è un ISBN nei params, cerca il libro
+      // Se c'è un ISBN nei params, imposta subito il libro con i dati disponibili
       if (params.isbn) {
-        const response = await axios.get(`${API_URL}/api/books/search?isbn=${params.isbn}`);
-        if (response.data && response.data.length > 0) {
-          const book = response.data[0];
-          setSelectedBook({
-            id: book.id || params.isbn,
-            isbn: params.isbn,
-            titolo: book.titolo || params.titolo || 'Libro',
-            autori: book.autori,
-            disciplina: book.disciplina,
-            prezzo_copertina: book.prezzo_copertina || parseFloat(params.prezzo || '0'),
-            editore: book.editore,
-          });
-          // Carica copertina
-          setAutoCoverUrl(`https://www.ibs.it/images/${params.isbn}_0_0_0_536_0.jpg`);
-        } else {
-          // Crea book manuale
-          setSelectedBook({
-            id: params.isbn,
-            isbn: params.isbn,
-            titolo: params.titolo || 'Libro',
-            prezzo_copertina: parseFloat(params.prezzo || '0'),
-          });
-          setAutoCoverUrl(`https://www.ibs.it/images/${params.isbn}_0_0_0_536_0.jpg`);
+        // Prima imposta il libro con i dati dai params (fallback sicuro)
+        const fallbackBook = {
+          id: params.isbn,
+          isbn: params.isbn,
+          titolo: params.titolo ? decodeURIComponent(params.titolo) : 'Libro',
+          prezzo_copertina: parseFloat(params.prezzo || '0'),
+        };
+        setSelectedBook(fallbackBook);
+        setAutoCoverUrl(`https://www.ibs.it/images/${params.isbn}_0_0_0_536_0.jpg`);
+        
+        // Poi prova a cercare più dettagli dal backend
+        try {
+          // Usa l'endpoint corretto /books/search/{isbn}
+          const response = await axios.get(`${API_URL}/api/books/search/${params.isbn}`);
+          if (response.data) {
+            const book = response.data;
+            setSelectedBook({
+              id: book.id || params.isbn,
+              isbn: book.isbn || params.isbn,
+              titolo: book.titolo || fallbackBook.titolo,
+              autori: book.autori,
+              disciplina: book.disciplina,
+              prezzo_copertina: book.prezzo_copertina || fallbackBook.prezzo_copertina,
+              editore: book.editore,
+            });
+          }
+        } catch (searchError) {
+          // Se la ricerca fallisce, prova con l'endpoint generico
+          try {
+            const genericResponse = await axios.get(`${API_URL}/api/books/search`, {
+              params: { q: params.isbn }
+            });
+            if (genericResponse.data?.books && genericResponse.data.books.length > 0) {
+              const book = genericResponse.data.books[0];
+              setSelectedBook({
+                id: book.id || params.isbn,
+                isbn: book.isbn || params.isbn,
+                titolo: book.titolo || fallbackBook.titolo,
+                autori: book.autori,
+                disciplina: book.disciplina,
+                prezzo_copertina: book.prezzo_copertina || fallbackBook.prezzo_copertina,
+                editore: book.editore,
+              });
+            }
+          } catch (e) {
+            // Usiamo i dati dai params già impostati
+            console.log('Book search failed, using params data');
+          }
         }
       }
     } catch (error) {
       console.error('Error loading data:', error);
+      // Se c'è un errore ma abbiamo i params, imposta comunque il libro
+      if (params.isbn) {
+        setSelectedBook({
+          id: params.isbn,
+          isbn: params.isbn,
+          titolo: params.titolo ? decodeURIComponent(params.titolo) : 'Libro',
+          prezzo_copertina: parseFloat(params.prezzo || '0'),
+        });
+        setAutoCoverUrl(`https://www.ibs.it/images/${params.isbn}_0_0_0_536_0.jpg`);
+      }
     } finally {
       setLoading(false);
     }
