@@ -492,7 +492,7 @@ export default function StudentDetailScreen() {
           </View>
         </View>
 
-        {/* 4 Categorie Libri - Cliccabili per tornare al Radar */}
+        {/* 4 Categorie Libri - Cliccabili */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Ionicons name="library" size={22} color="#1a472a" />
@@ -500,10 +500,10 @@ export default function StudentDetailScreen() {
           </View>
           
           <View style={styles.categoryGrid}>
-            {/* 1. VENDIBILI */}
+            {/* 1. VENDIBILI - Va alla pagina Cerca/Vendi */}
             <TouchableOpacity 
               style={[styles.categoryCard, { borderLeftColor: '#2196F3' }]}
-              onPress={() => router.replace('/(tabs)')}
+              onPress={() => router.push('/(tabs)/search')}
               activeOpacity={0.7}
             >
               <View style={[styles.categoryIcon, { backgroundColor: '#e3f2fd' }]}>
@@ -513,10 +513,10 @@ export default function StudentDetailScreen() {
                 <Text style={styles.categoryNumber}>{compatibility?.vendere?.totale_vendibili || 0}</Text>
                 <Text style={styles.categoryLabel}>Vendibili</Text>
                 <Text style={styles.categoryHint}>
-                  Libri dell'anno scorso che puoi vendere
+                  Clicca per mettere in vendita
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={20} color="#ccc" />
+              <Ionicons name="chevron-forward" size={20} color="#2196F3" />
             </TouchableOpacity>
 
             {/* 2. ACQUISTABILI USATI */}
