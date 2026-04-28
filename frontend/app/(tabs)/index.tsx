@@ -399,14 +399,14 @@ export default function RadarScreen() {
               <Text style={styles.addProfileText}>Aggiungi</Text>
             </View>
             
-            {/* Profili esistenti */}
+            {/* Profili esistenti - Click apre dettaglio */}
             {childProfiles.map((child) => {
               const isSelected = selectedChildId === child.id;
               const initial = child.nome_figlio?.charAt(0)?.toUpperCase() || '?';
               
               return (
                 <View key={child.id} style={styles.childCircleContainer}>
-                  {/* Cerchio con nome */}
+                  {/* Cerchio con nome - Click seleziona */}
                   <TouchableOpacity
                     style={[
                       styles.childCircle,
@@ -419,33 +419,25 @@ export default function RadarScreen() {
                       {child.nome_figlio}
                     </Text>
                   </TouchableOpacity>
-                  
-                  {/* Pulsante Info sotto il cerchio */}
-                  <TouchableOpacity
-                    style={[
-                      styles.childInfoButtonNew,
-                      isSelected && styles.childInfoButtonNewActive
-                    ]}
-                    onPress={() => router.push(`/student/${child.id}`)}
-                  >
-                    <Ionicons 
-                      name="information-circle-outline" 
-                      size={16} 
-                      color={isSelected ? '#FF9800' : '#888'} 
-                    />
-                    <Text style={[
-                      styles.childInfoText,
-                      isSelected && styles.childInfoTextActive
-                    ]}>
-                      info
-                    </Text>
-                  </TouchableOpacity>
                 </View>
               );
             })}
           </View>
         </ScrollView>
       </View>
+
+      {/* Barra Dettagli Scuola e Spesa */}
+      {selectedChildId && (
+        <TouchableOpacity 
+          style={styles.detailsBar}
+          onPress={() => router.push(`/student/${selectedChildId}`)}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="school-outline" size={20} color="#1a472a" />
+          <Text style={styles.detailsBarText}>Dettagli scuola e spesa</Text>
+          <Ionicons name="chevron-forward" size={20} color="#1a472a" />
+        </TouchableOpacity>
+      )}
 
       {/* Sezione Libri per il profilo selezionato */}
       {selectedChildId && childrenCompatibility[selectedChildId] && (() => {
@@ -1714,6 +1706,27 @@ const styles = StyleSheet.create({
   childInfoTextActive: {
     color: '#FF9800',
     fontWeight: '600',
+  },
+  // Barra Dettagli Scuola e Spesa
+  detailsBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#e8f5e9',
+    marginHorizontal: 16,
+    marginBottom: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: '#c8e6c9',
+  },
+  detailsBarText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1a472a',
+    flex: 1,
   },
   // New Purchasable Books Styles
   purchasableCounters: {
