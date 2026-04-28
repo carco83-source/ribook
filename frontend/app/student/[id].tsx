@@ -578,13 +578,14 @@ export default function StudentDetailScreen() {
           </View>
         </View>
 
-        {/* Lista Libri di Testo */}
+        {/* Lista Libri di Testo - Cliccabili per vendere */}
         {compatibility?.nuovi?.libri && compatibility.nuovi.libri.length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Ionicons name="list" size={22} color="#1a472a" />
               <Text style={styles.sectionTitle}>Lista Libri di Testo ({compatibility.nuovi.libri.length})</Text>
             </View>
+            <Text style={styles.sectionSubtitle}>Tocca un libro per metterlo in vendita</Text>
             
             <View style={styles.bookListCard}>
               {compatibility.nuovi.libri.map((book: any, idx: number) => {
@@ -592,12 +593,14 @@ export default function StudentDetailScreen() {
                 const prezzoNuovo = book.prezzo_copertina || book.prezzo_ministeriale || 0;
                 
                 return (
-                  <View 
+                  <TouchableOpacity 
                     key={idx} 
                     style={[
                       styles.bookListItem,
                       idx === compatibility.nuovi!.libri!.length - 1 && { borderBottomWidth: 0 }
                     ]}
+                    onPress={() => router.push(`/sell-form?isbn=${book.isbn}&titolo=${encodeURIComponent(book.titolo || '')}&prezzo=${prezzoNuovo}`)}
+                    activeOpacity={0.7}
                   >
                     <View style={styles.bookListLeft}>
                       <View style={[
@@ -630,8 +633,12 @@ export default function StudentDetailScreen() {
                           </Text>
                         </View>
                       )}
+                      <View style={styles.sellIconContainer}>
+                        <Ionicons name="pricetag" size={18} color="#2196F3" />
+                        <Text style={styles.sellIconText}>Vendi</Text>
+                      </View>
                     </View>
-                  </View>
+                  </TouchableOpacity>
                 );
               })}
             </View>
@@ -766,6 +773,13 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#1a472a',
+  },
+  sectionSubtitle: {
+    fontSize: 13,
+    color: '#888',
+    marginBottom: 12,
+    marginTop: -8,
+    fontStyle: 'italic',
   },
   schoolCard: {
     backgroundColor: '#fff',
@@ -1058,6 +1072,21 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '600',
     color: '#4CAF50',
+  },
+  sellIconContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#e3f2fd',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    marginTop: 8,
+    gap: 4,
+  },
+  sellIconText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#2196F3',
   },
   // Category Grid styles (4 categorie)
   categoryGrid: {
