@@ -208,7 +208,7 @@ export default function ProfileScreen() {
               style={styles.logoutHeaderButton}
               onPress={handleLogout}
             >
-              <Ionicons name="log-out-outline" size={16} color="#ff4444" />
+              <Ionicons name="log-out-outline" size={16} color="#333" />
               <Text style={styles.logoutHeaderButtonText}>Esci</Text>
             </TouchableOpacity>
           </View>
@@ -390,7 +390,7 @@ const styles = StyleSheet.create({
     resizeMode: 'contain',
   },
   profileHeaderOverlay: {
-    backgroundColor: 'rgba(255, 152, 0, 0.85)',
+    backgroundColor: 'rgba(255, 228, 196, 0.95)',
     alignItems: 'center',
     paddingVertical: 32,
     paddingHorizontal: 24,
@@ -421,11 +421,11 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#fff',
+    color: '#000',
   },
   userUsername: {
     fontSize: 14,
-    color: '#a8d5ba',
+    color: '#333',
     marginTop: 4,
   },
   premiumBadge: {
@@ -465,16 +465,14 @@ const styles = StyleSheet.create({
   logoutHeaderButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: '#fff',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
     gap: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(255,100,100,0.5)',
   },
   logoutHeaderButtonText: {
-    color: '#ff6666',
+    color: '#333',
     fontWeight: '600',
     fontSize: 14,
   },
