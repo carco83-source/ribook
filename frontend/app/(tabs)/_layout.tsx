@@ -5,19 +5,22 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Componente Header personalizzato con titolo a sinistra e logo centrato
-const CustomHeader = ({ title }: { title: string }) => (
-  <View style={headerStyles.container}>
-    <View style={headerStyles.titleContainer}>
-      <Text style={headerStyles.title} numberOfLines={1}>{title}</Text>
+const CustomHeader = ({ title }: { title: string }) => {
+  const isLongTitle = title.length > 8;
+  return (
+    <View style={headerStyles.container}>
+      <View style={headerStyles.titleContainer}>
+        <Text style={[headerStyles.title, isLongTitle && headerStyles.titleSmall]} numberOfLines={1}>{title}</Text>
+      </View>
+      <Image 
+        source={require('../../assets/images/ribook-header-logo-transparent.png')}
+        style={headerStyles.logo}
+        resizeMode="contain"
+      />
+      <View style={headerStyles.spacer} />
     </View>
-    <Image 
-      source={require('../../assets/images/ribook-header-logo-transparent.png')}
-      style={headerStyles.logo}
-      resizeMode="contain"
-    />
-    <View style={headerStyles.spacer} />
-  </View>
-);
+  );
+};
 
 const headerStyles = StyleSheet.create({
   container: {
@@ -27,17 +30,20 @@ const headerStyles = StyleSheet.create({
     width: '100%',
   },
   titleContainer: {
-    width: 85,
+    width: 90,
   },
   title: {
     fontSize: 17,
     fontWeight: 'bold',
     color: '#000',
   },
+  titleSmall: {
+    fontSize: 14,
+  },
   logo: {
     width: 120,
     height: 45,
-    marginLeft: 25,
+    marginLeft: 20,
   },
   spacer: {
     width: 45,
