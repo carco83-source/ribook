@@ -290,8 +290,10 @@ export default function BookSellersScreen() {
               // Calculate savings safely - handle both field names
               const prezzoCopertina = bookInfo?.prezzo_copertina || 0;
               const prezzoVendita = listing.prezzo_vendita || listing.price || 0;
-              const savings = prezzoCopertina - prezzoVendita;
-              const showSavings = prezzoCopertina > 0 && prezzoVendita > 0 && savings > 0;
+              // Prezzo totale per acquirente = prezzo + 17% commissione
+              const prezzoTotale = prezzoVendita * 1.17;
+              const savings = prezzoCopertina - prezzoTotale;
+              const showSavings = prezzoCopertina > 0 && prezzoTotale > 0 && savings > 0;
               const condizione = listing.condizione || listing.condition || 'buono';
 
               return (
@@ -312,7 +314,8 @@ export default function BookSellersScreen() {
                       </View>
                     </View>
                     <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={styles.listingPrice}>€{prezzoVendita.toFixed(2)}</Text>
+                      <Text style={styles.listingPrice}>€{prezzoTotale.toFixed(2)}</Text>
+                      <Text style={styles.priceSubtext}>comprensivo di gestione RB</Text>
                       {showSavings && (
                         <Text style={styles.savings}>
                           Risparmi €{savings.toFixed(2)}
@@ -573,6 +576,11 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: '#4CAF50',
+  },
+  priceSubtext: {
+    fontSize: 10,
+    color: '#888',
+    fontStyle: 'italic',
   },
   savings: {
     fontSize: 12,
