@@ -743,8 +743,8 @@ export default function SellFormScreen() {
                 <Text style={styles.priceLabel}>{price.label}</Text>
               </View>
               <View style={styles.priceOptionRight}>
-                <Text style={styles.priceValue}>€{price.prezzoAcquirente?.toFixed(2)}</Text>
-                <Text style={styles.priceEarning}>Guadagni: €{price.guadagnoVenditore?.toFixed(2)}</Text>
+                <Text style={styles.priceEarningMain}>Guadagni: €{price.guadagnoVenditore?.toFixed(2)}</Text>
+                <Text style={styles.priceAcquirente}>L'acquirente pagherà €{price.prezzoAcquirente?.toFixed(2)}</Text>
               </View>
             </TouchableOpacity>
           ))}
@@ -1113,6 +1113,16 @@ const styles = StyleSheet.create({
   priceEarning: {
     fontSize: 12,
     color: '#4CAF50',
+    marginTop: 2,
+  },
+  priceEarningMain: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#4CAF50',
+  },
+  priceAcquirente: {
+    fontSize: 11,
+    color: '#888',
     marginTop: 2,
   },
   photoGrid: {
