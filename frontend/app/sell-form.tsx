@@ -65,14 +65,19 @@ export default function SellFormScreen() {
   const [loading, setLoading] = useState(true);
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
   
-  // Form fields - Condizioni
-  const [pennaPercentuale, setPennaPercentuale] = useState(0);
-  const [matitaPercentuale, setMatitaPercentuale] = useState(0);
-  const [evidenziatorePercentuale, setEvidenziatorePercentuale] = useState(0);
-  const [usuraLibroPercentuale, setUsuraLibroPercentuale] = useState(0);
+  // Form fields - Condizioni (0=Nessuna, 1=Poche, 2=Diverse, 3=Molte)
+  const [scrittePenna, setScrittePenna] = useState(0);
+  const [scritteMatita, setScritteMatita] = useState(0);
+  const [pagineEvidenziate, setPagineEvidenziate] = useState(0);
+  const [condGenerale, setCondGenerale] = useState(0);
   const [eserciziPenna, setEserciziPenna] = useState(false);
   const [eserciziMatita, setEserciziMatita] = useState(false);
+  const [eserciziQuantita, setEserciziQuantita] = useState(0); // 0=Nessuno, 1=Pochi, 2=Diversi, 3=Molti
   const [isNewBook, setIsNewBook] = useState(false);
+  
+  // Colori pallini
+  const CONDITION_COLORS = ['#4CAF50', '#FFC107', '#FF9800', '#f44336']; // Verde, Giallo, Arancio, Rosso
+  const CONDITION_LABELS = ['Nessuna', 'Poche', 'Diverse', 'Molte'];
   
   // Photos
   const [listingPhotos, setListingPhotos] = useState<string[]>([]);
@@ -194,7 +199,7 @@ export default function SellFormScreen() {
     }
   };
 
-  // Calcolo prezzo
+  // Calcolo prezzo - Range 30% - 70% del prezzo nuovo
   const calcolaPrezzoLibro = () => {
     const prezzoNuovo = selectedBook?.prezzo_copertina || 0;
     
@@ -223,43 +228,58 @@ export default function SellFormScreen() {
       };
     }
     
-    const condizioniPagineMedia = (
-      pennaPercentuale * 0.50 +
-      evidenziatorePercentuale * 0.35 +
-      matitaPercentuale * 0.15
-    );
+    // Pesi per ogni condizione:
+    // - Scritte a penna: peso maggiore (0.40)
+    // - Pagine evidenziate: peso medio (0.25)
+    // - Scritte a matita: peso minore (0.15)
+    // - Condizione generale: peso (0.20)
+    // Ogni valore va da 0 a 3
     
-    let usuraBase = (
-      condizioniPagineMedia * 0.75 +
-      usuraLibroPercentuale * 0.25
-    );
+    // Calcolo punteggio usura (0-100)
+    let usuraScore = 0;
+    usuraScore += (scrittePenna / 3) * 40;      // Max 40 punti
+    usuraScore += (pagineEvidenziate / 3) * 25; // Max 25 punti
+    usuraScore += (scritteMatita / 3) * 15;     // Max 15 punti
+    usuraScore += (condGenerale / 3) * 20;      // Max 20 punti
     
-    if (eserciziPenna) usuraBase = Math.min(100, usuraBase + 10);
-    if (eserciziMatita) usuraBase = Math.min(100, usuraBase + 10);
+    // Esercizi svolti incidono come scritture aggiuntive
+    if (eserciziPenna && eserciziQuantita > 0) {
+      // Esercizi a penna: stessa incidenza delle scritte a penna
+      usuraScore += (eserciziQuantita / 3) * 15;
+    }
+    if (eserciziMatita && eserciziQuantita > 0) {
+      // Esercizi a matita: incidenza come scritte a matita
+      usuraScore += (eserciziQuantita / 3) * 8;
+    }
     
-    let usura = usuraBase / 100;
+    // Cap a 100
+    usuraScore = Math.min(100, usuraScore);
     
-    const maxUsato = prezzoNuovo * 0.80;
-    let prezzoUsato = maxUsato * (1 - Math.pow(usura, 1.2));
-    prezzoUsato = Math.min(prezzoUsato, maxUsato);
-    prezzoUsato = Math.max(prezzoUsato, prezzoNuovo * 0.20);
+    // Range prezzo: 30% (usura 100) - 70% (usura 0) del nuovo
+    // Formula: percentuale = 70% - (usura/100 * 40%)
+    const percentualePrezzo = 0.70 - (usuraScore / 100) * 0.40;
+    
+    let prezzoUsato = prezzoNuovo * percentualePrezzo;
+    
+    // Assicura che sia nel range 30%-70%
+    prezzoUsato = Math.max(prezzoUsato, prezzoNuovo * 0.30);
+    prezzoUsato = Math.min(prezzoUsato, prezzoNuovo * 0.70);
     
     const commissionePiattaforma = 0.17;
     const stripeFisso = 0.25;
     
-    const prezzoAlto = Math.min(prezzoUsato * 1.10, prezzoNuovo * 0.85);
+    const prezzoAlto = Math.min(prezzoUsato * 1.08, prezzoNuovo * 0.70);
     const prezzoMedio = prezzoUsato;
-    const prezzoBasso = prezzoUsato * 0.90;
+    const prezzoBasso = Math.max(prezzoUsato * 0.92, prezzoNuovo * 0.30);
     
     let condition = 'buono';
-    const usuraPercentuale = usura * 100;
-    if (usuraPercentuale <= 30) condition = 'ottimo';
-    else if (usuraPercentuale <= 60) condition = 'buono';
-    else if (usuraPercentuale <= 80) condition = 'accettabile';
+    if (usuraScore <= 15) condition = 'ottimo';
+    else if (usuraScore <= 40) condition = 'buono';
+    else if (usuraScore <= 70) condition = 'accettabile';
     else condition = 'scarso';
     
     return {
-      usura: Math.round(usuraPercentuale * 10) / 10,
+      usura: Math.round(usuraScore * 10) / 10,
       prezzoAlto: Math.round(prezzoAlto * 100) / 100,
       prezzoMedio: Math.round(prezzoMedio * 100) / 100,
       prezzoBasso: Math.round(prezzoBasso * 100) / 100,
@@ -544,102 +564,149 @@ export default function SellFormScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Condizioni del libro</Text>
             
-            {/* Slider Penna */}
-            <View style={styles.sliderRow}>
-              <Text style={styles.sliderLabel}>Scritte a penna</Text>
-              <Slider
-                style={styles.slider}
-                minimumValue={0}
-                maximumValue={100}
-                value={pennaPercentuale}
-                onValueChange={setPennaPercentuale}
-                minimumTrackTintColor={getGradientColor(pennaPercentuale)}
-                maximumTrackTintColor="#e0e0e0"
-                thumbTintColor={getGradientColor(pennaPercentuale)}
-              />
-              <Text style={[styles.sliderValue, { color: getGradientColor(pennaPercentuale) }]}>
-                {Math.round(pennaPercentuale)}%
-              </Text>
+            {/* Scritte a penna */}
+            <Text style={styles.conditionCategoryLabel}>Scritte a penna</Text>
+            <View style={styles.dotsRow}>
+              {CONDITION_LABELS.map((label, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  style={styles.dotContainer}
+                  onPress={() => setScrittePenna(idx)}
+                >
+                  <View style={[
+                    styles.conditionDot,
+                    { backgroundColor: CONDITION_COLORS[idx] },
+                    scrittePenna === idx && styles.conditionDotSelected
+                  ]}>
+                    {scrittePenna === idx && (
+                      <Ionicons name="checkmark" size={14} color="#fff" />
+                    )}
+                  </View>
+                  <Text style={styles.dotLabel}>{label}</Text>
+                </TouchableOpacity>
+              ))}
             </View>
 
-            {/* Slider Matita */}
-            <View style={styles.sliderRow}>
-              <Text style={styles.sliderLabel}>Scritte a matita</Text>
-              <Slider
-                style={styles.slider}
-                minimumValue={0}
-                maximumValue={100}
-                value={matitaPercentuale}
-                onValueChange={setMatitaPercentuale}
-                minimumTrackTintColor={getGradientColor(matitaPercentuale)}
-                maximumTrackTintColor="#e0e0e0"
-                thumbTintColor={getGradientColor(matitaPercentuale)}
-              />
-              <Text style={[styles.sliderValue, { color: getGradientColor(matitaPercentuale) }]}>
-                {Math.round(matitaPercentuale)}%
-              </Text>
+            {/* Scritte a matita */}
+            <Text style={styles.conditionCategoryLabel}>Scritte a matita</Text>
+            <View style={styles.dotsRow}>
+              {CONDITION_LABELS.map((label, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  style={styles.dotContainer}
+                  onPress={() => setScritteMatita(idx)}
+                >
+                  <View style={[
+                    styles.conditionDot,
+                    { backgroundColor: CONDITION_COLORS[idx] },
+                    scritteMatita === idx && styles.conditionDotSelected
+                  ]}>
+                    {scritteMatita === idx && (
+                      <Ionicons name="checkmark" size={14} color="#fff" />
+                    )}
+                  </View>
+                  <Text style={styles.dotLabel}>{label}</Text>
+                </TouchableOpacity>
+              ))}
             </View>
 
-            {/* Slider Evidenziatore */}
-            <View style={styles.sliderRow}>
-              <Text style={styles.sliderLabel}>Pagine evidenziate</Text>
-              <Slider
-                style={styles.slider}
-                minimumValue={0}
-                maximumValue={100}
-                value={evidenziatorePercentuale}
-                onValueChange={setEvidenziatorePercentuale}
-                minimumTrackTintColor={getGradientColor(evidenziatorePercentuale)}
-                maximumTrackTintColor="#e0e0e0"
-                thumbTintColor={getGradientColor(evidenziatorePercentuale)}
-              />
-              <Text style={[styles.sliderValue, { color: getGradientColor(evidenziatorePercentuale) }]}>
-                {Math.round(evidenziatorePercentuale)}%
-              </Text>
+            {/* Pagine evidenziate */}
+            <Text style={styles.conditionCategoryLabel}>Pagine evidenziate</Text>
+            <View style={styles.dotsRow}>
+              {CONDITION_LABELS.map((label, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  style={styles.dotContainer}
+                  onPress={() => setPagineEvidenziate(idx)}
+                >
+                  <View style={[
+                    styles.conditionDot,
+                    { backgroundColor: CONDITION_COLORS[idx] },
+                    pagineEvidenziate === idx && styles.conditionDotSelected
+                  ]}>
+                    {pagineEvidenziate === idx && (
+                      <Ionicons name="checkmark" size={14} color="#fff" />
+                    )}
+                  </View>
+                  <Text style={styles.dotLabel}>{label}</Text>
+                </TouchableOpacity>
+              ))}
             </View>
 
-            {/* Slider Usura */}
-            <View style={styles.sliderRow}>
-              <Text style={styles.sliderLabel}>Condizione generale</Text>
-              <Slider
-                style={styles.slider}
-                minimumValue={0}
-                maximumValue={100}
-                value={usuraLibroPercentuale}
-                onValueChange={setUsuraLibroPercentuale}
-                minimumTrackTintColor={getGradientColor(usuraLibroPercentuale)}
-                maximumTrackTintColor="#e0e0e0"
-                thumbTintColor={getGradientColor(usuraLibroPercentuale)}
-              />
-              <Text style={[styles.sliderValue, { color: getGradientColor(usuraLibroPercentuale) }]}>
-                {Math.round(usuraLibroPercentuale)}%
-              </Text>
+            {/* Condizione generale */}
+            <Text style={styles.conditionCategoryLabel}>Condizione generale</Text>
+            <View style={styles.dotsRow}>
+              {CONDITION_LABELS.map((label, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  style={styles.dotContainer}
+                  onPress={() => setCondGenerale(idx)}
+                >
+                  <View style={[
+                    styles.conditionDot,
+                    { backgroundColor: CONDITION_COLORS[idx] },
+                    condGenerale === idx && styles.conditionDotSelected
+                  ]}>
+                    {condGenerale === idx && (
+                      <Ionicons name="checkmark" size={14} color="#fff" />
+                    )}
+                  </View>
+                  <Text style={styles.dotLabel}>{label}</Text>
+                </TouchableOpacity>
+              ))}
             </View>
 
-            {/* Checkbox Esercizi */}
-            <View style={styles.checkboxRow}>
-              <TouchableOpacity 
-                style={styles.checkbox}
-                onPress={() => setEserciziPenna(!eserciziPenna)}
-              >
-                <Ionicons 
-                  name={eserciziPenna ? "checkbox" : "square-outline"} 
-                  size={22} 
-                  color={eserciziPenna ? "#f44336" : "#666"} 
-                />
-                <Text style={styles.checkboxLabel}>Esercizi svolti a penna</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={styles.checkbox}
-                onPress={() => setEserciziMatita(!eserciziMatita)}
-              >
-                <Ionicons 
-                  name={eserciziMatita ? "checkbox" : "square-outline"} 
-                  size={22} 
-                  color={eserciziMatita ? "#FF9800" : "#666"} 
-                />
-                <Text style={styles.checkboxLabel}>Esercizi svolti a matita</Text>
-              </TouchableOpacity>
+            {/* Esercizi svolti - con checkbox tipo */}
+            <View style={styles.eserciziSection}>
+              <Text style={styles.conditionCategoryLabel}>Esercizi svolti</Text>
+              <View style={styles.eserciziCheckboxRow}>
+                <Text style={styles.eserciziLabel}>a matita</Text>
+                <TouchableOpacity
+                  style={[
+                    styles.eserciziCheckbox,
+                    { backgroundColor: '#29B6F6' },
+                    eserciziMatita && styles.eserciziCheckboxSelected
+                  ]}
+                  onPress={() => setEserciziMatita(!eserciziMatita)}
+                >
+                  {eserciziMatita && <Ionicons name="checkmark" size={14} color="#fff" />}
+                </TouchableOpacity>
+                <Text style={styles.eserciziLabel}>a penna</Text>
+                <TouchableOpacity
+                  style={[
+                    styles.eserciziCheckbox,
+                    { backgroundColor: '#29B6F6' },
+                    eserciziPenna && styles.eserciziCheckboxSelected
+                  ]}
+                  onPress={() => setEserciziPenna(!eserciziPenna)}
+                >
+                  {eserciziPenna && <Ionicons name="checkmark" size={14} color="#fff" />}
+                </TouchableOpacity>
+              </View>
+              
+              {/* Quantità esercizi - solo se almeno uno è selezionato */}
+              {(eserciziMatita || eserciziPenna) && (
+                <View style={styles.dotsRow}>
+                  {CONDITION_LABELS.map((label, idx) => (
+                    <TouchableOpacity
+                      key={idx}
+                      style={styles.dotContainer}
+                      onPress={() => setEserciziQuantita(idx)}
+                    >
+                      <View style={[
+                        styles.conditionDot,
+                        { backgroundColor: CONDITION_COLORS[idx] },
+                        eserciziQuantita === idx && styles.conditionDotSelected
+                      ]}>
+                        {eserciziQuantita === idx && (
+                          <Ionicons name="checkmark" size={14} color="#fff" />
+                        )}
+                      </View>
+                      <Text style={styles.dotLabel}>{label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
             </View>
           </View>
         )}
@@ -934,6 +1001,76 @@ const styles = StyleSheet.create({
   checkboxLabel: {
     fontSize: 13,
     color: '#333',
+  },
+  // Nuovi stili per pallini condizioni
+  conditionCategoryLabel: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 12,
+    marginBottom: 8,
+    fontStyle: 'italic',
+    textDecorationLine: 'underline',
+  },
+  dotsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  dotContainer: {
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  conditionDot: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    opacity: 0.5,
+  },
+  conditionDotSelected: {
+    opacity: 1,
+    transform: [{ scale: 1.15 }],
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  dotLabel: {
+    fontSize: 11,
+    color: '#666',
+    marginTop: 4,
+  },
+  eserciziSection: {
+    marginTop: 16,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+  },
+  eserciziCheckboxRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 12,
+  },
+  eserciziLabel: {
+    fontSize: 14,
+    color: '#333',
+  },
+  eserciziCheckbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    opacity: 0.4,
+  },
+  eserciziCheckboxSelected: {
+    opacity: 1,
   },
   conditionResult: {
     flexDirection: 'row',
