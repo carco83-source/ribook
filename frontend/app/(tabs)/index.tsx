@@ -413,15 +413,8 @@ export default function RadarScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-      {/* Sezione Alunni con Logo RiBook come sfondo */}
+      {/* Sezione Alunni con sfondo arancione */}
       <View style={styles.profileSelectorCard}>
-        {/* Logo come sfondo assoluto */}
-        <Image 
-          source={require('../../assets/images/ribook-logo-new.png')}
-          style={styles.profileSelectorBgLogo}
-          resizeMode="contain"
-        />
-        
         <Text style={styles.profileSelectorLabel}>Alunni</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View style={styles.childTabs}>
@@ -2020,7 +2013,7 @@ const styles = StyleSheet.create({
   },
   // Profile selector card
   profileSelectorCard: {
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#FFE4C4',
     marginHorizontal: 16,
     marginTop: 8,
     marginBottom: 16,
@@ -2037,7 +2030,7 @@ const styles = StyleSheet.create({
     left: 20,
     right: 20,
     bottom: 20,
-    opacity: 0.12,
+    opacity: 0.2,
   },
   profileSelectorBgImage: {
     opacity: 1,

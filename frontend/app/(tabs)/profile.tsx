@@ -390,7 +390,7 @@ const styles = StyleSheet.create({
     resizeMode: 'contain',
   },
   profileHeaderOverlay: {
-    backgroundColor: 'rgba(26, 71, 42, 0.85)',
+    backgroundColor: 'rgba(255, 152, 0, 0.85)',
     alignItems: 'center',
     paddingVertical: 32,
     paddingHorizontal: 24,
