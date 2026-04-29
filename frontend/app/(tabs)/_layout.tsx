@@ -7,9 +7,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // Componente Header personalizzato con titolo a sinistra e logo centrato
 const CustomHeader = ({ title }: { title: string }) => (
   <View style={headerStyles.container}>
-    <Text style={headerStyles.title}>{title}</Text>
+    <Text style={headerStyles.title} numberOfLines={1}>{title}</Text>
     <Image 
-      source={require('../../assets/images/ribook-header-logo.png')}
+      source={require('../../assets/images/ribook-header-logo-transparent.png')}
       style={headerStyles.logo}
       resizeMode="contain"
     />
@@ -23,20 +23,20 @@ const headerStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     width: '100%',
-    paddingRight: 16,
+    paddingRight: 8,
   },
   title: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: 'bold',
     color: '#000',
-    width: 90,
+    width: 80,
   },
   logo: {
-    width: 130,
-    height: 50,
+    width: 120,
+    height: 45,
   },
   spacer: {
-    width: 90,
+    width: 80,
   },
 });
 
