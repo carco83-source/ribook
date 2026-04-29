@@ -540,7 +540,7 @@ export default function StudentDetailScreen() {
             {/* 1. VENDIBILI - Va al Radar sezione vendibili */}
             <TouchableOpacity 
               style={[styles.categoryCard, { borderLeftColor: '#2196F3' }]}
-              onPress={() => router.push({ pathname: '/(tabs)', params: { scrollTo: 'vendibili', childId: id } })}
+              onPress={() => router.replace({ pathname: '/(tabs)', params: { scrollTo: 'vendibili', childId: id, ts: Date.now().toString() } })}
               activeOpacity={0.7}
             >
               <View style={[styles.categoryIcon, { backgroundColor: '#e3f2fd' }]}>
@@ -559,7 +559,7 @@ export default function StudentDetailScreen() {
             {/* 2. ACQUISTABILI USATI */}
             <TouchableOpacity 
               style={[styles.categoryCard, { borderLeftColor: '#4CAF50' }]}
-              onPress={() => router.push({ pathname: '/(tabs)', params: { scrollTo: 'usati', childId: id } })}
+              onPress={() => router.replace({ pathname: '/(tabs)', params: { scrollTo: 'usati', childId: id, ts: Date.now().toString() } })}
               activeOpacity={0.7}
             >
               <View style={[styles.categoryIcon, { backgroundColor: '#e8f5e9' }]}>
@@ -578,7 +578,7 @@ export default function StudentDetailScreen() {
             {/* 3. NUOVE ADOZIONI */}
             <TouchableOpacity 
               style={[styles.categoryCard, { borderLeftColor: '#FF9800' }]}
-              onPress={() => router.push({ pathname: '/(tabs)', params: { scrollTo: 'nuovi', childId: id } })}
+              onPress={() => router.replace({ pathname: '/(tabs)', params: { scrollTo: 'nuovi', childId: id, ts: Date.now().toString() } })}
               activeOpacity={0.7}
             >
               <View style={[styles.categoryIcon, { backgroundColor: '#fff3e0' }]}>
@@ -597,7 +597,7 @@ export default function StudentDetailScreen() {
             {/* 4. TRIENNALI GIÀ IN USO */}
             <TouchableOpacity 
               style={[styles.categoryCard, { borderLeftColor: '#9C27B0' }]}
-              onPress={() => router.push({ pathname: '/(tabs)', params: { scrollTo: 'posseduti', childId: id } })}
+              onPress={() => router.replace({ pathname: '/(tabs)', params: { scrollTo: 'posseduti', childId: id, ts: Date.now().toString() } })}
               activeOpacity={0.7}
             >
               <View style={[styles.categoryIcon, { backgroundColor: '#f3e5f5' }]}>

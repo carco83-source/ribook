@@ -126,7 +126,7 @@ interface ClassCompatibilityData {
 
 export default function RadarScreen() {
   const router = useRouter();
-  const { scrollTo, childId } = useLocalSearchParams<{ scrollTo?: string; childId?: string }>();
+  const { scrollTo, childId, ts } = useLocalSearchParams<{ scrollTo?: string; childId?: string; ts?: string }>();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [radarData, setRadarData] = useState<RadarData | null>(null);
@@ -174,13 +174,32 @@ export default function RadarScreen() {
 
   // Effetto per gestire la navigazione con childId
   useEffect(() => {
+    console.log('childId from params:', childId, 'ts:', ts);
+    console.log('childProfiles:', childProfiles.map(p => ({ id: p.id, nome: p.nome_figlio })));
+    
     if (childId && childProfiles.length > 0) {
       const profileExists = childProfiles.some((p: any) => p.id === childId);
-      if (profileExists) {
+      console.log('Profile exists:', profileExists);
+      if (profileExists && selectedChildId !== childId) {
+        console.log('Setting selectedChildId to:', childId);
         setSelectedChildId(childId);
       }
     }
-  }, [childId, childProfiles]);
+  }, [childId, childProfiles, ts]);
+
+  // Forza il cambio quando childId o ts cambia (anche se i profili sono già caricati)
+  useFocusEffect(
+    useCallback(() => {
+      console.log('useFocusEffect triggered - childId:', childId, 'ts:', ts);
+      if (childId && childProfiles.length > 0) {
+        const profileExists = childProfiles.some((p: any) => p.id === childId);
+        if (profileExists) {
+          console.log('Focus effect setting childId:', childId);
+          setSelectedChildId(childId);
+        }
+      }
+    }, [childId, childProfiles, ts])
+  );
 
   const loadData = async () => {
     try {
