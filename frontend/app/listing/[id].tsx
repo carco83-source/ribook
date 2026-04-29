@@ -269,11 +269,10 @@ export default function ListingDetailScreen() {
   };
 
   const getPercentageLabel = (percentage: number): string => {
-    if (percentage === 0) return 'Nessuna (0%)';
-    if (percentage <= 25) return `Poche (${percentage}%)`;
-    if (percentage <= 50) return `Alcune (${percentage}%)`;
-    if (percentage <= 75) return `Molte (${percentage}%)`;
-    return `Tantissime (${percentage}%)`;
+    if (percentage === 0) return 'Nessuna';
+    if (percentage <= 33) return 'Poche';
+    if (percentage <= 66) return 'Diverse';
+    return 'Molte';
   };
 
   const calculateCommission = () => {
@@ -557,7 +556,7 @@ export default function ListingDetailScreen() {
           <View style={styles.conditionDetailsCard}>
             <Text style={styles.conditionDetailsTitle}>Stato dettagliato del libro</Text>
             
-            {/* New percentage-based condition details */}
+            {/* New condition details with labels */}
             {(listing.condition_details.penna !== undefined || 
               listing.condition_details.scritte !== undefined || 
               listing.condition_details.evidenziature !== undefined) ? (
@@ -568,21 +567,14 @@ export default function ListingDetailScreen() {
                     <Ionicons name="pencil" size={18} color="#666" />
                     <Text style={styles.conditionItemLabel}>Scritte a penna</Text>
                   </View>
-                  <View style={styles.percentageBarContainer}>
-                    <View style={[
-                      styles.percentageBar, 
-                      { 
-                        width: `${listing.condition_details.penna || listing.condition_details.scritte || 0}%`,
-                        backgroundColor: getPercentageColor(listing.condition_details.penna || listing.condition_details.scritte || 0)
-                      }
-                    ]} />
-                  </View>
-                  <Text style={[
-                    styles.percentageText,
-                    { color: getPercentageColor(listing.condition_details.penna || listing.condition_details.scritte || 0) }
+                  <View style={[
+                    styles.conditionBadgeSmall,
+                    { backgroundColor: getPercentageColor(listing.condition_details.penna || listing.condition_details.scritte || 0) }
                   ]}>
-                    {listing.condition_details.penna || listing.condition_details.scritte || 0}%
-                  </Text>
+                    <Text style={styles.conditionBadgeText}>
+                      {getPercentageLabel(listing.condition_details.penna || listing.condition_details.scritte || 0)}
+                    </Text>
+                  </View>
                 </View>
 
                 {/* Scritte a matita */}
@@ -592,21 +584,14 @@ export default function ListingDetailScreen() {
                       <Ionicons name="create-outline" size={18} color="#666" />
                       <Text style={styles.conditionItemLabel}>Scritte a matita</Text>
                     </View>
-                    <View style={styles.percentageBarContainer}>
-                      <View style={[
-                        styles.percentageBar, 
-                        { 
-                          width: `${listing.condition_details.matita || 0}%`,
-                          backgroundColor: getPercentageColor(listing.condition_details.matita || 0)
-                        }
-                      ]} />
-                    </View>
-                    <Text style={[
-                      styles.percentageText,
-                      { color: getPercentageColor(listing.condition_details.matita || 0) }
+                    <View style={[
+                      styles.conditionBadgeSmall,
+                      { backgroundColor: getPercentageColor(listing.condition_details.matita || 0) }
                     ]}>
-                      {listing.condition_details.matita || 0}%
-                    </Text>
+                      <Text style={styles.conditionBadgeText}>
+                        {getPercentageLabel(listing.condition_details.matita || 0)}
+                      </Text>
+                    </View>
                   </View>
                 )}
 
@@ -616,21 +601,14 @@ export default function ListingDetailScreen() {
                     <Ionicons name="color-fill" size={18} color="#666" />
                     <Text style={styles.conditionItemLabel}>Pagine evidenziate</Text>
                   </View>
-                  <View style={styles.percentageBarContainer}>
-                    <View style={[
-                      styles.percentageBar, 
-                      { 
-                        width: `${listing.condition_details.evidenziatore || listing.condition_details.evidenziature || 0}%`,
-                        backgroundColor: getPercentageColor(listing.condition_details.evidenziatore || listing.condition_details.evidenziature || 0)
-                      }
-                    ]} />
-                  </View>
-                  <Text style={[
-                    styles.percentageText,
-                    { color: getPercentageColor(listing.condition_details.evidenziatore || listing.condition_details.evidenziature || 0) }
+                  <View style={[
+                    styles.conditionBadgeSmall,
+                    { backgroundColor: getPercentageColor(listing.condition_details.evidenziatore || listing.condition_details.evidenziature || 0) }
                   ]}>
-                    {listing.condition_details.evidenziatore || listing.condition_details.evidenziature || 0}%
-                  </Text>
+                    <Text style={styles.conditionBadgeText}>
+                      {getPercentageLabel(listing.condition_details.evidenziatore || listing.condition_details.evidenziature || 0)}
+                    </Text>
+                  </View>
                 </View>
 
                 {/* Usura Libro */}
@@ -638,23 +616,16 @@ export default function ListingDetailScreen() {
                   <View style={styles.conditionItemNew}>
                     <View style={styles.conditionItemHeader}>
                       <Ionicons name="document-text" size={18} color="#666" />
-                      <Text style={styles.conditionItemLabel}>Usura del libro</Text>
+                      <Text style={styles.conditionItemLabel}>Usura pagine</Text>
                     </View>
-                    <View style={styles.percentageBarContainer}>
-                      <View style={[
-                        styles.percentageBar, 
-                        { 
-                          width: `${listing.condition_details.usura_libro || listing.condition_details.pieghe || 0}%`,
-                          backgroundColor: getPercentageColor(listing.condition_details.usura_libro || listing.condition_details.pieghe || 0)
-                        }
-                      ]} />
-                    </View>
-                    <Text style={[
-                      styles.percentageText,
-                      { color: getPercentageColor(listing.condition_details.usura_libro || listing.condition_details.pieghe || 0) }
+                    <View style={[
+                      styles.conditionBadgeSmall,
+                      { backgroundColor: getPercentageColor(listing.condition_details.usura_libro || listing.condition_details.pieghe || 0) }
                     ]}>
-                      {listing.condition_details.usura_libro || listing.condition_details.pieghe || 0}%
-                    </Text>
+                      <Text style={styles.conditionBadgeText}>
+                        {getPercentageLabel(listing.condition_details.usura_libro || listing.condition_details.pieghe || 0)}
+                      </Text>
+                    </View>
                   </View>
                 )}
 
@@ -907,7 +878,7 @@ export default function ListingDetailScreen() {
                 )}
               </View>
               <View style={styles.foderaturaTextContainer}>
-                <Text style={styles.foderaturaTitle}>Fodere il libro</Text>
+                <Text style={styles.foderaturaTitle}>Foderazione libro</Text>
                 <Text style={styles.foderaturaSubtitle}>
                   Richiedi la foderazione presso {selectedBookstore.nome}
                 </Text>
@@ -928,28 +899,20 @@ export default function ListingDetailScreen() {
           </View>
         ) : null}
 
-        {/* Price Display - With Foderazione breakdown */}
+        {/* Price Display - Totale con gestione RB inclusa */}
         <View style={styles.priceBreakdown}>
-          <View style={styles.priceRow}>
-            <Text style={styles.priceRowLabel}>Prezzo libro</Text>
-            <Text style={styles.priceRowValue}>€{total.toFixed(2)}</Text>
-          </View>
-          <View style={styles.priceRow}>
-            <Text style={styles.priceRowLabel}>Gestione RB</Text>
-            <Text style={styles.priceRowValue}>€{commission.toFixed(2)}</Text>
-          </View>
-          {richiediFoderazione && (
-            <View style={styles.priceRow}>
-              <Text style={styles.priceRowLabel}>Foderazione</Text>
-              <Text style={styles.priceRowValue}>€{foderazione.toFixed(2)}</Text>
-            </View>
-          )}
-          <View style={styles.totalDivider} />
           <View style={styles.totalPriceContainer}>
-            <Text style={styles.totalPriceLabel}>Totale</Text>
             <Text style={styles.totalPriceValue}>
               €{(total + commission + foderazione).toFixed(2)}
             </Text>
+            <Text style={styles.serviceRLB}>
+              comprensivo di gestione RB
+            </Text>
+            {richiediFoderazione && (
+              <Text style={styles.foderazioneLine}>
+                + Foderazione libro €{foderazione.toFixed(2)}
+              </Text>
+            )}
           </View>
         </View>
 
@@ -1272,6 +1235,18 @@ const styles = StyleSheet.create({
   conditionItemLabel: {
     fontSize: 14,
     color: '#666',
+  },
+  conditionBadgeSmall: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+    marginTop: 4,
+  },
+  conditionBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#fff',
   },
   conditionItemValue: {
     fontSize: 14,
@@ -1639,6 +1614,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#888',
     marginTop: 4,
+  },
+  foderazioneLine: {
+    fontSize: 13,
+    color: '#4CAF50',
+    marginTop: 8,
+    fontWeight: '600',
   },
   // Condizione percentuale row
   conditionPercentageRow: {
