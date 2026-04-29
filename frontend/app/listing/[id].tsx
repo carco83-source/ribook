@@ -387,6 +387,16 @@ export default function ListingDetailScreen() {
       return;
     }
 
+    // Check se è il proprio libro
+    if (listing?.seller_id === userId) {
+      if (Platform.OS === 'web') {
+        window.alert('Non puoi acquistare i tuoi libri');
+      } else {
+        Alert.alert('Errore', 'Non puoi acquistare i tuoi libri');
+      }
+      return;
+    }
+
     // Procedi direttamente con l'acquisto
     setPurchasing(true);
     try {
@@ -899,20 +909,25 @@ export default function ListingDetailScreen() {
           </View>
         ) : null}
 
-        {/* Price Display - Totale con gestione RB inclusa */}
+        {/* Price Display - Breakdown dettagliato */}
         <View style={styles.priceBreakdown}>
-          <View style={styles.totalPriceContainer}>
-            <Text style={styles.totalPriceValue}>
-              €{(total + commission + foderazione).toFixed(2)}
-            </Text>
-            <Text style={styles.serviceRLB}>
-              comprensivo di gestione RB
-            </Text>
-            {richiediFoderazione && (
-              <Text style={styles.foderazioneLine}>
-                + Foderazione libro €{foderazione.toFixed(2)}
-              </Text>
-            )}
+          <View style={styles.priceRow}>
+            <Text style={styles.priceRowLabel}>Costo del testo usato</Text>
+            <Text style={styles.priceRowValue}>€{(total + commission).toFixed(2)}</Text>
+          </View>
+          <Text style={styles.priceSubLabel}>comprensivo di gestione RB</Text>
+          
+          {richiediFoderazione && (
+            <View style={[styles.priceRow, { marginTop: 12 }]}>
+              <Text style={styles.priceRowLabel}>Foderazione</Text>
+              <Text style={styles.priceRowValue}>€{foderazione.toFixed(2)}</Text>
+            </View>
+          )}
+          
+          <View style={styles.totalDivider} />
+          <View style={styles.priceRow}>
+            <Text style={styles.totalLabel}>Totale</Text>
+            <Text style={styles.totalValue}>€{(total + commission + foderazione).toFixed(2)}</Text>
           </View>
         </View>
 
@@ -991,12 +1006,29 @@ const styles = StyleSheet.create({
   },
   priceRowLabel: {
     fontSize: 14,
-    color: '#666',
+    color: '#333',
   },
   priceRowValue: {
     fontSize: 14,
     fontWeight: '600',
     color: '#333',
+  },
+  priceSubLabel: {
+    fontSize: 12,
+    color: '#888',
+    fontStyle: 'italic',
+    marginTop: -4,
+    marginBottom: 4,
+  },
+  totalLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1a472a',
+  },
+  totalValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1a472a',
   },
   totalDivider: {
     height: 1,
