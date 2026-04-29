@@ -277,13 +277,14 @@ export default function ListingDetailScreen() {
   };
 
   const calculateCommission = () => {
-    if (!listing) return { commission: 0, total: 0 };
+    if (!listing) return { commission: 0, total: 0, foderazione: 0 };
     const sellingPrice = getListingSellingPrice(listing);
+    const foderazioneCost = richiediFoderazione ? 1.30 : 0;
     if (isPremium) {
-      return { commission: 0, total: sellingPrice };
+      return { commission: 0, total: sellingPrice, foderazione: foderazioneCost };
     }
     const commission = sellingPrice * 0.17;
-    return { commission, total: sellingPrice };
+    return { commission, total: sellingPrice, foderazione: foderazioneCost };
   };
 
   const handleShare = async () => {
@@ -458,7 +459,7 @@ export default function ListingDetailScreen() {
     }
   };
 
-  const { commission, total } = calculateCommission();
+  const { commission, total, foderazione } = calculateCommission();
 
   if (loading) {
     return (
@@ -927,15 +928,27 @@ export default function ListingDetailScreen() {
           </View>
         ) : null}
 
-        {/* Price Display - Simplified */}
+        {/* Price Display - With Foderazione breakdown */}
         <View style={styles.priceBreakdown}>
+          <View style={styles.priceRow}>
+            <Text style={styles.priceRowLabel}>Prezzo libro</Text>
+            <Text style={styles.priceRowValue}>€{total.toFixed(2)}</Text>
+          </View>
+          <View style={styles.priceRow}>
+            <Text style={styles.priceRowLabel}>Gestione RB</Text>
+            <Text style={styles.priceRowValue}>€{commission.toFixed(2)}</Text>
+          </View>
+          {richiediFoderazione && (
+            <View style={styles.priceRow}>
+              <Text style={styles.priceRowLabel}>Foderazione</Text>
+              <Text style={styles.priceRowValue}>€{foderazione.toFixed(2)}</Text>
+            </View>
+          )}
+          <View style={styles.totalDivider} />
           <View style={styles.totalPriceContainer}>
             <Text style={styles.totalPriceLabel}>Totale</Text>
             <Text style={styles.totalPriceValue}>
-              €{(total + commission).toFixed(2)}
-            </Text>
-            <Text style={styles.serviceRLB}>
-              comprensivo di gestione RLB
+              €{(total + commission + foderazione).toFixed(2)}
             </Text>
           </View>
         </View>
@@ -1012,6 +1025,20 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
+  },
+  priceRowLabel: {
+    fontSize: 14,
+    color: '#666',
+  },
+  priceRowValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+  },
+  totalDivider: {
+    height: 1,
+    backgroundColor: '#e0e0e0',
+    marginVertical: 8,
   },
   price: {
     fontSize: 28,

@@ -245,12 +245,12 @@ export default function SellFormScreen() {
     
     // Esercizi svolti incidono come scritture aggiuntive
     if (eserciziPenna && eserciziQuantita > 0) {
-      // Esercizi a penna: stessa incidenza delle scritte a penna
-      usuraScore += (eserciziQuantita / 3) * 15;
+      // Esercizi a penna: incidenza maggiore (come scritte a penna x1.5)
+      usuraScore += (eserciziQuantita / 3) * 25;
     }
     if (eserciziMatita && eserciziQuantita > 0) {
-      // Esercizi a matita: incidenza come scritte a matita
-      usuraScore += (eserciziQuantita / 3) * 8;
+      // Esercizi a matita: incidenza media
+      usuraScore += (eserciziQuantita / 3) * 12;
     }
     
     // Cap a 100
