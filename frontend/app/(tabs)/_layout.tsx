@@ -1,29 +1,42 @@
 import React from 'react';
-import { Platform, View, Image, StyleSheet } from 'react-native';
+import { Platform, View, Image, StyleSheet, Text } from 'react-native';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-// Componente Header personalizzato con logo RiBook centrato fisso
-const CustomHeader = () => (
+// Componente Header personalizzato con titolo a sinistra e logo centrato
+const CustomHeader = ({ title }: { title: string }) => (
   <View style={headerStyles.container}>
+    <Text style={headerStyles.title}>{title}</Text>
     <Image 
       source={require('../../assets/images/ribook-header-logo.png')}
       style={headerStyles.logo}
       resizeMode="contain"
     />
+    <View style={headerStyles.spacer} />
   </View>
 );
 
 const headerStyles = StyleSheet.create({
   container: {
-    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    paddingRight: 16,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#000',
+    width: 90,
   },
   logo: {
     width: 130,
     height: 50,
+  },
+  spacer: {
+    width: 90,
   },
 });
 
@@ -91,7 +104,7 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Home',
-          headerTitle: () => <CustomHeader />,
+          headerTitle: () => <CustomHeader title="Home" />,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="school" size={size} color={color} />
           ),
@@ -101,7 +114,7 @@ export default function TabLayout() {
         name="search"
         options={{
           title: 'Cerca/Vendi',
-          headerTitle: () => <CustomHeader />,
+          headerTitle: () => <CustomHeader title="Cerca/Vendi" />,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="pricetag" size={size} color={color} />
           ),
@@ -111,7 +124,7 @@ export default function TabLayout() {
         name="sell"
         options={{
           title: 'Carrello',
-          headerTitle: () => <CustomHeader />,
+          headerTitle: () => <CustomHeader title="Carrello" />,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="cart" size={size} color={color} />
           ),
@@ -120,14 +133,14 @@ export default function TabLayout() {
       <Tabs.Screen
         name="transactions"
         options={{
-          href: null, // Nasconde dalla tab bar ma rimane accessibile
+          href: null,
         }}
       />
       <Tabs.Screen
         name="chats"
         options={{
           title: 'Messaggi',
-          headerTitle: () => <CustomHeader />,
+          headerTitle: () => <CustomHeader title="Messaggi" />,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="chatbubbles" size={size} color={color} />
           ),
@@ -137,7 +150,7 @@ export default function TabLayout() {
         name="profile"
         options={{
           title: 'Profilo',
-          headerTitle: () => <CustomHeader />,
+          headerTitle: () => <CustomHeader title="Profilo" />,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="person" size={size} color={color} />
           ),
