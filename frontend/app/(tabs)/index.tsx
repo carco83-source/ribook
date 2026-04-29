@@ -172,34 +172,15 @@ export default function RadarScreen() {
     }, [])
   );
 
-  // Effetto per gestire la navigazione con childId
+  // Effetto per gestire la navigazione con childId - solo quando childId cambia
   useEffect(() => {
-    console.log('childId from params:', childId, 'ts:', ts);
-    console.log('childProfiles:', childProfiles.map(p => ({ id: p.id, nome: p.nome_figlio })));
-    
     if (childId && childProfiles.length > 0) {
       const profileExists = childProfiles.some((p: any) => p.id === childId);
-      console.log('Profile exists:', profileExists);
-      if (profileExists && selectedChildId !== childId) {
-        console.log('Setting selectedChildId to:', childId);
+      if (profileExists) {
         setSelectedChildId(childId);
       }
     }
-  }, [childId, childProfiles, ts]);
-
-  // Forza il cambio quando childId o ts cambia (anche se i profili sono già caricati)
-  useFocusEffect(
-    useCallback(() => {
-      console.log('useFocusEffect triggered - childId:', childId, 'ts:', ts);
-      if (childId && childProfiles.length > 0) {
-        const profileExists = childProfiles.some((p: any) => p.id === childId);
-        if (profileExists) {
-          console.log('Focus effect setting childId:', childId);
-          setSelectedChildId(childId);
-        }
-      }
-    }, [childId, childProfiles, ts])
-  );
+  }, [childId, ts]); // Reagisce solo a childId e ts, non a childProfiles
 
   const loadData = async () => {
     try {
@@ -287,12 +268,17 @@ export default function RadarScreen() {
         console.log('Failed to load notifications');
       }
       
-      // Select child - use childId from URL params if present, otherwise first child
+      // Select child - use childId from URL params if present, otherwise keep current or use first child
       if (profili.length > 0) {
         if (childId && profili.some((p: any) => p.id === childId)) {
+          // Se abbiamo un childId dall'URL, usalo
           setSelectedChildId(childId);
-        } else if (!selectedChildId) {
+        } else if (!selectedChildId || !profili.some((p: any) => p.id === selectedChildId)) {
+          // Solo se non c'è un selectedChildId valido, usa il primo
           setSelectedChildId(profili[0].id);
+        }
+        // Altrimenti mantieni il selectedChildId corrente
+      }
         }
       }
     } catch (error) {
