@@ -143,6 +143,9 @@ export default function RadarScreen() {
   
   // Cart state
   const [cartData, setCartData] = useState<CartData | null>(null);
+  
+  // Modal informativo per Libri Vendibili
+  const [showVendibiliInfo, setShowVendibiliInfo] = useState(false);
 
   // Notifications state
   const [notifications, setNotifications] = useState<any[]>([]);
@@ -499,9 +502,14 @@ export default function RadarScreen() {
             {/* Libri Vendibili */}
             {compatibility.vendere?.libri_vendibili && compatibility.vendere.libri_vendibili.length > 0 && (
               <View style={styles.classCard}>
-                <Text style={styles.sectionTitleBlue}>
-                  LIBRI VENDIBILI ({compatibility.vendere.libri_vendibili.length})
-                </Text>
+                <View style={styles.sectionTitleRow}>
+                  <Text style={styles.sectionTitleBlue}>
+                    LIBRI VENDIBILI ({compatibility.vendere.libri_vendibili.length})
+                  </Text>
+                  <TouchableOpacity onPress={() => setShowVendibiliInfo(true)}>
+                    <Ionicons name="information-circle-outline" size={22} color="#2196F3" />
+                  </TouchableOpacity>
+                </View>
                 <View style={styles.booksGrid}>
                   {compatibility.vendere.libri_vendibili.map((book: any, idx: number) => {
                     const coverUrl = book.isbn ? `https://www.ibs.it/images/${book.isbn}_0_0_0_536_0.jpg` : null;
@@ -982,6 +990,35 @@ export default function RadarScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
+      {/* Modal Informativo Libri Vendibili */}
+      <Modal
+        visible={showVendibiliInfo}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowVendibiliInfo(false)}
+      >
+        <View style={styles.infoModalOverlay}>
+          <View style={styles.infoModalContent}>
+            <View style={styles.infoModalHeader}>
+              <Ionicons name="information-circle" size={32} color="#2196F3" />
+              <Text style={styles.infoModalTitle}>Libri Vendibili</Text>
+            </View>
+            <Text style={styles.infoModalText}>
+              LIBRI PRESUMIBILMENTE GIÀ IN TUO POSSESSO, NON UTILIZZABILI QUEST'ANNO.
+            </Text>
+            <Text style={styles.infoModalSubtext}>
+              I testi sono aggiornati con i dati forniti dal MIUR, potrebbe comunque esserci un margine d'errore. Se qualche dato non ti sembra attendibile utilizza la sezione VENDI e carica i testi in sicurezza.
+            </Text>
+            <TouchableOpacity 
+              style={styles.infoModalButton}
+              onPress={() => setShowVendibiliInfo(false)}
+            >
+              <Text style={styles.infoModalButtonText}>Ho capito</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
     </>
   );
 }
@@ -1433,9 +1470,14 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#2196F3',
-    marginBottom: 12,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
   },
   sectionTitleRed: {
     fontSize: 18,
@@ -2256,5 +2298,54 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  // Modal Informativo
+  infoModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  infoModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 340,
+  },
+  infoModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 16,
+  },
+  infoModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  infoModalText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 12,
+  },
+  infoModalSubtext: {
+    fontSize: 13,
+    color: '#666',
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  infoModalButton: {
+    backgroundColor: '#2196F3',
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  infoModalButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
