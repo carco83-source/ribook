@@ -416,7 +416,7 @@ export default function RadarScreen() {
       >
       {/* Sezione Alunni con Logo RiBook come sfondo */}
       <ImageBackground 
-        source={require('../../assets/images/ribook-text-only.png')}
+        source={require('../../assets/images/ribook-logo-new.png')}
         style={styles.profileSelectorCard}
         imageStyle={styles.profileSelectorBgImage}
         resizeMode="contain"
@@ -2028,10 +2028,11 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
     overflow: 'hidden',
+    minHeight: 180,
   },
   profileSelectorBgImage: {
-    opacity: 0.4,
-    resizeMode: 'contain',
+    opacity: 0.25,
+    borderRadius: 16,
   },
   // Badge copie disponibili
   copieBadge: {
