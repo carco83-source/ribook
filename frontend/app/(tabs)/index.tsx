@@ -14,7 +14,7 @@ import {
   Platform,
   KeyboardAvoidingView,
 } from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
@@ -126,6 +126,7 @@ interface ClassCompatibilityData {
 
 export default function RadarScreen() {
   const router = useRouter();
+  const { scrollTo, childId } = useLocalSearchParams<{ scrollTo?: string; childId?: string }>();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [radarData, setRadarData] = useState<RadarData | null>(null);
@@ -167,6 +168,16 @@ export default function RadarScreen() {
       loadData();
     }, [])
   );
+
+  // Effetto per gestire la navigazione con childId
+  useEffect(() => {
+    if (childId && childProfiles.length > 0) {
+      const profileExists = childProfiles.some((p: any) => p.id === childId);
+      if (profileExists) {
+        setSelectedChildId(childId);
+      }
+    }
+  }, [childId, childProfiles]);
 
   const loadData = async () => {
     try {
@@ -254,9 +265,13 @@ export default function RadarScreen() {
         console.log('Failed to load notifications');
       }
       
-      // Select first child by default
-      if (profili.length > 0 && !selectedChildId) {
-        setSelectedChildId(profili[0].id);
+      // Select child - use childId from URL params if present, otherwise first child
+      if (profili.length > 0) {
+        if (childId && profili.some((p: any) => p.id === childId)) {
+          setSelectedChildId(childId);
+        } else if (!selectedChildId) {
+          setSelectedChildId(profili[0].id);
+        }
       }
     } catch (error) {
       console.error('Error loading radar data:', error);
