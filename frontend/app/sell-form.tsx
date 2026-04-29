@@ -78,6 +78,7 @@ export default function SellFormScreen() {
   // Colori pallini
   const CONDITION_COLORS = ['#4CAF50', '#FFC107', '#FF9800', '#f44336']; // Verde, Giallo, Arancio, Rosso
   const CONDITION_LABELS = ['Nessuna', 'Poche', 'Diverse', 'Molte'];
+  const CONDITION_LABELS_MASC = ['Nessuno', 'Pochi', 'Diversi', 'Molti'];
   
   // Photos
   const [listingPhotos, setListingPhotos] = useState<string[]>([]);
@@ -633,8 +634,8 @@ export default function SellFormScreen() {
               ))}
             </View>
 
-            {/* Condizione generale */}
-            <Text style={styles.conditionCategoryLabel}>Condizione generale</Text>
+            {/* Usura pagine (pieghe/orecchie) */}
+            <Text style={styles.conditionCategoryLabel}>Usura pagine (pieghe/orecchie)</Text>
             <View style={styles.dotsRow}>
               {CONDITION_LABELS.map((label, idx) => (
                 <TouchableOpacity
@@ -687,7 +688,7 @@ export default function SellFormScreen() {
               {/* Quantità esercizi - solo se almeno uno è selezionato */}
               {(eserciziMatita || eserciziPenna) && (
                 <View style={styles.dotsRow}>
-                  {CONDITION_LABELS.map((label, idx) => (
+                  {CONDITION_LABELS_MASC.map((label, idx) => (
                     <TouchableOpacity
                       key={idx}
                       style={styles.dotContainer}
@@ -805,23 +806,6 @@ export default function SellFormScreen() {
               </View>
             </TouchableOpacity>
           ))}
-          
-          {/* Fodere checkbox - visibile solo se selezionata una cartolibreria */}
-          {selectedBookshops.length > 0 && (
-            <TouchableOpacity 
-              style={[styles.foderareOption, foderare && styles.foderareOptionActive]}
-              onPress={() => setFoderare(!foderare)}
-            >
-              <Ionicons 
-                name={foderare ? "checkbox" : "square-outline"} 
-                size={22} 
-                color={foderare ? "#4CAF50" : "#666"} 
-              />
-              <Text style={[styles.foderareText, foderare && styles.foderareTextActive]}>
-                Foderare il libro (servizio cartolibreria)
-              </Text>
-            </TouchableOpacity>
-          )}
         </View>
 
         {/* Note */}
