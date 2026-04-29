@@ -428,20 +428,19 @@ export default function SellFormScreen() {
     try {
       const selectedShopsDetails = bookshopsData.filter(b => selectedBookshops.includes(b.id));
       
+      // Converti i nuovi valori (0-3) in percentuali (0-100) per compatibilità backend
       const conditionDetails = {
-        penna: pennaPercentuale,
-        matita: matitaPercentuale,
-        evidenziatore: evidenziatorePercentuale,
-        usura_libro: usuraLibroPercentuale,
+        penna: (scrittePenna / 3) * 100,
+        matita: (scritteMatita / 3) * 100,
+        evidenziatore: (pagineEvidenziate / 3) * 100,
+        usura_libro: (condGenerale / 3) * 100,
         esercizi_penna: eserciziPenna,
         esercizi_matita: eserciziMatita,
+        esercizi_quantita: eserciziQuantita,
       };
       
-      const currentPriceRange = calculatePriceRange();
-      const selectedPriceInfo = currentPriceRange.prices.find(
-        p => p.prezzoAcquirente === selectedPriceOption
-      );
-      const guadagnoUtente = selectedPriceInfo?.guadagnoVenditore || (selectedPriceOption * 0.83 - 0.25);
+      const currentPriceCalc = calcolaPrezzoLibro();
+      const guadagnoUtente = selectedPriceOption * 0.83 - 0.25;
       
       await axios.post(`${API_URL}/api/listings?user_id=${userId}`, {
         book_id: selectedBook.isbn || selectedBook.id,
@@ -450,7 +449,7 @@ export default function SellFormScreen() {
         book_autori: selectedBook.autori,
         book_disciplina: selectedBook.disciplina,
         prezzo_copertina: selectedBook.prezzo_copertina,
-        condizione: currentPriceRange.condition,
+        condizione: currentPriceCalc.condition,
         prezzo_vendita: selectedPriceOption,
         foto_base64: listingPhotos.length > 0 ? listingPhotos[0] : null,
         foto_aggiuntive: listingPhotos.slice(1),
@@ -461,7 +460,7 @@ export default function SellFormScreen() {
         bookstore_addresses: selectedShopsDetails.map(s => s.address),
         notes: notes,
         is_new_book: isNewBook,
-        usura: currentPriceRange.usura || 0,
+        usura: currentPriceCalc.usura || 0,
         guadagno_utente: guadagnoUtente,
         foderare: foderare,
       });
@@ -469,6 +468,7 @@ export default function SellFormScreen() {
       showAlert('Successo!', 'Annuncio creato con successo');
       router.back();
     } catch (error: any) {
+      console.log('Create listing error:', error.response?.data || error.message);
       showAlert('Errore', error.response?.data?.detail || 'Impossibile creare annuncio');
     } finally {
       setCreatingListing(false);
