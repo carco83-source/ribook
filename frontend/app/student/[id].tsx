@@ -537,10 +537,10 @@ export default function StudentDetailScreen() {
           </View>
           
           <View style={styles.categoryGrid}>
-            {/* 1. VENDIBILI - Va alla pagina Cerca/Vendi */}
+            {/* 1. VENDIBILI - Va al Radar sezione vendibili */}
             <TouchableOpacity 
               style={[styles.categoryCard, { borderLeftColor: '#2196F3' }]}
-              onPress={() => router.push('/(tabs)/search')}
+              onPress={() => router.push({ pathname: '/(tabs)', params: { scrollTo: 'vendibili', childId: id } })}
               activeOpacity={0.7}
             >
               <View style={[styles.categoryIcon, { backgroundColor: '#e3f2fd' }]}>
@@ -550,7 +550,7 @@ export default function StudentDetailScreen() {
                 <Text style={styles.categoryNumber}>{compatibility?.vendere?.totale_vendibili || 0}</Text>
                 <Text style={styles.categoryLabel}>Vendibili</Text>
                 <Text style={styles.categoryHint}>
-                  Clicca per mettere in vendita
+                  Libri che puoi vendere
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color="#2196F3" />
@@ -559,7 +559,7 @@ export default function StudentDetailScreen() {
             {/* 2. ACQUISTABILI USATI */}
             <TouchableOpacity 
               style={[styles.categoryCard, { borderLeftColor: '#4CAF50' }]}
-              onPress={() => router.replace('/(tabs)')}
+              onPress={() => router.push({ pathname: '/(tabs)', params: { scrollTo: 'usati', childId: id } })}
               activeOpacity={0.7}
             >
               <View style={[styles.categoryIcon, { backgroundColor: '#e8f5e9' }]}>
@@ -569,16 +569,16 @@ export default function StudentDetailScreen() {
                 <Text style={styles.categoryNumber}>{compatibility?.comprare?.totale_usati || 0}</Text>
                 <Text style={styles.categoryLabel}>Acquistabili usati</Text>
                 <Text style={styles.categoryHint}>
-                  Libri che puoi comprare usati da altri studenti
+                  Libri che puoi comprare usati
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={20} color="#ccc" />
+              <Ionicons name="chevron-forward" size={20} color="#4CAF50" />
             </TouchableOpacity>
 
             {/* 3. NUOVE ADOZIONI */}
             <TouchableOpacity 
               style={[styles.categoryCard, { borderLeftColor: '#FF9800' }]}
-              onPress={() => router.replace('/(tabs)')}
+              onPress={() => router.push({ pathname: '/(tabs)', params: { scrollTo: 'nuovi', childId: id } })}
               activeOpacity={0.7}
             >
               <View style={[styles.categoryIcon, { backgroundColor: '#fff3e0' }]}>
@@ -588,16 +588,16 @@ export default function StudentDetailScreen() {
                 <Text style={styles.categoryNumber}>{compatibility?.nuove_adozioni?.totale || totals?.numLibriNuovi || 0}</Text>
                 <Text style={styles.categoryLabel}>Nuove adozioni</Text>
                 <Text style={styles.categoryHint}>
-                  Libri nuovi da acquistare (cambi edizione)
+                  Libri nuovi da acquistare
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={20} color="#ccc" />
+              <Ionicons name="chevron-forward" size={20} color="#FF9800" />
             </TouchableOpacity>
 
             {/* 4. TRIENNALI GIÀ IN USO */}
             <TouchableOpacity 
               style={[styles.categoryCard, { borderLeftColor: '#9C27B0' }]}
-              onPress={() => router.replace('/(tabs)')}
+              onPress={() => router.push({ pathname: '/(tabs)', params: { scrollTo: 'posseduti', childId: id } })}
               activeOpacity={0.7}
             >
               <View style={[styles.categoryIcon, { backgroundColor: '#f3e5f5' }]}>
@@ -607,80 +607,13 @@ export default function StudentDetailScreen() {
                 <Text style={styles.categoryNumber}>{compatibility?.gia_posseduti?.totale || 0}</Text>
                 <Text style={styles.categoryLabel}>Già in possesso</Text>
                 <Text style={styles.categoryHint}>
-                  Triennali o libri che hai già dall'anno scorso
+                  Triennali o libri che hai già
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={20} color="#ccc" />
+              <Ionicons name="chevron-forward" size={20} color="#9C27B0" />
             </TouchableOpacity>
           </View>
         </View>
-
-        {/* Lista Libri di Testo - Cliccabili per vendere */}
-        {compatibility?.nuovi?.libri && compatibility.nuovi.libri.length > 0 && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Ionicons name="list" size={22} color="#1a472a" />
-              <Text style={styles.sectionTitle}>Lista Libri di Testo ({compatibility.nuovi.libri.length})</Text>
-            </View>
-            <Text style={styles.sectionSubtitle}>Tocca un libro per metterlo in vendita</Text>
-            
-            <View style={styles.bookListCard}>
-              {compatibility.nuovi.libri.map((book: any, idx: number) => {
-                const isObbligatorio = book.tipo_acquisto === 'obbligatorio' || book.obbligatorio;
-                const prezzoNuovo = book.prezzo_copertina || book.prezzo_ministeriale || 0;
-                
-                return (
-                  <TouchableOpacity 
-                    key={idx} 
-                    style={[
-                      styles.bookListItem,
-                      idx === compatibility.nuovi!.libri!.length - 1 && { borderBottomWidth: 0 }
-                    ]}
-                    onPress={() => router.push(`/sell-form?isbn=${book.isbn}&titolo=${encodeURIComponent(book.titolo || '')}&prezzo=${prezzoNuovo}`)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.bookListLeft}>
-                      <View style={[
-                        styles.bookTypeBadge,
-                        { backgroundColor: isObbligatorio ? '#e8f5e9' : '#fff3e0' }
-                      ]}>
-                        <Text style={[
-                          styles.bookTypeText,
-                          { color: isObbligatorio ? '#4CAF50' : '#FF9800' }
-                        ]}>
-                          {isObbligatorio ? 'Obbligatorio' : 'Consigliato'}
-                        </Text>
-                      </View>
-                      <Text style={styles.bookListDiscipline}>{book.disciplina}</Text>
-                      <Text style={styles.bookListTitle} numberOfLines={2}>{book.titolo}</Text>
-                      {book.autori && (
-                        <Text style={styles.bookListAuthor} numberOfLines={1}>{book.autori}</Text>
-                      )}
-                      {book.editore && (
-                        <Text style={styles.bookListEditor}>{book.editore}</Text>
-                      )}
-                      <Text style={styles.bookListIsbn}>ISBN: {book.isbn}</Text>
-                    </View>
-                    <View style={styles.bookListRight}>
-                      <Text style={styles.bookListPrice}>€{prezzoNuovo.toFixed(2)}</Text>
-                      {book.copie_usate_disponibili > 0 && (
-                        <View style={styles.usatoBadge}>
-                          <Text style={styles.usatoBadgeText}>
-                            {book.copie_usate_disponibili} usati
-                          </Text>
-                        </View>
-                      )}
-                      <View style={styles.sellIconContainer}>
-                        <Ionicons name="pricetag" size={18} color="#2196F3" />
-                        <Text style={styles.sellIconText}>Vendi</Text>
-                      </View>
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-        )}
 
         {/* Pulsante Scarica Lista - FUNZIONA DIRETTAMENTE */}
         <TouchableOpacity
