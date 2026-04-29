@@ -7,13 +7,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // Componente Header personalizzato con titolo a sinistra e logo centrato
 const CustomHeader = ({ title }: { title: string }) => (
   <View style={headerStyles.container}>
-    <Text style={headerStyles.title} numberOfLines={1}>{title}</Text>
-    <Image 
-      source={require('../../assets/images/ribook-header-logo-transparent.png')}
-      style={headerStyles.logo}
-      resizeMode="contain"
-    />
-    <View style={headerStyles.spacer} />
+    <View style={headerStyles.leftSection}>
+      <Text style={headerStyles.title} numberOfLines={1}>{title}</Text>
+    </View>
+    <View style={headerStyles.centerSection}>
+      <Image 
+        source={require('../../assets/images/ribook-header-logo-transparent.png')}
+        style={headerStyles.logo}
+        resizeMode="contain"
+      />
+    </View>
+    <View style={headerStyles.rightSection} />
   </View>
 );
 
@@ -21,22 +25,26 @@ const headerStyles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     width: '100%',
-    paddingRight: 8,
+  },
+  leftSection: {
+    width: 75,
+  },
+  centerSection: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  rightSection: {
+    width: 75,
   },
   title: {
     fontSize: 17,
     fontWeight: 'bold',
     color: '#000',
-    width: 80,
   },
   logo: {
     width: 120,
     height: 45,
-  },
-  spacer: {
-    width: 80,
   },
 });
 
