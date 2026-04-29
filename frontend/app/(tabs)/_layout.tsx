@@ -4,20 +4,20 @@ import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-// Componente Header personalizzato con logo RiBook centrato
+// Componente Header personalizzato con logo RiBook centrato fisso
 const CustomHeader = ({ title }: { title: string }) => (
   <View style={headerStyles.container}>
-    <Text style={headerStyles.title}>{title}</Text>
-    <View style={headerStyles.logoContainer}>
+    <View style={headerStyles.leftSection}>
+      <Text style={headerStyles.title}>{title}</Text>
+    </View>
+    <View style={headerStyles.centerSection}>
       <Image 
         source={require('../../assets/images/ribook-header-logo.png')}
         style={headerStyles.logo}
         resizeMode="contain"
       />
     </View>
-    <View style={headerStyles.placeholder}>
-      <Text style={headerStyles.spacer}>{title}</Text>
-    </View>
+    <View style={headerStyles.rightSection} />
   </View>
 );
 
@@ -25,31 +25,31 @@ const headerStyles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     width: '100%',
-    paddingHorizontal: 0,
+    height: 50,
+  },
+  leftSection: {
+    position: 'absolute',
+    left: 0,
+    zIndex: 1,
+  },
+  centerSection: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rightSection: {
+    position: 'absolute',
+    right: 0,
   },
   title: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#000',
-    minWidth: 80,
-  },
-  logoContainer: {
-    flex: 1,
-    alignItems: 'center',
   },
   logo: {
     width: 120,
-    height: 50,
-  },
-  placeholder: {
-    minWidth: 80,
-    opacity: 0,
-  },
-  spacer: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    height: 45,
   },
 });
 
