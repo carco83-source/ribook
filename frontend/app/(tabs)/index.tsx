@@ -13,7 +13,6 @@ import {
   TextInput,
   Platform,
   KeyboardAvoidingView,
-  ImageBackground,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -415,12 +414,14 @@ export default function RadarScreen() {
         }
       >
       {/* Sezione Alunni con Logo RiBook come sfondo */}
-      <ImageBackground 
-        source={require('../../assets/images/ribook-logo-new.png')}
-        style={styles.profileSelectorCard}
-        imageStyle={styles.profileSelectorBgImage}
-        resizeMode="contain"
-      >
+      <View style={styles.profileSelectorCard}>
+        {/* Logo come sfondo assoluto */}
+        <Image 
+          source={require('../../assets/images/ribook-logo-new.png')}
+          style={styles.profileSelectorBgLogo}
+          resizeMode="contain"
+        />
+        
         <Text style={styles.profileSelectorLabel}>Alunni</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View style={styles.childTabs}>
@@ -461,7 +462,7 @@ export default function RadarScreen() {
             })}
           </View>
         </ScrollView>
-      </ImageBackground>
+      </View>
 
       {/* Barra Dettagli Scuola e Spesa */}
       {selectedChildId && (
@@ -2019,19 +2020,24 @@ const styles = StyleSheet.create({
   },
   // Profile selector card
   profileSelectorCard: {
-    backgroundColor: 'transparent',
+    backgroundColor: '#f5f5f5',
     marginHorizontal: 16,
+    marginTop: 8,
     marginBottom: 16,
     borderRadius: 16,
     padding: 16,
     paddingBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
     overflow: 'hidden',
     minHeight: 200,
+    position: 'relative',
+  },
+  profileSelectorBgLogo: {
+    position: 'absolute',
+    top: 20,
+    left: 20,
+    right: 20,
+    bottom: 20,
+    opacity: 0.12,
   },
   profileSelectorBgImage: {
     opacity: 1,
