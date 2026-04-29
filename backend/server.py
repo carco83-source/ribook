@@ -1319,6 +1319,58 @@ async def get_book_cover(isbn: str):
             "error": str(e)
         }
 
+# ============== POPULAR BOOKS API ==============
+
+@api_router.get("/books/popular")
+async def get_popular_books(anno_scolastico: str = "2025/2026", limit: int = 12):
+    """
+    Restituisce i libri più presenti nelle liste di adozione per l'anno scolastico specificato.
+    Predisposto per supportare anche 2026/2027 quando verrà inserito.
+    """
+    try:
+        # Cerca nelle adozioni per contare gli ISBN più frequenti
+        pipeline = [
+            # Filtra per anno scolastico se presente nei dati
+            {"$unwind": "$libri"},
+            {"$group": {
+                "_id": "$libri.isbn",
+                "titolo": {"$first": "$libri.titolo"},
+                "count": {"$sum": 1}
+            }},
+            {"$match": {"_id": {"$ne": None, "$ne": ""}}},
+            {"$sort": {"count": -1}},
+            {"$limit": limit}
+        ]
+        
+        results = []
+        async for doc in db.adozioni.aggregate(pipeline):
+            if doc["_id"]:
+                results.append({
+                    "isbn": doc["_id"],
+                    "titolo": doc.get("titolo", ""),
+                    "count": doc["count"]
+                })
+        
+        # Se non ci sono risultati dalle adozioni, cerca nei libri più cercati/venduti
+        if not results:
+            # Fallback: prendi i libri dal database books
+            pipeline_books = [
+                {"$match": {"isbn": {"$ne": None, "$ne": ""}}},
+                {"$limit": limit}
+            ]
+            async for book in db.books.aggregate(pipeline_books):
+                results.append({
+                    "isbn": book.get("isbn", ""),
+                    "titolo": book.get("titolo", ""),
+                    "count": 1
+                })
+        
+        return results
+        
+    except Exception as e:
+        logging.error(f"Error fetching popular books: {e}")
+        return []
+
 # ============== BOOK LISTINGS ROUTES ==============
 
 @api_router.post("/listings")

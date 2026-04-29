@@ -38,6 +38,17 @@ interface SearchResult {
   prezzo_minimo?: number;
 }
 
+interface PopularBook {
+  isbn: string;
+  titolo: string;
+  count: number;
+}
+
+// Anno scolastico corrente
+const CURRENT_SCHOOL_YEAR = '2025/2026';
+// Prossimo anno (per future implementazioni)
+const NEXT_SCHOOL_YEAR = '2026/2027';
+
 export default function SearchSellScreen() {
   const router = useRouter();
   const [userId, setUserId] = useState<string | null>(null);
@@ -56,9 +67,14 @@ export default function SearchSellScreen() {
   const [cercaLoading, setCercaLoading] = useState(false);
   const [cercaResults, setCercaResults] = useState<SearchResult[]>([]);
   const [cercaBook, setCercaBook] = useState<Book | null>(null);
+  
+  // Libri popolari states
+  const [popularBooks, setPopularBooks] = useState<PopularBook[]>([]);
+  const [popularLoading, setPopularLoading] = useState(false);
 
   useEffect(() => {
     loadUserId();
+    loadPopularBooks();
     // Log platform info on mount for debugging
     console.log('Search screen mounted - Platform.OS:', Platform.OS);
   }, []);
@@ -66,6 +82,25 @@ export default function SearchSellScreen() {
   const loadUserId = async () => {
     const id = await AsyncStorage.getItem('user_id');
     setUserId(id);
+  };
+
+  const loadPopularBooks = async () => {
+    setPopularLoading(true);
+    try {
+      // Fetch i libri più presenti nelle adozioni
+      const response = await axios.get(`${API_URL}/api/books/popular`, {
+        params: { anno_scolastico: CURRENT_SCHOOL_YEAR, limit: 12 }
+      });
+      if (response.data && response.data.length > 0) {
+        setPopularBooks(response.data);
+      }
+    } catch (error) {
+      console.log('Error loading popular books:', error);
+      // In caso di errore, mostra alcuni libri di esempio
+      // Questi verranno sostituiti dai dati reali dall'API
+    } finally {
+      setPopularLoading(false);
+    }
   };
 
   // Check if we're running on native (not web)
@@ -496,6 +531,44 @@ export default function SearchSellScreen() {
         )}
       </View>
 
+      {/* Divider - Libri Popolari */}
+      <View style={styles.dividerDark} />
+
+      {/* ==================== SEZIONE LIBRI POPOLARI ==================== */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="trending-up" size={24} color="#FF5722" />
+          <Text style={[styles.sectionTitle, { color: '#FF5722' }]}>LIBRI PIÙ RICHIESTI {CURRENT_SCHOOL_YEAR}</Text>
+        </View>
+        
+        {popularLoading ? (
+          <ActivityIndicator size="large" color="#FF5722" style={{ marginVertical: 40 }} />
+        ) : popularBooks.length > 0 ? (
+          <View style={styles.booksGrid}>
+            {popularBooks.map((book, index) => (
+              <TouchableOpacity 
+                key={book.isbn || index} 
+                style={styles.bookGridItem}
+                onPress={() => {
+                  setCercaIsbn(book.isbn);
+                }}
+              >
+                <Image
+                  source={{ uri: `https://www.ibs.it/images/${book.isbn}_0_0_0_536_0.jpg` }}
+                  style={styles.bookGridCover}
+                  resizeMode="cover"
+                />
+              </TouchableOpacity>
+            ))}
+          </View>
+        ) : (
+          <View style={styles.emptyState}>
+            <Ionicons name="book-outline" size={48} color="#ccc" />
+            <Text style={styles.emptyStateText}>Nessun libro popolare trovato</Text>
+          </View>
+        )}
+      </View>
+
       <View style={{ height: 100 }} />
     </ScrollView>
   );
@@ -551,6 +624,42 @@ const styles = StyleSheet.create({
   divider: {
     height: 8,
     backgroundColor: '#e0e0e0',
+  },
+  dividerDark: {
+    height: 8,
+    backgroundColor: '#9e9e9e',
+  },
+  booksGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-start',
+    gap: 12,
+  },
+  bookGridItem: {
+    width: (Dimensions.get('window').width - 32 - 36) / 4, // 4 colonne con gap
+    aspectRatio: 0.7,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#f0f0f0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  bookGridCover: {
+    width: '100%',
+    height: '100%',
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  emptyStateText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#999',
   },
   resultCard: {
     backgroundColor: '#fff',
