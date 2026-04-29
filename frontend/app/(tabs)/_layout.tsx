@@ -37,10 +37,10 @@ const headerStyles = StyleSheet.create({
   logo: {
     width: 120,
     height: 45,
-    marginRight: 15,
+    marginLeft: 25,
   },
   spacer: {
-    width: 70,
+    width: 45,
   },
 });
 
