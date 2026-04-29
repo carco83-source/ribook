@@ -279,8 +279,6 @@ export default function RadarScreen() {
         }
         // Altrimenti mantieni il selectedChildId corrente
       }
-        }
-      }
     } catch (error) {
       console.error('Error loading radar data:', error);
     } finally {
