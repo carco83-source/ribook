@@ -531,21 +531,16 @@ export default function SearchSellScreen() {
         )}
       </View>
 
-      {/* Divider - Libri Popolari */}
+      {/* Divider */}
       <View style={styles.dividerDark} />
 
-      {/* ==================== SEZIONE LIBRI POPOLARI ==================== */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Ionicons name="trending-up" size={24} color="#FF5722" />
-          <Text style={[styles.sectionTitle, { color: '#FF5722' }]}>LIBRI PIÙ RICHIESTI {CURRENT_SCHOOL_YEAR}</Text>
-        </View>
-        
+      {/* ==================== GRIGLIA COPERTINE LIBRI POPOLARI ==================== */}
+      <View style={styles.popularBooksSection}>
         {popularLoading ? (
           <ActivityIndicator size="large" color="#FF5722" style={{ marginVertical: 40 }} />
         ) : popularBooks.length > 0 ? (
           <View style={styles.booksGrid}>
-            {popularBooks.map((book, index) => (
+            {popularBooks.slice(0, 12).map((book, index) => (
               <TouchableOpacity 
                 key={book.isbn || index} 
                 style={styles.bookGridItem}
@@ -564,7 +559,7 @@ export default function SearchSellScreen() {
         ) : (
           <View style={styles.emptyState}>
             <Ionicons name="book-outline" size={48} color="#ccc" />
-            <Text style={styles.emptyStateText}>Nessun libro popolare trovato</Text>
+            <Text style={styles.emptyStateText}>Nessun libro trovato</Text>
           </View>
         )}
       </View>
@@ -629,23 +624,24 @@ const styles = StyleSheet.create({
     height: 8,
     backgroundColor: '#9e9e9e',
   },
+  popularBooksSection: {
+    backgroundColor: '#fff',
+    padding: 8,
+  },
   booksGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'flex-start',
-    gap: 12,
   },
   bookGridItem: {
-    width: (Dimensions.get('window').width - 32 - 36) / 4, // 4 colonne con gap
-    aspectRatio: 0.7,
-    borderRadius: 8,
+    width: (Dimensions.get('window').width - 16 - 24) / 4, // 4 colonne
+    aspectRatio: 0.65,
+    margin: 3,
+    borderRadius: 4,
     overflow: 'hidden',
     backgroundColor: '#f0f0f0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    borderWidth: 2,
+    borderColor: '#fff',
   },
   bookGridCover: {
     width: '100%',
