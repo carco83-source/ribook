@@ -1896,10 +1896,13 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   profileSelectorLabel: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
-    color: '#fff',
+    color: '#1a472a',
     marginBottom: 12,
+    textShadowColor: 'rgba(255,255,255,0.8)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
   },
   childTabSmall: {
     paddingHorizontal: 16,
@@ -2016,7 +2019,7 @@ const styles = StyleSheet.create({
   },
   // Profile selector card
   profileSelectorCard: {
-    backgroundColor: '#1a472a',
+    backgroundColor: 'transparent',
     marginHorizontal: 16,
     marginBottom: 16,
     borderRadius: 16,
@@ -2028,10 +2031,10 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
     overflow: 'hidden',
-    minHeight: 180,
+    minHeight: 200,
   },
   profileSelectorBgImage: {
-    opacity: 0.25,
+    opacity: 1,
     borderRadius: 16,
   },
   // Badge copie disponibili
