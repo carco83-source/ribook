@@ -172,22 +172,6 @@ export default function RadarScreen() {
     }, [])
   );
 
-  // Effetto per gestire la navigazione con childId da AsyncStorage
-  useEffect(() => {
-    const checkStoredChildId = async () => {
-      const storedChildId = await AsyncStorage.getItem('selected_child_id');
-      if (storedChildId && childProfiles.length > 0) {
-        const profileExists = childProfiles.some((p: any) => p.id === storedChildId);
-        if (profileExists) {
-          setSelectedChildId(storedChildId);
-          // Pulisci dopo aver usato
-          await AsyncStorage.removeItem('selected_child_id');
-        }
-      }
-    };
-    checkStoredChildId();
-  }, [childProfiles]);
-
   const loadData = async () => {
     try {
       const storedUserId = await AsyncStorage.getItem('user_id');
@@ -274,9 +258,19 @@ export default function RadarScreen() {
         console.log('Failed to load notifications');
       }
       
-      // Select child - use childId from URL params if present, otherwise keep current or use first child
+      // Select child - prima controlla AsyncStorage, poi URL params, poi mantieni corrente o usa il primo
       if (profili.length > 0) {
-        if (childId && profili.some((p: any) => p.id === childId)) {
+        // Prima controlla se c'è un childId salvato in AsyncStorage (dalla navigazione da pagina studente)
+        const storedChildId = await AsyncStorage.getItem('selected_child_id');
+        if (storedChildId) {
+          const profileExists = profili.some((p: any) => p.id === storedChildId);
+          if (profileExists) {
+            setSelectedChildId(storedChildId);
+            await AsyncStorage.removeItem('selected_child_id');
+          } else if (!selectedChildId || !profili.some((p: any) => p.id === selectedChildId)) {
+            setSelectedChildId(profili[0].id);
+          }
+        } else if (childId && profili.some((p: any) => p.id === childId)) {
           // Se abbiamo un childId dall'URL, usalo
           setSelectedChildId(childId);
         } else if (!selectedChildId || !profili.some((p: any) => p.id === selectedChildId)) {
