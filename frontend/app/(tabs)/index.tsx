@@ -172,15 +172,21 @@ export default function RadarScreen() {
     }, [])
   );
 
-  // Effetto per gestire la navigazione con childId - solo quando childId cambia
+  // Effetto per gestire la navigazione con childId da AsyncStorage
   useEffect(() => {
-    if (childId && childProfiles.length > 0) {
-      const profileExists = childProfiles.some((p: any) => p.id === childId);
-      if (profileExists) {
-        setSelectedChildId(childId);
+    const checkStoredChildId = async () => {
+      const storedChildId = await AsyncStorage.getItem('selected_child_id');
+      if (storedChildId && childProfiles.length > 0) {
+        const profileExists = childProfiles.some((p: any) => p.id === storedChildId);
+        if (profileExists) {
+          setSelectedChildId(storedChildId);
+          // Pulisci dopo aver usato
+          await AsyncStorage.removeItem('selected_child_id');
+        }
       }
-    }
-  }, [childId, ts]); // Reagisce solo a childId e ts, non a childProfiles
+    };
+    checkStoredChildId();
+  }, [childProfiles]);
 
   const loadData = async () => {
     try {
