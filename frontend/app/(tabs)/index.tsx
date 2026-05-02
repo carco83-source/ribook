@@ -268,21 +268,19 @@ export default function RadarScreen() {
         console.log('Failed to load notifications');
       }
       
-      // Select child - prima controlla AsyncStorage, poi URL params, poi mantieni corrente o usa il primo
+      // Select child - PRIORITÀ: childId dall'URL (letto direttamente)
       if (profili.length > 0) {
-        // Prima controlla se c'è un childId salvato in AsyncStorage (dalla navigazione da pagina studente)
-        const storedChildId = await AsyncStorage.getItem('selected_child_id');
-        if (storedChildId) {
-          const profileExists = profili.some((p: any) => p.id === storedChildId);
+        // Leggi childId direttamente dall'URL in questo momento
+        const urlParams = new URLSearchParams(window?.location?.search || '');
+        const urlChildId = urlParams.get('childId');
+        
+        if (urlChildId) {
+          const profileExists = profili.some((p: any) => p.id === urlChildId);
           if (profileExists) {
-            setSelectedChildId(storedChildId);
-            await AsyncStorage.removeItem('selected_child_id');
-          } else if (!selectedChildId || !profili.some((p: any) => p.id === selectedChildId)) {
+            setSelectedChildId(urlChildId);
+          } else {
             setSelectedChildId(profili[0].id);
           }
-        } else if (childId && profili.some((p: any) => p.id === childId)) {
-          // Se abbiamo un childId dall'URL, usalo
-          setSelectedChildId(childId);
         } else if (!selectedChildId || !profili.some((p: any) => p.id === selectedChildId)) {
           // Solo se non c'è un selectedChildId valido, usa il primo
           setSelectedChildId(profili[0].id);
