@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -17,8 +17,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
-import { BarCodeScanner } from 'expo-barcode-scanner';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
 import * as Device from 'expo-device';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:8001';
@@ -62,6 +61,8 @@ export default function SearchSellScreen() {
   const [showScanner, setShowScanner] = useState(false);
   const [scanned, setScanned] = useState(false);
   const [cameraKey, setCameraKey] = useState(0);
+  const [isCameraReady, setIsCameraReady] = useState(false);
+  const [scannerError, setScannerError] = useState<string | null>(null);
   
   // Cerca states
   const [cercaIsbn, setCercaIsbn] = useState('');
@@ -174,22 +175,30 @@ export default function SearchSellScreen() {
     }
   };
 
-  const handleBarCodeScanned = ({ type, data }: { type: string; data: string }) => {
-    if (scanned) return; // Previene scansioni multiple
+  const handleBarCodeScanned = useCallback((scanResult: BarcodeScanningResult) => {
+    if (scanned || !isCameraReady) return; // Previene scansioni multiple e premature
     
+    const { type, data } = scanResult;
     setScanned(true);
     console.log('=== BARCODE SCANNED ===');
     console.log('Type:', type);
     console.log('Data:', data);
     
-    // Clean the ISBN
+    // Clean the ISBN - rimuovi caratteri non numerici (eccetto X per ISBN-10)
     const cleanIsbn = data.replace(/[^0-9X]/gi, '');
     console.log('Clean ISBN:', cleanIsbn);
+    
+    // Valida la lunghezza dell'ISBN
+    if (cleanIsbn.length < 10 || cleanIsbn.length > 13) {
+      console.log('Invalid ISBN length, ignoring...');
+      setScanned(false);
+      return;
+    }
     
     // Vibration feedback
     if (Platform.OS !== 'web') {
       try {
-        const { default: Haptics } = require('expo-haptics');
+        const Haptics = require('expo-haptics');
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } catch (e) {
         // Haptics not available
@@ -198,12 +207,13 @@ export default function SearchSellScreen() {
     
     setVendiIsbn(cleanIsbn);
     setShowScanner(false);
+    setIsCameraReady(false);
     
     // Auto search after closing scanner
     setTimeout(() => {
       handleVendiSearchWithIsbn(cleanIsbn);
     }, 300);
-  };
+  }, [scanned, isCameraReady]);
 
   const handleVendiSearchWithIsbn = async (isbn: string) => {
     if (!isbn || isbn.length < 10) return;
@@ -276,6 +286,7 @@ export default function SearchSellScreen() {
     
     try {
       console.log('Requesting Camera permissions...');
+      console.log('Current permission status:', permission?.status);
       
       if (!permission?.granted) {
         const result = await requestPermission();
@@ -288,14 +299,31 @@ export default function SearchSellScreen() {
       }
       
       console.log('Opening scanner...');
+      setScannerError(null);
       setScanned(false);
-      setCameraKey(prev => prev + 1);
+      setIsCameraReady(false);
+      setCameraKey(prev => prev + 1); // Force remount camera
       setShowScanner(true);
     } catch (error) {
       console.error('Error opening scanner:', error);
+      setScannerError('Errore apertura fotocamera');
       showAlert('Errore Scanner', 'Impossibile aprire lo scanner. Prova a inserire l\'ISBN manualmente.');
     }
   };
+
+  const handleCameraReady = useCallback(() => {
+    console.log('Camera is ready!');
+    setIsCameraReady(true);
+    setScannerError(null);
+  }, []);
+
+  const closeScanner = useCallback(() => {
+    console.log('Closing scanner...');
+    setShowScanner(false);
+    setScanned(false);
+    setIsCameraReady(false);
+    setScannerError(null);
+  }, []);
 
   // ==================== CERCA FUNCTIONS ====================
 
@@ -392,25 +420,84 @@ export default function SearchSellScreen() {
           key={cameraKey}
           style={StyleSheet.absoluteFillObject}
           facing="back"
+          autofocus="on"
           barcodeScannerSettings={{
             barcodeTypes: ['ean13', 'ean8', 'code128', 'code39', 'upc_a', 'upc_e'],
           }}
-          onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+          onCameraReady={handleCameraReady}
+          onBarcodeScanned={isCameraReady && !scanned ? handleBarCodeScanned : undefined}
         />
+        
+        {/* Loading overlay while camera initializes */}
+        {!isCameraReady && (
+          <View style={styles.cameraLoadingOverlay}>
+            <ActivityIndicator size="large" color="#4CAF50" />
+            <Text style={styles.cameraLoadingText}>Inizializzazione fotocamera...</Text>
+          </View>
+        )}
+        
+        {/* Scanner overlay with viewfinder */}
         <View style={styles.scannerOverlay}>
-          <View style={styles.scannerFrame} />
-          <Text style={styles.scannerText}>Inquadra il codice a barre ISBN</Text>
-          <Text style={styles.scannerHint}>Tieni fermo il libro</Text>
+          {/* Top dark area */}
+          <View style={styles.overlayDark} />
+          
+          {/* Middle row with viewfinder */}
+          <View style={styles.overlayMiddle}>
+            <View style={styles.overlayDarkSide} />
+            <View style={styles.scannerFrameContainer}>
+              <View style={styles.scannerFrame}>
+                {/* Corner markers */}
+                <View style={[styles.cornerMarker, styles.cornerTopLeft]} />
+                <View style={[styles.cornerMarker, styles.cornerTopRight]} />
+                <View style={[styles.cornerMarker, styles.cornerBottomLeft]} />
+                <View style={[styles.cornerMarker, styles.cornerBottomRight]} />
+                
+                {/* Scan line animation indicator */}
+                {isCameraReady && (
+                  <View style={styles.scanLine} />
+                )}
+              </View>
+            </View>
+            <View style={styles.overlayDarkSide} />
+          </View>
+          
+          {/* Bottom area with instructions */}
+          <View style={styles.overlayBottom}>
+            <Text style={styles.scannerText}>
+              {isCameraReady ? 'Inquadra il codice a barre ISBN' : 'Attendere...'}
+            </Text>
+            <Text style={styles.scannerHint}>
+              {isCameraReady ? 'Posiziona il codice nel riquadro verde' : 'Preparazione fotocamera'}
+            </Text>
+            
+            {/* Manual entry button */}
+            <TouchableOpacity 
+              style={styles.manualEntryButton}
+              onPress={() => {
+                closeScanner();
+              }}
+            >
+              <Ionicons name="keypad-outline" size={20} color="#fff" />
+              <Text style={styles.manualEntryText}>Inserisci manualmente</Text>
+            </TouchableOpacity>
+          </View>
         </View>
+        
+        {/* Close button */}
         <TouchableOpacity 
           style={styles.scannerCloseBtn}
-          onPress={() => {
-            setShowScanner(false);
-            setScanned(false);
-          }}
+          onPress={closeScanner}
         >
           <Ionicons name="close" size={30} color="#fff" />
         </TouchableOpacity>
+        
+        {/* Camera ready indicator */}
+        {isCameraReady && (
+          <View style={styles.cameraReadyBadge}>
+            <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
+            <Text style={styles.cameraReadyText}>Pronto</Text>
+          </View>
+        )}
       </View>
     );
   }
@@ -786,5 +873,118 @@ const styles = StyleSheet.create({
     height: 50,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // New scanner styles
+  cameraLoadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  cameraLoadingText: {
+    color: '#fff',
+    fontSize: 16,
+    marginTop: 16,
+  },
+  overlayDark: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    width: '100%',
+  },
+  overlayMiddle: {
+    flexDirection: 'row',
+    height: 200,
+  },
+  overlayDarkSide: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+  },
+  scannerFrameContainer: {
+    width: 280,
+    height: 200,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  overlayBottom: {
+    flex: 1.5,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    width: '100%',
+    alignItems: 'center',
+    paddingTop: 20,
+  },
+  cornerMarker: {
+    position: 'absolute',
+    width: 30,
+    height: 30,
+    borderColor: '#4CAF50',
+  },
+  cornerTopLeft: {
+    top: 0,
+    left: 0,
+    borderTopWidth: 4,
+    borderLeftWidth: 4,
+    borderTopLeftRadius: 12,
+  },
+  cornerTopRight: {
+    top: 0,
+    right: 0,
+    borderTopWidth: 4,
+    borderRightWidth: 4,
+    borderTopRightRadius: 12,
+  },
+  cornerBottomLeft: {
+    bottom: 0,
+    left: 0,
+    borderBottomWidth: 4,
+    borderLeftWidth: 4,
+    borderBottomLeftRadius: 12,
+  },
+  cornerBottomRight: {
+    bottom: 0,
+    right: 0,
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomRightRadius: 12,
+  },
+  scanLine: {
+    position: 'absolute',
+    left: 10,
+    right: 10,
+    height: 2,
+    backgroundColor: '#4CAF50',
+    top: '50%',
+  },
+  manualEntryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 25,
+    marginTop: 30,
+    gap: 8,
+  },
+  manualEntryText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  cameraReadyBadge: {
+    position: 'absolute',
+    top: 60,
+    left: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 15,
+    gap: 4,
+  },
+  cameraReadyText: {
+    color: '#4CAF50',
+    fontSize: 12,
+    fontWeight: '600',
   },
 });
