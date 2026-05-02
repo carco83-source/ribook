@@ -126,7 +126,7 @@ interface ClassCompatibilityData {
 
 export default function RadarScreen() {
   const router = useRouter();
-  const { scrollTo, childId, ts } = useLocalSearchParams<{ scrollTo?: string; childId?: string; ts?: string }>();
+  const { scrollTo, childId, ts, t } = useLocalSearchParams<{ scrollTo?: string; childId?: string; ts?: string; t?: string }>();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [radarData, setRadarData] = useState<RadarData | null>(null);
@@ -171,6 +171,16 @@ export default function RadarScreen() {
       loadData();
     }, [])
   );
+
+  // Effetto per reagire al cambio di childId dall'URL
+  useEffect(() => {
+    if (childId && childProfiles.length > 0) {
+      const profileExists = childProfiles.some((p: any) => p.id === childId);
+      if (profileExists) {
+        setSelectedChildId(childId);
+      }
+    }
+  }, [childId, t, childProfiles]);
 
   const loadData = async () => {
     try {

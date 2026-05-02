@@ -540,9 +540,8 @@ export default function StudentDetailScreen() {
             {/* 1. VENDIBILI - Va al Radar sezione vendibili */}
             <TouchableOpacity 
               style={[styles.categoryCard, { borderLeftColor: '#2196F3' }]}
-              onPress={async () => {
-                await AsyncStorage.setItem('selected_child_id', id as string);
-                router.replace('/(tabs)');
+              onPress={() => {
+                router.push(`/?childId=${id}&t=${Date.now()}`);
               }}
               activeOpacity={0.7}
             >
@@ -562,9 +561,8 @@ export default function StudentDetailScreen() {
             {/* 2. ACQUISTABILI USATI */}
             <TouchableOpacity 
               style={[styles.categoryCard, { borderLeftColor: '#4CAF50' }]}
-              onPress={async () => {
-                await AsyncStorage.setItem('selected_child_id', id as string);
-                router.replace('/(tabs)');
+              onPress={() => {
+                router.push(`/?childId=${id}&t=${Date.now()}`);
               }}
               activeOpacity={0.7}
             >
@@ -584,9 +582,8 @@ export default function StudentDetailScreen() {
             {/* 3. NUOVE ADOZIONI */}
             <TouchableOpacity 
               style={[styles.categoryCard, { borderLeftColor: '#FF9800' }]}
-              onPress={async () => {
-                await AsyncStorage.setItem('selected_child_id', id as string);
-                router.replace('/(tabs)');
+              onPress={() => {
+                router.push(`/?childId=${id}&t=${Date.now()}`);
               }}
               activeOpacity={0.7}
             >
@@ -606,9 +603,8 @@ export default function StudentDetailScreen() {
             {/* 4. TRIENNALI GIÀ IN USO */}
             <TouchableOpacity 
               style={[styles.categoryCard, { borderLeftColor: '#9C27B0' }]}
-              onPress={async () => {
-                await AsyncStorage.setItem('selected_child_id', id as string);
-                router.replace('/(tabs)');
+              onPress={() => {
+                router.push(`/?childId=${id}&t=${Date.now()}`);
               }}
               activeOpacity={0.7}
             >
