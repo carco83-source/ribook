@@ -1314,182 +1314,64 @@ async def search_book_by_isbn(isbn: str):
 
 # ============== IBS.IT SCRAPER FOR BOOK DATA ==============
 
-async def scrape_book_from_ibs(isbn: str) -> Optional[dict]:
+def get_book_cover_url(isbn: str, size: str = "M") -> dict:
     """
-    Scrape book data from IBS.it including title, author, publisher, and price.
-    First tries to find the product page link, then extracts data from there.
-    Returns None if book not found.
+    Get book cover URL, trying Open Library first (legal), then IBS as fallback.
+    Size: S (small), M (medium), L (large)
+    Returns dict with primary and fallback URLs.
     """
-    try:
-        clean_isbn = isbn.strip().replace("-", "").replace(" ", "")
-        
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7',
-        }
-        
-        book_data = {
-            "isbn": clean_isbn,
-            "source": "ibs.it"
-        }
-        
-        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
-            # First, search for the book
-            search_url = f"https://www.ibs.it/search/?ts=as&query={clean_isbn}"
-            response = await client.get(search_url, headers=headers)
-            
-            if response.status_code != 200:
-                logging.warning(f"IBS.it returned status {response.status_code} for ISBN {clean_isbn}")
-                return None
-            
-            html = response.text
-            
-            # Try to find the product page link that contains the ISBN
-            product_link = None
-            
-            # Look for links ending with the ISBN (most reliable)
-            link_patterns = [
-                rf'href="(/[^"]+/e/{clean_isbn})"',  # Link ending with /e/ISBN
-                rf'href="(/[^"]*{clean_isbn}[^"]*)"',  # Link containing ISBN
-                rf'href="(/[^"]*-libro[^"]*/e/\d+)"',  # Any product link with /e/
-            ]
-            
-            for pattern in link_patterns:
-                match = re.search(pattern, html, re.IGNORECASE)
-                if match:
-                    product_link = match.group(1)
-                    break
-            
-            # If we found a product link, fetch that page for better data
-            if product_link:
-                product_url = f"https://www.ibs.it{product_link}"
-                logging.info(f"Found product link for ISBN {clean_isbn}: {product_url}")
-                try:
-                    product_response = await client.get(product_url, headers=headers)
-                    if product_response.status_code == 200:
-                        html = product_response.text
-                except Exception as e:
-                    logging.warning(f"Failed to fetch product page: {e}")
-            
-            # Extract title from the page title tag (most reliable on product pages)
-            title_match = re.search(r'<title>([^|<]+)', html)
-            if title_match:
-                title = title_match.group(1).strip()
-                # Clean up title - remove common suffixes
-                title = re.sub(r'\s*[-|]\s*IBS.*$', '', title)
-                title = re.sub(r'\s*[-|]\s*Libro.*$', '', title)
-                title = title.replace('&amp;', '&').strip()
-                # Extract just the book title (before author name if present)
-                if ' - ' in title:
-                    parts = title.split(' - ')
-                    title = parts[0].strip()
-                if title and len(title) > 3 and 'risultati' not in title.lower() and 'ricerca' not in title.lower():
-                    book_data["titolo"] = title
-            
-            # Try to extract author from JSON-LD structured data first
-            author_patterns = [
-                r'"author"\s*:\s*\[\s*\{\s*"@type"\s*:\s*"Person"\s*,\s*"name"\s*:\s*"([^"]+)"',
-                r'"author"\s*:\s*\{\s*"@type"\s*:\s*"Person"\s*,\s*"name"\s*:\s*"([^"]+)"',
-                r'"author"\s*:\s*"([^"]+)"',
-                r'itemprop="author"[^>]*>([^<]+)<',
-                r'class="[^"]*author[^"]*"[^>]*>([^<]+)<',
-            ]
-            
-            for pattern in author_patterns:
-                match = re.search(pattern, html, re.IGNORECASE)
-                if match:
-                    author = match.group(1).strip()
-                    if author and len(author) > 2 and author != "undefined":
-                        book_data["autori"] = author
-                        break
-            
-            # Try to extract publisher
-            publisher_patterns = [
-                r'"publisher"\s*:\s*\{\s*"@type"\s*:\s*"Organization"\s*,\s*"name"\s*:\s*"([^"]+)"',
-                r'"publisher"\s*:\s*"([^"]+)"',
-                r'itemprop="publisher"[^>]*>([^<]+)<',
-                r'Editore[:\s]*<[^>]*>([^<]+)<',
-            ]
-            
-            for pattern in publisher_patterns:
-                match = re.search(pattern, html, re.IGNORECASE)
-                if match:
-                    publisher = match.group(1).strip()
-                    if publisher and len(publisher) > 2 and publisher != "undefined":
-                        book_data["editore"] = publisher
-                        break
-            
-            # Try to extract price - look for structured data first
-            price_patterns = [
-                r'"price"\s*:\s*"?(\d+[.,]\d{2})"?',
-                r'"offers"\s*:\s*\{[^}]*"price"\s*:\s*"?(\d+[.,]\d{2})"?',
-                r'€\s*(\d+[.,]\d{2})',
-                r'>(\d+[.,]\d{2})\s*€',
-                r'data-price="(\d+[.,]\d{2})"',
-            ]
-            
-            for pattern in price_patterns:
-                matches = re.findall(pattern, html)
-                if matches:
-                    for price_str in matches:
-                        try:
-                            price = float(price_str.replace(',', '.'))
-                            if 1.0 < price < 500.0:  # Reasonable book price range
-                                book_data["prezzo_copertina"] = price
-                                break
-                        except:
-                            continue
-                    if "prezzo_copertina" in book_data:
-                        break
-            
-            # Add cover URL
-            book_data["cover_url"] = f"https://www.ibs.it/images/{clean_isbn}_0_0_0_536_0.jpg"
-            
-            # Only return if we found meaningful data
-            if "titolo" in book_data or "prezzo_copertina" in book_data:
-                logging.info(f"Successfully scraped book data from IBS.it for ISBN {clean_isbn}: {book_data}")
-                return book_data
-            
-            logging.warning(f"Could not extract meaningful data from IBS.it for ISBN {clean_isbn}")
-            return None
-            
-    except Exception as e:
-        logging.error(f"Error scraping IBS.it for ISBN {isbn}: {e}")
-        return None
+    clean_isbn = isbn.strip().replace("-", "").replace(" ", "")
+    
+    # Open Library is free and legal (Internet Archive project)
+    open_library_url = f"https://covers.openlibrary.org/b/isbn/{clean_isbn}-{size}.jpg"
+    
+    # IBS.it as fallback (direct image linking)
+    ibs_url = f"https://www.ibs.it/images/{clean_isbn}_0_0_0_536_0.jpg"
+    
+    return {
+        "primary": open_library_url,
+        "fallback": ibs_url,
+        "open_library": open_library_url,
+        "ibs": ibs_url
+    }
 
 
 @api_router.get("/books/lookup/{isbn}")
 async def lookup_book_by_isbn(isbn: str):
     """
-    Search for a book first in local database, then scrape from IBS.it if not found.
-    This is the enhanced search that includes external data.
+    Search for a book first in local database.
+    For non-school books, returns cover URLs only (user enters data manually).
     """
     clean_isbn = isbn.strip().replace("-", "").replace(" ", "")
     
-    # First try local database
+    # First try local database (school books)
     book = await db.books.find_one({"isbn": clean_isbn})
     if book:
         return {
             **Book(**book).dict(),
-            "source": "database"
+            "source": "database",
+            "cover_url": get_book_cover_url(clean_isbn)["primary"],
+            "cover_fallback": get_book_cover_url(clean_isbn)["fallback"]
         }
     
-    # Try scraping from IBS.it
-    ibs_data = await scrape_book_from_ibs(clean_isbn)
-    if ibs_data:
+    # Also check adozioni collection
+    adozione = await db.adozioni.find_one({"isbn": clean_isbn})
+    if adozione:
+        covers = get_book_cover_url(clean_isbn)
         return {
-            "id": f"ibs-{clean_isbn}",
+            "id": f"adozione-{clean_isbn}",
             "isbn": clean_isbn,
-            "titolo": ibs_data.get("titolo", ""),
-            "autori": ibs_data.get("autori", ""),
-            "editore": ibs_data.get("editore", ""),
-            "prezzo_copertina": ibs_data.get("prezzo_copertina", 0),
-            "cover_url": ibs_data.get("cover_url"),
-            "source": "ibs.it"
+            "titolo": adozione.get("titolo", ""),
+            "autori": adozione.get("autori", ""),
+            "editore": adozione.get("editore", ""),
+            "prezzo_copertina": adozione.get("prezzo", 0),
+            "cover_url": covers["primary"],
+            "cover_fallback": covers["fallback"],
+            "source": "adozioni"
         }
     
-    # Return minimal data with just the ISBN and cover
+    # For non-school books: return cover URLs only, user enters data manually
+    covers = get_book_cover_url(clean_isbn)
     return {
         "id": f"manual-{clean_isbn}",
         "isbn": clean_isbn,
@@ -1497,7 +1379,8 @@ async def lookup_book_by_isbn(isbn: str):
         "autori": "",
         "editore": "",
         "prezzo_copertina": 0,
-        "cover_url": f"https://www.ibs.it/images/{clean_isbn}_0_0_0_536_0.jpg",
+        "cover_url": covers["primary"],
+        "cover_fallback": covers["fallback"],
         "source": "not_found"
     }
 

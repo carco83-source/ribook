@@ -129,27 +129,34 @@ export default function SearchSellScreen() {
     setVendiBook(null);
     
     try {
-      // Usa il nuovo endpoint lookup che cerca prima nel DB locale, poi su IBS.it
+      // Usa il nuovo endpoint lookup che cerca prima nel DB locale
       const response = await axios.get(`${API_URL}/api/books/lookup/${vendiIsbn}`);
       if (response.data) {
         const bookData = response.data;
         setVendiBook({
           id: bookData.id,
           isbn: bookData.isbn,
-          titolo: bookData.titolo || 'Titolo non disponibile',
+          titolo: bookData.titolo || '',
           autori: bookData.autori,
           editore: bookData.editore,
           prezzo_copertina: bookData.prezzo_copertina || 0,
+          cover_url: bookData.cover_url,
+          cover_fallback: bookData.cover_fallback,
+          source: bookData.source,
         });
       }
     } catch (error) {
       console.error('Error searching book:', error);
       // In caso di errore, permetti di procedere con dati manuali
+      const cleanIsbn = vendiIsbn.replace(/[^0-9X]/gi, '');
       setVendiBook({
-        id: `manual-${vendiIsbn}`,
-        isbn: vendiIsbn,
-        titolo: 'Libro non trovato - Inserisci i dati',
+        id: `manual-${cleanIsbn}`,
+        isbn: cleanIsbn,
+        titolo: '',
         prezzo_copertina: 0,
+        cover_url: `https://covers.openlibrary.org/b/isbn/${cleanIsbn}-M.jpg`,
+        cover_fallback: `https://www.ibs.it/images/${cleanIsbn}_0_0_0_536_0.jpg`,
+        source: 'not_found',
       });
     } finally {
       setVendiLoading(false);
@@ -203,26 +210,33 @@ export default function SearchSellScreen() {
     setVendiBook(null);
     
     try {
-      // Usa il nuovo endpoint lookup che cerca prima nel DB locale, poi su IBS.it
+      // Usa il nuovo endpoint lookup
       const response = await axios.get(`${API_URL}/api/books/lookup/${isbn}`);
       if (response.data) {
         const bookData = response.data;
         setVendiBook({
           id: bookData.id,
           isbn: bookData.isbn,
-          titolo: bookData.titolo || 'Titolo non disponibile',
+          titolo: bookData.titolo || '',
           autori: bookData.autori,
           editore: bookData.editore,
           prezzo_copertina: bookData.prezzo_copertina || 0,
+          cover_url: bookData.cover_url,
+          cover_fallback: bookData.cover_fallback,
+          source: bookData.source,
         });
       }
     } catch (error) {
       console.error('Error searching book:', error);
+      const cleanIsbn = isbn.replace(/[^0-9X]/gi, '');
       setVendiBook({
-        id: `manual-${isbn}`,
-        isbn: isbn,
-        titolo: 'Libro non trovato - Inserisci i dati',
+        id: `manual-${cleanIsbn}`,
+        isbn: cleanIsbn,
+        titolo: '',
         prezzo_copertina: 0,
+        cover_url: `https://covers.openlibrary.org/b/isbn/${cleanIsbn}-M.jpg`,
+        cover_fallback: `https://www.ibs.it/images/${cleanIsbn}_0_0_0_536_0.jpg`,
+        source: 'not_found',
       });
     } finally {
       setVendiLoading(false);
