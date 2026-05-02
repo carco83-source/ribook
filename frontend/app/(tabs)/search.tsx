@@ -512,22 +512,43 @@ export default function SearchSellScreen() {
 
         {vendiBook && (
           <View style={styles.resultCard}>
-            <Image
-              source={{ uri: `https://www.ibs.it/images/${vendiBook.isbn}_0_0_0_536_0.jpg` }}
-              style={styles.bookCover}
-              resizeMode="contain"
-            />
-            <View style={styles.bookInfo}>
-              <Text style={styles.bookTitle} numberOfLines={2}>{vendiBook.titolo}</Text>
-              {vendiBook.autori && <Text style={styles.bookAuthor}>{vendiBook.autori}</Text>}
-              <Text style={styles.bookIsbn}>ISBN: {vendiBook.isbn}</Text>
-              {vendiBook.prezzo_copertina && vendiBook.prezzo_copertina > 0 && (
-                <Text style={styles.bookPrice}>Prezzo copertina: €{vendiBook.prezzo_copertina.toFixed(2)}</Text>
-              )}
-            </View>
-            <TouchableOpacity style={styles.actionButton} onPress={goToSellBook}>
-              <Text style={styles.actionButtonText}>Vendi</Text>
-              <Ionicons name="arrow-forward" size={18} color="#fff" />
+            {vendiBook.source === 'not_found' ? (
+              /* Libro NON scolastico - non vendibile */
+              <View style={styles.notSchoolBookContainer}>
+                <Ionicons name="alert-circle" size={48} color="#FF9800" />
+                <Text style={styles.notSchoolBookTitle}>Libro non trovato</Text>
+                <Text style={styles.notSchoolBookText}>
+                  Questo libro non fa parte delle adozioni scolastiche delle 21 scuole di Catanzaro.
+                </Text>
+                <Text style={styles.notSchoolBookSubtext}>
+                  Al momento è possibile vendere solo libri scolastici adottati.
+                </Text>
+              </View>
+            ) : (
+              /* Libro scolastico - vendibile */
+              <>
+                <Image
+                  source={{ uri: vendiBook.cover_url || `https://covers.openlibrary.org/b/isbn/${vendiBook.isbn}-M.jpg` }}
+                  style={styles.bookCover}
+                  resizeMode="contain"
+                  onError={() => {
+                    // Se Open Library fallisce, usa IBS come fallback
+                  }}
+                />
+                <View style={styles.bookInfo}>
+                  <Text style={styles.bookTitle} numberOfLines={2}>{vendiBook.titolo}</Text>
+                  {vendiBook.autori && <Text style={styles.bookAuthor}>{vendiBook.autori}</Text>}
+                  <Text style={styles.bookIsbn}>ISBN: {vendiBook.isbn}</Text>
+                  {vendiBook.prezzo_copertina && vendiBook.prezzo_copertina > 0 && (
+                    <Text style={styles.bookPrice}>Prezzo copertina: €{vendiBook.prezzo_copertina.toFixed(2)}</Text>
+                  )}
+                </View>
+                <TouchableOpacity style={styles.actionButton} onPress={goToSellBook}>
+                  <Text style={styles.actionButtonText}>Vendi</Text>
+                  <Ionicons name="arrow-forward" size={18} color="#fff" />
+                </TouchableOpacity>
+              </>
+            )}
             </TouchableOpacity>
           </View>
         )}
@@ -963,5 +984,33 @@ const styles = StyleSheet.create({
     color: '#4CAF50',
     fontSize: 12,
     fontWeight: '600',
+  },
+  // Stili per libro non scolastico
+  notSchoolBookContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  notSchoolBookTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FF9800',
+    marginTop: 12,
+    textAlign: 'center',
+  },
+  notSchoolBookText: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 8,
+    lineHeight: 20,
+  },
+  notSchoolBookSubtext: {
+    fontSize: 12,
+    color: '#999',
+    textAlign: 'center',
+    marginTop: 8,
+    fontStyle: 'italic',
   },
 });

@@ -89,8 +89,6 @@ export default function SellFormScreen() {
   // Bookshops & Price
   const [selectedBookshops, setSelectedBookshops] = useState<string[]>([]);
   const [selectedPriceOption, setSelectedPriceOption] = useState<number | null>(null);
-  const [useCustomPrice, setUseCustomPrice] = useState(false);
-  const [customPrice, setCustomPrice] = useState('');
   const [notes, setNotes] = useState('');
   const [creatingListing, setCreatingListing] = useState(false);
   const [foderare, setFoderare] = useState(false);
@@ -313,6 +311,29 @@ export default function SellFormScreen() {
       };
     }
     
+    // Assicura sempre 3 prezzi distinti
+    let prezzoAlto = prezzoCalcolato.prezzoAlto;
+    let prezzoMedio = prezzoCalcolato.prezzoMedio;
+    let prezzoBasso = prezzoCalcolato.prezzoBasso;
+    let guadagnoAlto = prezzoCalcolato.guadagnoAlto;
+    let guadagnoMedio = prezzoCalcolato.guadagnoMedio;
+    let guadagnoBasso = prezzoCalcolato.guadagnoBasso;
+    
+    // Se prezzoAlto e prezzoMedio sono troppo vicini (diff < 0.50€), crea la media
+    const diffAltoMedio = prezzoAlto - prezzoMedio;
+    const diffMedioBasso = prezzoMedio - prezzoBasso;
+    
+    // Se i prezzi sono troppo simili, redistribuisci per avere 3 prezzi distinti
+    if (diffAltoMedio < 0.50 || diffMedioBasso < 0.50) {
+      // Usa prezzoAlto e prezzoBasso come estremi, calcola la media
+      const commissionePiattaforma = 0.17;
+      const stripeFisso = 0.25;
+      
+      prezzoMedio = (prezzoAlto + prezzoBasso) / 2;
+      prezzoMedio = Math.round(prezzoMedio * 100) / 100;
+      guadagnoMedio = Math.round((prezzoMedio * (1 - commissionePiattaforma) - stripeFisso) * 100) / 100;
+    }
+    
     return {
       condition: prezzoCalcolato.condition,
       usura: prezzoCalcolato.usura,
@@ -320,18 +341,18 @@ export default function SellFormScreen() {
       prices: [
         { 
           label: 'Prezzo alto', 
-          prezzoAcquirente: prezzoCalcolato.prezzoAlto,
-          guadagnoVenditore: prezzoCalcolato.guadagnoAlto
+          prezzoAcquirente: prezzoAlto,
+          guadagnoVenditore: guadagnoAlto
         },
         { 
           label: 'Prezzo consigliato', 
-          prezzoAcquirente: prezzoCalcolato.prezzoMedio,
-          guadagnoVenditore: prezzoCalcolato.guadagnoMedio
+          prezzoAcquirente: prezzoMedio,
+          guadagnoVenditore: guadagnoMedio
         },
         { 
           label: 'Vendita rapida', 
-          prezzoAcquirente: prezzoCalcolato.prezzoBasso,
-          guadagnoVenditore: prezzoCalcolato.guadagnoBasso
+          prezzoAcquirente: prezzoBasso,
+          guadagnoVenditore: guadagnoBasso
         },
       ]
     };
@@ -416,26 +437,9 @@ export default function SellFormScreen() {
   const createListing = async () => {
     if (!selectedBook || !userId) return;
 
-    // Determina il prezzo finale da usare
-    let finalPrice: number;
-    
-    if (useCustomPrice) {
-      const parsedCustomPrice = parseFloat(customPrice.replace(',', '.'));
-      if (isNaN(parsedCustomPrice) || parsedCustomPrice <= 0) {
-        showAlert('Prezzo non valido', 'Inserisci un prezzo valido maggiore di 0');
-        return;
-      }
-      if (parsedCustomPrice > 500) {
-        showAlert('Prezzo troppo alto', 'Il prezzo non può superare €500');
-        return;
-      }
-      finalPrice = parsedCustomPrice;
-    } else {
-      if (selectedPriceOption === null) {
-        showAlert('Prezzo richiesto', 'Seleziona un prezzo dalla forbice');
-        return;
-      }
-      finalPrice = selectedPriceOption;
+    if (selectedPriceOption === null) {
+      showAlert('Prezzo richiesto', 'Seleziona un prezzo dalla forbice');
+      return;
     }
 
     if (selectedBookshops.length === 0) {
@@ -459,7 +463,7 @@ export default function SellFormScreen() {
       };
       
       const currentPriceCalc = calcolaPrezzoLibro();
-      const guadagnoUtente = finalPrice * 0.83 - 0.25;
+      const guadagnoUtente = selectedPriceOption * 0.83 - 0.25;
       
       await axios.post(`${API_URL}/api/listings?user_id=${userId}`, {
         book_id: selectedBook.isbn || selectedBook.id,
@@ -468,8 +472,8 @@ export default function SellFormScreen() {
         book_autori: selectedBook.autori,
         book_disciplina: selectedBook.disciplina,
         prezzo_copertina: selectedBook.prezzo_copertina,
-        condizione: useCustomPrice ? 'personalizzato' : currentPriceCalc.condition,
-        prezzo_vendita: finalPrice,
+        condizione: currentPriceCalc.condition,
+        prezzo_vendita: selectedPriceOption,
         foto_base64: listingPhotos.length > 0 ? listingPhotos[0] : null,
         foto_aggiuntive: listingPhotos.slice(1),
         cover_url: autoCoverUrl,
@@ -482,7 +486,6 @@ export default function SellFormScreen() {
         usura: currentPriceCalc.usura || 0,
         guadagno_utente: guadagnoUtente,
         foderare: foderare,
-        is_custom_price: useCustomPrice,
       });
 
       showAlert('Successo!', 'Annuncio creato con successo');
@@ -733,99 +736,43 @@ export default function SellFormScreen() {
         )}
 
         {/* Risultato Condizione */}
-        {!useCustomPrice && (
-          <View style={styles.conditionResult}>
-            <Text style={styles.conditionLabel}>Condizione calcolata:</Text>
-            <View style={[styles.conditionBadge, { backgroundColor: getConditionColor(priceRange.condition) + '20' }]}>
-              <Text style={[styles.conditionText, { color: getConditionColor(priceRange.condition) }]}>
-                {getConditionLabel(priceRange.condition)}
-              </Text>
-            </View>
+        <View style={styles.conditionResult}>
+          <Text style={styles.conditionLabel}>Condizione calcolata:</Text>
+          <View style={[styles.conditionBadge, { backgroundColor: getConditionColor(priceRange.condition) + '20' }]}>
+            <Text style={[styles.conditionText, { color: getConditionColor(priceRange.condition) }]}>
+              {getConditionLabel(priceRange.condition)}
+            </Text>
           </View>
-        )}
+        </View>
 
         {/* Forbice Prezzi */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Scegli il prezzo</Text>
           
-          {/* Toggle Prezzo Personalizzato */}
-          <TouchableOpacity
-            style={styles.customPriceToggle}
-            onPress={() => {
-              setUseCustomPrice(!useCustomPrice);
-              if (!useCustomPrice) {
-                setSelectedPriceOption(null);
-              } else {
-                setCustomPrice('');
-              }
-            }}
-          >
-            <Ionicons 
-              name={useCustomPrice ? "checkbox" : "square-outline"} 
-              size={24} 
-              color={useCustomPrice ? "#FF9800" : "#666"} 
-            />
-            <View style={styles.customPriceToggleText}>
-              <Text style={styles.customPriceToggleTitle}>Prezzo personalizzato</Text>
-              <Text style={styles.customPriceToggleSubtitle}>
-                Per libri non scolastici o prezzi liberi
-              </Text>
-            </View>
-          </TouchableOpacity>
-
-          {useCustomPrice ? (
-            /* Campo Prezzo Personalizzato */
-            <View style={styles.customPriceContainer}>
-              <Text style={styles.customPriceLabel}>Inserisci il prezzo (€)</Text>
-              <View style={styles.customPriceInputRow}>
-                <Text style={styles.currencySymbol}>€</Text>
-                <TextInput
-                  style={styles.customPriceInput}
-                  value={customPrice}
-                  onChangeText={setCustomPrice}
-                  keyboardType="decimal-pad"
-                  placeholder="0.00"
-                  placeholderTextColor="#999"
-                  maxLength={6}
+          {/* Prezzi Consigliati - sempre 3 opzioni */}
+          {priceRange.prices.map((price, idx) => (
+            <TouchableOpacity
+              key={idx}
+              style={[
+                styles.priceOption,
+                selectedPriceOption === price.prezzoAcquirente && styles.priceOptionSelected
+              ]}
+              onPress={() => setSelectedPriceOption(price.prezzoAcquirente ?? null)}
+            >
+              <View style={styles.priceOptionLeft}>
+                <Ionicons 
+                  name={selectedPriceOption === price.prezzoAcquirente ? "radio-button-on" : "radio-button-off"} 
+                  size={22} 
+                  color={selectedPriceOption === price.prezzoAcquirente ? "#1a472a" : "#666"} 
                 />
+                <Text style={styles.priceLabel}>{price.label}</Text>
               </View>
-              {customPrice && parseFloat(customPrice.replace(',', '.')) > 0 && (
-                <View style={styles.customPricePreview}>
-                  <Text style={styles.customPricePreviewLabel}>
-                    Il tuo guadagno: €{((parseFloat(customPrice.replace(',', '.')) * 0.83) - 0.25).toFixed(2)}
-                  </Text>
-                  <Text style={styles.customPricePreviewNote}>
-                    (al netto della commissione RiBook)
-                  </Text>
-                </View>
-              )}
-            </View>
-          ) : (
-            /* Prezzi Consigliati */
-            priceRange.prices.map((price, idx) => (
-              <TouchableOpacity
-                key={idx}
-                style={[
-                  styles.priceOption,
-                  selectedPriceOption === price.prezzoAcquirente && styles.priceOptionSelected
-                ]}
-                onPress={() => setSelectedPriceOption(price.prezzoAcquirente ?? null)}
-              >
-                <View style={styles.priceOptionLeft}>
-                  <Ionicons 
-                    name={selectedPriceOption === price.prezzoAcquirente ? "radio-button-on" : "radio-button-off"} 
-                    size={22} 
-                    color={selectedPriceOption === price.prezzoAcquirente ? "#1a472a" : "#666"} 
-                  />
-                  <Text style={styles.priceLabel}>{price.label}</Text>
-                </View>
-                <View style={styles.priceOptionRight}>
-                  <Text style={styles.priceEarningMain}>Guadagni: €{price.guadagnoVenditore?.toFixed(2)}</Text>
-                  <Text style={styles.priceAcquirente}>L'acquirente pagherà €{price.prezzoAcquirente?.toFixed(2)}</Text>
-                </View>
-              </TouchableOpacity>
-            ))
-          )}
+              <View style={styles.priceOptionRight}>
+                <Text style={styles.priceEarningMain}>Guadagni: €{price.guadagnoVenditore?.toFixed(2)}</Text>
+                <Text style={styles.priceAcquirente}>L'acquirente pagherà €{price.prezzoAcquirente?.toFixed(2)}</Text>
+              </View>
+            </TouchableOpacity>
+          ))}
         </View>
 
         {/* Foto (opzionali) */}
