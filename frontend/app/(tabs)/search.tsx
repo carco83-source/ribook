@@ -518,7 +518,7 @@ export default function SearchSellScreen() {
                 <Ionicons name="alert-circle" size={48} color="#FF9800" />
                 <Text style={styles.notSchoolBookTitle}>Libro non trovato</Text>
                 <Text style={styles.notSchoolBookText}>
-                  Questo libro non fa parte delle adozioni scolastiche delle 21 scuole di Catanzaro.
+                  Questo libro non fa parte delle adozioni scolastiche del comune di Catanzaro.
                 </Text>
                 <Text style={styles.notSchoolBookSubtext}>
                   Al momento è possibile vendere solo libri scolastici adottati.
