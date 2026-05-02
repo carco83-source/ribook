@@ -48,6 +48,8 @@ export default function ProfileScreen() {
   const [stats, setStats] = useState<any>(null);
   const [transactions, setTransactions] = useState<{acquisti: any[], vendite: any[]}>({ acquisti: [], vendite: [] });
   const [showAllTransactions, setShowAllTransactions] = useState(false);
+  const [myListings, setMyListings] = useState<any[]>([]);
+  const [loadingListings, setLoadingListings] = useState(false);
 
   useEffect(() => {
     loadUserData();
@@ -78,6 +80,18 @@ export default function ProfileScreen() {
         setTransactions(transRes.data);
       } catch (e) {
         console.log('No transactions found');
+      }
+
+      // Get user listings (i miei annunci)
+      try {
+        setLoadingListings(true);
+        const listingsRes = await axios.get(`${API_URL}/api/listings/user/${userId}`);
+        setMyListings(listingsRes.data || []);
+      } catch (e) {
+        console.log('No listings found');
+        setMyListings([]);
+      } finally {
+        setLoadingListings(false);
       }
 
       setUserData({
@@ -298,6 +312,113 @@ export default function ProfileScreen() {
                 <Ionicons name="chevron-forward" size={18} color="#1a472a" />
               </TouchableOpacity>
             )}
+          </View>
+        )}
+      </View>
+
+      {/* Sezione I Miei Annunci */}
+      <View style={styles.listingsSection}>
+        <View style={styles.listingsSectionHeader}>
+          <View style={styles.listingsSectionHeaderLeft}>
+            <Ionicons name="pricetag" size={24} color="#FF9800" />
+            <Text style={styles.listingsSectionTitle}>I Miei Annunci</Text>
+          </View>
+          <View style={styles.listingsSectionHeaderRight}>
+            <Text style={styles.listingsSectionCount}>{myListings.length}</Text>
+          </View>
+        </View>
+        
+        {loadingListings ? (
+          <View style={styles.listingsLoading}>
+            <ActivityIndicator size="small" color="#FF9800" />
+            <Text style={styles.listingsLoadingText}>Caricamento annunci...</Text>
+          </View>
+        ) : myListings.length === 0 ? (
+          <View style={styles.listingsEmpty}>
+            <Ionicons name="book-outline" size={48} color="#ccc" />
+            <Text style={styles.listingsEmptyTitle}>Nessun annuncio attivo</Text>
+            <Text style={styles.listingsEmptySubtitle}>
+              I tuoi libri in vendita appariranno qui
+            </Text>
+            <TouchableOpacity 
+              style={styles.listingsStartButton}
+              onPress={() => router.push('/(tabs)/search')}
+            >
+              <Ionicons name="add" size={20} color="#fff" />
+              <Text style={styles.listingsStartButtonText}>Vendi un libro</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.listingsList}>
+            {myListings.slice(0, 5).map((listing: any, index: number) => {
+              const coverUrl = listing.cover_url || listing.foto_base64 || 
+                `https://www.ibs.it/images/${listing.book_isbn}_0_0_0_180_50.jpg`;
+              const isCustomPrice = listing.is_custom_price;
+              
+              return (
+                <TouchableOpacity 
+                  key={listing.id || index} 
+                  style={styles.listingCard}
+                  onPress={() => router.push(`/listing/${listing.id}`)}
+                >
+                  <Image 
+                    source={{ uri: coverUrl }}
+                    style={styles.listingCover}
+                    resizeMode="cover"
+                  />
+                  <View style={styles.listingCardContent}>
+                    <View style={styles.listingCardHeader}>
+                      <View style={[
+                        styles.listingTypeBadge, 
+                        { backgroundColor: isCustomPrice ? '#FFF3E0' : '#E8F5E9' }
+                      ]}>
+                        <Text style={[
+                          styles.listingTypeBadgeText,
+                          { color: isCustomPrice ? '#FF9800' : '#4CAF50' }
+                        ]}>
+                          {isCustomPrice ? 'Non scolastico' : 'Scolastico'}
+                        </Text>
+                      </View>
+                      <Text style={styles.listingCardPrice}>€{listing.prezzo_vendita?.toFixed(2)}</Text>
+                    </View>
+                    <Text style={styles.listingCardTitle} numberOfLines={2}>
+                      {listing.book_titolo || 'Titolo non disponibile'}
+                    </Text>
+                    {listing.book_autori && (
+                      <Text style={styles.listingCardAuthor} numberOfLines={1}>
+                        {listing.book_autori}
+                      </Text>
+                    )}
+                    <View style={styles.listingCardMeta}>
+                      <View style={[
+                        styles.listingStatusBadge, 
+                        { backgroundColor: listing.stato === 'disponibile' ? '#E8F5E9' : '#FFF8E1' }
+                      ]}>
+                        <View style={[
+                          styles.listingStatusDot,
+                          { backgroundColor: listing.stato === 'disponibile' ? '#4CAF50' : '#FFC107' }
+                        ]} />
+                        <Text style={[
+                          styles.listingStatusText,
+                          { color: listing.stato === 'disponibile' ? '#4CAF50' : '#FF9800' }
+                        ]}>
+                          {listing.stato === 'disponibile' ? 'In vendita' : listing.stato}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+            
+            {/* Pulsante Aggiungi nuovo */}
+            <TouchableOpacity 
+              style={styles.addListingButton}
+              onPress={() => router.push('/(tabs)/search')}
+            >
+              <Ionicons name="add-circle" size={24} color="#FF9800" />
+              <Text style={styles.addListingButtonText}>Vendi un altro libro</Text>
+            </TouchableOpacity>
           </View>
         )}
       </View>
@@ -1554,5 +1675,176 @@ const styles = StyleSheet.create({
     color: '#1a472a',
     fontSize: 14,
     fontWeight: '600',
+  },
+  // Listings Section Styles
+  listingsSection: {
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginTop: 16,
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  listingsSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  listingsSectionHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  listingsSectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#333',
+  },
+  listingsSectionHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  listingsSectionCount: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#FF9800',
+    backgroundColor: '#FFF3E0',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  listingsLoading: {
+    alignItems: 'center',
+    padding: 20,
+    gap: 10,
+  },
+  listingsLoadingText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  listingsEmpty: {
+    alignItems: 'center',
+    padding: 24,
+    gap: 8,
+  },
+  listingsEmptyTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginTop: 8,
+  },
+  listingsEmptySubtitle: {
+    fontSize: 13,
+    color: '#888',
+    textAlign: 'center',
+  },
+  listingsStartButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FF9800',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 25,
+    gap: 8,
+    marginTop: 12,
+  },
+  listingsStartButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  listingsList: {
+    gap: 12,
+  },
+  listingCard: {
+    flexDirection: 'row',
+    backgroundColor: '#f9f9f9',
+    borderRadius: 12,
+    padding: 12,
+    gap: 12,
+  },
+  listingCover: {
+    width: 60,
+    height: 85,
+    borderRadius: 6,
+    backgroundColor: '#e0e0e0',
+  },
+  listingCardContent: {
+    flex: 1,
+    justifyContent: 'space-between',
+  },
+  listingCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  listingTypeBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  listingTypeBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  listingCardPrice: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1a472a',
+  },
+  listingCardTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginTop: 4,
+  },
+  listingCardAuthor: {
+    fontSize: 12,
+    color: '#666',
+  },
+  listingCardMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+  },
+  listingStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    gap: 5,
+  },
+  listingStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  listingStatusText: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  addListingButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#FF9800',
+    borderRadius: 12,
+    borderStyle: 'dashed',
+  },
+  addListingButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FF9800',
   },
 });
