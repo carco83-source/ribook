@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { BarCodeScanner } from 'expo-barcode-scanner';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Device from 'expo-device';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:8001';
@@ -52,7 +53,7 @@ const NEXT_SCHOOL_YEAR = '2026/2027';
 export default function SearchSellScreen() {
   const router = useRouter();
   const [userId, setUserId] = useState<string | null>(null);
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [permission, requestPermission] = useCameraPermissions();
   
   // Vendi states
   const [vendiIsbn, setVendiIsbn] = useState('');
@@ -274,15 +275,16 @@ export default function SearchSellScreen() {
     }
     
     try {
-      console.log('Requesting BarCodeScanner permissions...');
-      const { status } = await BarCodeScanner.requestPermissionsAsync();
-      console.log('Permission status:', status);
+      console.log('Requesting Camera permissions...');
       
-      setHasPermission(status === 'granted');
-      
-      if (status !== 'granted') {
-        showAlert('Permesso Fotocamera', 'Per scansionare i codici a barre, consenti l\'accesso alla fotocamera nelle Impostazioni del telefono.');
-        return;
+      if (!permission?.granted) {
+        const result = await requestPermission();
+        console.log('Permission result:', result);
+        
+        if (!result.granted) {
+          showAlert('Permesso Fotocamera', 'Per scansionare i codici a barre, consenti l\'accesso alla fotocamera nelle Impostazioni del telefono.');
+          return;
+        }
       }
       
       console.log('Opening scanner...');
@@ -386,10 +388,14 @@ export default function SearchSellScreen() {
   if (showScanner) {
     return (
       <View style={styles.scannerContainer}>
-        <BarCodeScanner
+        <CameraView
           key={cameraKey}
           style={StyleSheet.absoluteFillObject}
-          onBarCodeScanned={scanned ? undefined : handleBarCodeScanned}
+          facing="back"
+          barcodeScannerSettings={{
+            barcodeTypes: ['ean13', 'ean8', 'code128', 'code39', 'upc_a', 'upc_e'],
+          }}
+          onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
         />
         <View style={styles.scannerOverlay}>
           <View style={styles.scannerFrame} />
