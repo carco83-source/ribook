@@ -350,7 +350,7 @@ export default function ProfileScreen() {
           </View>
         ) : (
           <View style={styles.listingsList}>
-            {myListings.slice(0, 5).map((listing: any, index: number) => {
+            {myListings.slice(0, 3).map((listing: any, index: number) => {
               const coverUrl = listing.cover_url || listing.foto_base64 || 
                 `https://www.ibs.it/images/${listing.book_isbn}_0_0_0_180_50.jpg`;
               const isCustomPrice = listing.is_custom_price;
@@ -411,14 +411,18 @@ export default function ProfileScreen() {
               );
             })}
             
-            {/* Pulsante Aggiungi nuovo */}
-            <TouchableOpacity 
-              style={styles.addListingButton}
-              onPress={() => router.push('/(tabs)/search')}
-            >
-              <Ionicons name="add-circle" size={24} color="#FF9800" />
-              <Text style={styles.addListingButtonText}>Vendi un altro libro</Text>
-            </TouchableOpacity>
+            {/* Pulsante Vedi altri */}
+            {myListings.length > 3 && (
+              <TouchableOpacity 
+                style={styles.showMoreButton}
+                onPress={() => router.push('/profile/my-listings')}
+              >
+                <Text style={styles.showMoreButtonText}>
+                  Vedi tutti ({myListings.length})
+                </Text>
+                <Ionicons name="chevron-forward" size={18} color="#1a472a" />
+              </TouchableOpacity>
+            )}
           </View>
         )}
       </View>
