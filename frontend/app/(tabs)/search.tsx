@@ -549,7 +549,6 @@ export default function SearchSellScreen() {
                 </TouchableOpacity>
               </>
             )}
-            </TouchableOpacity>
           </View>
         )}
       </View>
