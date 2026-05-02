@@ -129,41 +129,22 @@ export default function SearchSellScreen() {
     setVendiBook(null);
     
     try {
-      // Prima prova con l'endpoint specifico per ISBN
-      let bookFound = false;
-      try {
-        const response = await axios.get(`${API_URL}/api/books/search/${vendiIsbn}`);
-        if (response.data) {
-          setVendiBook(response.data);
-          bookFound = true;
-        }
-      } catch (e) {
-        // L'endpoint specifico non ha trovato nulla, prova con la ricerca generica
-      }
-      
-      if (!bookFound) {
-        // Prova con la ricerca generica
-        const genericResponse = await axios.get(`${API_URL}/api/books/search`, {
-          params: { q: vendiIsbn }
-        });
-        if (genericResponse.data?.books && genericResponse.data.books.length > 0) {
-          setVendiBook(genericResponse.data.books[0]);
-          bookFound = true;
-        }
-      }
-      
-      if (!bookFound) {
-        // Crea libro manuale con dati base
+      // Usa il nuovo endpoint lookup che cerca prima nel DB locale, poi su IBS.it
+      const response = await axios.get(`${API_URL}/api/books/lookup/${vendiIsbn}`);
+      if (response.data) {
+        const bookData = response.data;
         setVendiBook({
-          id: `manual-${vendiIsbn}`,
-          isbn: vendiIsbn,
-          titolo: 'Libro non trovato - Inserisci i dati',
-          prezzo_copertina: 0,
+          id: bookData.id,
+          isbn: bookData.isbn,
+          titolo: bookData.titolo || 'Titolo non disponibile',
+          autori: bookData.autori,
+          editore: bookData.editore,
+          prezzo_copertina: bookData.prezzo_copertina || 0,
         });
       }
     } catch (error) {
       console.error('Error searching book:', error);
-      // Anche in caso di errore, permetti di procedere con dati manuali
+      // In caso di errore, permetti di procedere con dati manuali
       setVendiBook({
         id: `manual-${vendiIsbn}`,
         isbn: vendiIsbn,
@@ -222,35 +203,17 @@ export default function SearchSellScreen() {
     setVendiBook(null);
     
     try {
-      // Prima prova con l'endpoint specifico per ISBN
-      let bookFound = false;
-      try {
-        const response = await axios.get(`${API_URL}/api/books/search/${isbn}`);
-        if (response.data) {
-          setVendiBook(response.data);
-          bookFound = true;
-        }
-      } catch (e) {
-        // L'endpoint specifico non ha trovato nulla
-      }
-      
-      if (!bookFound) {
-        // Prova con la ricerca generica
-        const genericResponse = await axios.get(`${API_URL}/api/books/search`, {
-          params: { q: isbn }
-        });
-        if (genericResponse.data?.books && genericResponse.data.books.length > 0) {
-          setVendiBook(genericResponse.data.books[0]);
-          bookFound = true;
-        }
-      }
-      
-      if (!bookFound) {
+      // Usa il nuovo endpoint lookup che cerca prima nel DB locale, poi su IBS.it
+      const response = await axios.get(`${API_URL}/api/books/lookup/${isbn}`);
+      if (response.data) {
+        const bookData = response.data;
         setVendiBook({
-          id: `manual-${isbn}`,
-          isbn: isbn,
-          titolo: 'Libro non trovato - Inserisci i dati',
-          prezzo_copertina: 0,
+          id: bookData.id,
+          isbn: bookData.isbn,
+          titolo: bookData.titolo || 'Titolo non disponibile',
+          autori: bookData.autori,
+          editore: bookData.editore,
+          prezzo_copertina: bookData.prezzo_copertina || 0,
         });
       }
     } catch (error) {
