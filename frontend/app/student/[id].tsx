@@ -52,10 +52,7 @@ interface CompatibilityData {
     totale: number;
     libri?: any[];
   };
-  gia_posseduti?: {
-    totale: number;
-    libri?: any[];
-  };
+  libri_gia_posseduti?: any[];
   tetto_spesa?: {
     tetto_ministeriale: number;
     tetto_con_deroga_10: number;
@@ -612,7 +609,7 @@ export default function StudentDetailScreen() {
                 <Ionicons name="checkmark-done-circle" size={28} color="#9C27B0" />
               </View>
               <View style={styles.categoryInfo}>
-                <Text style={styles.categoryNumber}>{compatibility?.gia_posseduti?.totale || 0}</Text>
+                <Text style={styles.categoryNumber}>{compatibility?.libri_gia_posseduti?.length || 0}</Text>
                 <Text style={styles.categoryLabel}>Già in possesso</Text>
                 <Text style={styles.categoryHint}>
                   Triennali o libri che hai già
