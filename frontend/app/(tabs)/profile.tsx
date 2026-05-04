@@ -427,6 +427,23 @@ export default function ProfileScreen() {
         )}
       </View>
 
+      {/* Vendi un libro - Sezione prominente */}
+      <TouchableOpacity 
+        style={styles.sellBookSection}
+        onPress={() => router.push('/(tabs)/search')}
+      >
+        <View style={styles.sellBookContent}>
+          <View style={styles.sellBookIconContainer}>
+            <Ionicons name="camera" size={28} color="#fff" />
+          </View>
+          <View style={styles.sellBookTextContainer}>
+            <Text style={styles.sellBookTitle}>Vendi un libro</Text>
+            <Text style={styles.sellBookSubtitle}>Scansiona il codice ISBN e metti in vendita</Text>
+          </View>
+        </View>
+        <Ionicons name="chevron-forward" size={24} color="#fff" />
+      </TouchableOpacity>
+
       {/* Quick Actions */}
       <View style={styles.section}>
         <TouchableOpacity 
@@ -1850,5 +1867,48 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#FF9800',
+  },
+  // Stili sezione "Vendi un libro"
+  sellBookSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FF9800',
+    marginHorizontal: 16,
+    marginTop: 16,
+    padding: 16,
+    borderRadius: 16,
+    shadowColor: '#FF9800',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  sellBookContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 14,
+  },
+  sellBookIconContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sellBookTextContainer: {
+    flex: 1,
+  },
+  sellBookTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  sellBookSubtitle: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.85)',
+    marginTop: 2,
   },
 });
