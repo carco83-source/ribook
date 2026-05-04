@@ -437,6 +437,12 @@ export default function SellFormScreen() {
   const createListing = async () => {
     if (!selectedBook || !userId) return;
 
+    // Validazione foto copertina obbligatoria
+    if (!listingPhotos[0]) {
+      showAlert('Foto richiesta', 'La foto della copertina è obbligatoria');
+      return;
+    }
+
     if (selectedPriceOption === null) {
       showAlert('Prezzo richiesto', 'Seleziona un prezzo dalla forbice');
       return;
@@ -783,11 +789,47 @@ export default function SellFormScreen() {
           ))}
         </View>
 
-        {/* Foto (opzionali) */}
+        {/* Foto del libro */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Foto del libro (opzionali)</Text>
+          <Text style={styles.sectionTitle}>Foto del libro</Text>
+          
+          {/* Foto copertina - OBBLIGATORIA */}
+          <Text style={styles.photoLabel}>Foto copertina <Text style={styles.requiredStar}>*</Text></Text>
+          <TouchableOpacity
+            style={[
+              styles.coverPhotoSlot, 
+              listingPhotos[0] && styles.photoSlotFilled,
+              !listingPhotos[0] && styles.coverPhotoRequired
+            ]}
+            onPress={() => !listingPhotos[0] && takePhotoAtIndex(0)}
+            disabled={loadingPhoto}
+          >
+            {listingPhotos[0] ? (
+              <>
+                <Image 
+                  source={{ uri: `data:image/jpeg;base64,${listingPhotos[0]}` }} 
+                  style={styles.coverPhotoPreview} 
+                />
+                <TouchableOpacity 
+                  style={styles.removePhotoBtn}
+                  onPress={() => removePhoto(0)}
+                >
+                  <Ionicons name="close-circle" size={24} color="#ff4444" />
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <Ionicons name="camera" size={32} color="#FF9800" />
+                <Text style={styles.coverPhotoText}>Scatta foto copertina</Text>
+                <Text style={styles.coverPhotoHint}>Obbligatoria</Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          {/* Foto aggiuntive - OPZIONALI */}
+          <Text style={[styles.photoLabel, { marginTop: 16 }]}>Foto aggiuntive (opzionali)</Text>
           <View style={styles.photoGrid}>
-            {[0, 1, 2].map((idx) => (
+            {[1, 2].map((idx) => (
               <TouchableOpacity
                 key={idx}
                 style={[styles.photoSlot, listingPhotos[idx] && styles.photoSlotFilled]}
@@ -1176,6 +1218,46 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#888',
     marginTop: 2,
+  },
+  photoLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  requiredStar: {
+    color: '#ff4444',
+    fontWeight: 'bold',
+  },
+  coverPhotoSlot: {
+    height: 160,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#e0e0e0',
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  coverPhotoRequired: {
+    borderColor: '#FF9800',
+    backgroundColor: '#FFF8E1',
+  },
+  coverPhotoPreview: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 10,
+  },
+  coverPhotoText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FF9800',
+    marginTop: 8,
+  },
+  coverPhotoHint: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 4,
   },
   photoGrid: {
     flexDirection: 'row',
