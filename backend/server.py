@@ -3542,14 +3542,15 @@ async def get_child_compatibility(user_id: str, child_id: str):
                 my_books.append(libro)
             else:
                 # Seconda/terza media: solo libri ANNUALI (non volumi unici)
-                if libro.get('da_acquistare', True) == True or libro.get('consigliato') == True:
+                if libro.get('is_volume_unico'):
+                    # Volume unico in 2ª/3ª - GIÀ COMPRATO in 1ª
+                    libri_gia_posseduti.append({
+                        **libro,
+                        "motivo_possesso": "Volume unico triennale comprato in 1ª media"
+                    })
+                elif libro.get('da_acquistare', True) == True or libro.get('consigliato') == True:
                     # Sia obbligatori che consigliati vanno in my_books
-                    if not libro.get('is_volume_unico'):
-                        my_books.append(libro)
-                    # I volumi unici non vanno acquistati in 2ª/3ª
-                elif libro.get('is_volume_unico'):
-                    # Volume unico in 2ª/3ª - già comprato
-                    pass
+                    my_books.append(libro)
                 else:
                     my_books.append(libro)
         else:
