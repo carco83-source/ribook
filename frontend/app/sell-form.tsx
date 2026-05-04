@@ -566,6 +566,14 @@ export default function SellFormScreen() {
           </View>
         </View>
 
+        {/* Nota fascicoli */}
+        <View style={styles.fascicoliNote}>
+          <Ionicons name="information-circle-outline" size={18} color="#666" />
+          <Text style={styles.fascicoliNoteText}>
+            Il libro, se previsti, è completo di tutti i fascicoli
+          </Text>
+        </View>
+
         {/* Libro Nuovo Checkbox */}
         <View style={styles.section}>
           <TouchableOpacity 
@@ -1020,6 +1028,25 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     fontStyle: 'italic',
     textDecorationLine: 'underline',
+  },
+  // Stile nota fascicoli
+  fascicoliNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 8,
+    borderRadius: 8,
+    gap: 8,
+  },
+  fascicoliNoteText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#666',
+    fontStyle: 'italic',
   },
   dotsRow: {
     flexDirection: 'row',
