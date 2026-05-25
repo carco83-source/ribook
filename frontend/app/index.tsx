@@ -1,13 +1,29 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions } from 'react-native';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  TouchableOpacity, 
+  ScrollView,
+  useWindowDimensions,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const { width } = Dimensions.get('window');
+// Breakpoints
+const BREAKPOINTS = {
+  tablet: 768,
+  desktop: 1024,
+};
 
 export default function WelcomeScreen() {
   const router = useRouter();
+  const { width, height } = useWindowDimensions();
+  
+  const isDesktop = width >= BREAKPOINTS.desktop;
+  const isTablet = width >= BREAKPOINTS.tablet && width < BREAKPOINTS.desktop;
+  const isSmallHeight = height < 700;
 
   useEffect(() => {
     checkAuth();
@@ -20,56 +36,124 @@ export default function WelcomeScreen() {
     }
   };
 
+  // Stili dinamici
+  const dynamicStyles = {
+    maxWidth: isDesktop ? 500 : isTablet ? 450 : '100%',
+    iconSize: isDesktop ? 90 : isTablet ? 85 : isSmallHeight ? 60 : 80,
+    fontSize: {
+      title: isDesktop ? 42 : isTablet ? 38 : isSmallHeight ? 30 : 36,
+      subtitle: isDesktop ? 18 : isSmallHeight ? 14 : 16,
+      feature: isDesktop ? 17 : isSmallHeight ? 14 : 16,
+      button: isDesktop ? 19 : 18,
+    },
+    padding: {
+      top: isSmallHeight ? 30 : 60,
+      horizontal: isDesktop ? 40 : 24,
+    },
+    spacing: {
+      headerMargin: isSmallHeight ? 20 : 40,
+      featuresMargin: isSmallHeight ? 20 : 40,
+    },
+  };
+
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Ionicons name="book" size={80} color="#fff" />
-        <Text style={styles.title}>RiLiBro</Text>
-        <Text style={styles.subtitle}>Acquisto libro usato assistito</Text>
-      </View>
-
-      <View style={styles.features}>
-        <View style={styles.featureItem}>
-          <Ionicons name="search" size={32} color="#1a472a" />
-          <Text style={styles.featureText}>Trova i libri che cerchi</Text>
+    <ScrollView 
+      style={styles.scrollView}
+      contentContainerStyle={[
+        styles.container,
+        (isDesktop || isTablet) && styles.containerCentered,
+      ]}
+    >
+      <View style={[
+        styles.content,
+        { 
+          maxWidth: dynamicStyles.maxWidth,
+          paddingTop: dynamicStyles.padding.top,
+          paddingHorizontal: dynamicStyles.padding.horizontal,
+        },
+      ]}>
+        {/* Header */}
+        <View style={[styles.header, { marginBottom: dynamicStyles.spacing.headerMargin }]}>
+          <Ionicons name="book" size={dynamicStyles.iconSize} color="#fff" />
+          <Text style={[styles.title, { fontSize: dynamicStyles.fontSize.title }]}>
+            RiBook
+          </Text>
+          <Text style={[styles.subtitle, { fontSize: dynamicStyles.fontSize.subtitle }]}>
+            Acquisto libro usato assistito
+          </Text>
         </View>
-        <View style={styles.featureItem}>
-          <Ionicons name="checkmark-done" size={32} color="#1a472a" />
-          <Text style={styles.featureText}>Ti selezioniamo i libri da vendere e da acquistare</Text>
+
+        {/* Features Card */}
+        <View style={[
+          styles.features, 
+          { marginBottom: dynamicStyles.spacing.featuresMargin },
+          isDesktop && styles.featuresDesktop,
+        ]}>
+          <View style={styles.featureItem}>
+            <Ionicons name="search" size={isSmallHeight ? 26 : 32} color="#1a472a" />
+            <Text style={[styles.featureText, { fontSize: dynamicStyles.fontSize.feature }]}>
+              Trova i libri che cerchi
+            </Text>
+          </View>
+          <View style={styles.featureItem}>
+            <Ionicons name="checkmark-done" size={isSmallHeight ? 26 : 32} color="#1a472a" />
+            <Text style={[styles.featureText, { fontSize: dynamicStyles.fontSize.feature }]}>
+              Ti selezioniamo i libri da vendere e da acquistare
+            </Text>
+          </View>
+          <View style={[styles.featureItem, { marginBottom: 0 }]}>
+            <Ionicons name="calculator" size={isSmallHeight ? 26 : 32} color="#1a472a" />
+            <Text style={[styles.featureText, { fontSize: dynamicStyles.fontSize.feature }]}>
+              Calcoliamo immediatamente il tuo risparmio
+            </Text>
+          </View>
         </View>
-        <View style={styles.featureItem}>
-          <Ionicons name="calculator" size={32} color="#1a472a" />
-          <Text style={styles.featureText}>Calcoliamo immediatamente il tuo risparmio</Text>
+
+        {/* Buttons */}
+        <View style={styles.buttons}>
+          <TouchableOpacity
+            style={[styles.primaryButton, isDesktop && styles.primaryButtonDesktop]}
+            onPress={() => router.push('/(auth)/register')}
+          >
+            <Text style={[styles.primaryButtonText, { fontSize: dynamicStyles.fontSize.button }]}>
+              Registrati
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={() => router.push('/(auth)/login')}
+          >
+            <Text style={styles.secondaryButtonText}>
+              Hai già un account? Accedi
+            </Text>
+          </TouchableOpacity>
         </View>
+
+        {/* Footer */}
+        <Text style={styles.footer}>Risparmia. Scambia. Studia.</Text>
       </View>
-
-      <View style={styles.buttons}>
-        <TouchableOpacity
-          style={styles.primaryButton}
-          onPress={() => router.push('/(auth)/register')}
-        >
-          <Text style={styles.primaryButtonText}>Registrati</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.secondaryButton}
-          onPress={() => router.push('/(auth)/login')}
-        >
-          <Text style={styles.secondaryButtonText}>Hai già un account? Accedi</Text>
-        </TouchableOpacity>
-      </View>
-
-      <Text style={styles.footer}>Risparmia. Scambia. Studia.</Text>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  scrollView: {
     flex: 1,
     backgroundColor: '#1a472a',
-    paddingHorizontal: 24,
-    paddingTop: 60,
+  },
+  container: {
+    flexGrow: 1,
+    minHeight: '100%',
+  },
+  containerCentered: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  content: {
+    flex: 1,
+    width: '100%',
+    paddingBottom: 40,
   },
   header: {
     alignItems: 'center',
@@ -94,6 +178,10 @@ const styles = StyleSheet.create({
     padding: 24,
     marginBottom: 40,
   },
+  featuresDesktop: {
+    padding: 32,
+    borderRadius: 20,
+  },
   featureItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -103,6 +191,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
     marginLeft: 16,
+    flex: 1,
   },
   buttons: {
     gap: 16,
@@ -112,6 +201,10 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
+  },
+  primaryButtonDesktop: {
+    paddingVertical: 18,
+    borderRadius: 14,
   },
   primaryButtonText: {
     color: '#fff',
@@ -129,8 +222,7 @@ const styles = StyleSheet.create({
   footer: {
     color: '#a8d5ba',
     textAlign: 'center',
-    marginTop: 'auto',
-    marginBottom: 40,
+    marginTop: 40,
     fontSize: 14,
   },
 });
