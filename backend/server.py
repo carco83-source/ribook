@@ -8696,10 +8696,10 @@ def check_message_content(content: str, sender_name: str = "", other_user_name: 
     if number_word_count >= 3:
         return False, error_msg
     
-    # 5. Blocca pattern di presentazione nome (AGGIORNATO - più aggressivo)
+    # 5. Blocca pattern di presentazione nome (RAFFINATO - evita falsi positivi)
+    # Pattern che NON dipendono da "sono + parola" generico
     name_patterns = [
-        r'\bmi\s*chiamo\b',           # "mi chiamo", "michiamo"
-        r'\bsono\s+\w+\b',            # "sono Mario", "sono valerio"
+        r'\bmi\s*chiamo\b',           # "mi chiamo"
         r'\bmi\s*famo\b',             # dialettale
         r'\bil\s*mio\s*nome\b',       # "il mio nome"
         r'\bchiamami\b',
@@ -8707,16 +8707,22 @@ def check_message_content(content: str, sender_name: str = "", other_user_name: 
         r'\bscrivimi\b',
         r'\bchiama\s*me\b',
         r'\bscrivi\s*a\b',
-        r'\bio\s+sono\b',             # "io sono"
+        r'\bio\s+sono\s+[A-Z]',       # "io sono Mario" (con maiuscola)
         r'\bmi\s+presento\b',         # "mi presento"
-        r'\bpiacere\s*,?\s*\w+\b',    # "piacere, Mario" o "piacere Mario"
-        r'\bciao\s+sono\b',           # "ciao sono"
-        r'\bsalve\s+sono\b',          # "salve sono"
-        r'\bhey\s+sono\b',            # "hey sono"
+        r'\bpiacere\s*,?\s*[A-Z]',    # "piacere, Mario" (con maiuscola)
+        r'\bciao\s+sono\s+[A-Z]',     # "ciao sono Mario" (con maiuscola)
+        r'\bsalve\s+sono\s+[A-Z]',    # "salve sono Mario" (con maiuscola)
+        r'\bhey\s+sono\s+[A-Z]',      # "hey sono Mario" (con maiuscola)
         r'\bmi\s+dico\b',             # "mi dico"
     ]
     for pattern in name_patterns:
-        if re.search(pattern, content_lower):
+        if re.search(pattern, content):  # Nota: usa content, non content_lower per maiuscole
+            return False, error_msg
+    
+    # 5b. Blocca "sono + NOME" solo se seguito da un nome dalla lista
+    for nome in NOMI_ITALIANI:
+        sono_nome_pattern = rf'\bsono\s+{nome}\b'
+        if re.search(sono_nome_pattern, content_lower):
             return False, error_msg
     
     # 6. Blocca social media e app di messaggistica
