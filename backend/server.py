@@ -8618,6 +8618,60 @@ async def get_conversation_messages(conversation_id: str):
     return {"messages": messages}
 
 
+# ============== FILTRO MESSAGGI CHAT ==============
+
+def check_message_content(content: str, sender_name: str = "", other_user_name: str = "") -> tuple[bool, str]:
+    """
+    Verifica se un messaggio contiene informazioni di contatto proibite.
+    Restituisce (is_valid, error_message)
+    """
+    import re
+    
+    content_lower = content.lower()
+    
+    # 1. Blocca email (pattern con @)
+    email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
+    if re.search(email_pattern, content):
+        return False, "Non è possibile condividere indirizzi email nella chat"
+    
+    # 2. Blocca numeri di telefono (sequenze di 6+ cifre, anche con spazi/trattini)
+    # Rimuovi spazi e trattini per il controllo
+    content_no_spaces = re.sub(r'[\s\-\.\(\)]', '', content)
+    phone_pattern = r'\d{6,}'
+    if re.search(phone_pattern, content_no_spaces):
+        return False, "Non è possibile condividere numeri di telefono nella chat"
+    
+    # 3. Blocca pattern comuni di telefono italiano
+    italian_phone_patterns = [
+        r'3\d{2}[\s\-\.]?\d{3}[\s\-\.]?\d{4}',  # 3XX XXX XXXX
+        r'\+39[\s\-\.]?\d{10}',  # +39 seguito da 10 cifre
+        r'0\d{1,3}[\s\-\.]?\d{6,8}',  # Fissi: 0XX XXXXXX
+    ]
+    for pattern in italian_phone_patterns:
+        if re.search(pattern, content):
+            return False, "Non è possibile condividere numeri di telefono nella chat"
+    
+    # 4. Blocca tentativi di offuscare email
+    obfuscated_email_patterns = [
+        r'\bat\b.*\bdot\b',  # "at ... dot"
+        r'chiocciola',  # italiano per @
+        r'\[at\]',
+        r'\(at\)',
+        r'@+',
+    ]
+    for pattern in obfuscated_email_patterns:
+        if re.search(pattern, content_lower):
+            return False, "Non è possibile condividere informazioni di contatto nella chat"
+    
+    # 5. Blocca se contiene il nome dell'altro utente (potrebbe essere tentativo di identificazione)
+    # Disabilitato per ora - potrebbe essere troppo restrittivo
+    # if other_user_name and len(other_user_name) > 2:
+    #     if other_user_name.lower() in content_lower:
+    #         return False, "Per la tua sicurezza, evita di condividere nomi completi"
+    
+    return True, ""
+
+
 @api_router.post("/conversations/{conversation_id}/messages")
 async def send_message(conversation_id: str, data: MessageCreate):
     """Send a message in a conversation"""
@@ -8634,6 +8688,16 @@ async def send_message(conversation_id: str, data: MessageCreate):
     sender = await db.users.find_one({"id": data.sender_id})
     if not sender:
         raise HTTPException(status_code=404, detail="Utente non trovato")
+    
+    # FILTRO MESSAGGI: Verifica contenuto
+    is_valid, error_message = check_message_content(
+        content=data.content,
+        sender_name=sender.get("nome", ""),
+        other_user_name=""  # Potremmo recuperare il nome dell'altro utente se necessario
+    )
+    
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=error_message)
     
     # Create message
     message = ConversationMessage(
