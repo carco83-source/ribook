@@ -8628,22 +8628,48 @@ def check_message_content(content: str, sender_name: str = "", other_user_name: 
     import re
     
     content_lower = content.lower()
+    error_msg = "Solo informazioni relative al libro"
     
     # 1. Blocca email (pattern con @)
     email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
     if re.search(email_pattern, content):
-        return False, "Non è possibile condividere indirizzi email nella chat"
+        return False, error_msg
     
-    # 2. Blocca QUALSIASI sequenza di 4+ cifre (anche con spazi/trattini)
-    content_no_spaces = re.sub(r'[\s\-\.\(\)/]', '', content)
+    # 2. Blocca QUALSIASI sequenza di 4+ cifre (anche con spazi/trattini/punti)
+    content_no_spaces = re.sub(r'[\s\-\.\(\)/,]', '', content)
     if re.search(r'\d{4,}', content_no_spaces):
-        return False, "Non è possibile condividere numeri nella chat"
+        return False, error_msg
     
-    # 3. Blocca pattern di presentazione nome
+    # 3. Blocca numeri scritti con spazi tra le cifre (es: "3 3 3 1 2 3")
+    # Rimuovi tutto tranne cifre e spazi, poi controlla se ci sono 4+ cifre separate da spazi
+    digits_and_spaces = re.sub(r'[^\d\s]', '', content)
+    digits_only = re.sub(r'\s', '', digits_and_spaces)
+    if len(digits_only) >= 4:
+        return False, error_msg
+    
+    # 4. Blocca numeri scritti in lettere
+    number_words = [
+        r'\bzero\b', r'\buno\b', r'\bdue\b', r'\btre\b', r'\bquattro\b',
+        r'\bcinque\b', r'\bsei\b', r'\bsette\b', r'\botto\b', r'\bnove\b',
+        r'\bdieci\b', r'\bundici\b', r'\bdodici\b', r'\btredici\b', r'\bquattordici\b',
+        r'\bquindici\b', r'\bsedici\b', r'\bdiciassette\b', r'\bdiciotto\b', r'\bdiciannove\b',
+        r'\bventi\b', r'\btrenta\b', r'\bquaranta\b', r'\bcinquanta\b',
+        r'\bsessanta\b', r'\bsettanta\b', r'\bottanta\b', r'\bnovanta\b', r'\bcento\b',
+    ]
+    # Conta quanti numeri in lettere ci sono
+    number_word_count = 0
+    for pattern in number_words:
+        if re.search(pattern, content_lower):
+            number_word_count += 1
+    # Se ci sono 3+ numeri in lettere, probabilmente è un tentativo di condividere un numero
+    if number_word_count >= 3:
+        return False, error_msg
+    
+    # 5. Blocca pattern di presentazione nome
     name_patterns = [
         r'\bmi\s+chiamo\b',
-        r'\bsono\s+[A-Z][a-z]+\b',  # "sono Mario"
-        r'\bmi\s+famo\b',  # dialettale
+        r'\bsono\s+[A-Z][a-z]+\b',
+        r'\bmi\s+famo\b',
         r'\bil\s+mio\s+nome\b',
         r'\bchiamami\b',
         r'\bcontattami\b',
@@ -8653,9 +8679,9 @@ def check_message_content(content: str, sender_name: str = "", other_user_name: 
     ]
     for pattern in name_patterns:
         if re.search(pattern, content_lower):
-            return False, "Non è possibile condividere il proprio nome nella chat"
+            return False, error_msg
     
-    # 4. Blocca social media e app di messaggistica
+    # 6. Blocca social media e app di messaggistica
     social_patterns = [
         r'\binstagram\b', r'\binsta\b', r'\big\b',
         r'\btelegram\b', r'\btg\b',
@@ -8672,15 +8698,15 @@ def check_message_content(content: str, sender_name: str = "", other_user_name: 
         r'\bskype\b',
         r'\bmessenger\b',
         r'\bwechat\b',
-        r'\bline\b(?!\s+di)',  # "line" ma non "line di testo"
+        r'\bline\b(?!\s+di)',
     ]
     for pattern in social_patterns:
         if re.search(pattern, content_lower):
-            return False, "Non è possibile condividere riferimenti a social network nella chat"
+            return False, error_msg
     
-    # 5. Blocca pattern di username social (@username, username:, ecc)
+    # 7. Blocca pattern di username social (@username, username:, ecc)
     username_patterns = [
-        r'@[a-zA-Z0-9_\.]+',  # @username
+        r'@[a-zA-Z0-9_\.]+',
         r'\busername\b',
         r'\bprofilo\b',
         r'\baccount\b',
@@ -8689,9 +8715,9 @@ def check_message_content(content: str, sender_name: str = "", other_user_name: 
     ]
     for pattern in username_patterns:
         if re.search(pattern, content_lower):
-            return False, "Non è possibile condividere username o profili social nella chat"
+            return False, error_msg
     
-    # 6. Blocca tentativi di offuscare email
+    # 8. Blocca tentativi di offuscare email
     obfuscated_patterns = [
         r'\bat\b.*\bdot\b',
         r'\bchiocciola\b',
@@ -8701,9 +8727,9 @@ def check_message_content(content: str, sender_name: str = "", other_user_name: 
     ]
     for pattern in obfuscated_patterns:
         if re.search(pattern, content_lower):
-            return False, "Non è possibile condividere informazioni di contatto nella chat"
+            return False, error_msg
     
-    # 7. Blocca frasi che suggeriscono scambio contatti
+    # 9. Blocca frasi che suggeriscono scambio contatti
     contact_phrases = [
         r'\bil\s+mio\s+numero\b',
         r'\bla\s+mia\s+mail\b',
@@ -8723,18 +8749,18 @@ def check_message_content(content: str, sender_name: str = "", other_user_name: 
     ]
     for pattern in contact_phrases:
         if re.search(pattern, content_lower):
-            return False, "Non è possibile condividere contatti personali nella chat"
+            return False, error_msg
     
-    # 8. Blocca URL e link
+    # 10. Blocca URL e link
     url_patterns = [
         r'https?://',
         r'www\.',
-        r'\.[a-z]{2,4}/',  # .com/ .it/ etc
+        r'\.[a-z]{2,4}/',
         r'bit\.ly', r'tinyurl', r'goo\.gl',
     ]
     for pattern in url_patterns:
         if re.search(pattern, content_lower):
-            return False, "Non è possibile condividere link nella chat"
+            return False, error_msg
     
     return True, ""
 
