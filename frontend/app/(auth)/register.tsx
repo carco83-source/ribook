@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,8 +18,23 @@ import axios from 'axios';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
+// Breakpoints per responsive design
+const BREAKPOINTS = {
+  mobile: 480,
+  tablet: 768,
+  desktop: 1024,
+};
+
 export default function RegisterScreen() {
   const router = useRouter();
+  const { width, height } = useWindowDimensions();
+  
+  // Determina il tipo di dispositivo
+  const isDesktop = width >= BREAKPOINTS.desktop;
+  const isTablet = width >= BREAKPOINTS.tablet && width < BREAKPOINTS.desktop;
+  const isMobile = width < BREAKPOINTS.tablet;
+  const isLandscape = width > height;
+  
   const [formData, setFormData] = useState({
     nome: '',
     cognome: '',
@@ -38,7 +54,7 @@ export default function RegisterScreen() {
 
   const handleRegister = async () => {
     setErrorMessage('');
-    const { nome, cognome, email, telefono, password, confirmPassword } = formData;
+    const { nome, cognome, email, password, confirmPassword } = formData;
 
     // Validazione campi
     if (!nome.trim()) {
@@ -79,22 +95,40 @@ export default function RegisterScreen() {
         password,
       });
 
-      // Login automatico dopo la registrazione
-      await AsyncStorage.setItem('user_id', response.data.user_id);
-      await AsyncStorage.setItem('username', response.data.username);
-      await AsyncStorage.setItem('user_nome', nome);
-      await AsyncStorage.setItem('is_premium', 'false');
-      
-      // Vai alla home - l'utente creerà i profili figli successivamente
+      const { user } = response.data;
+
+      // Salva i dati dell'utente
+      await AsyncStorage.setItem('user_id', user.id);
+      await AsyncStorage.setItem('username', user.email);
+      await AsyncStorage.setItem('user_nome', user.nome);
+      await AsyncStorage.setItem('is_premium', String(user.is_premium || false));
+
+      // Vai alla home
       router.replace('/(tabs)');
-      
     } catch (error: any) {
-      console.error('Registration error:', error);
-      const errorMsg = error.response?.data?.detail || 'Errore durante la registrazione. Riprova.';
-      setErrorMessage(errorMsg);
+      console.error('Registration error:', error.response?.data || error.message);
+      const message = error.response?.data?.detail || 'Errore durante la registrazione';
+      setErrorMessage(message);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Stili dinamici basati sulla dimensione dello schermo
+  const dynamicStyles = {
+    formMaxWidth: isDesktop ? 500 : isTablet ? 450 : '100%',
+    headerPadding: isDesktop ? 60 : isTablet ? 50 : 40,
+    fontSize: {
+      title: isDesktop ? 36 : isTablet ? 34 : 32,
+      subtitle: isDesktop ? 18 : 16,
+      sectionTitle: isDesktop ? 20 : 18,
+      input: isDesktop ? 17 : 16,
+      button: isDesktop ? 19 : 18,
+    },
+    spacing: {
+      inputMargin: isDesktop ? 20 : 16,
+      containerPadding: isDesktop ? 32 : isTablet ? 28 : 20,
+    },
   };
 
   return (
@@ -103,162 +137,236 @@ export default function RegisterScreen() {
       style={styles.container}
     >
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          isDesktop && styles.scrollContentDesktop,
+        ]}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.headerBanner}>
-          <Ionicons name="book" size={48} color="#fff" />
-          <Text style={styles.headerTitle}>RiLiBro</Text>
-          <Text style={styles.headerSubtitle}>Crea il tuo account</Text>
-        </View>
-
-        <View style={styles.formContainer}>
-          {errorMessage ? (
-            <View style={styles.errorContainer}>
-              <Ionicons name="alert-circle" size={20} color="#f44336" />
-              <Text style={styles.errorText}>{errorMessage}</Text>
-            </View>
-          ) : null}
-
-          <Text style={styles.sectionTitle}>I tuoi dati</Text>
-
-          {/* Nome */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Nome *</Text>
-            <View style={styles.inputWrapper}>
-              <Ionicons name="person-outline" size={20} color="#666" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Il tuo nome"
-                placeholderTextColor="#999"
-                value={formData.nome}
-                onChangeText={(v) => updateField('nome', v)}
-                autoCapitalize="words"
-              />
-            </View>
-          </View>
-
-          {/* Cognome */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Cognome *</Text>
-            <View style={styles.inputWrapper}>
-              <Ionicons name="person-outline" size={20} color="#666" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Il tuo cognome"
-                placeholderTextColor="#999"
-                value={formData.cognome}
-                onChangeText={(v) => updateField('cognome', v)}
-                autoCapitalize="words"
-              />
-            </View>
-          </View>
-
-          {/* Email */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Email *</Text>
-            <View style={styles.inputWrapper}>
-              <Ionicons name="mail-outline" size={20} color="#666" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="La tua email"
-                placeholderTextColor="#999"
-                value={formData.email}
-                onChangeText={(v) => updateField('email', v)}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-            </View>
-          </View>
-
-          <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Sicurezza</Text>
-
-          {/* Password */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Password *</Text>
-            <View style={styles.inputWrapper}>
-              <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Almeno 6 caratteri"
-                placeholderTextColor="#999"
-                value={formData.password}
-                onChangeText={(v) => updateField('password', v)}
-                secureTextEntry={!showPassword}
-              />
-              <TouchableOpacity
-                onPress={() => setShowPassword(!showPassword)}
-                style={styles.eyeButton}
-              >
-                <Ionicons
-                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                  size={20}
-                  color="#666"
-                />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Conferma Password */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Conferma Password *</Text>
-            <View style={styles.inputWrapper}>
-              <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Ripeti la password"
-                placeholderTextColor="#999"
-                value={formData.confirmPassword}
-                onChangeText={(v) => updateField('confirmPassword', v)}
-                secureTextEntry={!showConfirmPassword}
-              />
-              <TouchableOpacity
-                onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-                style={styles.eyeButton}
-              >
-                <Ionicons
-                  name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'}
-                  size={20}
-                  color="#666"
-                />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Info Box */}
-          <View style={styles.infoBox}>
-            <Ionicons name="information-circle" size={20} color="#1a472a" />
-            <Text style={styles.infoText}>
-              Dopo la registrazione potrai aggiungere i profili dei tuoi figli con le relative scuole e classi.
+        {/* Layout wrapper per centrare su desktop/tablet */}
+        <View style={[
+          styles.contentWrapper,
+          isDesktop && styles.contentWrapperDesktop,
+          isTablet && styles.contentWrapperTablet,
+        ]}>
+          
+          {/* Header Banner */}
+          <View style={[
+            styles.headerBanner,
+            isDesktop && styles.headerBannerDesktop,
+            isTablet && styles.headerBannerTablet,
+          ]}>
+            <Ionicons name="book" size={isDesktop ? 56 : isTablet ? 52 : 48} color="#fff" />
+            <Text style={[styles.headerTitle, { fontSize: dynamicStyles.fontSize.title }]}>
+              RiBook
+            </Text>
+            <Text style={[styles.headerSubtitle, { fontSize: dynamicStyles.fontSize.subtitle }]}>
+              Crea il tuo account
             </Text>
           </View>
 
-          {/* Bottone Registrati */}
-          <TouchableOpacity
-            style={[styles.registerButton, loading && styles.registerButtonDisabled]}
-            onPress={handleRegister}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <>
-                <Ionicons name="person-add" size={20} color="#fff" />
-                <Text style={styles.registerButtonText}>Registrati</Text>
-              </>
-            )}
-          </TouchableOpacity>
+          {/* Form Container */}
+          <View style={[
+            styles.formContainer,
+            isDesktop && styles.formContainerDesktop,
+            isTablet && styles.formContainerTablet,
+            { padding: dynamicStyles.spacing.containerPadding },
+          ]}>
+            {/* Inner container per max-width */}
+            <View style={[
+              styles.formInner,
+              { maxWidth: dynamicStyles.formMaxWidth, width: '100%' },
+            ]}>
+              
+              {errorMessage ? (
+                <View style={styles.errorContainer}>
+                  <Ionicons name="alert-circle" size={20} color="#f44336" />
+                  <Text style={styles.errorText}>{errorMessage}</Text>
+                </View>
+              ) : null}
 
-          {/* Link Login */}
-          <TouchableOpacity
-            style={styles.loginLink}
-            onPress={() => router.push('/(auth)/login')}
-          >
-            <Text style={styles.loginLinkText}>
-              Hai già un account? <Text style={styles.loginLinkBold}>Accedi</Text>
-            </Text>
-          </TouchableOpacity>
+              <Text style={[styles.sectionTitle, { fontSize: dynamicStyles.fontSize.sectionTitle }]}>
+                I tuoi dati
+              </Text>
+
+              {/* Layout a 2 colonne per desktop/tablet landscape */}
+              <View style={[
+                styles.fieldsRow,
+                (isDesktop || (isTablet && isLandscape)) && styles.fieldsRowDesktop,
+              ]}>
+                {/* Nome */}
+                <View style={[
+                  styles.inputGroup,
+                  (isDesktop || (isTablet && isLandscape)) && styles.inputGroupHalf,
+                  { marginBottom: dynamicStyles.spacing.inputMargin },
+                ]}>
+                  <Text style={styles.inputLabel}>Nome *</Text>
+                  <View style={styles.inputWrapper}>
+                    <Ionicons name="person-outline" size={20} color="#666" style={styles.inputIcon} />
+                    <TextInput
+                      style={[styles.input, { fontSize: dynamicStyles.fontSize.input }]}
+                      placeholder="Il tuo nome"
+                      placeholderTextColor="#999"
+                      value={formData.nome}
+                      onChangeText={(v) => updateField('nome', v)}
+                      autoCapitalize="words"
+                    />
+                  </View>
+                </View>
+
+                {/* Cognome */}
+                <View style={[
+                  styles.inputGroup,
+                  (isDesktop || (isTablet && isLandscape)) && styles.inputGroupHalf,
+                  { marginBottom: dynamicStyles.spacing.inputMargin },
+                ]}>
+                  <Text style={styles.inputLabel}>Cognome *</Text>
+                  <View style={styles.inputWrapper}>
+                    <Ionicons name="person-outline" size={20} color="#666" style={styles.inputIcon} />
+                    <TextInput
+                      style={[styles.input, { fontSize: dynamicStyles.fontSize.input }]}
+                      placeholder="Il tuo cognome"
+                      placeholderTextColor="#999"
+                      value={formData.cognome}
+                      onChangeText={(v) => updateField('cognome', v)}
+                      autoCapitalize="words"
+                    />
+                  </View>
+                </View>
+              </View>
+
+              {/* Email - full width */}
+              <View style={[styles.inputGroup, { marginBottom: dynamicStyles.spacing.inputMargin }]}>
+                <Text style={styles.inputLabel}>Email *</Text>
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="mail-outline" size={20} color="#666" style={styles.inputIcon} />
+                  <TextInput
+                    style={[styles.input, { fontSize: dynamicStyles.fontSize.input }]}
+                    placeholder="La tua email"
+                    placeholderTextColor="#999"
+                    value={formData.email}
+                    onChangeText={(v) => updateField('email', v)}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </View>
+              </View>
+
+              <Text style={[
+                styles.sectionTitle, 
+                { marginTop: 24, fontSize: dynamicStyles.fontSize.sectionTitle }
+              ]}>
+                Sicurezza
+              </Text>
+
+              {/* Layout a 2 colonne per password su desktop */}
+              <View style={[
+                styles.fieldsRow,
+                isDesktop && styles.fieldsRowDesktop,
+              ]}>
+                {/* Password */}
+                <View style={[
+                  styles.inputGroup,
+                  isDesktop && styles.inputGroupHalf,
+                  { marginBottom: dynamicStyles.spacing.inputMargin },
+                ]}>
+                  <Text style={styles.inputLabel}>Password *</Text>
+                  <View style={styles.inputWrapper}>
+                    <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
+                    <TextInput
+                      style={[styles.input, { fontSize: dynamicStyles.fontSize.input }]}
+                      placeholder="Almeno 6 caratteri"
+                      placeholderTextColor="#999"
+                      value={formData.password}
+                      onChangeText={(v) => updateField('password', v)}
+                      secureTextEntry={!showPassword}
+                    />
+                    <TouchableOpacity
+                      onPress={() => setShowPassword(!showPassword)}
+                      style={styles.eyeButton}
+                    >
+                      <Ionicons
+                        name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                        size={20}
+                        color="#666"
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Conferma Password */}
+                <View style={[
+                  styles.inputGroup,
+                  isDesktop && styles.inputGroupHalf,
+                  { marginBottom: dynamicStyles.spacing.inputMargin },
+                ]}>
+                  <Text style={styles.inputLabel}>Conferma Password *</Text>
+                  <View style={styles.inputWrapper}>
+                    <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
+                    <TextInput
+                      style={[styles.input, { fontSize: dynamicStyles.fontSize.input }]}
+                      placeholder="Ripeti la password"
+                      placeholderTextColor="#999"
+                      value={formData.confirmPassword}
+                      onChangeText={(v) => updateField('confirmPassword', v)}
+                      secureTextEntry={!showConfirmPassword}
+                    />
+                    <TouchableOpacity
+                      onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                      style={styles.eyeButton}
+                    >
+                      <Ionicons
+                        name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'}
+                        size={20}
+                        color="#666"
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+
+              {/* Info Box */}
+              <View style={styles.infoBox}>
+                <Ionicons name="information-circle" size={20} color="#1a472a" />
+                <Text style={styles.infoText}>
+                  Dopo la registrazione potrai aggiungere i profili dei tuoi figli e scoprire i libri di cui hanno bisogno.
+                </Text>
+              </View>
+
+              {/* Register Button */}
+              <TouchableOpacity
+                style={[
+                  styles.registerButton,
+                  loading && styles.registerButtonDisabled,
+                  isDesktop && styles.registerButtonDesktop,
+                ]}
+                onPress={handleRegister}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <>
+                    <Text style={[styles.registerButtonText, { fontSize: dynamicStyles.fontSize.button }]}>
+                      Crea Account
+                    </Text>
+                    <Ionicons name="arrow-forward" size={20} color="#fff" />
+                  </>
+                )}
+              </TouchableOpacity>
+
+              {/* Link Login */}
+              <TouchableOpacity
+                style={styles.loginLink}
+                onPress={() => router.push('/(auth)/login')}
+              >
+                <Text style={styles.loginLinkText}>
+                  Hai già un account? <Text style={styles.loginLinkBold}>Accedi</Text>
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -273,11 +381,49 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
   },
+  scrollContentDesktop: {
+    justifyContent: 'center',
+    minHeight: '100%',
+  },
+  contentWrapper: {
+    flex: 1,
+  },
+  contentWrapperDesktop: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 40,
+    maxWidth: 1200,
+    alignSelf: 'center',
+    width: '100%',
+  },
+  contentWrapperTablet: {
+    maxWidth: 600,
+    alignSelf: 'center',
+    width: '100%',
+  },
   headerBanner: {
     backgroundColor: '#1a472a',
     paddingTop: 60,
     paddingBottom: 40,
     alignItems: 'center',
+  },
+  headerBannerDesktop: {
+    flex: 1,
+    maxWidth: 400,
+    borderRadius: 24,
+    marginRight: 40,
+    justifyContent: 'center',
+    paddingTop: 40,
+    paddingBottom: 40,
+    paddingHorizontal: 40,
+  },
+  headerBannerTablet: {
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+    paddingTop: 70,
+    paddingBottom: 50,
   },
   headerTitle: {
     fontSize: 32,
@@ -297,6 +443,30 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     minHeight: 500,
+  },
+  formContainerDesktop: {
+    flex: 1.5,
+    marginTop: 0,
+    borderRadius: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  formContainerTablet: {
+    marginHorizontal: 20,
+    marginTop: -20,
+    marginBottom: 20,
+    borderRadius: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  formInner: {
+    alignSelf: 'center',
   },
   errorContainer: {
     flexDirection: 'row',
@@ -318,8 +488,18 @@ const styles = StyleSheet.create({
     color: '#333',
     marginBottom: 16,
   },
+  fieldsRow: {
+    flexDirection: 'column',
+  },
+  fieldsRowDesktop: {
+    flexDirection: 'row',
+    gap: 16,
+  },
   inputGroup: {
     marginBottom: 16,
+  },
+  inputGroupHalf: {
+    flex: 1,
   },
   inputLabel: {
     fontSize: 14,
@@ -371,6 +551,10 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     gap: 8,
+  },
+  registerButtonDesktop: {
+    padding: 18,
+    borderRadius: 14,
   },
   registerButtonDisabled: {
     backgroundColor: '#ccc',

@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,12 +19,39 @@ import axios from 'axios';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
+// Breakpoints per responsive design
+const BREAKPOINTS = {
+  mobile: 480,
+  tablet: 768,
+  desktop: 1024,
+};
+
 export default function LoginScreen() {
   const router = useRouter();
+  const { width, height } = useWindowDimensions();
+  
+  // Determina il tipo di dispositivo
+  const isDesktop = width >= BREAKPOINTS.desktop;
+  const isTablet = width >= BREAKPOINTS.tablet && width < BREAKPOINTS.desktop;
+  const isMobile = width < BREAKPOINTS.tablet;
+  
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  // Stili dinamici
+  const dynamicStyles = {
+    maxWidth: isDesktop ? 440 : isTablet ? 400 : '100%',
+    iconSize: isDesktop ? 70 : isTablet ? 65 : 60,
+    fontSize: {
+      title: isDesktop ? 32 : isTablet ? 30 : 28,
+      subtitle: isDesktop ? 17 : 16,
+      input: isDesktop ? 17 : 16,
+      button: isDesktop ? 19 : 18,
+    },
+    padding: isDesktop ? 40 : isTablet ? 32 : 24,
+  };
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -61,75 +89,94 @@ export default function LoginScreen() {
       style={styles.container}
     >
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          (isDesktop || isTablet) && styles.scrollContentCentered,
+        ]}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.iconContainer}>
-          <Ionicons name="book" size={60} color="#1a472a" />
-        </View>
-
-        <Text style={styles.title}>Bentornato!</Text>
-        <Text style={styles.subtitle}>Accedi per continuare</Text>
-
-        <View style={styles.form}>
-          <View style={styles.inputContainer}>
-            <Ionicons name="mail-outline" size={20} color="#666" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Email"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
+        {/* Card container per desktop/tablet */}
+        <View style={[
+          styles.card,
+          isDesktop && styles.cardDesktop,
+          isTablet && styles.cardTablet,
+          { maxWidth: dynamicStyles.maxWidth, padding: dynamicStyles.padding },
+        ]}>
+          <View style={styles.iconContainer}>
+            <Ionicons name="book" size={dynamicStyles.iconSize} color="#1a472a" />
           </View>
 
-          <View style={styles.inputContainer}>
-            <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Password"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword}
-            />
-            <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-              <Ionicons
-                name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                size={20}
-                color="#666"
+          <Text style={[styles.title, { fontSize: dynamicStyles.fontSize.title }]}>
+            Bentornato!
+          </Text>
+          <Text style={[styles.subtitle, { fontSize: dynamicStyles.fontSize.subtitle }]}>
+            Accedi per continuare
+          </Text>
+
+          <View style={styles.form}>
+            <View style={[styles.inputContainer, isDesktop && styles.inputContainerDesktop]}>
+              <Ionicons name="mail-outline" size={20} color="#666" style={styles.inputIcon} />
+              <TextInput
+                style={[styles.input, { fontSize: dynamicStyles.fontSize.input }]}
+                placeholder="Email"
+                placeholderTextColor="#999"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
               />
+            </View>
+
+            <View style={[styles.inputContainer, isDesktop && styles.inputContainerDesktop]}>
+              <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
+              <TextInput
+                style={[styles.input, { fontSize: dynamicStyles.fontSize.input }]}
+                placeholder="Password"
+                placeholderTextColor="#999"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+              />
+              <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeButton}>
+                <Ionicons
+                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                  size={20}
+                  color="#666"
+                />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.loginButton, isDesktop && styles.loginButtonDesktop]}
+              onPress={handleLogin}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={[styles.loginButtonText, { fontSize: dynamicStyles.fontSize.button }]}>
+                  Accedi
+                </Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.forgotPassword}
+              onPress={() => router.push('/(auth)/forgot-password')}
+            >
+              <Text style={styles.forgotPasswordText}>Password dimenticata?</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.registerLink}
+              onPress={() => router.push('/(auth)/register')}
+            >
+              <Text style={styles.registerLinkText}>
+                Non hai un account? <Text style={styles.registerLinkBold}>Registrati</Text>
+              </Text>
             </TouchableOpacity>
           </View>
-
-          <TouchableOpacity
-            style={styles.loginButton}
-            onPress={handleLogin}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.loginButtonText}>Accedi</Text>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.forgotPassword}
-            onPress={() => router.push('/(auth)/forgot-password')}
-          >
-            <Text style={styles.forgotPasswordText}>Password dimenticata?</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.registerLink}
-            onPress={() => router.push('/(auth)/register')}
-          >
-            <Text style={styles.registerLinkText}>
-              Non hai un account? <Text style={styles.registerLinkBold}>Registrati</Text>
-            </Text>
-          </TouchableOpacity>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -145,6 +192,30 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     padding: 24,
     justifyContent: 'center',
+  },
+  scrollContentCentered: {
+    alignItems: 'center',
+  },
+  card: {
+    width: '100%',
+  },
+  cardDesktop: {
+    backgroundColor: '#fff',
+    borderRadius: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  cardTablet: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 6,
   },
   iconContainer: {
     alignItems: 'center',
@@ -169,11 +240,14 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: '#f8f9fa',
     borderRadius: 12,
     paddingHorizontal: 16,
     borderWidth: 1,
     borderColor: '#e0e0e0',
+  },
+  inputContainerDesktop: {
+    borderRadius: 14,
   },
   inputIcon: {
     marginRight: 12,
@@ -182,6 +256,10 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 16,
     fontSize: 16,
+    color: '#333',
+  },
+  eyeButton: {
+    padding: 4,
   },
   loginButton: {
     backgroundColor: '#1a472a',
@@ -189,6 +267,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     marginTop: 8,
+  },
+  loginButtonDesktop: {
+    paddingVertical: 18,
+    borderRadius: 14,
   },
   loginButtonText: {
     color: '#fff',
