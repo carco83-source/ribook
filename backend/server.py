@@ -8620,6 +8620,34 @@ async def get_conversation_messages(conversation_id: str):
 
 # ============== FILTRO MESSAGGI CHAT ==============
 
+# Lista di nomi propri italiani comuni da bloccare
+NOMI_ITALIANI = [
+    'marco', 'luca', 'andrea', 'matteo', 'lorenzo', 'alessandro', 'francesco', 'leonardo',
+    'riccardo', 'gabriele', 'tommaso', 'edoardo', 'federico', 'giuseppe', 'antonio',
+    'giovanni', 'pietro', 'davide', 'simone', 'filippo', 'michele', 'nicola', 'stefano',
+    'roberto', 'alberto', 'giorgio', 'paolo', 'fabio', 'daniele', 'massimo', 'emanuele',
+    'vincenzo', 'salvatore', 'domenico', 'raffaele', 'carlo', 'mario', 'luigi', 'franco',
+    'giulio', 'enrico', 'sergio', 'claudio', 'maurizio', 'luciano', 'bruno', 'gianluca',
+    'christian', 'manuel', 'valerio', 'nicholas', 'alex', 'kevin', 'thomas', 'samuel',
+    'diego', 'jacopo', 'samuele', 'nicholas', 'dennis', 'cristian', 'mirko', 'ivan',
+    # Nomi femminili
+    'giulia', 'sofia', 'aurora', 'alice', 'ginevra', 'emma', 'giorgia', 'martina',
+    'sara', 'chiara', 'anna', 'gaia', 'elena', 'francesca', 'valentina', 'alessia',
+    'beatrice', 'elisa', 'rebecca', 'camilla', 'vittoria', 'noemi', 'nicole', 'matilde',
+    'arianna', 'bianca', 'carlotta', 'claudia', 'cristina', 'daniela', 'eleonora',
+    'federica', 'ilaria', 'jessica', 'laura', 'lucia', 'marta', 'michela', 'monica',
+    'paola', 'roberta', 'silvia', 'simona', 'serena', 'stefania', 'teresa', 'valeria',
+    'vanessa', 'veronica', 'virginia', 'maria', 'rosa', 'angela', 'giovanna', 'patrizia',
+    'barbara', 'sabrina', 'manuela', 'emanuela', 'antonella', 'raffaella', 'rossella',
+    # Nomi stranieri comuni in Italia
+    'mohamed', 'ahmed', 'ali', 'omar', 'adam', 'david', 'daniel', 'gabriel', 'michael',
+    'jason', 'brian', 'ryan', 'dylan', 'jordan', 'justin', 'brandon', 'tyler', 'william',
+    'james', 'john', 'robert', 'richard', 'joseph', 'charles', 'steven', 'anthony',
+    # Diminutivi comuni
+    'ale', 'fra', 'fede', 'ste', 'matte', 'andre', 'giuly', 'vale', 'lore', 'nico',
+    'miki', 'roby', 'tommy', 'dani', 'simo', 'max', 'gigi', 'toni', 'peppe', 'nino',
+]
+
 def check_message_content(content: str, sender_name: str = "", other_user_name: str = "") -> tuple[bool, str]:
     """
     Verifica se un messaggio contiene informazioni di contatto proibite.
@@ -8629,6 +8657,12 @@ def check_message_content(content: str, sender_name: str = "", other_user_name: 
     
     content_lower = content.lower()
     error_msg = "Solo informazioni relative al libro"
+    
+    # 0. Blocca nomi propri italiani
+    for nome in NOMI_ITALIANI:
+        # Cerca il nome come parola intera (non parte di altre parole)
+        if re.search(rf'\b{nome}\b', content_lower):
+            return False, error_msg
     
     # 1. Blocca email (pattern con @)
     email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
