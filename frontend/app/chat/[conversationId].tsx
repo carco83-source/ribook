@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -158,9 +159,15 @@ export default function ChatScreen() {
         setTimeout(() => {
           flatListRef.current?.scrollToEnd({ animated: true });
         }, 100);
+      } else {
+        // Gestisce l'errore dal server (es. filtro messaggi)
+        const errorData = await response.json();
+        const errorMessage = errorData.detail || 'Impossibile inviare il messaggio';
+        Alert.alert('Messaggio non inviato', errorMessage);
       }
     } catch (error) {
       console.error('Error sending message:', error);
+      Alert.alert('Errore', 'Si è verificato un errore durante l\'invio del messaggio');
     } finally {
       setSending(false);
     }
