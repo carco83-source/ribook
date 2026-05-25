@@ -8641,7 +8641,6 @@ def check_message_content(content: str, sender_name: str = "", other_user_name: 
         return False, error_msg
     
     # 3. Blocca numeri scritti con spazi tra le cifre (es: "3 3 3 1 2 3")
-    # Rimuovi tutto tranne cifre e spazi, poi controlla se ci sono 4+ cifre separate da spazi
     digits_and_spaces = re.sub(r'[^\d\s]', '', content)
     digits_only = re.sub(r'\s', '', digits_and_spaces)
     if len(digits_only) >= 4:
@@ -8656,26 +8655,31 @@ def check_message_content(content: str, sender_name: str = "", other_user_name: 
         r'\bventi\b', r'\btrenta\b', r'\bquaranta\b', r'\bcinquanta\b',
         r'\bsessanta\b', r'\bsettanta\b', r'\bottanta\b', r'\bnovanta\b', r'\bcento\b',
     ]
-    # Conta quanti numeri in lettere ci sono
     number_word_count = 0
     for pattern in number_words:
         if re.search(pattern, content_lower):
             number_word_count += 1
-    # Se ci sono 3+ numeri in lettere, probabilmente è un tentativo di condividere un numero
     if number_word_count >= 3:
         return False, error_msg
     
-    # 5. Blocca pattern di presentazione nome
+    # 5. Blocca pattern di presentazione nome (AGGIORNATO - più aggressivo)
     name_patterns = [
-        r'\bmi\s+chiamo\b',
-        r'\bsono\s+[A-Z][a-z]+\b',
-        r'\bmi\s+famo\b',
-        r'\bil\s+mio\s+nome\b',
+        r'\bmi\s*chiamo\b',           # "mi chiamo", "michiamo"
+        r'\bsono\s+\w+\b',            # "sono Mario", "sono valerio"
+        r'\bmi\s*famo\b',             # dialettale
+        r'\bil\s*mio\s*nome\b',       # "il mio nome"
         r'\bchiamami\b',
         r'\bcontattami\b',
         r'\bscrivimi\b',
-        r'\bchiama\s+me\b',
-        r'\bscrivi\s+a\b',
+        r'\bchiama\s*me\b',
+        r'\bscrivi\s*a\b',
+        r'\bio\s+sono\b',             # "io sono"
+        r'\bmi\s+presento\b',         # "mi presento"
+        r'\bpiacere\s*,?\s*\w+\b',    # "piacere, Mario" o "piacere Mario"
+        r'\bciao\s+sono\b',           # "ciao sono"
+        r'\bsalve\s+sono\b',          # "salve sono"
+        r'\bhey\s+sono\b',            # "hey sono"
+        r'\bmi\s+dico\b',             # "mi dico"
     ]
     for pattern in name_patterns:
         if re.search(pattern, content_lower):
@@ -8683,15 +8687,15 @@ def check_message_content(content: str, sender_name: str = "", other_user_name: 
     
     # 6. Blocca social media e app di messaggistica
     social_patterns = [
-        r'\binstagram\b', r'\binsta\b', r'\big\b',
-        r'\btelegram\b', r'\btg\b',
-        r'\bwhatsapp\b', r'\bwa\b', r'\bwhats\s*app\b',
-        r'\bfacebook\b', r'\bfb\b',
+        r'\binstagram\b', r'\binsta\b', r'\big\s*:',
+        r'\btelegram\b', r'\btg\s*:', r'\bt\.me\b',
+        r'\bwhatsapp\b', r'\bwa\s*:', r'\bwhats\s*app\b', r'\bwapp\b',
+        r'\bfacebook\b', r'\bfb\s*:',
         r'\btiktok\b', r'\btik\s*tok\b',
         r'\btwitter\b', r'\bx\.com\b',
-        r'\bsnapchat\b', r'\bsnap\b',
+        r'\bsnapchat\b', r'\bsnap\s*:',
         r'\blinkedin\b',
-        r'\byoutube\b', r'\byt\b',
+        r'\byoutube\b', r'\byt\s*:',
         r'\bdiscord\b',
         r'\bsignal\b',
         r'\bviber\b',
@@ -8699,6 +8703,7 @@ def check_message_content(content: str, sender_name: str = "", other_user_name: 
         r'\bmessenger\b',
         r'\bwechat\b',
         r'\bline\b(?!\s+di)',
+        r'\bthreads\b',
     ]
     for pattern in social_patterns:
         if re.search(pattern, content_lower):
@@ -8712,6 +8717,8 @@ def check_message_content(content: str, sender_name: str = "", other_user_name: 
         r'\baccount\b',
         r'\bnick\b',
         r'\bnickname\b',
+        r'\buser\s*:\b',
+        r'\bid\s*:\b',
     ]
     for pattern in username_patterns:
         if re.search(pattern, content_lower):
