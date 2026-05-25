@@ -8634,40 +8634,107 @@ def check_message_content(content: str, sender_name: str = "", other_user_name: 
     if re.search(email_pattern, content):
         return False, "Non è possibile condividere indirizzi email nella chat"
     
-    # 2. Blocca numeri di telefono (sequenze di 6+ cifre, anche con spazi/trattini)
-    # Rimuovi spazi e trattini per il controllo
-    content_no_spaces = re.sub(r'[\s\-\.\(\)]', '', content)
-    phone_pattern = r'\d{6,}'
-    if re.search(phone_pattern, content_no_spaces):
-        return False, "Non è possibile condividere numeri di telefono nella chat"
+    # 2. Blocca QUALSIASI sequenza di 4+ cifre (anche con spazi/trattini)
+    content_no_spaces = re.sub(r'[\s\-\.\(\)/]', '', content)
+    if re.search(r'\d{4,}', content_no_spaces):
+        return False, "Non è possibile condividere numeri nella chat"
     
-    # 3. Blocca pattern comuni di telefono italiano
-    italian_phone_patterns = [
-        r'3\d{2}[\s\-\.]?\d{3}[\s\-\.]?\d{4}',  # 3XX XXX XXXX
-        r'\+39[\s\-\.]?\d{10}',  # +39 seguito da 10 cifre
-        r'0\d{1,3}[\s\-\.]?\d{6,8}',  # Fissi: 0XX XXXXXX
+    # 3. Blocca pattern di presentazione nome
+    name_patterns = [
+        r'\bmi\s+chiamo\b',
+        r'\bsono\s+[A-Z][a-z]+\b',  # "sono Mario"
+        r'\bmi\s+famo\b',  # dialettale
+        r'\bil\s+mio\s+nome\b',
+        r'\bchiamami\b',
+        r'\bcontattami\b',
+        r'\bscrivimi\b',
+        r'\bchiama\s+me\b',
+        r'\bscrivi\s+a\b',
     ]
-    for pattern in italian_phone_patterns:
-        if re.search(pattern, content):
-            return False, "Non è possibile condividere numeri di telefono nella chat"
+    for pattern in name_patterns:
+        if re.search(pattern, content_lower):
+            return False, "Non è possibile condividere il proprio nome nella chat"
     
-    # 4. Blocca tentativi di offuscare email
-    obfuscated_email_patterns = [
-        r'\bat\b.*\bdot\b',  # "at ... dot"
-        r'chiocciola',  # italiano per @
-        r'\[at\]',
-        r'\(at\)',
-        r'@+',
+    # 4. Blocca social media e app di messaggistica
+    social_patterns = [
+        r'\binstagram\b', r'\binsta\b', r'\big\b',
+        r'\btelegram\b', r'\btg\b',
+        r'\bwhatsapp\b', r'\bwa\b', r'\bwhats\s*app\b',
+        r'\bfacebook\b', r'\bfb\b',
+        r'\btiktok\b', r'\btik\s*tok\b',
+        r'\btwitter\b', r'\bx\.com\b',
+        r'\bsnapchat\b', r'\bsnap\b',
+        r'\blinkedin\b',
+        r'\byoutube\b', r'\byt\b',
+        r'\bdiscord\b',
+        r'\bsignal\b',
+        r'\bviber\b',
+        r'\bskype\b',
+        r'\bmessenger\b',
+        r'\bwechat\b',
+        r'\bline\b(?!\s+di)',  # "line" ma non "line di testo"
     ]
-    for pattern in obfuscated_email_patterns:
+    for pattern in social_patterns:
+        if re.search(pattern, content_lower):
+            return False, "Non è possibile condividere riferimenti a social network nella chat"
+    
+    # 5. Blocca pattern di username social (@username, username:, ecc)
+    username_patterns = [
+        r'@[a-zA-Z0-9_\.]+',  # @username
+        r'\busername\b',
+        r'\bprofilo\b',
+        r'\baccount\b',
+        r'\bnick\b',
+        r'\bnickname\b',
+    ]
+    for pattern in username_patterns:
+        if re.search(pattern, content_lower):
+            return False, "Non è possibile condividere username o profili social nella chat"
+    
+    # 6. Blocca tentativi di offuscare email
+    obfuscated_patterns = [
+        r'\bat\b.*\bdot\b',
+        r'\bchiocciola\b',
+        r'\[at\]', r'\(at\)', r'\{at\}',
+        r'\[dot\]', r'\(dot\)', r'\{dot\}',
+        r'punto\s*(it|com|net|org)',
+    ]
+    for pattern in obfuscated_patterns:
         if re.search(pattern, content_lower):
             return False, "Non è possibile condividere informazioni di contatto nella chat"
     
-    # 5. Blocca se contiene il nome dell'altro utente (potrebbe essere tentativo di identificazione)
-    # Disabilitato per ora - potrebbe essere troppo restrittivo
-    # if other_user_name and len(other_user_name) > 2:
-    #     if other_user_name.lower() in content_lower:
-    #         return False, "Per la tua sicurezza, evita di condividere nomi completi"
+    # 7. Blocca frasi che suggeriscono scambio contatti
+    contact_phrases = [
+        r'\bil\s+mio\s+numero\b',
+        r'\bla\s+mia\s+mail\b',
+        r'\bla\s+mia\s+email\b',
+        r'\bil\s+mio\s+contatto\b',
+        r'\bi\s+miei\s+contatti\b',
+        r'\bsu\s+whatsapp\b',
+        r'\bsu\s+telegram\b',
+        r'\bsu\s+instagram\b',
+        r'\bscrivimi\s+su\b',
+        r'\bcontattami\s+su\b',
+        r'\bsentiamoci\s+su\b',
+        r'\bti\s+do\s+il\b',
+        r'\bti\s+lascio\s+il\b',
+        r'\becco\s+il\s+mio\b',
+        r'\bfuori\s+da\s+(qui|ribook|app)\b',
+    ]
+    for pattern in contact_phrases:
+        if re.search(pattern, content_lower):
+            return False, "Non è possibile condividere contatti personali nella chat"
+    
+    # 8. Blocca URL e link
+    url_patterns = [
+        r'https?://',
+        r'www\.',
+        r'\.[a-z]{2,4}/',  # .com/ .it/ etc
+        r'bit\.ly', r'tinyurl', r'goo\.gl',
+    ]
+    for pattern in url_patterns:
+        if re.search(pattern, content_lower):
+            return False, "Non è possibile condividere link nella chat"
     
     return True, ""
 
