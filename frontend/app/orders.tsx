@@ -51,6 +51,12 @@ interface Order {
   escrow_release_deadline?: string;
   is_buyer: boolean;
   is_seller: boolean;
+  // Campi reso
+  return_deadline?: string;
+  return_requested_at?: string;
+  return_reason?: string;
+  return_verified_at?: string;
+  return_notes?: string;
 }
 
 // Stati con colori e icone
@@ -107,6 +113,24 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: string
     label: 'Rimborsato', 
     color: '#f44336', 
     icon: 'refresh-outline',
+    bgColor: '#FFEBEE'
+  },
+  in_verifica_reso: { 
+    label: 'Reso in verifica', 
+    color: '#FF9800', 
+    icon: 'time-outline',
+    bgColor: '#FFF3E0'
+  },
+  reso_accettato: { 
+    label: 'Reso accettato', 
+    color: '#4CAF50', 
+    icon: 'checkmark-done-outline',
+    bgColor: '#E8F5E9'
+  },
+  reso_rifiutato: { 
+    label: 'Reso rifiutato', 
+    color: '#f44336', 
+    icon: 'close-outline',
     bgColor: '#FFEBEE'
   },
 };
@@ -303,7 +327,7 @@ export default function OrdersScreen() {
   const handleConfirmPickup = async (order: Order) => {
     Alert.alert(
       'Conferma ritiro',
-      `Confermi di aver ritirato "${order.book_titolo}" presso ${order.bookstore_name}?\n\nQuesta azione sbloccherà il pagamento al venditore.`,
+      `Confermi di aver ritirato "${order.book_titolo}" presso ${order.bookstore_name}?\n\nAvrai 3 giorni per segnalare eventuali problemi con le condizioni del libro.`,
       [
         { text: 'Annulla', style: 'cancel' },
         {
@@ -317,7 +341,7 @@ export default function OrdersScreen() {
               );
               Alert.alert(
                 'Ritiro confermato!',
-                'Il venditore riceverà il pagamento. Grazie per aver usato RiLiBro!',
+                'Hai 3 giorni per verificare le condizioni del libro e segnalare eventuali problemi. Dopo questo periodo, il pagamento verrà rilasciato al venditore.',
                 [{ text: 'OK' }]
               );
               loadOrders();
@@ -367,6 +391,46 @@ export default function OrdersScreen() {
         },
       ]
     );
+  };
+
+  // Richiesta reso (acquirente) - solo per stato 'picked_up' entro 72h
+  const handleRequestReturn = async (order: Order) => {
+    Alert.alert(
+      'Richiedi reso',
+      'Puoi richiedere un reso SOLO se le condizioni del libro non corrispondono alla descrizione.\n\nLa cartolibreria verificherà il libro e deciderà.',
+      [
+        { text: 'Annulla', style: 'cancel' },
+        {
+          text: 'Condizioni non conformi',
+          style: 'destructive',
+          onPress: async () => {
+            setActionLoading(true);
+            try {
+              await axios.post(
+                `${API_URL}/api/orders/${order.id}/request-return?user_id=${userId}`
+              );
+              Alert.alert(
+                'Richiesta reso inviata',
+                'La cartolibreria verificherà il libro. Riceverai una notifica con l\'esito.',
+                [{ text: 'OK' }]
+              );
+              loadOrders();
+              setShowDetailModal(false);
+            } catch (error: any) {
+              Alert.alert('Errore', error.response?.data?.detail || 'Impossibile richiedere il reso');
+            } finally {
+              setActionLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // Calcola tempo rimanente per reso
+  const getReturnTimeRemaining = (order: Order) => {
+    if (order.status !== 'picked_up' || !order.return_deadline) return null;
+    return calculateTimeRemaining(order.return_deadline);
   };
 
   // Azione venditore: conferma consegna
@@ -722,6 +786,83 @@ export default function OrdersScreen() {
                     {selectedOrder.status === 'paid_escrow' ? 'Richiedi rimborso' : 'Annulla ordine'}
                   </Text>
                 </TouchableOpacity>
+              )}
+
+              {/* Return Period Info and Button - For picked_up orders */}
+              {isBuyer && selectedOrder.status === 'picked_up' && (
+                <View style={styles.returnSection}>
+                  <View style={styles.returnInfoBox}>
+                    <Ionicons name="time-outline" size={24} color="#FF9800" />
+                    <View style={styles.returnInfoContent}>
+                      <Text style={styles.returnInfoTitle}>Periodo di verifica</Text>
+                      <Text style={styles.returnInfoTime}>
+                        {getReturnTimeRemaining(selectedOrder) || 'Caricamento...'}
+                      </Text>
+                      <Text style={styles.returnInfoDesc}>
+                        Puoi richiedere un reso solo se le condizioni del libro non corrispondono alla descrizione.
+                      </Text>
+                    </View>
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.returnButton]}
+                    onPress={() => handleRequestReturn(selectedOrder)}
+                    disabled={actionLoading}
+                  >
+                    {actionLoading ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <>
+                        <Ionicons name="arrow-undo" size={20} color="#fff" />
+                        <Text style={styles.actionButtonText}>Richiedi reso</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Return in verification */}
+              {selectedOrder.status === 'in_verifica_reso' && (
+                <View style={styles.verificationBox}>
+                  <Ionicons name="hourglass-outline" size={24} color="#FF9800" />
+                  <Text style={styles.verificationText}>
+                    Reso in attesa di verifica dalla cartolibreria
+                  </Text>
+                  {selectedOrder.return_reason && (
+                    <Text style={styles.returnReasonText}>
+                      Motivo: {selectedOrder.return_reason}
+                    </Text>
+                  )}
+                </View>
+              )}
+
+              {/* Return accepted */}
+              {selectedOrder.status === 'reso_accettato' && (
+                <View style={[styles.verificationBox, { backgroundColor: '#E8F5E9' }]}>
+                  <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
+                  <Text style={[styles.verificationText, { color: '#4CAF50' }]}>
+                    Reso accettato - Rimborso in elaborazione
+                  </Text>
+                  {selectedOrder.return_notes && (
+                    <Text style={styles.returnReasonText}>
+                      Note: {selectedOrder.return_notes}
+                    </Text>
+                  )}
+                </View>
+              )}
+
+              {/* Return rejected */}
+              {selectedOrder.status === 'reso_rifiutato' && (
+                <View style={[styles.verificationBox, { backgroundColor: '#FFEBEE' }]}>
+                  <Ionicons name="close-circle" size={24} color="#f44336" />
+                  <Text style={[styles.verificationText, { color: '#f44336' }]}>
+                    Reso rifiutato - Libro conforme alla descrizione
+                  </Text>
+                  {selectedOrder.return_notes && (
+                    <Text style={styles.returnReasonText}>
+                      Note: {selectedOrder.return_notes}
+                    </Text>
+                  )}
+                </View>
               )}
             </View>
           </ScrollView>
@@ -1262,5 +1403,64 @@ const styles = StyleSheet.create({
     color: '#FF9800',
     fontWeight: '500',
     flex: 1,
+  },
+  // Return section styles
+  returnSection: {
+    marginTop: 16,
+  },
+  returnInfoBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FFF3E0',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    gap: 12,
+  },
+  returnInfoContent: {
+    flex: 1,
+  },
+  returnInfoTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#E65100',
+    marginBottom: 4,
+  },
+  returnInfoTime: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FF9800',
+    marginBottom: 8,
+  },
+  returnInfoDesc: {
+    fontSize: 13,
+    color: '#666',
+    lineHeight: 18,
+  },
+  returnButton: {
+    backgroundColor: '#f44336',
+  },
+  verificationBox: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#FFF3E0',
+    padding: 16,
+    borderRadius: 12,
+    marginTop: 16,
+  },
+  verificationText: {
+    fontSize: 14,
+    color: '#FF9800',
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  returnReasonText: {
+    fontSize: 13,
+    color: '#666',
+    marginTop: 8,
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
 });

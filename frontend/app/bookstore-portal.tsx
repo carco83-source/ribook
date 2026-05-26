@@ -77,6 +77,11 @@ export default function BookstorePortalScreen() {
   // Notifications state
   const [notifications, setNotifications] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  
+  // Returns state
+  const [pendingReturns, setPendingReturns] = useState<any[]>([]);
+  const [showReturnsModal, setShowReturnsModal] = useState(false);
+  const [processingReturn, setProcessingReturn] = useState(false);
 
   useEffect(() => {
     checkLoginStatus();
@@ -106,8 +111,9 @@ export default function BookstorePortalScreen() {
       setOrders(response.data.orders || []);
       setBookstoreName(response.data.bookstore_name || '');
       
-      // Carica anche le notifiche
+      // Carica anche le notifiche e i resi in attesa
       await loadNotifications(bsId);
+      await loadPendingReturns(bsId);
     } catch (error) {
       console.error('Error loading orders:', error);
     } finally {
@@ -123,6 +129,57 @@ export default function BookstorePortalScreen() {
     } catch (error) {
       console.error('Error loading notifications:', error);
     }
+  };
+  
+  const loadPendingReturns = async (bsId: string) => {
+    try {
+      const response = await axios.get(`${API_URL}/api/bookstore/${bsId}/pending-returns`);
+      setPendingReturns(response.data.returns || []);
+    } catch (error) {
+      console.error('Error loading pending returns:', error);
+    }
+  };
+  
+  const handleVerifyReturn = async (orderId: string, accepted: boolean) => {
+    const actionText = accepted ? 'accettare' : 'rifiutare';
+    const confirmText = accepted 
+      ? 'Confermi che il libro NON corrisponde alla descrizione? L\'acquirente riceverà un rimborso.'
+      : 'Confermi che il libro corrisponde alla descrizione? Il venditore riceverà il pagamento.';
+    
+    Alert.alert(
+      `Conferma ${actionText} reso`,
+      confirmText,
+      [
+        { text: 'Annulla', style: 'cancel' },
+        {
+          text: accepted ? 'Accetta reso' : 'Rifiuta reso',
+          style: accepted ? 'destructive' : 'default',
+          onPress: async () => {
+            setProcessingReturn(true);
+            try {
+              await axios.post(
+                `${API_URL}/api/orders/${orderId}/verify-return?bookstore_id=${bookstoreId}&accepted=${accepted}&notes=`
+              );
+              Alert.alert(
+                'Reso verificato',
+                accepted 
+                  ? 'Reso accettato. L\'acquirente riceverà il rimborso.'
+                  : 'Reso rifiutato. Il venditore riceverà il pagamento.',
+                [{ text: 'OK' }]
+              );
+              // Ricarica resi
+              if (bookstoreId) {
+                await loadPendingReturns(bookstoreId);
+              }
+            } catch (error: any) {
+              Alert.alert('Errore', error.response?.data?.detail || 'Errore nella verifica');
+            } finally {
+              setProcessingReturn(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleLogin = async () => {
@@ -454,6 +511,50 @@ export default function BookstorePortalScreen() {
                 </View>
               );
             })}
+          </View>
+        )}
+        
+        {/* Resi in Attesa Section */}
+        {pendingReturns.length > 0 && (
+          <View style={styles.returnsSection}>
+            <View style={styles.returnsSectionHeader}>
+              <Ionicons name="arrow-undo" size={20} color="#f44336" />
+              <Text style={styles.returnsSectionTitle}>
+                Resi da verificare ({pendingReturns.length})
+              </Text>
+            </View>
+            {pendingReturns.map((returnItem) => (
+              <View key={returnItem.id} style={styles.returnCard}>
+                <View style={styles.returnCardHeader}>
+                  <Text style={styles.returnBookTitle}>{returnItem.book_titolo}</Text>
+                  <Text style={styles.returnOrderCode}>#{returnItem.order_code}</Text>
+                </View>
+                <Text style={styles.returnReason}>
+                  Motivo: {returnItem.return_reason || 'Condizioni non conformi'}
+                </Text>
+                <Text style={styles.returnBuyer}>
+                  Acquirente: {returnItem.buyer_name}
+                </Text>
+                <View style={styles.returnActions}>
+                  <TouchableOpacity
+                    style={[styles.returnActionBtn, styles.returnRejectBtn]}
+                    onPress={() => handleVerifyReturn(returnItem.id, false)}
+                    disabled={processingReturn}
+                  >
+                    <Ionicons name="close" size={18} color="#fff" />
+                    <Text style={styles.returnActionText}>Rifiuta</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.returnActionBtn, styles.returnAcceptBtn]}
+                    onPress={() => handleVerifyReturn(returnItem.id, true)}
+                    disabled={processingReturn}
+                  >
+                    <Ionicons name="checkmark" size={18} color="#fff" />
+                    <Text style={styles.returnActionText}>Accetta</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))}
           </View>
         )}
         
@@ -1024,5 +1125,86 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: '#4CAF50',
+  },
+  // Returns section styles
+  returnsSection: {
+    margin: 16,
+    marginBottom: 8,
+    backgroundColor: '#FFF3E0',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 2,
+    borderColor: '#f44336',
+  },
+  returnsSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  returnsSectionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#f44336',
+  },
+  returnCard: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#f44336',
+  },
+  returnCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  returnBookTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#333',
+    flex: 1,
+  },
+  returnOrderCode: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '500',
+  },
+  returnReason: {
+    fontSize: 13,
+    color: '#f44336',
+    marginBottom: 4,
+    fontStyle: 'italic',
+  },
+  returnBuyer: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 12,
+  },
+  returnActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  returnActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 10,
+    borderRadius: 8,
+    gap: 6,
+  },
+  returnRejectBtn: {
+    backgroundColor: '#9e9e9e',
+  },
+  returnAcceptBtn: {
+    backgroundColor: '#f44336',
+  },
+  returnActionText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
   },
 });

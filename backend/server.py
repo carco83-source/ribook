@@ -390,11 +390,17 @@ ORDER_STATES = {
     "paid_escrow": "Pagato (in escrow)",
     "delivering_to_bookstore": "In consegna alla cartolibreria",
     "ready_for_pickup": "Pronto per il ritiro",
-    "picked_up": "Ritirato (confermato)",
+    "picked_up": "Ritirato (in attesa conferma)",
+    "in_verifica_reso": "Reso in verifica",
+    "reso_accettato": "Reso accettato",
+    "reso_rifiutato": "Reso rifiutato",
     "completed": "Completato (pagamento trasferito)",
     "cancelled": "Annullato",
     "refunded": "Rimborsato"
 }
+
+# Tempo limite per richiedere reso (72 ore = 3 giorni)
+RETURN_WINDOW_HOURS = 72
 
 class PaymentIntent(BaseModel):
     """Simula Stripe PaymentIntent"""
@@ -446,6 +452,14 @@ class Order(BaseModel):
     picked_up_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     escrow_release_deadline: Optional[datetime] = None  # 2 giorni dopo ready_for_pickup
+    
+    # Campi per il sistema di reso
+    return_deadline: Optional[datetime] = None  # 72 ore dopo picked_up_at
+    return_requested_at: Optional[datetime] = None
+    return_reason: Optional[str] = None  # Motivazione reso
+    return_verified_at: Optional[datetime] = None
+    return_verified_by: Optional[str] = None  # ID cartolibreria che ha verificato
+    return_notes: Optional[str] = None  # Note della cartolibreria
     
     # Stripe Connect (per futuro)
     seller_stripe_account_id: Optional[str] = None
@@ -7020,7 +7034,7 @@ async def mark_ready_for_pickup(order_id: str, bookstore_id: str = Query(None)):
 
 @api_router.post("/orders/{order_id}/confirm-pickup")
 async def confirm_pickup(order_id: str, user_id: str = Query(...)):
-    """L'acquirente conferma il ritiro - sblocca i fondi al venditore"""
+    """L'acquirente conferma il ritiro - inizia il periodo di 72h per eventuale reso"""
     
     order = await db.orders.find_one({"id": order_id, "buyer_id": user_id})
     if not order:
@@ -7030,21 +7044,18 @@ async def confirm_pickup(order_id: str, user_id: str = Query(...)):
         raise HTTPException(status_code=400, detail="Il libro non è ancora pronto per il ritiro")
     
     now = datetime.utcnow()
+    from datetime import timedelta
+    return_deadline = now + timedelta(hours=RETURN_WINDOW_HOURS)
     
-    # Aggiorna ordine a completato
+    # Aggiorna ordine a "picked_up" (non completato - 72h per reso)
     update_data = {
-        "status": "completed",
-        "payment_status": "released",
+        "status": "picked_up",
         "picked_up_at": now,
-        "completed_at": now,
+        "return_deadline": return_deadline,
         "status_history": order.get("status_history", []) + [{
             "status": "picked_up",
             "timestamp": now.isoformat(),
-            "note": "Ritiro confermato dall'acquirente"
-        }, {
-            "status": "completed",
-            "timestamp": now.isoformat(),
-            "note": f"Pagamento di €{order.get('netto_venditore', 0):.2f} rilasciato al venditore"
+            "note": "Ritiro confermato dall'acquirente - Inizio periodo reso 72h"
         }]
     }
     
@@ -7056,23 +7067,37 @@ async def confirm_pickup(order_id: str, user_id: str = Query(...)):
         {"$set": {"status": "sold", "sold_at": now, "sold_to": user_id}}
     )
     
-    # Notifica al venditore
-    notification = {
+    # Notifica all'acquirente sulla finestra reso
+    notification_buyer = {
         "id": str(uuid.uuid4()),
-        "user_id": order.get("seller_id"),
-        "type": "payment_released",
-        "title": "FONDI IN ARRIVO!",
-        "message": f"FONDI IN ARRIVO PER:\n{order.get('book_titolo')}\n\nImporto: €{order.get('netto_venditore', 0):.2f}",
+        "user_id": user_id,
+        "type": "pickup_confirmed",
+        "title": "Libro ritirato!",
+        "message": f"Hai ritirato: {order.get('book_titolo')}\n\nHai 3 giorni per segnalare eventuali problemi con le condizioni del libro.",
         "order_id": order_id,
         "read": False,
         "created_at": now.isoformat()
     }
-    await db.notifications.insert_one(notification)
+    await db.notifications.insert_one(notification_buyer)
+    
+    # Notifica al venditore
+    notification_seller = {
+        "id": str(uuid.uuid4()),
+        "user_id": order.get("seller_id"),
+        "type": "book_picked_up",
+        "title": "Libro ritirato!",
+        "message": f"L'acquirente ha ritirato: {order.get('book_titolo')}\n\nRiceverai il pagamento tra 3 giorni se non ci saranno problemi.",
+        "order_id": order_id,
+        "read": False,
+        "created_at": now.isoformat()
+    }
+    await db.notifications.insert_one(notification_seller)
     
     return {
         "success": True,
-        "status": "completed",
-        "message": "Ritiro confermato! Il venditore riceverà il pagamento."
+        "status": "picked_up",
+        "return_deadline": return_deadline.isoformat(),
+        "message": "Ritiro confermato! Hai 3 giorni per segnalare eventuali problemi."
     }
 
 @api_router.get("/orders/{order_id}")
@@ -7094,7 +7119,331 @@ async def get_order(order_id: str, user_id: str = Query(...)):
     
     return order
 
-@api_router.get("/orders/user/{user_id}")
+# ============== SISTEMA RESI ==============
+
+async def check_and_complete_order_if_expired(order_id: str):
+    """
+    Verifica se il periodo di reso (72h) è scaduto e completa l'ordine automaticamente.
+    Chiamata on-demand quando l'utente accede ai dettagli ordine.
+    """
+    order = await db.orders.find_one({"id": order_id})
+    if not order:
+        return None
+    
+    # Solo gli ordini in stato "picked_up" possono scadere
+    if order.get("status") != "picked_up":
+        return order
+    
+    return_deadline = order.get("return_deadline")
+    if not return_deadline:
+        return order
+    
+    # Converte se stringa
+    if isinstance(return_deadline, str):
+        return_deadline = datetime.fromisoformat(return_deadline.replace('Z', '+00:00'))
+    
+    now = datetime.utcnow()
+    
+    # Se la deadline è passata, completa l'ordine
+    if now > return_deadline:
+        update_data = {
+            "status": "completed",
+            "payment_status": "released",
+            "completed_at": now,
+            "status_history": order.get("status_history", []) + [{
+                "status": "completed",
+                "timestamp": now.isoformat(),
+                "note": f"Periodo reso scaduto - Pagamento di €{order.get('netto_venditore', 0):.2f} rilasciato al venditore"
+            }]
+        }
+        
+        await db.orders.update_one({"id": order_id}, {"$set": update_data})
+        
+        # Notifica al venditore
+        notification = {
+            "id": str(uuid.uuid4()),
+            "user_id": order.get("seller_id"),
+            "type": "payment_released",
+            "title": "FONDI IN ARRIVO!",
+            "message": f"Il periodo di reso è scaduto senza reclami.\n\nFONDI IN ARRIVO PER:\n{order.get('book_titolo')}\n\nImporto: €{order.get('netto_venditore', 0):.2f}",
+            "order_id": order_id,
+            "read": False,
+            "created_at": now.isoformat()
+        }
+        await db.notifications.insert_one(notification)
+        
+        # Aggiorna ordine in memoria
+        order["status"] = "completed"
+        order["payment_status"] = "released"
+        order["completed_at"] = now
+    
+    return order
+
+@api_router.post("/orders/{order_id}/request-return")
+async def request_return(order_id: str, user_id: str = Query(...)):
+    """
+    L'acquirente richiede un reso.
+    Solo per "Condizioni non conformi alla descrizione".
+    """
+    order = await db.orders.find_one({"id": order_id, "buyer_id": user_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="Ordine non trovato")
+    
+    # Verifica stato ordine
+    if order.get("status") != "picked_up":
+        if order.get("status") == "completed":
+            raise HTTPException(status_code=400, detail="Il periodo per richiedere il reso è scaduto")
+        raise HTTPException(status_code=400, detail="Non puoi richiedere un reso per questo ordine")
+    
+    # Verifica deadline reso
+    return_deadline = order.get("return_deadline")
+    if return_deadline:
+        if isinstance(return_deadline, str):
+            return_deadline = datetime.fromisoformat(return_deadline.replace('Z', '+00:00'))
+        if datetime.utcnow() > return_deadline:
+            # Completa l'ordine se scaduto
+            await check_and_complete_order_if_expired(order_id)
+            raise HTTPException(status_code=400, detail="Il periodo per richiedere il reso è scaduto (72 ore dal ritiro)")
+    
+    now = datetime.utcnow()
+    
+    # Aggiorna ordine a "in_verifica_reso"
+    update_data = {
+        "status": "in_verifica_reso",
+        "return_requested_at": now,
+        "return_reason": "Condizioni non conformi alla descrizione",
+        "status_history": order.get("status_history", []) + [{
+            "status": "in_verifica_reso",
+            "timestamp": now.isoformat(),
+            "note": "Richiesta reso: Condizioni non conformi alla descrizione"
+        }]
+    }
+    
+    await db.orders.update_one({"id": order_id}, {"$set": update_data})
+    
+    # Notifica alla cartolibreria
+    notification_bookstore = {
+        "id": str(uuid.uuid4()),
+        "user_id": f"bookstore_{order.get('bookstore_id')}",
+        "bookstore_id": order.get("bookstore_id"),
+        "type": "return_request",
+        "title": "Richiesta reso in attesa",
+        "message": f"Nuovo reso da verificare:\n{order.get('book_titolo')}\n\nMotivo: Condizioni non conformi alla descrizione",
+        "order_id": order_id,
+        "read": False,
+        "created_at": now.isoformat()
+    }
+    await db.notifications.insert_one(notification_bookstore)
+    
+    # Notifica al venditore
+    notification_seller = {
+        "id": str(uuid.uuid4()),
+        "user_id": order.get("seller_id"),
+        "type": "return_requested",
+        "title": "Richiesta reso",
+        "message": f"L'acquirente ha richiesto un reso per:\n{order.get('book_titolo')}\n\nLa cartolibreria verificherà il libro.",
+        "order_id": order_id,
+        "read": False,
+        "created_at": now.isoformat()
+    }
+    await db.notifications.insert_one(notification_seller)
+    
+    return {
+        "success": True,
+        "status": "in_verifica_reso",
+        "message": "Richiesta reso inviata. La cartolibreria verificherà il libro."
+    }
+
+@api_router.post("/orders/{order_id}/verify-return")
+async def verify_return(
+    order_id: str, 
+    bookstore_id: str = Query(...),
+    accepted: bool = Query(...),
+    notes: str = Query("")
+):
+    """
+    La cartolibreria verifica e accetta/rifiuta il reso.
+    """
+    order = await db.orders.find_one({"id": order_id, "bookstore_id": bookstore_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="Ordine non trovato per questa cartolibreria")
+    
+    if order.get("status") != "in_verifica_reso":
+        raise HTTPException(status_code=400, detail="Questo ordine non ha una richiesta reso in attesa")
+    
+    now = datetime.utcnow()
+    
+    if accepted:
+        # RESO ACCETTATO - Rimborso acquirente
+        update_data = {
+            "status": "reso_accettato",
+            "payment_status": "refunded",
+            "return_verified_at": now,
+            "return_verified_by": bookstore_id,
+            "return_notes": notes or "Reso accettato - Libro non conforme alla descrizione",
+            "status_history": order.get("status_history", []) + [{
+                "status": "reso_accettato",
+                "timestamp": now.isoformat(),
+                "note": f"Reso accettato dalla cartolibreria. {notes}"
+            }]
+        }
+        
+        await db.orders.update_one({"id": order_id}, {"$set": update_data})
+        
+        # Rimetti il listing disponibile per il venditore
+        await db.listings.update_one(
+            {"id": order.get("listing_id")},
+            {"$set": {"status": "active", "sold_at": None, "sold_to": None}}
+        )
+        
+        # Notifica acquirente
+        notification_buyer = {
+            "id": str(uuid.uuid4()),
+            "user_id": order.get("buyer_id"),
+            "type": "return_accepted",
+            "title": "Reso accettato!",
+            "message": f"Il reso per '{order.get('book_titolo')}' è stato accettato.\n\nRiceverai il rimborso di €{order.get('totale_acquirente', 0):.2f}",
+            "order_id": order_id,
+            "read": False,
+            "created_at": now.isoformat()
+        }
+        await db.notifications.insert_one(notification_buyer)
+        
+        # Notifica venditore
+        notification_seller = {
+            "id": str(uuid.uuid4()),
+            "user_id": order.get("seller_id"),
+            "type": "return_accepted",
+            "title": "Reso accettato",
+            "message": f"Il reso per '{order.get('book_titolo')}' è stato accettato.\n\nIl libro è tornato disponibile nel tuo inventario.",
+            "order_id": order_id,
+            "read": False,
+            "created_at": now.isoformat()
+        }
+        await db.notifications.insert_one(notification_seller)
+        
+        return {
+            "success": True,
+            "status": "reso_accettato",
+            "message": "Reso accettato. L'acquirente riceverà il rimborso."
+        }
+    else:
+        # RESO RIFIUTATO - Pagamento al venditore
+        update_data = {
+            "status": "reso_rifiutato",
+            "payment_status": "released",
+            "completed_at": now,
+            "return_verified_at": now,
+            "return_verified_by": bookstore_id,
+            "return_notes": notes or "Reso rifiutato - Libro conforme alla descrizione",
+            "status_history": order.get("status_history", []) + [{
+                "status": "reso_rifiutato",
+                "timestamp": now.isoformat(),
+                "note": f"Reso rifiutato dalla cartolibreria. {notes}"
+            }, {
+                "status": "completed",
+                "timestamp": now.isoformat(),
+                "note": f"Pagamento di €{order.get('netto_venditore', 0):.2f} rilasciato al venditore"
+            }]
+        }
+        
+        await db.orders.update_one({"id": order_id}, {"$set": update_data})
+        
+        # Notifica acquirente
+        notification_buyer = {
+            "id": str(uuid.uuid4()),
+            "user_id": order.get("buyer_id"),
+            "type": "return_rejected",
+            "title": "Reso rifiutato",
+            "message": f"Il reso per '{order.get('book_titolo')}' è stato rifiutato.\n\nMotivo: Il libro risulta conforme alla descrizione.",
+            "order_id": order_id,
+            "read": False,
+            "created_at": now.isoformat()
+        }
+        await db.notifications.insert_one(notification_buyer)
+        
+        # Notifica venditore
+        notification_seller = {
+            "id": str(uuid.uuid4()),
+            "user_id": order.get("seller_id"),
+            "type": "payment_released",
+            "title": "FONDI IN ARRIVO!",
+            "message": f"Reso rifiutato - libro conforme.\n\nFONDI IN ARRIVO PER:\n{order.get('book_titolo')}\n\nImporto: €{order.get('netto_venditore', 0):.2f}",
+            "order_id": order_id,
+            "read": False,
+            "created_at": now.isoformat()
+        }
+        await db.notifications.insert_one(notification_seller)
+        
+        return {
+            "success": True,
+            "status": "reso_rifiutato",
+            "message": "Reso rifiutato. Il venditore riceverà il pagamento."
+        }
+
+@api_router.get("/bookstore/{bookstore_id}/pending-returns")
+async def get_pending_returns(bookstore_id: str):
+    """Ottiene tutti i resi in attesa di verifica per una cartolibreria"""
+    
+    orders = await db.orders.find({
+        "bookstore_id": bookstore_id,
+        "status": "in_verifica_reso"
+    }).sort("return_requested_at", -1).to_list(100)
+    
+    for order in orders:
+        order.pop('_id', None)
+        order["status_label"] = ORDER_STATES.get(order.get("status"), order.get("status"))
+    
+    return {"returns": orders, "count": len(orders)}
+
+@api_router.get("/orders/{order_id}/check-return-status")
+async def check_return_status(order_id: str, user_id: str = Query(...)):
+    """
+    Verifica lo stato del reso per un ordine.
+    Controlla anche se la deadline è scaduta (on-demand).
+    """
+    order = await db.orders.find_one({
+        "id": order_id,
+        "$or": [{"buyer_id": user_id}, {"seller_id": user_id}]
+    })
+    
+    if not order:
+        raise HTTPException(status_code=404, detail="Ordine non trovato")
+    
+    # Check e completa se scaduto
+    order = await check_and_complete_order_if_expired(order_id)
+    
+    order.pop('_id', None)
+    
+    # Calcola tempo rimanente per reso
+    return_time_remaining = None
+    can_request_return = False
+    
+    if order.get("status") == "picked_up":
+        return_deadline = order.get("return_deadline")
+        if return_deadline:
+            if isinstance(return_deadline, str):
+                return_deadline = datetime.fromisoformat(return_deadline.replace('Z', '+00:00'))
+            remaining = return_deadline - datetime.utcnow()
+            if remaining.total_seconds() > 0:
+                hours = int(remaining.total_seconds() // 3600)
+                minutes = int((remaining.total_seconds() % 3600) // 60)
+                return_time_remaining = f"{hours}h {minutes}m"
+                can_request_return = True
+    
+    return {
+        "order_id": order_id,
+        "status": order.get("status"),
+        "status_label": ORDER_STATES.get(order.get("status"), order.get("status")),
+        "can_request_return": can_request_return,
+        "return_time_remaining": return_time_remaining,
+        "return_deadline": order.get("return_deadline"),
+        "return_reason": order.get("return_reason"),
+        "return_notes": order.get("return_notes"),
+        "is_buyer": order.get("buyer_id") == user_id
+    }
+
+
 async def get_user_orders(user_id: str, role: str = Query("all")):
     """Ottieni tutti gli ordini di un utente (come acquirente o venditore)"""
     
