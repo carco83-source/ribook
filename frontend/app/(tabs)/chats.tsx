@@ -7,11 +7,14 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  Alert,
+  Platform,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
+import { useNotifications } from '../../context/NotificationContext';
 
 const API_BASE = process.env.EXPO_PUBLIC_BACKEND_URL 
   ? `${process.env.EXPO_PUBLIC_BACKEND_URL}/api`
@@ -62,6 +65,7 @@ type TabType = 'messaggi' | 'notifiche';
 
 export default function MessaggiScreen() {
   const router = useRouter();
+  const { refreshNotifications: refreshGlobalNotifications, setUnreadCount: setGlobalUnreadCount } = useNotifications();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -144,11 +148,20 @@ export default function MessaggiScreen() {
 
   const markNotificationAsRead = async (notifId: string) => {
     try {
+      // 1. Chiama l'API per segnare come letta
       await fetch(`${API_BASE}/notifications/${notifId}/read`, { method: 'PUT' });
+      
+      // 2. Aggiorna lo stato locale immediatamente (optimistic update)
       setNotifications(prev => 
         prev.map(n => n.id === notifId ? { ...n, read: true } : n)
       );
+      
+      // 3. Decrementa il contatore locale
       setUnreadNotifications(prev => Math.max(0, prev - 1));
+      
+      // 4. Aggiorna il contatore globale (per il badge nella tab)
+      setGlobalUnreadCount((prev: number) => Math.max(0, prev - 1));
+      
     } catch (error) {
       console.error('Error marking notification as read:', error);
     }
@@ -166,17 +179,27 @@ export default function MessaggiScreen() {
       });
       
       if (response.ok) {
-        // Rimuovi la notifica dalla lista
-        setNotifications(prev => prev.filter(n => n.id !== notification.id));
-        setUnreadNotifications(prev => Math.max(0, prev - 1));
+        // Segna come letta ma NON rimuovere dalla lista
+        await markNotificationAsRead(notification.id);
+        // Aggiorna lo stato della notifica localmente per rimuovere i pulsanti
+        setNotifications(prev => prev.map(n => 
+          n.id === notification.id 
+            ? { ...n, read: true, action_type: 'completed', type: 'seller_confirmed' } 
+            : n
+        ));
         // Mostra conferma
-        if (typeof window !== 'undefined' && window.alert) {
+        if (Platform.OS === 'web') {
           window.alert('✅ Disponibilità confermata! L\'acquirente può procedere al pagamento.');
+        } else {
+          Alert.alert('Conferma', 'Disponibilità confermata! L\'acquirente può procedere al pagamento.');
         }
       } else {
         const error = await response.json();
-        if (typeof window !== 'undefined' && window.alert) {
-          window.alert('Errore: ' + (error.detail || 'Impossibile confermare'));
+        const errorMsg = error.detail || 'Impossibile confermare';
+        if (Platform.OS === 'web') {
+          window.alert('Errore: ' + errorMsg);
+        } else {
+          Alert.alert('Errore', errorMsg);
         }
       }
     } catch (error) {
@@ -198,16 +221,26 @@ export default function MessaggiScreen() {
       });
       
       if (response.ok) {
-        // Rimuovi la notifica dalla lista
-        setNotifications(prev => prev.filter(n => n.id !== notification.id));
-        setUnreadNotifications(prev => Math.max(0, prev - 1));
-        if (typeof window !== 'undefined' && window.alert) {
+        // Segna come letta ma NON rimuovere dalla lista
+        await markNotificationAsRead(notification.id);
+        // Aggiorna lo stato della notifica localmente
+        setNotifications(prev => prev.map(n => 
+          n.id === notification.id 
+            ? { ...n, read: true, action_type: 'completed', type: 'seller_rejected' } 
+            : n
+        ));
+        if (Platform.OS === 'web') {
           window.alert('Richiesta annullata. L\'acquirente è stato notificato.');
+        } else {
+          Alert.alert('Annullato', 'Richiesta annullata. L\'acquirente è stato notificato.');
         }
       } else {
         const error = await response.json();
-        if (typeof window !== 'undefined' && window.alert) {
-          window.alert('Errore: ' + (error.detail || 'Impossibile rifiutare'));
+        const errorMsg = error.detail || 'Impossibile rifiutare';
+        if (Platform.OS === 'web') {
+          window.alert('Errore: ' + errorMsg);
+        } else {
+          Alert.alert('Errore', errorMsg);
         }
       }
     } catch (error) {
@@ -288,19 +321,22 @@ export default function MessaggiScreen() {
     const isReadyForPayment = item.type === 'ready_for_payment' || item.action === 'open_cart' || item.data?.open_cart;
     const isLoading = actionLoading === item.id;
     
-    // Handler per click sulla notifica
+    // Handler per click sulla notifica - TUTTE le notifiche sono cliccabili per segnare come lette
     const handleNotificationPress = async () => {
-      // Segna come letta
+      // Segna come letta se non lo è già
       if (!item.read) {
         await markNotificationAsRead(item.id);
       }
       
+      // Navigazione opzionale basata sul tipo
       if (isReadyForPayment) {
-        // Vai al carrello
         router.push('/(tabs)/sell');
+      } else if (item.data?.order_id) {
+        router.push('/orders');
       } else if (item.data?.listing_id) {
         router.push(`/listing/${item.data.listing_id}`);
       }
+      // Per altre notifiche, semplicemente segna come letta senza navigare
     };
     
     // Contenuto della notifica
@@ -322,7 +358,7 @@ export default function MessaggiScreen() {
               </Text>
               <Text style={styles.notifTime}>{formatTime(item.created_at)}</Text>
             </View>
-            <Text style={styles.notifMessage} numberOfLines={isSellerConfirmation ? 6 : 3}>
+            <Text style={styles.notifMessage} numberOfLines={isSellerConfirmation ? 8 : 5}>
               {item.message}
             </Text>
             {/* Indicatore "Vai al carrello" per notifiche ready_for_payment */}
@@ -335,7 +371,7 @@ export default function MessaggiScreen() {
             )}
           </View>
 
-          {!item.read && !isSellerConfirmation && !isReadyForPayment && <View style={styles.unreadDot} />}
+          {!item.read && <View style={styles.unreadDot} />}
         </View>
         
         {/* Pulsanti azione per richiesta conferma venditore */}
@@ -374,34 +410,20 @@ export default function MessaggiScreen() {
       </>
     );
     
-    // Se è notifica cliccabile (ready_for_payment), usa TouchableOpacity
-    if (isReadyForPayment && !isSellerConfirmation) {
-      return (
-        <TouchableOpacity
-          style={[
-            styles.notificationCard, 
-            !item.read && styles.notificationUnread, 
-            styles.notificationClickable
-          ]}
-          onPress={handleNotificationPress}
-          activeOpacity={0.7}
-        >
-          {notificationContent}
-        </TouchableOpacity>
-      );
-    }
-    
-    // Altrimenti usa View normale
+    // TUTTE le notifiche sono ora cliccabili per segnare come lette
     return (
-      <View 
+      <TouchableOpacity
         style={[
           styles.notificationCard, 
           !item.read && styles.notificationUnread, 
-          isSellerConfirmation && styles.notificationAction
+          isSellerConfirmation && styles.notificationAction,
+          isReadyForPayment && !isSellerConfirmation && styles.notificationClickable
         ]}
+        onPress={handleNotificationPress}
+        activeOpacity={0.7}
       >
         {notificationContent}
-      </View>
+      </TouchableOpacity>
     );
   };
 

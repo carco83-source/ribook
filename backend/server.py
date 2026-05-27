@@ -6761,6 +6761,17 @@ async def pay_order(order_id: str, user_id: str = Query(...)):
     if current_status not in ["pending_payment", "in_attesa_pagamento"]:
         raise HTTPException(status_code=400, detail=f"Ordine non in attesa di pagamento. Stato: {current_status}")
     
+    # Recupera indirizzo cartolibreria
+    bookstore = await db.bookstores.find_one({"id": order.get("bookstore_id")})
+    bookstore_address = ""
+    if bookstore:
+        indirizzo = bookstore.get("indirizzo", "")
+        citta = bookstore.get("citta", "")
+        if indirizzo and citta:
+            bookstore_address = f"{indirizzo}, {citta}"
+        elif indirizzo:
+            bookstore_address = indirizzo
+    
     # Simula PaymentIntent di Stripe
     payment_intent_id = f"pi_mock_{uuid.uuid4().hex[:16]}"
     
@@ -6792,16 +6803,18 @@ async def pay_order(order_id: str, user_id: str = Query(...)):
         {"$set": {"status": "reserved", "stato": "riservato", "reserved_by": user_id, "order_id": order_id}}
     )
     
-    # Notifica al venditore con QR code
+    # Notifica al venditore con QR code E indirizzo cartolibreria
+    address_line = f"\n📍 {bookstore_address}" if bookstore_address else ""
     seller_notification = {
         "id": str(uuid.uuid4()),
         "user_id": order.get("seller_id"),
         "type": "order_paid_deliver",
         "title": "Il testo è stato acquistato!",
-        "message": f"Hai 2 giorni lavorativi per consegnare:\n📚 {order.get('book_titolo')}\n\npresso:\n🏪 {order.get('bookstore_name')}\n\nper sbloccare i fondi.\n\nMostra il seguente codice:\n🔐 {order.get('order_code')}\n\ne il QR associato all'ordine.",
+        "message": f"Hai 2 giorni lavorativi per consegnare:\n📚 {order.get('book_titolo')}\n\npresso:\n🏪 {order.get('bookstore_name')}{address_line}\n\nper sbloccare i fondi.\n\nMostra il seguente codice:\n🔐 {order.get('order_code')}\n\ne il QR associato all'ordine.",
         "order_id": order_id,
         "order_code": order.get("order_code"),
         "bookstore_name": order.get("bookstore_name"),
+        "bookstore_address": bookstore_address,
         "delivery_deadline": delivery_deadline.isoformat(),
         "data": {
             "order_id": order_id,
@@ -6809,6 +6822,7 @@ async def pay_order(order_id: str, user_id: str = Query(...)):
             "book_titolo": order.get("book_titolo"),
             "book_condizioni": order.get("book_condizioni"),
             "bookstore_name": order.get("bookstore_name"),
+            "bookstore_address": bookstore_address,
             "netto_venditore": order.get("netto_venditore"),
             "show_qr": True,
             "role": "seller"
