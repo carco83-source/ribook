@@ -59,12 +59,39 @@ interface Order {
   return_notes?: string;
 }
 
-// Stati con colori e icone
+// Stati con colori e icone - NUOVO FLUSSO RIBOOK
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: string; bgColor: string }> = {
+  // Fase 1: Richiesta
+  in_attesa_conferma_venditore: { 
+    label: 'In attesa conferma venditore', 
+    color: '#FF9800', 
+    icon: 'hourglass-outline',
+    bgColor: '#FFF3E0'
+  },
   pending_seller_confirmation: { 
     label: 'In attesa conferma venditore', 
     color: '#FF9800', 
     icon: 'hourglass-outline',
+    bgColor: '#FFF3E0'
+  },
+  annullato_non_disponibile: { 
+    label: 'Annullato - Non disponibile', 
+    color: '#f44336', 
+    icon: 'close-circle-outline',
+    bgColor: '#FFEBEE'
+  },
+  annullato_timeout: { 
+    label: 'Annullato - Timeout 24h', 
+    color: '#f44336', 
+    icon: 'time-outline',
+    bgColor: '#FFEBEE'
+  },
+  
+  // Fase 2: Pagamento
+  in_attesa_pagamento: { 
+    label: 'In attesa di pagamento', 
+    color: '#FF9800', 
+    icon: 'card-outline',
     bgColor: '#FFF3E0'
   },
   pending_payment: { 
@@ -73,11 +100,25 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: string
     icon: 'card-outline',
     bgColor: '#FFF3E0'
   },
+  
+  // Fase 3: Consegna venditore
+  pagato_attesa_consegna: { 
+    label: 'Pagato - In attesa consegna', 
+    color: '#2196F3', 
+    icon: 'time-outline',
+    bgColor: '#E3F2FD'
+  },
   paid_escrow: { 
     label: 'Pagato (in escrow)', 
     color: '#2196F3', 
     icon: 'lock-closed-outline',
     bgColor: '#E3F2FD'
+  },
+  annullato_mancata_consegna: { 
+    label: 'Annullato - Mancata consegna', 
+    color: '#f44336', 
+    icon: 'close-circle-outline',
+    bgColor: '#FFEBEE'
   },
   delivering_to_bookstore: { 
     label: 'In consegna alla cartolibreria', 
@@ -85,14 +126,30 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: string
     icon: 'car-outline',
     bgColor: '#F3E5F5'
   },
+  
+  // Fase 4: Verifica cartolibreria
+  rifiutato_condizioni: { 
+    label: 'Rifiutato - Condizioni non conformi', 
+    color: '#f44336', 
+    icon: 'alert-circle-outline',
+    bgColor: '#FFEBEE'
+  },
+  pronto_per_ritiro: { 
+    label: 'Pronto per il ritiro', 
+    color: '#4CAF50', 
+    icon: 'checkmark-circle-outline',
+    bgColor: '#E8F5E9'
+  },
   ready_for_pickup: { 
     label: 'Pronto per il ritiro', 
     color: '#4CAF50', 
     icon: 'checkmark-circle-outline',
     bgColor: '#E8F5E9'
   },
+  
+  // Fase 5: Ritiro e completamento
   picked_up: { 
-    label: 'Ritirato', 
+    label: 'Ritirato (periodo verifica)', 
     color: '#4CAF50', 
     icon: 'bag-check-outline',
     bgColor: '#E8F5E9'
@@ -103,6 +160,28 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: string
     icon: 'trophy-outline',
     bgColor: '#E8F5E9'
   },
+  
+  // Stati reso
+  in_verifica_reso: { 
+    label: 'Reso in verifica', 
+    color: '#FF9800', 
+    icon: 'time-outline',
+    bgColor: '#FFF3E0'
+  },
+  reso_accettato: { 
+    label: 'Reso accettato - Rimborsato', 
+    color: '#4CAF50', 
+    icon: 'checkmark-done-outline',
+    bgColor: '#E8F5E9'
+  },
+  reso_rifiutato: { 
+    label: 'Reso rifiutato', 
+    color: '#f44336', 
+    icon: 'close-outline',
+    bgColor: '#FFEBEE'
+  },
+  
+  // Altri stati
   cancelled: { 
     label: 'Annullato', 
     color: '#f44336', 
@@ -113,24 +192,6 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: string
     label: 'Rimborsato', 
     color: '#f44336', 
     icon: 'refresh-outline',
-    bgColor: '#FFEBEE'
-  },
-  in_verifica_reso: { 
-    label: 'Reso in verifica', 
-    color: '#FF9800', 
-    icon: 'time-outline',
-    bgColor: '#FFF3E0'
-  },
-  reso_accettato: { 
-    label: 'Reso accettato', 
-    color: '#4CAF50', 
-    icon: 'checkmark-done-outline',
-    bgColor: '#E8F5E9'
-  },
-  reso_rifiutato: { 
-    label: 'Reso rifiutato', 
-    color: '#f44336', 
-    icon: 'close-outline',
     bgColor: '#FFEBEE'
   },
 };
@@ -225,11 +286,11 @@ export default function OrdersScreen() {
 
   // === AZIONI ORDINE ===
 
-  // Venditore conferma disponibilità
+  // Venditore conferma disponibilità - DISPONIBILE
   const handleSellerConfirm = async (order: Order) => {
     Alert.alert(
-      'Conferma disponibilità',
-      `Confermi che "${order.book_titolo}" è disponibile per la vendita?`,
+      '✅ DISPONIBILE',
+      `Confermi la disponibilità del testo:\n📚 "${order.book_titolo}"\n\ne la consegna entro 2 giorni lavorativi presso:\n🏪 ${order.bookstore_name}?`,
       [
         { text: 'Annulla', style: 'cancel' },
         {
@@ -258,15 +319,15 @@ export default function OrdersScreen() {
     );
   };
 
-  // Venditore rifiuta/annulla
+  // Venditore rifiuta - NON DISPONIBILE
   const handleSellerReject = async (order: Order) => {
     Alert.alert(
-      'Rifiuta ordine',
+      '❌ NON DISPONIBILE',
       `Il libro "${order.book_titolo}" non è più disponibile?`,
       [
-        { text: 'No, annulla', style: 'cancel' },
+        { text: 'Annulla', style: 'cancel' },
         {
-          text: 'Sì, rifiuta ordine',
+          text: 'Sì, non disponibile',
           style: 'destructive',
           onPress: async () => {
             setActionLoading(true);
@@ -275,8 +336,8 @@ export default function OrdersScreen() {
                 `${API_URL}/api/orders/${order.id}/seller-reject?user_id=${userId}&reason=Libro non più disponibile`
               );
               Alert.alert(
-                'Ordine rifiutato',
-                'L\'acquirente è stato notificato.',
+                'Richiesta annullata',
+                'L\'acquirente è stato notificato che il libro non è disponibile.',
                 [{ text: 'OK' }]
               );
               loadOrders();

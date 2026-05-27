@@ -384,23 +384,42 @@ class Transaction(BaseModel):
 
 # ============== PAYMENT/ORDER SYSTEM ==============
 
-# Stati dell'ordine
+# Stati dell'ordine - FLUSSO COMPLETO RIBOOK
 ORDER_STATES = {
-    "pending_payment": "In attesa di pagamento",
-    "paid_escrow": "Pagato (in escrow)",
-    "delivering_to_bookstore": "In consegna alla cartolibreria",
-    "ready_for_pickup": "Pronto per il ritiro",
-    "picked_up": "Ritirato (in attesa conferma)",
+    # Fase 1: Richiesta
+    "in_attesa_conferma_venditore": "In attesa conferma venditore",
+    "annullato_non_disponibile": "Annullato - Non disponibile",
+    "annullato_timeout": "Annullato - Timeout 24h",
+    
+    # Fase 2: Pagamento
+    "in_attesa_pagamento": "In attesa di pagamento",
+    
+    # Fase 3: Consegna venditore
+    "pagato_attesa_consegna": "Pagato - In attesa consegna",
+    "annullato_mancata_consegna": "Annullato - Mancata consegna",
+    
+    # Fase 4: Verifica cartolibreria
+    "rifiutato_condizioni": "Rifiutato - Condizioni non conformi",
+    "pronto_per_ritiro": "Pronto per il ritiro",
+    
+    # Fase 5: Ritiro e completamento
+    "picked_up": "Ritirato (periodo verifica 3gg)",
+    "completed": "Completato",
+    
+    # Stati reso
     "in_verifica_reso": "Reso in verifica",
-    "reso_accettato": "Reso accettato",
+    "reso_accettato": "Reso accettato - Rimborsato",
     "reso_rifiutato": "Reso rifiutato",
-    "completed": "Completato (pagamento trasferito)",
+    
+    # Altri stati
     "cancelled": "Annullato",
     "refunded": "Rimborsato"
 }
 
-# Tempo limite per richiedere reso (72 ore = 3 giorni)
-RETURN_WINDOW_HOURS = 72
+# Timer automatici
+SELLER_CONFIRMATION_HOURS = 24  # 24h per conferma venditore
+DELIVERY_BUSINESS_DAYS = 2      # 2 giorni lavorativi per consegna
+RETURN_WINDOW_HOURS = 72        # 72 ore (3 giorni) per reso
 
 class PaymentIntent(BaseModel):
     """Simula Stripe PaymentIntent"""
@@ -428,6 +447,7 @@ class Order(BaseModel):
     book_isbn: str
     book_titolo: str
     book_autore: str = ""
+    book_condizioni: str = ""  # Condizioni dichiarate
     
     # Prezzi (in euro)
     prezzo_libro: float  # Prezzo del libro (va al venditore)
@@ -441,25 +461,37 @@ class Order(BaseModel):
     payment_status: str = "pending"  # pending, paid, released, refunded
     
     # Stato ordine
-    status: str = "pending_payment"
+    status: str = "in_attesa_conferma_venditore"  # Stato iniziale nuovo flusso
     status_history: List[dict] = Field(default_factory=list)
     
     # Date
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    
+    # Timer 1: Conferma venditore (24h)
+    seller_confirmation_deadline: Optional[datetime] = None
+    seller_confirmed_at: Optional[datetime] = None
+    
+    # Timer 2: Consegna libro (2 giorni lavorativi)
     paid_at: Optional[datetime] = None
+    delivery_deadline: Optional[datetime] = None
     delivered_to_bookstore_at: Optional[datetime] = None
+    
+    # Verifica cartolibreria
+    bookstore_verified_at: Optional[datetime] = None
+    bookstore_verification_notes: Optional[str] = None
+    
+    # Ritiro
     ready_for_pickup_at: Optional[datetime] = None
     picked_up_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
-    escrow_release_deadline: Optional[datetime] = None  # 2 giorni dopo ready_for_pickup
     
-    # Campi per il sistema di reso
-    return_deadline: Optional[datetime] = None  # 72 ore dopo picked_up_at
+    # Campi per il sistema di reso (3 giorni dal ritiro)
+    return_deadline: Optional[datetime] = None
     return_requested_at: Optional[datetime] = None
-    return_reason: Optional[str] = None  # Motivazione reso
+    return_reason: Optional[str] = None
     return_verified_at: Optional[datetime] = None
-    return_verified_by: Optional[str] = None  # ID cartolibreria che ha verificato
-    return_notes: Optional[str] = None  # Note della cartolibreria
+    return_verified_by: Optional[str] = None
+    return_notes: Optional[str] = None
     
     # Stripe Connect (per futuro)
     seller_stripe_account_id: Optional[str] = None
@@ -6494,7 +6526,15 @@ async def create_order(
     totale_acquirente = prezzo_libro + commissione_app + commissione_cartolibreria  # +17%
     netto_venditore = prezzo_libro  # Il venditore riceve il prezzo del libro
     
-    # Crea ordine
+    # Calcola deadline conferma venditore (24h)
+    from datetime import timedelta
+    now = datetime.utcnow()
+    seller_confirmation_deadline = now + timedelta(hours=SELLER_CONFIRMATION_HOURS)
+    
+    # Genera codice utente anonimo per il venditore
+    buyer_code = f"REB-{user_id[:6].upper()}"
+    
+    # Crea ordine con nuovo flusso
     order = Order(
         buyer_id=user_id,
         buyer_name=buyer.get("username", "Acquirente"),
@@ -6506,16 +6546,18 @@ async def create_order(
         book_isbn=listing.get("book_isbn", ""),
         book_titolo=listing.get("book_titolo", ""),
         book_autore=listing.get("book_autore", ""),
+        book_condizioni=listing.get("condizioni", listing.get("condition", "")),
         prezzo_libro=round(prezzo_libro, 2),
         commissione_app=round(commissione_app, 2),
         commissione_cartolibreria=round(commissione_cartolibreria, 2),
         totale_acquirente=round(totale_acquirente, 2),
         netto_venditore=round(netto_venditore, 2),
-        status="pending_seller_confirmation",  # Prima deve confermare il venditore
+        status="in_attesa_conferma_venditore",
+        seller_confirmation_deadline=seller_confirmation_deadline,
         status_history=[{
-            "status": "pending_seller_confirmation",
-            "timestamp": datetime.utcnow().isoformat(),
-            "note": "In attesa di conferma disponibilità dal venditore"
+            "status": "in_attesa_conferma_venditore",
+            "timestamp": now.isoformat(),
+            "note": f"Richiesta inviata - Il venditore ha 24h per confermare la disponibilità"
         }]
     )
     
@@ -6538,17 +6580,22 @@ async def create_order(
         "user_id": listing.get("seller_id"),
         "type": "seller_confirmation_request",
         "title": "RICHIESTA D'ACQUISTO",
-        "message": f"RICHIESTA D'ACQUISTO PER:\n{order.book_titolo}\n\nCONFERMA LA DISPONIBILITÀ ENTRO 24H",
+        "message": f"L'utente {buyer_code} è interessato al testo:\n📚 {order.book_titolo}\n\nConfermi la disponibilità del testo e la consegna entro 2 giorni lavorativi presso:\n🏪 {order.bookstore_name}\n\nSeleziona una delle opzioni:\n✅ DISPONIBILE\n❌ NON DISPONIBILE",
         "order_id": order.id,
+        "order_code": order.order_code,
         "data": {
             "order_id": order.id,
+            "order_code": order.order_code,
             "book_titolo": order.book_titolo,
-            "buyer_name": order.buyer_name,
+            "buyer_code": buyer_code,
             "bookstore_name": order.bookstore_name,
-            "prezzo": order.netto_venditore
+            "prezzo": order.netto_venditore,
+            "deadline": seller_confirmation_deadline.isoformat()
         },
+        "requires_action": True,
+        "action_type": "seller_confirmation",
         "read": False,
-        "created_at": datetime.utcnow().isoformat()
+        "created_at": now.isoformat()
     }
     await db.notifications.insert_one(notification_seller)
     
@@ -6556,16 +6603,17 @@ async def create_order(
     notification_buyer = {
         "id": str(uuid.uuid4()),
         "user_id": user_id,
-        "type": "order_pending",
-        "title": "RICHIESTA INVIATA",
-        "message": f"LA TUA RICHIESTA PER:\n{order.book_titolo}\n\nÈ STATA INVIATA AL VENDITORE\n\nIL VENDITORE DOVRÀ CONFERMARE LA DISPONIBILITÀ ENTRO 24H",
+        "type": "order_pending_seller",
+        "title": "Richiesta inviata!",
+        "message": f"La tua richiesta per:\n📚 {order.book_titolo}\n\nè stata inviata al venditore.\n\nIl venditore ha 24 ore per confermare la disponibilità.",
         "order_id": order.id,
+        "order_code": order.order_code,
         "data": {
             "order_id": order.id,
             "book_titolo": order.book_titolo
         },
         "read": False,
-        "created_at": datetime.utcnow().isoformat()
+        "created_at": now.isoformat()
     }
     await db.notifications.insert_one(notification_buyer)
     
@@ -6574,28 +6622,31 @@ async def create_order(
         "order_code": order.order_code,
         "totale": order.totale_acquirente,
         "status": order.status,
-        "message": "Richiesta inviata! Il venditore deve confermare la disponibilità."
+        "status_label": ORDER_STATES.get(order.status, order.status),
+        "seller_confirmation_deadline": seller_confirmation_deadline.isoformat(),
+        "message": "Richiesta inviata! Il venditore deve confermare la disponibilità entro 24 ore."
     }
 
 @api_router.post("/orders/{order_id}/seller-confirm")
 async def seller_confirm_order(order_id: str, user_id: str = Query(...)):
-    """Venditore conferma la disponibilità del libro"""
+    """Venditore conferma la disponibilità del libro - DISPONIBILE"""
     
     order = await db.orders.find_one({"id": order_id, "seller_id": user_id})
     if not order:
         raise HTTPException(status_code=404, detail="Ordine non trovato")
     
-    if order.get("status") != "pending_seller_confirmation":
+    current_status = order.get("status")
+    if current_status not in ["pending_seller_confirmation", "in_attesa_conferma_venditore"]:
         raise HTTPException(status_code=400, detail="Ordine non in attesa di conferma")
     
     now = datetime.utcnow()
     
-    # Aggiorna ordine - ora può essere pagato
+    # Aggiorna ordine - ora può essere pagato (va nel carrello)
     update_data = {
-        "status": "pending_payment",
+        "status": "in_attesa_pagamento",
         "seller_confirmed_at": now,
         "status_history": order.get("status_history", []) + [{
-            "status": "pending_payment",
+            "status": "in_attesa_pagamento",
             "timestamp": now.isoformat(),
             "note": "Venditore ha confermato la disponibilità"
         }]
@@ -6615,9 +6666,10 @@ async def seller_confirm_order(order_id: str, user_id: str = Query(...)):
         "id": str(uuid.uuid4()),
         "user_id": order.get("buyer_id"),
         "type": "ready_for_payment",
-        "title": "COMPLIMENTI! LIBRO DISPONIBILE",
-        "message": f"COMPLIMENTI!\n{order.get('book_titolo')}\nÈ DISPONIBILE!\n\nAGGIUNGI AL CARRELLO PER COMPLETARE L'ACQUISTO",
+        "title": "Libro disponibile!",
+        "message": f"Il testo:\n📚 {order.get('book_titolo')}\n\nè disponibile.\nIl libro è stato aggiunto al carrello.\nCompleta l'acquisto per procedere.",
         "order_id": order_id,
+        "order_code": order.get("order_code"),
         "data": {
             "order_id": order_id,
             "book_titolo": order.get("book_titolo"),
@@ -6630,29 +6682,32 @@ async def seller_confirm_order(order_id: str, user_id: str = Query(...)):
     
     return {
         "success": True,
-        "message": "Disponibilità confermata! L'acquirente è stato notificato."
+        "status": "in_attesa_pagamento",
+        "message": "Disponibilità confermata! L'acquirente è stato notificato e il libro è nel suo carrello."
     }
 
 @api_router.post("/orders/{order_id}/seller-reject")
 async def seller_reject_order(order_id: str, user_id: str = Query(...), reason: str = Query("")):
-    """Venditore rifiuta/annulla l'ordine"""
+    """Venditore rifiuta/annulla l'ordine - NON DISPONIBILE"""
     
     order = await db.orders.find_one({"id": order_id, "seller_id": user_id})
     if not order:
         raise HTTPException(status_code=404, detail="Ordine non trovato")
     
-    if order.get("status") != "pending_seller_confirmation":
+    current_status = order.get("status")
+    if current_status not in ["pending_seller_confirmation", "in_attesa_conferma_venditore"]:
         raise HTTPException(status_code=400, detail="Ordine non può essere rifiutato")
     
     now = datetime.utcnow()
+    seller_code = f"REB-{user_id[:6].upper()}"
     
     # Aggiorna ordine
     update_data = {
-        "status": "cancelled",
+        "status": "annullato_non_disponibile",
         "cancelled_at": now,
         "cancellation_reason": reason or "Libro non disponibile",
         "status_history": order.get("status_history", []) + [{
-            "status": "cancelled",
+            "status": "annullato_non_disponibile",
             "timestamp": now.isoformat(),
             "note": f"Rifiutato dal venditore: {reason or 'Libro non disponibile'}"
         }]
@@ -6663,16 +6718,23 @@ async def seller_reject_order(order_id: str, user_id: str = Query(...), reason: 
     # Rimetti il listing come disponibile
     await db.listings.update_one(
         {"id": order.get("listing_id")},
-        {"$set": {"status": "available"}, "$unset": {"reserved_by": "", "order_id": ""}}
+        {"$set": {"status": "available", "stato": "disponibile"}, "$unset": {"reserved_by": "", "order_id": ""}}
     )
+    
+    # Elimina la notifica del venditore
+    await db.notifications.delete_many({
+        "user_id": user_id,
+        "order_id": order_id,
+        "type": "seller_confirmation_request"
+    })
     
     # Notifica all'acquirente
     notification = {
         "id": str(uuid.uuid4()),
         "user_id": order.get("buyer_id"),
-        "type": "order_rejected",
-        "title": "CI DISPIACE!",
-        "message": f"CI DISPIACE!\nIL TESTO RICHIESTO:\n{order.get('book_titolo')}\n\nNON È PIÙ DISPONIBILE",
+        "type": "order_rejected_seller",
+        "title": "Libro non disponibile",
+        "message": f"Ci dispiace, l'utente {seller_code} non ha disponibilità per il testo:\n📚 {order.get('book_titolo')}",
         "order_id": order_id,
         "read": False,
         "created_at": now.isoformat()
@@ -6681,7 +6743,8 @@ async def seller_reject_order(order_id: str, user_id: str = Query(...), reason: 
     
     return {
         "success": True,
-        "message": "Ordine rifiutato."
+        "status": "annullato_non_disponibile",
+        "message": "Ordine rifiutato. Il libro è tornato disponibile nel marketplace."
     }
 
 @api_router.post("/orders/{order_id}/pay")
@@ -6692,23 +6755,30 @@ async def pay_order(order_id: str, user_id: str = Query(...)):
     if not order:
         raise HTTPException(status_code=404, detail="Ordine non trovato")
     
-    if order.get("status") != "pending_payment":
-        raise HTTPException(status_code=400, detail=f"Ordine non in attesa di pagamento. Stato: {order.get('status')}")
+    current_status = order.get("status")
+    if current_status not in ["pending_payment", "in_attesa_pagamento"]:
+        raise HTTPException(status_code=400, detail=f"Ordine non in attesa di pagamento. Stato: {current_status}")
     
     # Simula PaymentIntent di Stripe
     payment_intent_id = f"pi_mock_{uuid.uuid4().hex[:16]}"
     
-    # Aggiorna ordine
+    # Calcola deadline consegna (2 giorni lavorativi)
+    from datetime import timedelta
     now = datetime.utcnow()
+    # Semplificato: 2 giorni lavorativi = ~3 giorni calendar (considera weekend)
+    delivery_deadline = now + timedelta(days=3)
+    
+    # Aggiorna ordine con nuovo stato
     update_data = {
         "payment_intent_id": payment_intent_id,
         "payment_status": "paid",
-        "status": "paid_escrow",
+        "status": "pagato_attesa_consegna",
         "paid_at": now,
+        "delivery_deadline": delivery_deadline,
         "status_history": order.get("status_history", []) + [{
-            "status": "paid_escrow",
+            "status": "pagato_attesa_consegna",
             "timestamp": now.isoformat(),
-            "note": "Pagamento ricevuto - fondi in escrow"
+            "note": f"Pagamento ricevuto - Il venditore ha 2 giorni lavorativi per consegnare"
         }]
     }
     
@@ -6717,56 +6787,64 @@ async def pay_order(order_id: str, user_id: str = Query(...)):
     # Aggiorna listing come riservato
     await db.listings.update_one(
         {"id": order.get("listing_id")},
-        {"$set": {"status": "reserved", "reserved_by": user_id, "order_id": order_id}}
+        {"$set": {"status": "reserved", "stato": "riservato", "reserved_by": user_id, "order_id": order_id}}
     )
     
     # Notifica al venditore con QR code
     seller_notification = {
         "id": str(uuid.uuid4()),
         "user_id": order.get("seller_id"),
-        "type": "order_qr_code",
-        "title": "🎉 VENDITA COMPLETATA!",
-        "message": f"COMPLIMENTI!\n{order.get('book_titolo')}\nÈ STATO VENDUTO!\n\nCODICE CONSEGNA: {order.get('order_code')}\n\nCONSEGNA ENTRO 2 GIORNI LAVORATIVI PRESSO:\n{order.get('bookstore_name')}\n\nMostra questo codice o il QR alla cartolibreria quando consegni il libro.\n\n📸 Ti consigliamo di fare uno screenshot!",
+        "type": "order_paid_deliver",
+        "title": "Il testo è stato acquistato!",
+        "message": f"Hai 2 giorni lavorativi per consegnare:\n📚 {order.get('book_titolo')}\n\npresso:\n🏪 {order.get('bookstore_name')}\n\nper sbloccare i fondi.\n\nMostra il seguente codice:\n🔐 {order.get('order_code')}\n\ne il QR associato all'ordine.",
         "order_id": order_id,
         "order_code": order.get("order_code"),
         "bookstore_name": order.get("bookstore_name"),
+        "delivery_deadline": delivery_deadline.isoformat(),
         "data": {
             "order_id": order_id,
             "order_code": order.get("order_code"),
             "book_titolo": order.get("book_titolo"),
+            "book_condizioni": order.get("book_condizioni"),
             "bookstore_name": order.get("bookstore_name"),
+            "netto_venditore": order.get("netto_venditore"),
             "show_qr": True,
             "role": "seller"
         },
+        "requires_action": True,
         "read": False,
         "persistent": True,
         "created_at": now.isoformat()
     }
     await db.notifications.insert_one(seller_notification)
     
-    # Notifica alla cartolibreria che riceverà un libro
+    # Notifica alla cartolibreria
     bookstore_notification = {
         "id": str(uuid.uuid4()),
         "bookstore_id": order.get("bookstore_id"),
-        "type": "incoming_order",
-        "title": "NUOVO ORDINE IN ARRIVO",
-        "message": f"ORDINE: {order.get('order_code')}\n\nLIBRO: {order.get('book_titolo')}\n\nVENDITORE: {order.get('seller_name')}\nACQUIRENTE: {order.get('buyer_name')}\n\n1️⃣ Scansiona QR del VENDITORE quando consegna\n2️⃣ Scansiona QR dell'ACQUIRENTE quando ritira",
+        "user_id": f"bookstore_{order.get('bookstore_id')}",
+        "type": "incoming_book_delivery",
+        "title": "Libro acquistato in arrivo",
+        "message": f"È stato acquistato il seguente testo:\n📚 {order.get('book_titolo')}\n\nAlla consegna da parte del venditore, scansionare il QR oppure inserire il codice:\n🔐 {order.get('order_code')}\n\nVerificare inoltre le condizioni dichiarate del testo:\n📋 {order.get('book_condizioni', 'Non specificate')}",
         "order_id": order_id,
         "order_code": order.get("order_code"),
+        "book_titolo": order.get("book_titolo"),
+        "book_condizioni": order.get("book_condizioni"),
         "seller_name": order.get("seller_name"),
         "buyer_name": order.get("buyer_name"),
         "read": False,
         "created_at": now.isoformat()
     }
     await db.bookstore_notifications.insert_one(bookstore_notification)
+    await db.notifications.insert_one(bookstore_notification)
     
-    # Notifica all'acquirente con QR code
-    buyer_qr_notification = {
+    # Notifica all'acquirente
+    buyer_notification = {
         "id": str(uuid.uuid4()),
         "user_id": order.get("buyer_id"),
-        "type": "order_qr_code",
-        "title": "🎉 ACQUISTO COMPLETATO!",
-        "message": f"Il tuo ordine per:\n{order.get('book_titolo')}\n\nCODICE RITIRO: {order.get('order_code')}\n\nMostra questo codice o il QR alla cartolibreria quando ritiri il libro.\n\n📸 Ti consigliamo di fare uno screenshot di questa notifica!",
+        "type": "order_paid_waiting",
+        "title": "Acquisto completato con successo!",
+        "message": f"📚 {order.get('book_titolo')}\n\nOrdine confermato.\nRiceverai una notifica quando il testo sarà disponibile per il ritiro.",
         "order_id": order_id,
         "order_code": order.get("order_code"),
         "bookstore_name": order.get("bookstore_name"),
@@ -6781,13 +6859,15 @@ async def pay_order(order_id: str, user_id: str = Query(...)):
         "persistent": True,
         "created_at": now.isoformat()
     }
-    await db.notifications.insert_one(buyer_qr_notification)
+    await db.notifications.insert_one(buyer_notification)
     
     return {
         "success": True,
         "order_id": order_id,
-        "status": "paid_escrow",
-        "message": "Pagamento completato! I fondi sono in escrow fino alla conferma del ritiro."
+        "order_code": order.get("order_code"),
+        "status": "pagato_attesa_consegna",
+        "delivery_deadline": delivery_deadline.isoformat(),
+        "message": "Pagamento completato! Il venditore ha 2 giorni lavorativi per consegnare il libro."
     }
 
 @api_router.post("/orders/pay-batch")
@@ -7118,6 +7198,165 @@ async def get_order(order_id: str, user_id: str = Query(...)):
     order["is_seller"] = order.get("seller_id") == user_id
     
     return order
+
+# ============== SISTEMA TIMER E CHECK AUTOMATICI ==============
+
+async def check_order_timeouts(order_id: str):
+    """
+    Verifica tutti i timeout di un ordine (on-demand):
+    1. Timer 24h conferma venditore
+    2. Timer 2 giorni consegna
+    3. Timer 3 giorni reso
+    """
+    order = await db.orders.find_one({"id": order_id})
+    if not order:
+        return None
+    
+    now = datetime.utcnow()
+    status = order.get("status")
+    
+    # 1. Check timeout 24h conferma venditore
+    if status in ["in_attesa_conferma_venditore", "pending_seller_confirmation"]:
+        deadline = order.get("seller_confirmation_deadline")
+        if deadline:
+            if isinstance(deadline, str):
+                deadline = datetime.fromisoformat(deadline.replace('Z', '+00:00'))
+            if now > deadline:
+                # Timeout! Annulla ordine
+                seller_code = f"REB-{order.get('seller_id', '')[:6].upper()}"
+                update_data = {
+                    "status": "annullato_timeout",
+                    "cancelled_at": now,
+                    "cancellation_reason": "Nessuna risposta dal venditore entro 24h",
+                    "status_history": order.get("status_history", []) + [{
+                        "status": "annullato_timeout",
+                        "timestamp": now.isoformat(),
+                        "note": "Timeout 24h - Nessuna risposta dal venditore"
+                    }]
+                }
+                await db.orders.update_one({"id": order_id}, {"$set": update_data})
+                
+                # Rimetti listing disponibile
+                await db.listings.update_one(
+                    {"id": order.get("listing_id")},
+                    {"$set": {"status": "available", "stato": "disponibile"}, "$unset": {"reserved_by": "", "order_id": ""}}
+                )
+                
+                # Notifica acquirente
+                notification_buyer = {
+                    "id": str(uuid.uuid4()),
+                    "user_id": order.get("buyer_id"),
+                    "type": "order_timeout",
+                    "title": "Richiesta scaduta",
+                    "message": f"Ci dispiace, sono trascorse 24 ore senza conferma della disponibilità del testo:\n📚 {order.get('book_titolo')}\n\nLa richiesta verrà annullata.\nÈ possibile formularla nuovamente.",
+                    "order_id": order_id,
+                    "read": False,
+                    "created_at": now.isoformat()
+                }
+                await db.notifications.insert_one(notification_buyer)
+                
+                # Notifica venditore
+                notification_seller = {
+                    "id": str(uuid.uuid4()),
+                    "user_id": order.get("seller_id"),
+                    "type": "order_timeout_seller",
+                    "title": "Richiesta scaduta",
+                    "message": f"Non hai confermato la disponibilità del testo:\n📚 {order.get('book_titolo')}\n\nLa richiesta è stata annullata automaticamente.",
+                    "order_id": order_id,
+                    "read": False,
+                    "created_at": now.isoformat()
+                }
+                await db.notifications.insert_one(notification_seller)
+                
+                # Elimina notifiche pendenti del venditore
+                await db.notifications.delete_many({
+                    "user_id": order.get("seller_id"),
+                    "order_id": order_id,
+                    "type": "seller_confirmation_request"
+                })
+                
+                order["status"] = "annullato_timeout"
+                return order
+    
+    # 2. Check timeout 2 giorni consegna
+    if status in ["pagato_attesa_consegna", "paid_escrow"]:
+        deadline = order.get("delivery_deadline")
+        if deadline:
+            if isinstance(deadline, str):
+                deadline = datetime.fromisoformat(deadline.replace('Z', '+00:00'))
+            if now > deadline:
+                # Timeout! Annulla e rimborsa
+                update_data = {
+                    "status": "annullato_mancata_consegna",
+                    "payment_status": "refunded",
+                    "cancelled_at": now,
+                    "cancellation_reason": "Il venditore non ha consegnato entro 2 giorni lavorativi",
+                    "status_history": order.get("status_history", []) + [{
+                        "status": "annullato_mancata_consegna",
+                        "timestamp": now.isoformat(),
+                        "note": "Timeout consegna - Rimborso automatico all'acquirente"
+                    }]
+                }
+                await db.orders.update_one({"id": order_id}, {"$set": update_data})
+                
+                # Rimetti listing disponibile
+                await db.listings.update_one(
+                    {"id": order.get("listing_id")},
+                    {"$set": {"status": "available", "stato": "disponibile"}, "$unset": {"reserved_by": "", "order_id": ""}}
+                )
+                
+                # Notifica acquirente
+                notification_buyer = {
+                    "id": str(uuid.uuid4()),
+                    "user_id": order.get("buyer_id"),
+                    "type": "order_delivery_timeout",
+                    "title": "Ordine annullato - Rimborso",
+                    "message": f"Il venditore non ha consegnato il libro:\n📚 {order.get('book_titolo')}\n\nentro 2 giorni lavorativi.\n\nI fondi di €{order.get('totale_acquirente', 0):.2f} verranno riaccreditati automaticamente.",
+                    "order_id": order_id,
+                    "read": False,
+                    "created_at": now.isoformat()
+                }
+                await db.notifications.insert_one(notification_buyer)
+                
+                # Notifica venditore
+                notification_seller = {
+                    "id": str(uuid.uuid4()),
+                    "user_id": order.get("seller_id"),
+                    "type": "order_delivery_timeout_seller",
+                    "title": "Ordine annullato",
+                    "message": f"Non hai consegnato il libro:\n📚 {order.get('book_titolo')}\n\nentro 2 giorni lavorativi.\n\nL'ordine è stato annullato e l'acquirente rimborsato.",
+                    "order_id": order_id,
+                    "read": False,
+                    "created_at": now.isoformat()
+                }
+                await db.notifications.insert_one(notification_seller)
+                
+                order["status"] = "annullato_mancata_consegna"
+                order["payment_status"] = "refunded"
+                return order
+    
+    # 3. Check timeout 3 giorni reso (già implementato sotto)
+    if status == "picked_up":
+        return await check_and_complete_order_if_expired(order_id)
+    
+    return order
+
+@api_router.get("/orders/{order_id}/check-timeouts")
+async def check_order_timeouts_endpoint(order_id: str, user_id: str = Query(...)):
+    """Endpoint per forzare il check dei timeout di un ordine"""
+    order = await check_order_timeouts(order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Ordine non trovato")
+    
+    order.pop('_id', None)
+    order["status_label"] = ORDER_STATES.get(order.get("status"), order.get("status"))
+    
+    return {
+        "order_id": order_id,
+        "status": order.get("status"),
+        "status_label": order.get("status_label"),
+        "checked_at": datetime.utcnow().isoformat()
+    }
 
 # ============== SISTEMA RESI ==============
 
@@ -7927,8 +8166,17 @@ async def get_bookstore_orders(bookstore_id: str):
     }
 
 @api_router.post("/bookstore/{bookstore_id}/confirm-seller-delivery")
-async def bookstore_confirm_seller_delivery(bookstore_id: str, order_code: str = Query(...)):
-    """Cartolibreria: conferma che il VENDITORE ha consegnato il libro (1a scansione)"""
+async def bookstore_confirm_seller_delivery(
+    bookstore_id: str, 
+    order_code: str = Query(...),
+    idoneo: bool = Query(True, description="True = IDONEO, False = NON IDONEO"),
+    notes: str = Query("", description="Note sulla verifica")
+):
+    """
+    Cartolibreria: verifica libro consegnato dal venditore.
+    - IDONEO: Libro conforme alla descrizione → Pronto per ritiro
+    - NON IDONEO: Libro non conforme → Rimborso acquirente
+    """
     
     bookstore = await db.bookstores.find_one({"id": bookstore_id})
     if not bookstore:
@@ -7943,10 +8191,10 @@ async def bookstore_confirm_seller_delivery(bookstore_id: str, order_code: str =
     if not order:
         raise HTTPException(status_code=404, detail="Ordine non trovato con questo codice")
     
-    # Deve essere in stato paid_escrow per la consegna del venditore
-    if order.get("status") != "paid_escrow":
-        current_status = order.get("status")
-        if current_status == "ready_for_pickup":
+    # Deve essere in stato pagato_attesa_consegna o paid_escrow
+    current_status = order.get("status")
+    if current_status not in ["paid_escrow", "pagato_attesa_consegna"]:
+        if current_status == "pronto_per_ritiro" or current_status == "ready_for_pickup":
             raise HTTPException(status_code=400, detail="Il libro è già stato consegnato. In attesa del ritiro dell'acquirente.")
         if current_status == "completed":
             raise HTTPException(status_code=400, detail="Ordine già completato.")
@@ -7954,53 +8202,135 @@ async def bookstore_confirm_seller_delivery(bookstore_id: str, order_code: str =
     
     now = datetime.utcnow()
     
-    # Aggiorna ordine a "pronto per il ritiro"
-    update_data = {
-        "status": "ready_for_pickup",
-        "delivered_to_bookstore_at": now,
-        "ready_for_pickup_at": now,
-        "status_history": order.get("status_history", []) + [{
-            "status": "ready_for_pickup",
-            "timestamp": now.isoformat(),
-            "note": f"Libro consegnato dal venditore alla cartolibreria {bookstore['nome']}"
-        }]
-    }
-    
-    await db.orders.update_one({"id": order["id"]}, {"$set": update_data})
-    
-    # Notifica all'ACQUIRENTE che può ritirare
-    notification = {
-        "id": str(uuid.uuid4()),
-        "user_id": order.get("buyer_id"),
-        "type": "ready_for_pickup",
-        "title": "📦 IL TUO LIBRO È PRONTO!",
-        "message": f"Il libro:\n{order.get('book_titolo')}\n\nÈ PRONTO PER IL RITIRO PRESSO:\n{bookstore['nome']}\n\nMostra il codice {order.get('order_code')} o il QR che hai nelle notifiche.",
-        "order_id": order["id"],
-        "order_code": order.get("order_code"),
-        "bookstore_name": bookstore['nome'],
-        "data": {
+    if idoneo:
+        # ✅ IDONEO - Libro conforme
+        update_data = {
+            "status": "pronto_per_ritiro",
+            "delivered_to_bookstore_at": now,
+            "bookstore_verified_at": now,
+            "bookstore_verification_notes": notes or "Libro conforme alla descrizione",
+            "ready_for_pickup_at": now,
+            "status_history": order.get("status_history", []) + [{
+                "status": "pronto_per_ritiro",
+                "timestamp": now.isoformat(),
+                "note": f"✅ IDONEO - Libro verificato e pronto per ritiro presso {bookstore['nome']}"
+            }]
+        }
+        
+        await db.orders.update_one({"id": order["id"]}, {"$set": update_data})
+        
+        # Notifica al VENDITORE
+        notification_seller = {
+            "id": str(uuid.uuid4()),
+            "user_id": order.get("seller_id"),
+            "type": "book_verified_ok",
+            "title": "Libro verificato!",
+            "message": f"Il testo:\n📚 {order.get('book_titolo')}\n\nè risultato idoneo.\nAl ritiro effettuato dall'acquirente verranno accreditati i fondi.\nGrazie.",
             "order_id": order["id"],
             "order_code": order.get("order_code"),
-            "bookstore_name": bookstore['nome']
-        },
-        "read": False,
-        "created_at": now.isoformat()
-    }
-    await db.notifications.insert_one(notification)
-    
-    return {
-        "success": True,
-        "message": f"Consegna venditore confermata! L'acquirente {order.get('buyer_name')} è stato notificato.",
-        "order_id": order["id"],
-        "order_code": order.get("order_code"),
-        "book_titolo": order.get("book_titolo"),
-        "buyer_name": order.get("buyer_name"),
-        "next_step": "In attesa del ritiro dell'acquirente"
-    }
+            "read": False,
+            "created_at": now.isoformat()
+        }
+        await db.notifications.insert_one(notification_seller)
+        
+        # Notifica all'ACQUIRENTE che può ritirare
+        notification_buyer = {
+            "id": str(uuid.uuid4()),
+            "user_id": order.get("buyer_id"),
+            "type": "ready_for_pickup",
+            "title": "Il tuo libro è pronto!",
+            "message": f"Il testo:\n📚 {order.get('book_titolo')}\n\nè disponibile presso:\n🏪 {bookstore['nome']}\n\nMostra il seguente codice per il ritiro:\n🔐 {order.get('order_code')}\n\ninsieme al QR associato all'ordine.",
+            "order_id": order["id"],
+            "order_code": order.get("order_code"),
+            "bookstore_name": bookstore['nome'],
+            "data": {
+                "order_id": order["id"],
+                "order_code": order.get("order_code"),
+                "bookstore_name": bookstore['nome'],
+                "show_qr": True
+            },
+            "read": False,
+            "created_at": now.isoformat()
+        }
+        await db.notifications.insert_one(notification_buyer)
+        
+        return {
+            "success": True,
+            "status": "pronto_per_ritiro",
+            "message": f"✅ Libro IDONEO! L'acquirente {order.get('buyer_name')} è stato notificato.",
+            "order_id": order["id"],
+            "order_code": order.get("order_code"),
+            "book_titolo": order.get("book_titolo"),
+            "buyer_name": order.get("buyer_name"),
+            "next_step": "In attesa del ritiro dell'acquirente"
+        }
+    else:
+        # ❌ NON IDONEO - Libro non conforme → Rimborso
+        update_data = {
+            "status": "rifiutato_condizioni",
+            "payment_status": "refunded",
+            "delivered_to_bookstore_at": now,
+            "bookstore_verified_at": now,
+            "bookstore_verification_notes": notes or "Condizioni libro non conformi alla descrizione",
+            "status_history": order.get("status_history", []) + [{
+                "status": "rifiutato_condizioni",
+                "timestamp": now.isoformat(),
+                "note": f"❌ NON IDONEO - Le condizioni del libro non corrispondono alla descrizione. {notes}"
+            }]
+        }
+        
+        await db.orders.update_one({"id": order["id"]}, {"$set": update_data})
+        
+        # Rimetti il listing come disponibile (torna al venditore)
+        await db.listings.update_one(
+            {"id": order.get("listing_id")},
+            {"$set": {"status": "available", "stato": "disponibile"}, "$unset": {"reserved_by": "", "order_id": ""}}
+        )
+        
+        # Notifica al VENDITORE
+        notification_seller = {
+            "id": str(uuid.uuid4()),
+            "user_id": order.get("seller_id"),
+            "type": "book_rejected_conditions",
+            "title": "Libro rifiutato",
+            "message": f"Il libro:\n📚 {order.get('book_titolo')}\n\nè stato rifiutato.\nLe condizioni del testo non corrispondono alla descrizione inserita nell'annuncio.",
+            "order_id": order["id"],
+            "order_code": order.get("order_code"),
+            "read": False,
+            "created_at": now.isoformat()
+        }
+        await db.notifications.insert_one(notification_seller)
+        
+        # Notifica all'ACQUIRENTE
+        notification_buyer = {
+            "id": str(uuid.uuid4()),
+            "user_id": order.get("buyer_id"),
+            "type": "order_refunded_conditions",
+            "title": "Ordine rimborsato",
+            "message": f"Il libro:\n📚 {order.get('book_titolo')}\n\nè stato rifiutato per incongruenze nelle condizioni dichiarate.\nI fondi verranno riaccreditati automaticamente.",
+            "order_id": order["id"],
+            "order_code": order.get("order_code"),
+            "read": False,
+            "created_at": now.isoformat()
+        }
+        await db.notifications.insert_one(notification_buyer)
+        
+        return {
+            "success": True,
+            "status": "rifiutato_condizioni",
+            "message": f"❌ Libro NON IDONEO. L'acquirente riceverà il rimborso. Il libro torna disponibile al venditore.",
+            "order_id": order["id"],
+            "order_code": order.get("order_code"),
+            "book_titolo": order.get("book_titolo"),
+            "refunded": True
+        }
 
 @api_router.post("/bookstore/{bookstore_id}/confirm-pickup-by-code")
 async def bookstore_confirm_pickup_by_code(bookstore_id: str, order_code: str = Query(...)):
-    """Cartolibreria: conferma ritiro tramite codice ordine (scansione QR o manuale)"""
+    """
+    Cartolibreria: conferma ritiro acquirente (stesso QR usato per consegna).
+    Inizia periodo di 3 giorni per eventuale reso.
+    """
     
     bookstore = await db.bookstores.find_one({"id": bookstore_id})
     if not bookstore:
@@ -8015,30 +8345,28 @@ async def bookstore_confirm_pickup_by_code(bookstore_id: str, order_code: str = 
     if not order:
         raise HTTPException(status_code=404, detail="Ordine non trovato con questo codice")
     
-    if order.get("status") != "ready_for_pickup":
-        status_label = ORDER_STATES.get(order.get("status"), order.get("status"))
+    current_status = order.get("status")
+    if current_status not in ["ready_for_pickup", "pronto_per_ritiro"]:
+        status_label = ORDER_STATES.get(current_status, current_status)
         raise HTTPException(
             status_code=400, 
             detail=f"Ordine non pronto per il ritiro. Stato attuale: {status_label}"
         )
     
     now = datetime.utcnow()
+    from datetime import timedelta
+    return_deadline = now + timedelta(hours=RETURN_WINDOW_HOURS)  # 72h = 3 giorni
     
-    # Aggiorna ordine a completato
+    # Aggiorna ordine a "picked_up" - inizia periodo reso
     update_data = {
-        "status": "completed",
-        "payment_status": "released",
+        "status": "picked_up",
         "picked_up_at": now,
-        "completed_at": now,
+        "return_deadline": return_deadline,
         "confirmed_by_bookstore": True,
         "status_history": order.get("status_history", []) + [{
             "status": "picked_up",
             "timestamp": now.isoformat(),
-            "note": f"Ritiro confermato dalla cartolibreria {bookstore['nome']}"
-        }, {
-            "status": "completed",
-            "timestamp": now.isoformat(),
-            "note": f"Pagamento di €{order.get('netto_venditore', 0):.2f} rilasciato al venditore"
+            "note": f"Ritiro confermato dalla cartolibreria {bookstore['nome']} - Inizia periodo reso 3 giorni"
         }]
     }
     
@@ -8047,57 +8375,62 @@ async def bookstore_confirm_pickup_by_code(bookstore_id: str, order_code: str = 
     # Aggiorna listing come venduto
     await db.listings.update_one(
         {"id": order.get("listing_id")},
-        {"$set": {"status": "sold", "sold_at": now, "sold_to": order.get("buyer_id")}}
+        {"$set": {"status": "sold", "stato": "venduto", "sold_at": now, "sold_to": order.get("buyer_id")}}
     )
     
-    # Notifica al venditore
-    notification = {
+    # Notifica al venditore (pagamento dopo 3 giorni)
+    notification_seller = {
         "id": str(uuid.uuid4()),
         "user_id": order.get("seller_id"),
-        "type": "payment_released",
-        "title": "Pagamento ricevuto!",
-        "message": f"L'acquirente ha ritirato '{order.get('book_titolo')[:40]}'. €{order.get('netto_venditore', 0):.2f} sono stati accreditati.",
+        "type": "book_picked_up",
+        "title": "Libro ritirato!",
+        "message": f"L'acquirente ha ritirato:\n📚 {order.get('book_titolo')}\n\nRiceverai il pagamento di €{order.get('netto_venditore', 0):.2f} tra 3 giorni se non ci saranno problemi.",
         "order_id": order["id"],
+        "order_code": order.get("order_code"),
         "read": False,
         "created_at": now.isoformat()
     }
-    await db.notifications.insert_one(notification)
+    await db.notifications.insert_one(notification_seller)
     
     # Notifica all'acquirente
     notification_buyer = {
         "id": str(uuid.uuid4()),
         "user_id": order.get("buyer_id"),
         "type": "pickup_confirmed",
-        "title": "Ritiro confermato!",
-        "message": f"Hai ritirato '{order.get('book_titolo')[:40]}'. Grazie per aver usato RiLiBro!",
+        "title": "Libro ritirato!",
+        "message": f"Hai ritirato:\n📚 {order.get('book_titolo')}\n\nHai 3 giorni per segnalare eventuali problemi con le condizioni del libro.",
         "order_id": order["id"],
+        "order_code": order.get("order_code"),
+        "return_deadline": return_deadline.isoformat(),
         "read": False,
         "created_at": now.isoformat()
     }
     await db.notifications.insert_one(notification_buyer)
     
-    # Notifica alla cartolibreria - ORDINE COMPLETATO
-    bookstore_completed_notification = {
+    # Notifica alla cartolibreria
+    bookstore_notification = {
         "id": str(uuid.uuid4()),
         "bookstore_id": bookstore_id,
-        "type": "order_completed",
-        "title": "✅ ORDINE COMPLETATO",
-        "message": f"Ordine {order.get('order_code')} completato!\n\nLibro: {order.get('book_titolo')}\nAcquirente: {order.get('buyer_name')}\nVenditore: {order.get('seller_name')}",
+        "type": "order_pickup_completed",
+        "title": "Ritiro completato",
+        "message": f"Ordine {order.get('order_code')} - Ritiro completato!\n\nLibro: {order.get('book_titolo')}\nAcquirente: {order.get('buyer_name')}\n\nIl pagamento sarà sbloccato tra 3 giorni se non ci sono reclami.",
         "order_id": order["id"],
         "order_code": order.get("order_code"),
         "commissione_cartolibreria": order.get("commissione_cartolibreria", 0),
         "read": False,
         "created_at": now.isoformat()
     }
-    await db.bookstore_notifications.insert_one(bookstore_completed_notification)
+    await db.bookstore_notifications.insert_one(bookstore_notification)
     
     return {
         "success": True,
+        "status": "picked_up",
         "order_id": order["id"],
         "order_code": order.get("order_code"),
         "book_titolo": order.get("book_titolo"),
         "buyer_name": order.get("buyer_name"),
-        "message": "Ritiro confermato! Transazione completata."
+        "return_deadline": return_deadline.isoformat(),
+        "message": "Ritiro confermato! L'acquirente ha 3 giorni per verificare le condizioni."
     }
 
 @api_router.post("/bookstore/{bookstore_id}/mark-ready/{order_id}")
