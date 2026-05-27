@@ -146,27 +146,48 @@ export default function ProfileScreen() {
   };
 
   const handleLogout = async () => {
-    showConfirm(
+    // Su web esegui logout direttamente (può sempre rientrare)
+    if (Platform.OS === 'web') {
+      try {
+        await AsyncStorage.multiRemove([
+          'user_id',
+          'username',
+          'user_nome',
+          'is_premium',
+        ]);
+        router.replace('/login');
+      } catch (error) {
+        console.error('Logout error:', error);
+        router.replace('/login');
+      }
+      return;
+    }
+    
+    // Su mobile mostra conferma
+    Alert.alert(
       'Esci',
       'Sei sicuro di voler uscire?',
-      async () => {
-        try {
-          await AsyncStorage.multiRemove([
-            'user_id',
-            'username',
-            'user_nome',
-            'is_premium',
-          ]);
-          // Use replace to prevent going back to profile
-          router.replace('/login');
-        } catch (error) {
-          console.error('Logout error:', error);
-          // Force navigate even if storage clear fails
-          router.replace('/login');
-        }
-      },
-      true,
-      'Esci'  // Testo del pulsante
+      [
+        { text: 'Annulla', style: 'cancel' },
+        {
+          text: 'Esci',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await AsyncStorage.multiRemove([
+                'user_id',
+                'username',
+                'user_nome',
+                'is_premium',
+              ]);
+              router.replace('/login');
+            } catch (error) {
+              console.error('Logout error:', error);
+              router.replace('/login');
+            }
+          },
+        },
+      ]
     );
   };
 
