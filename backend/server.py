@@ -6667,13 +6667,15 @@ async def seller_confirm_order(order_id: str, user_id: str = Query(...)):
         "user_id": order.get("buyer_id"),
         "type": "ready_for_payment",
         "title": "Libro disponibile!",
-        "message": f"Il testo:\n📚 {order.get('book_titolo')}\n\nè disponibile.\nIl libro è stato aggiunto al carrello.\nCompleta l'acquisto per procedere.",
+        "message": f"📚 {order.get('book_titolo')}\n\nConcludi l'acquisto nel carrello",
         "order_id": order_id,
         "order_code": order.get("order_code"),
+        "action": "open_cart",
         "data": {
             "order_id": order_id,
             "book_titolo": order.get("book_titolo"),
-            "totale": order.get("totale_acquirente")
+            "totale": order.get("totale_acquirente"),
+            "open_cart": True
         },
         "read": False,
         "created_at": now.isoformat()

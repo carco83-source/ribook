@@ -43,6 +43,7 @@ interface Notification {
   order_code?: string;
   requires_action?: boolean;
   action_type?: string;
+  action?: string;
   data?: {
     listing_id?: string;
     order_id?: string;
@@ -53,6 +54,7 @@ interface Notification {
     bookstore_name?: string;
     prezzo?: number;
     deadline?: string;
+    open_cart?: boolean;
   };
 }
 
@@ -283,10 +285,37 @@ export default function MessaggiScreen() {
 
   const renderNotification = ({ item }: { item: Notification }) => {
     const isSellerConfirmation = item.type === 'seller_confirmation_request' || item.action_type === 'seller_confirmation';
+    const isReadyForPayment = item.type === 'ready_for_payment' || item.action === 'open_cart' || item.data?.open_cart;
     const isLoading = actionLoading === item.id;
     
+    // Handler per click sulla notifica
+    const handleNotificationPress = () => {
+      if (!item.read) markNotificationAsRead(item.id);
+      
+      if (isReadyForPayment) {
+        // Vai al carrello
+        router.push('/(tabs)/sell');
+      } else if (item.data?.listing_id) {
+        router.push(`/listing/${item.data.listing_id}`);
+      }
+    };
+    
+    // Se è una notifica cliccabile (ready_for_payment), wrappala in TouchableOpacity
+    const NotificationWrapper = isReadyForPayment && !isSellerConfirmation 
+      ? TouchableOpacity 
+      : View;
+    
     return (
-      <View style={[styles.notificationCard, !item.read && styles.notificationUnread, isSellerConfirmation && styles.notificationAction]}>
+      <NotificationWrapper 
+        style={[
+          styles.notificationCard, 
+          !item.read && styles.notificationUnread, 
+          isSellerConfirmation && styles.notificationAction,
+          isReadyForPayment && !isSellerConfirmation && styles.notificationClickable
+        ]}
+        onPress={isReadyForPayment && !isSellerConfirmation ? handleNotificationPress : undefined}
+        activeOpacity={0.7}
+      >
         <View style={styles.notificationMainContent}>
           <View style={[styles.notifIcon, { backgroundColor: getNotificationColor(item.type) + '20' }]}>
             <Ionicons 
@@ -303,12 +332,20 @@ export default function MessaggiScreen() {
               </Text>
               <Text style={styles.notifTime}>{formatTime(item.created_at)}</Text>
             </View>
-            <Text style={styles.notifMessage} numberOfLines={isSellerConfirmation ? 6 : 2}>
+            <Text style={styles.notifMessage} numberOfLines={isSellerConfirmation ? 6 : 3}>
               {item.message}
             </Text>
+            {/* Indicatore "Vai al carrello" per notifiche ready_for_payment */}
+            {isReadyForPayment && !isSellerConfirmation && (
+              <View style={styles.goToCartIndicator}>
+                <Ionicons name="cart" size={14} color="#1a472a" />
+                <Text style={styles.goToCartText}>Tocca per andare al carrello</Text>
+                <Ionicons name="chevron-forward" size={14} color="#1a472a" />
+              </View>
+            )}
           </View>
 
-          {!item.read && !isSellerConfirmation && <View style={styles.unreadDot} />}
+          {!item.read && !isSellerConfirmation && !isReadyForPayment && <View style={styles.unreadDot} />}
         </View>
         
         {/* Pulsanti azione per richiesta conferma venditore */}
@@ -344,7 +381,7 @@ export default function MessaggiScreen() {
             </TouchableOpacity>
           </View>
         )}
-      </View>
+      </NotificationWrapper>
     );
   };
 
@@ -728,5 +765,25 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 12,
+  },
+  notificationClickable: {
+    borderWidth: 2,
+    borderColor: '#1a472a',
+    backgroundColor: '#f0f8f0',
+  },
+  goToCartIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+    gap: 6,
+  },
+  goToCartText: {
+    fontSize: 12,
+    color: '#1a472a',
+    fontWeight: '600',
+    flex: 1,
   },
 });

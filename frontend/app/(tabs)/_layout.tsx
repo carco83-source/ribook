@@ -57,26 +57,36 @@ const headerStyles = StyleSheet.create({
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [cartItemsCount, setCartItemsCount] = useState(0);
   
-  // Fetch unread notifications count
+  // Fetch unread notifications count and cart items
   useEffect(() => {
-    const fetchUnreadCount = async () => {
+    const fetchCounts = async () => {
       try {
         const userId = await AsyncStorage.getItem('user_id');
         if (!userId) return;
         
-        const response = await axios.get(`${API_URL}/api/notifications/${userId}`);
-        const notifications = response.data.notifications || [];
+        // Fetch notifications
+        const notifResponse = await axios.get(`${API_URL}/api/notifications/${userId}`);
+        const notifications = notifResponse.data.notifications || [];
         const unread = notifications.filter((n: any) => !n.read).length;
         setUnreadNotifications(unread);
+        
+        // Fetch cart items (orders in_attesa_pagamento)
+        const ordersResponse = await axios.get(`${API_URL}/api/orders/user/${userId}`);
+        const orders = ordersResponse.data.orders || [];
+        const cartOrders = orders.filter((o: any) => 
+          o.status === 'in_attesa_pagamento' || o.status === 'pending_payment'
+        );
+        setCartItemsCount(cartOrders.length);
       } catch (error) {
-        console.error('Error fetching notifications:', error);
+        console.error('Error fetching counts:', error);
       }
     };
     
-    fetchUnreadCount();
+    fetchCounts();
     // Refresh every 15 seconds
-    const interval = setInterval(fetchUnreadCount, 15000);
+    const interval = setInterval(fetchCounts, 15000);
     return () => clearInterval(interval);
   }, []);
   
@@ -165,6 +175,13 @@ export default function TabLayout() {
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="cart" size={size} color={color} />
           ),
+          tabBarBadge: cartItemsCount > 0 ? cartItemsCount : undefined,
+          tabBarBadgeStyle: {
+            backgroundColor: '#1a472a',
+            fontSize: 10,
+            minWidth: 18,
+            height: 18,
+          },
         }}
       />
       <Tabs.Screen
