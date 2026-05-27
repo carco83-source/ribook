@@ -19,15 +19,20 @@ import axios from 'axios';
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
 // Cross-platform confirm dialog
-const showConfirm = (title: string, message: string, onConfirm: () => void, destructive = false) => {
+const showConfirm = (title: string, message: string, onConfirm: () => void, destructive = false, confirmText?: string) => {
+  const buttonText = confirmText || (destructive ? 'Elimina' : 'Conferma');
   if (Platform.OS === 'web') {
-    if (window.confirm(`${title}\n\n${message}`)) {
-      onConfirm();
-    }
+    // Use setTimeout to ensure the confirm dialog is shown properly on web
+    setTimeout(() => {
+      const confirmed = window.confirm(`${title}\n\n${message}`);
+      if (confirmed) {
+        onConfirm();
+      }
+    }, 100);
   } else {
     Alert.alert(title, message, [
       { text: 'Annulla', style: 'cancel' },
-      { text: destructive ? 'Elimina' : 'Conferma', style: destructive ? 'destructive' : 'default', onPress: onConfirm },
+      { text: buttonText, style: destructive ? 'destructive' : 'default', onPress: onConfirm },
     ]);
   }
 };
@@ -160,7 +165,8 @@ export default function ProfileScreen() {
           router.replace('/login');
         }
       },
-      true
+      true,
+      'Esci'  // Testo del pulsante
     );
   };
 
