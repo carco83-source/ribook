@@ -39,10 +39,20 @@ interface Notification {
   message: string;
   read: boolean;
   created_at: string;
+  order_id?: string;
+  order_code?: string;
+  requires_action?: boolean;
+  action_type?: string;
   data?: {
     listing_id?: string;
     order_id?: string;
+    order_code?: string;
+    book_titolo?: string;
     book_title?: string;
+    buyer_code?: string;
+    bookstore_name?: string;
+    prezzo?: number;
+    deadline?: string;
   };
 }
 
@@ -57,6 +67,7 @@ export default function MessaggiScreen() {
   const [userId, setUserId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('messaggi');
   const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   const loadData = async () => {
     try {
@@ -141,6 +152,72 @@ export default function MessaggiScreen() {
     }
   };
 
+  // Venditore conferma disponibilità
+  const handleSellerConfirm = async (notification: Notification) => {
+    const orderId = notification.order_id || notification.data?.order_id;
+    if (!orderId || !userId) return;
+    
+    setActionLoading(notification.id);
+    try {
+      const response = await fetch(`${API_BASE}/orders/${orderId}/seller-confirm?user_id=${userId}`, {
+        method: 'POST',
+      });
+      
+      if (response.ok) {
+        // Rimuovi la notifica dalla lista
+        setNotifications(prev => prev.filter(n => n.id !== notification.id));
+        setUnreadNotifications(prev => Math.max(0, prev - 1));
+        // Mostra conferma
+        if (typeof window !== 'undefined' && window.alert) {
+          window.alert('✅ Disponibilità confermata! L\'acquirente può procedere al pagamento.');
+        }
+      } else {
+        const error = await response.json();
+        if (typeof window !== 'undefined' && window.alert) {
+          window.alert('Errore: ' + (error.detail || 'Impossibile confermare'));
+        }
+      }
+    } catch (error) {
+      console.error('Error confirming:', error);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Venditore rifiuta
+  const handleSellerReject = async (notification: Notification) => {
+    const orderId = notification.order_id || notification.data?.order_id;
+    if (!orderId || !userId) return;
+    
+    setActionLoading(notification.id);
+    try {
+      const response = await fetch(`${API_BASE}/orders/${orderId}/seller-reject?user_id=${userId}&reason=Libro non disponibile`, {
+        method: 'POST',
+      });
+      
+      if (response.ok) {
+        // Rimuovi la notifica dalla lista
+        setNotifications(prev => prev.filter(n => n.id !== notification.id));
+        setUnreadNotifications(prev => Math.max(0, prev - 1));
+        if (typeof window !== 'undefined' && window.alert) {
+          window.alert('Richiesta annullata. L\'acquirente è stato notificato.');
+        }
+      } else {
+        const error = await response.json();
+        if (typeof window !== 'undefined' && window.alert) {
+          window.alert('Errore: ' + (error.detail || 'Impossibile rifiutare'));
+        }
+      }
+    } catch (error) {
+      console.error('Error rejecting:', error);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+      console.error('Error marking notification as read:', error);
+    }
+  };
+
   const getNotificationIcon = (type: string) => {
     switch (type) {
       case 'new_message': return 'chatbubble';
@@ -208,41 +285,69 @@ export default function MessaggiScreen() {
   };
 
   const renderNotification = ({ item }: { item: Notification }) => {
+    const isSellerConfirmation = item.type === 'seller_confirmation_request' || item.action_type === 'seller_confirmation';
+    const isLoading = actionLoading === item.id;
+    
     return (
-      <TouchableOpacity
-        style={[styles.notificationCard, !item.read && styles.notificationUnread]}
-        onPress={() => {
-          if (!item.read) markNotificationAsRead(item.id);
-          // Navigate based on notification type
-          if (item.data?.listing_id) {
-            router.push(`/listing/${item.data.listing_id}`);
-          } else if (item.data?.order_id) {
-            router.push('/(tabs)/transactions');
-          }
-        }}
-      >
-        <View style={[styles.notifIcon, { backgroundColor: getNotificationColor(item.type) + '20' }]}>
-          <Ionicons 
-            name={getNotificationIcon(item.type) as any} 
-            size={22} 
-            color={getNotificationColor(item.type)} 
-          />
-        </View>
-
-        <View style={styles.notifContent}>
-          <View style={styles.notifHeader}>
-            <Text style={[styles.notifTitle, !item.read && styles.notifTitleUnread]}>
-              {item.title}
-            </Text>
-            <Text style={styles.notifTime}>{formatTime(item.created_at)}</Text>
+      <View style={[styles.notificationCard, !item.read && styles.notificationUnread, isSellerConfirmation && styles.notificationAction]}>
+        <View style={styles.notificationMainContent}>
+          <View style={[styles.notifIcon, { backgroundColor: getNotificationColor(item.type) + '20' }]}>
+            <Ionicons 
+              name={getNotificationIcon(item.type) as any} 
+              size={22} 
+              color={getNotificationColor(item.type)} 
+            />
           </View>
-          <Text style={styles.notifMessage} numberOfLines={2}>
-            {item.message}
-          </Text>
-        </View>
 
-        {!item.read && <View style={styles.unreadDot} />}
-      </TouchableOpacity>
+          <View style={styles.notifContent}>
+            <View style={styles.notifHeader}>
+              <Text style={[styles.notifTitle, !item.read && styles.notifTitleUnread]}>
+                {item.title}
+              </Text>
+              <Text style={styles.notifTime}>{formatTime(item.created_at)}</Text>
+            </View>
+            <Text style={styles.notifMessage} numberOfLines={isSellerConfirmation ? 6 : 2}>
+              {item.message}
+            </Text>
+          </View>
+
+          {!item.read && !isSellerConfirmation && <View style={styles.unreadDot} />}
+        </View>
+        
+        {/* Pulsanti azione per richiesta conferma venditore */}
+        {isSellerConfirmation && (
+          <View style={styles.notificationActions}>
+            <TouchableOpacity
+              style={[styles.notifActionBtn, styles.notifRejectBtn]}
+              onPress={() => handleSellerReject(item)}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="close" size={18} color="#fff" />
+                  <Text style={styles.notifActionText}>NON DISPONIBILE</Text>
+                </>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.notifActionBtn, styles.notifConfirmBtn]}
+              onPress={() => handleSellerConfirm(item)}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="checkmark" size={18} color="#fff" />
+                  <Text style={styles.notifActionText}>DISPONIBILE</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
     );
   };
 
@@ -533,8 +638,7 @@ const styles = StyleSheet.create({
   },
   // Notification styles
   notificationCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'column',
     backgroundColor: '#fff',
     borderRadius: 12,
     padding: 14,
@@ -545,10 +649,19 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 1,
   },
+  notificationMainContent: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
   notificationUnread: {
     backgroundColor: '#f0f8f0',
     borderLeftWidth: 3,
     borderLeftColor: '#1a472a',
+  },
+  notificationAction: {
+    borderWidth: 2,
+    borderColor: '#FF9800',
+    backgroundColor: '#FFF8E1',
   },
   notifIcon: {
     width: 44,
@@ -592,5 +705,31 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     backgroundColor: '#1a472a',
     marginLeft: 8,
+  },
+  // Stili per azioni nella notifica
+  notificationActions: {
+    flexDirection: 'row',
+    marginTop: 14,
+    gap: 10,
+  },
+  notifActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 8,
+    gap: 6,
+  },
+  notifRejectBtn: {
+    backgroundColor: '#9e9e9e',
+  },
+  notifConfirmBtn: {
+    backgroundColor: '#4CAF50',
+  },
+  notifActionText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 12,
   },
 });
