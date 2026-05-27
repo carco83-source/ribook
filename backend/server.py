@@ -7182,6 +7182,22 @@ async def confirm_pickup(order_id: str, user_id: str = Query(...)):
         "message": "Ritiro confermato! Hai 3 giorni per segnalare eventuali problemi."
     }
 
+@api_router.get("/user-orders/{user_id}")
+async def get_user_orders(user_id: str):
+    """Ottieni tutti gli ordini di un utente (come acquirente o venditore)"""
+    
+    orders = await db.orders.find({
+        "$or": [{"buyer_id": user_id}, {"seller_id": user_id}]
+    }).sort("created_at", -1).to_list(100)
+    
+    for order in orders:
+        order.pop('_id', None)
+        order["status_label"] = ORDER_STATES.get(order.get("status"), order.get("status"))
+        order["is_buyer"] = order.get("buyer_id") == user_id
+        order["is_seller"] = order.get("seller_id") == user_id
+    
+    return {"orders": orders, "count": len(orders)}
+
 @api_router.get("/orders/{order_id}")
 async def get_order(order_id: str, user_id: str = Query(...)):
     """Ottieni dettagli ordine"""

@@ -59,7 +59,7 @@ export default function CartScreen() {
       }
 
       // Carica ordini dell'utente
-      const response = await axios.get(`${API_URL}/api/orders/user/${storedUserId}`);
+      const response = await axios.get(`${API_URL}/api/user-orders/${storedUserId}`);
       const allOrders = response.data.orders || [];
       
       // Filtra solo ordini in attesa di pagamento (carrello)

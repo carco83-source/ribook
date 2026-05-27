@@ -289,8 +289,11 @@ export default function MessaggiScreen() {
     const isLoading = actionLoading === item.id;
     
     // Handler per click sulla notifica
-    const handleNotificationPress = () => {
-      if (!item.read) markNotificationAsRead(item.id);
+    const handleNotificationPress = async () => {
+      // Segna come letta
+      if (!item.read) {
+        await markNotificationAsRead(item.id);
+      }
       
       if (isReadyForPayment) {
         // Vai al carrello
@@ -300,22 +303,9 @@ export default function MessaggiScreen() {
       }
     };
     
-    // Se è una notifica cliccabile (ready_for_payment), wrappala in TouchableOpacity
-    const NotificationWrapper = isReadyForPayment && !isSellerConfirmation 
-      ? TouchableOpacity 
-      : View;
-    
-    return (
-      <NotificationWrapper 
-        style={[
-          styles.notificationCard, 
-          !item.read && styles.notificationUnread, 
-          isSellerConfirmation && styles.notificationAction,
-          isReadyForPayment && !isSellerConfirmation && styles.notificationClickable
-        ]}
-        onPress={isReadyForPayment && !isSellerConfirmation ? handleNotificationPress : undefined}
-        activeOpacity={0.7}
-      >
+    // Contenuto della notifica
+    const notificationContent = (
+      <>
         <View style={styles.notificationMainContent}>
           <View style={[styles.notifIcon, { backgroundColor: getNotificationColor(item.type) + '20' }]}>
             <Ionicons 
@@ -381,7 +371,37 @@ export default function MessaggiScreen() {
             </TouchableOpacity>
           </View>
         )}
-      </NotificationWrapper>
+      </>
+    );
+    
+    // Se è notifica cliccabile (ready_for_payment), usa TouchableOpacity
+    if (isReadyForPayment && !isSellerConfirmation) {
+      return (
+        <TouchableOpacity
+          style={[
+            styles.notificationCard, 
+            !item.read && styles.notificationUnread, 
+            styles.notificationClickable
+          ]}
+          onPress={handleNotificationPress}
+          activeOpacity={0.7}
+        >
+          {notificationContent}
+        </TouchableOpacity>
+      );
+    }
+    
+    // Altrimenti usa View normale
+    return (
+      <View 
+        style={[
+          styles.notificationCard, 
+          !item.read && styles.notificationUnread, 
+          isSellerConfirmation && styles.notificationAction
+        ]}
+      >
+        {notificationContent}
+      </View>
     );
   };
 

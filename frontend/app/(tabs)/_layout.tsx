@@ -73,7 +73,7 @@ export default function TabLayout() {
         setUnreadNotifications(unread);
         
         // Fetch cart items (orders in_attesa_pagamento)
-        const ordersResponse = await axios.get(`${API_URL}/api/orders/user/${userId}`);
+        const ordersResponse = await axios.get(`${API_URL}/api/user-orders/${userId}`);
         const orders = ordersResponse.data.orders || [];
         const cartOrders = orders.filter((o: any) => 
           o.status === 'in_attesa_pagamento' || o.status === 'pending_payment'
