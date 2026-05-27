@@ -144,7 +144,7 @@ export default function MessaggiScreen() {
 
   const markNotificationAsRead = async (notifId: string) => {
     try {
-      await fetch(`${API_BASE}/notifications/${notifId}/read`, { method: 'POST' });
+      await fetch(`${API_BASE}/notifications/${notifId}/read`, { method: 'PUT' });
       setNotifications(prev => 
         prev.map(n => n.id === notifId ? { ...n, read: true } : n)
       );

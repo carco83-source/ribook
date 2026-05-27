@@ -62,9 +62,10 @@ export default function CartScreen() {
       const response = await axios.get(`${API_URL}/api/user-orders/${storedUserId}`);
       const allOrders = response.data.orders || [];
       
-      // Filtra solo ordini in attesa di pagamento (carrello)
+      // Filtra solo ordini in attesa di pagamento DOVE L'UTENTE È L'ACQUIRENTE
       const ordersToPay = allOrders.filter((o: any) => 
-        o.status === 'in_attesa_pagamento' || o.status === 'pending_payment'
+        (o.status === 'in_attesa_pagamento' || o.status === 'pending_payment') &&
+        o.buyer_id === storedUserId  // Solo ordini dove sono l'acquirente
       );
       
       setOrders(ordersToPay);
