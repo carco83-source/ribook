@@ -214,9 +214,6 @@ export default function MessaggiScreen() {
       setActionLoading(null);
     }
   };
-      console.error('Error marking notification as read:', error);
-    }
-  };
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
