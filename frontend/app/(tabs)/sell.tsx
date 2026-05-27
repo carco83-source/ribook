@@ -82,6 +82,30 @@ export default function CartScreen() {
   };
 
   const handlePayOrder = async (order: OrderToPay) => {
+    // Su web, usa confirm invece di Alert
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm(
+        `Conferma acquisto\n\nStai per acquistare:\n📚 ${order.book_titolo}\n\nTotale: €${order.totale_acquirente.toFixed(2)}`
+      );
+      
+      if (confirmed) {
+        setPayingOrderId(order.id);
+        try {
+          await axios.post(`${API_URL}/api/orders/${order.id}/pay?user_id=${userId}`);
+          window.alert(
+            `✅ Acquisto effettuato con successo!\n\n📚 ${order.book_titolo}\n\n🏪 Ritiro presso: ${order.bookstore_name}\n\nIl venditore ha 2 giorni lavorativi per consegnare il libro.\n\n(Presto inseriremo un vero sistema Stripe per i pagamenti)`
+          );
+          loadOrders();
+        } catch (error: any) {
+          window.alert('Errore: ' + (error.response?.data?.detail || 'Errore nel pagamento'));
+        } finally {
+          setPayingOrderId(null);
+        }
+      }
+      return;
+    }
+    
+    // Su mobile, usa Alert
     Alert.alert(
       'Conferma acquisto',
       `Stai per acquistare:\n\n📚 ${order.book_titolo}\n\nTotale: €${order.totale_acquirente.toFixed(2)}\n\n(Prezzo: €${order.prezzo_libro.toFixed(2)} + Commissioni: €${(order.commissione_app + order.commissione_cartolibreria).toFixed(2)})`,
@@ -94,8 +118,8 @@ export default function CartScreen() {
             try {
               await axios.post(`${API_URL}/api/orders/${order.id}/pay?user_id=${userId}`);
               Alert.alert(
-                '✅ Acquisto completato!',
-                `Il venditore ha 2 giorni lavorativi per consegnare il libro presso:\n\n🏪 ${order.bookstore_name}\n\nRiceverai una notifica quando sarà pronto per il ritiro.`,
+                '✅ Acquisto effettuato con successo!',
+                `📚 ${order.book_titolo}\n\n🏪 Ritiro presso: ${order.bookstore_name}\n\nIl venditore ha 2 giorni lavorativi per consegnare il libro.\n\n(Presto inseriremo un vero sistema Stripe per i pagamenti)`,
                 [{ text: 'OK' }]
               );
               loadOrders();
