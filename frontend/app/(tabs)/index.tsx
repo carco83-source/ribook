@@ -2450,26 +2450,27 @@ const styles = StyleSheet.create({
     backgroundColor: '#f3e5f5',
   },
   badgeUnderCoverText: {
-    fontSize: 9,
-    fontWeight: '600',
+    fontSize: 11,
+    fontWeight: 'bold',
     color: '#666',
   },
   badgeUnderCoverTextBlue: {
-    fontSize: 9,
+    fontSize: 11,
     fontWeight: 'bold',
     color: '#2196F3',
   },
   badgeUnderCoverTextGreen: {
+    fontSize: 12,
     color: '#4CAF50',
     fontWeight: 'bold',
   },
   badgeUnderCoverTextRed: {
-    fontSize: 9,
+    fontSize: 11,
     fontWeight: 'bold',
     color: '#F44336',
   },
   badgeUnderCoverTextPurple: {
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: 'bold',
     color: '#9C27B0',
   },
