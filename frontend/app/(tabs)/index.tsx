@@ -442,21 +442,20 @@ export default function RadarScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-      {/* Sezione Alunni con sfondo arancione */}
-      <View style={styles.profileSelectorCard}>
-        <Text style={styles.profileSelectorLabel}>Alunni</Text>
+      {/* Sezione Alunni con sfondo arancione - COMPATTA */}
+      <View style={styles.profileSelectorCardCompact}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View style={styles.childTabs}>
+          <View style={styles.childTabsCompact}>
             {/* Rettangolo + per aggiungere profilo */}
             <TouchableOpacity
-              style={styles.addProfileRect}
+              style={styles.addProfileRectCompact}
               onPress={() => setShowAddProfileModal(true)}
             >
-              <Ionicons name="add" size={28} color="#1a472a" />
-              <Text style={styles.addProfileRectText}>Aggiungi</Text>
+              <Ionicons name="add" size={24} color="#1a472a" />
+              <Text style={styles.addProfileRectTextCompact}>Aggiungi</Text>
             </TouchableOpacity>
             
-            {/* Profili esistenti - Rettangoli bianchi con info */}
+            {/* Profili esistenti - Rettangoli compatti */}
             {childProfiles.map((child) => {
               const isSelected = selectedChildId === child.id;
               const schoolColor = getSchoolColor(child.codice_scuola);
@@ -467,16 +466,15 @@ export default function RadarScreen() {
                 <TouchableOpacity
                   key={child.id}
                   style={[
-                    styles.childRect,
-                    { borderColor: schoolColor, borderWidth: 4 },
-                    isSelected && styles.childRectSelected
+                    styles.childRectCompact,
+                    { borderColor: schoolColor, borderWidth: 3 },
+                    isSelected && styles.childRectSelectedCompact
                   ]}
                   onPress={() => setSelectedChildId(child.id)}
                 >
-                  <Text style={styles.childRectName}>{child.nome_figlio}</Text>
-                  <Text style={styles.childRectClasse}>Classe {classeLabel}</Text>
-                  <Text style={styles.childRectSezione}>Sezione {sezioneLabel}</Text>
-                  <Text style={styles.childRectSchool} numberOfLines={3}>
+                  <Text style={styles.childRectNameCompact}>{child.nome_figlio}</Text>
+                  <Text style={styles.childRectClasseCompact}>{classeLabel} {sezioneLabel}</Text>
+                  <Text style={styles.childRectSchoolCompact} numberOfLines={2}>
                     {child.scuola}
                   </Text>
                 </TouchableOpacity>
@@ -486,18 +484,23 @@ export default function RadarScreen() {
         </ScrollView>
       </View>
 
-      {/* Barra Dettagli Scuola e Spesa */}
-      {selectedChildId && (
-        <TouchableOpacity 
-          style={styles.detailsBar}
-          onPress={() => router.push(`/student/${selectedChildId}`)}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="school-outline" size={20} color="#1a472a" />
-          <Text style={styles.detailsBarText}>Dettagli scuola e spesa</Text>
-          <Ionicons name="chevron-forward" size={20} color="#1a472a" />
-        </TouchableOpacity>
-      )}
+      {/* Barra Dettagli Scuola e Spesa - Con nome profilo */}
+      {selectedChildId && (() => {
+        const selectedChild = childProfiles.find(c => c.id === selectedChildId);
+        return (
+          <TouchableOpacity 
+            style={styles.detailsBar}
+            onPress={() => router.push(`/student/${selectedChildId}`)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="school-outline" size={20} color="#1a472a" />
+            <Text style={styles.detailsBarText}>
+              <Text style={styles.detailsBarName}>{selectedChild?.nome_figlio}</Text> - Dettagli scuola e spesa
+            </Text>
+            <Ionicons name="chevron-forward" size={20} color="#1a472a" />
+          </TouchableOpacity>
+        );
+      })()}
 
       {/* Sezione Libri per il profilo selezionato */}
       {selectedChildId && childrenCompatibility[selectedChildId] && (() => {
@@ -532,35 +535,33 @@ export default function RadarScreen() {
                         style={[styles.sampleBookItem, styles.sampleBookItemClickable]}
                         onPress={() => router.push(`/sell-form?isbn=${book.isbn}&titolo=${encodeURIComponent(book.titolo || '')}&prezzo=${prezzoNuovo}`)}
                       >
-                        {coverUrl ? (
-                          <Image 
-                            source={{ uri: coverUrl }} 
-                            style={styles.bookCoverImage}
-                            resizeMode="contain"
-                          />
-                        ) : (
-                          <Image 
-                            source={require('../../assets/images/ribook-logo.png')} 
-                            style={styles.bookCoverImage}
-                            resizeMode="contain"
-                          />
-                        )}
+                        <View style={styles.bookCoverContainer}>
+                          {coverUrl ? (
+                            <Image 
+                              source={{ uri: coverUrl }} 
+                              style={styles.bookCoverImage}
+                              resizeMode="contain"
+                            />
+                          ) : (
+                            <Image 
+                              source={require('../../assets/images/ribook-logo.png')} 
+                              style={styles.bookCoverImage}
+                              resizeMode="contain"
+                            />
+                          )}
+                          {/* Badge VENDIBILE sotto la copertina */}
+                          <View style={styles.badgeUnderCover}>
+                            <Text style={styles.badgeUnderCoverTextBlue}>VENDIBILE</Text>
+                          </View>
+                        </View>
                         <View style={styles.bookDetailsContainer}>
                           <Text style={styles.sampleBookSubject}>{book.disciplina}</Text>
                           <Text style={styles.sampleBookTitle}>{book.titolo}</Text>
                           {book.autori && <Text style={styles.sampleBookAuthor}>{book.autori}</Text>}
                           {book.editore && <Text style={styles.sampleBookEdition}>{book.editore}</Text>}
-                          {book.isbn && <Text style={styles.bookIsbnText}>ISBN: {book.isbn}</Text>}
-                          <View style={styles.priceContainer}>
-                            <View>
-                              <Text style={styles.priceNewLabel}>Nuovo: <Text style={styles.priceNewValue}>€{prezzoNuovo.toFixed(2)}</Text></Text>
-                              <Text style={styles.priceUsedLabel}>Vendi a: <Text style={styles.priceUsedValue}>€{prezzoUsato.toFixed(2)}</Text></Text>
-                            </View>
-                            <View style={{ alignItems: 'center' }}>
-                              <View style={[styles.copieBadge, { backgroundColor: '#e3f2fd', borderColor: '#2196F3' }]}>
-                                <Text style={[styles.copieBadgeText, { color: '#2196F3' }]}>vendibile</Text>
-                              </View>
-                            </View>
+                          <View style={styles.priceContainerCompact}>
+                            <Text style={styles.priceNewLabel}>Nuovo: <Text style={styles.priceNewValue}>€{prezzoNuovo.toFixed(2)}</Text></Text>
+                            <Text style={styles.priceUsedLabel}>Vendi a: <Text style={styles.priceUsedValue}>€{prezzoUsato.toFixed(2)}</Text></Text>
                           </View>
                         </View>
                       </TouchableOpacity>
@@ -606,43 +607,35 @@ export default function RadarScreen() {
                           }}
                           disabled={copie === 0}
                         >
-                          {coverUrl ? (
-                            <Image 
-                              source={{ uri: coverUrl }} 
-                              style={styles.bookCoverImage}
-                              resizeMode="contain"
-                            />
-                          ) : (
-                            <Image 
-                              source={require('../../assets/images/ribook-logo.png')} 
-                              style={styles.bookCoverImage}
-                              resizeMode="contain"
-                            />
-                          )}
+                          <View style={styles.bookCoverContainer}>
+                            {coverUrl ? (
+                              <Image 
+                                source={{ uri: coverUrl }} 
+                                style={styles.bookCoverImage}
+                                resizeMode="contain"
+                              />
+                            ) : (
+                              <Image 
+                                source={require('../../assets/images/ribook-logo.png')} 
+                                style={styles.bookCoverImage}
+                                resizeMode="contain"
+                              />
+                            )}
+                            {/* Badge copie sotto la copertina */}
+                            <View style={[styles.badgeUnderCover, copie > 0 ? styles.badgeUnderCoverGreen : styles.badgeUnderCoverGray]}>
+                              <Text style={[styles.badgeUnderCoverText, copie > 0 && styles.badgeUnderCoverTextGreen]}>
+                                {copie} {copie === 1 ? 'copia' : 'copie'}
+                              </Text>
+                            </View>
+                          </View>
                           <View style={styles.bookDetailsContainer}>
                             <Text style={styles.sampleBookSubject}>{book.disciplina}</Text>
                             <Text style={styles.sampleBookTitle}>{book.titolo}</Text>
                             {book.autori && <Text style={styles.sampleBookAuthor}>{book.autori}</Text>}
                             {book.editore && <Text style={styles.sampleBookEdition}>{book.editore}</Text>}
-                            {book.isbn && <Text style={styles.bookIsbnText}>ISBN: {book.isbn}</Text>}
-                            <View style={styles.priceContainer}>
-                              <View>
-                                <Text style={styles.priceNewLabel}>Nuovo: <Text style={styles.priceNewValue}>€{prezzoNuovo.toFixed(2)}</Text></Text>
-                                <Text style={styles.priceUsedLabel}>Usato da: <Text style={styles.priceUsedValue}>€{prezzoUsato.toFixed(2)}</Text></Text>
-                              </View>
-                              <View style={{ alignItems: 'center' }}>
-                                <View style={[
-                                  styles.copieBadge,
-                                  copie > 0 ? styles.copieBadgeAvailable : styles.copieBadgeNone
-                                ]}>
-                                  <Text style={[
-                                    styles.copieBadgeText,
-                                    copie > 0 ? styles.copieBadgeTextAvailable : styles.copieBadgeTextNone
-                                  ]}>
-                                    {copie} {copie === 1 ? 'copia' : 'copie'}
-                                  </Text>
-                                </View>
-                              </View>
+                            <View style={styles.priceContainerCompact}>
+                              <Text style={styles.priceNewLabel}>Nuovo: <Text style={styles.priceNewValue}>€{prezzoNuovo.toFixed(2)}</Text></Text>
+                              <Text style={styles.priceUsedLabel}>Usato da: <Text style={styles.priceUsedValue}>€{prezzoUsato.toFixed(2)}</Text></Text>
                             </View>
                           </View>
                         </TouchableOpacity>
@@ -718,40 +711,37 @@ export default function RadarScreen() {
                             onPress: () => router.push(`/book-sellers/${book.isbn}`)
                           } : {})}
                         >
-                          {coverUrl ? (
-                            <Image 
-                              source={{ uri: coverUrl }} 
-                              style={styles.bookCoverImage}
-                              resizeMode="contain"
-                            />
-                          ) : (
-                            <Image 
-                              source={require('../../assets/images/ribook-logo.png')} 
-                              style={styles.bookCoverImage}
-                              resizeMode="contain"
-                            />
-                          )}
+                          <View style={styles.bookCoverContainer}>
+                            {coverUrl ? (
+                              <Image 
+                                source={{ uri: coverUrl }} 
+                                style={styles.bookCoverImage}
+                                resizeMode="contain"
+                              />
+                            ) : (
+                              <Image 
+                                source={require('../../assets/images/ribook-logo.png')} 
+                                style={styles.bookCoverImage}
+                                resizeMode="contain"
+                              />
+                            )}
+                            {/* Badge sotto la copertina */}
+                            <View style={[styles.badgeUnderCover, copie > 0 ? styles.badgeUnderCoverGreen : styles.badgeUnderCoverPurple]}>
+                              <Text style={[styles.badgeUnderCoverText, copie > 0 ? styles.badgeUnderCoverTextGreen : styles.badgeUnderCoverTextPurple]}>
+                                {copie > 0 ? `${copie} ${copie === 1 ? 'copia' : 'copie'}` : 'IN USO'}
+                              </Text>
+                            </View>
+                          </View>
                           <View style={styles.bookDetailsContainer}>
                             <Text style={styles.sampleBookSubject}>{book.disciplina}</Text>
                             <Text style={styles.sampleBookTitle}>{book.titolo || book.titolo_vecchio}</Text>
                             {book.autori && <Text style={styles.sampleBookAuthor}>{book.autori}</Text>}
                             {book.editore && <Text style={styles.sampleBookEdition}>{book.editore}</Text>}
-                            <View style={styles.priceContainer}>
-                              <View>
-                                <Text style={styles.priceNewLabel}>Nuovo: <Text style={styles.priceNewValue}>€{prezzoNuovo.toFixed(2)}</Text></Text>
+                            <View style={styles.priceContainerCompact}>
+                              <Text style={styles.priceNewLabel}>Nuovo: <Text style={styles.priceNewValue}>€{prezzoNuovo.toFixed(2)}</Text></Text>
+                              {copie > 0 && (
                                 <Text style={styles.priceUsedLabel}>Usato da: <Text style={styles.priceUsedValue}>€{prezzoUsato.toFixed(2)}</Text></Text>
-                              </View>
-                              <View style={{ alignItems: 'center' }}>
-                                {copie > 0 ? (
-                                  <View style={[styles.copieBadge, styles.copieBadgeAvailable]}>
-                                    <Text style={[styles.copieBadgeText, styles.copieBadgeTextAvailable]}>
-                                      {copie} {copie === 1 ? 'copia' : 'copie'}
-                                    </Text>
-                                  </View>
-                                ) : (
-                                  <Ionicons name="checkmark-circle" size={24} color="#9C27B0" />
-                                )}
-                              </View>
+                              )}
                             </View>
                           </View>
                         </CardComponent>
@@ -782,34 +772,33 @@ export default function RadarScreen() {
                       const prezzoNuovo = book.prezzo_copertina || book.prezzo_ministeriale || 0;
                       return (
                         <View key={idx} style={styles.sampleBookItem}>
-                          {coverUrl ? (
-                            <Image 
-                              source={{ uri: coverUrl }} 
-                              style={styles.bookCoverImage}
-                              resizeMode="contain"
-                            />
-                          ) : (
-                            <Image 
-                              source={require('../../assets/images/ribook-logo.png')} 
-                              style={styles.bookCoverImage}
-                              resizeMode="contain"
-                            />
-                          )}
+                          <View style={styles.bookCoverContainer}>
+                            {coverUrl ? (
+                              <Image 
+                                source={{ uri: coverUrl }} 
+                                style={styles.bookCoverImage}
+                                resizeMode="contain"
+                              />
+                            ) : (
+                              <Image 
+                                source={require('../../assets/images/ribook-logo.png')} 
+                                style={styles.bookCoverImage}
+                                resizeMode="contain"
+                              />
+                            )}
+                            {/* Badge sotto la copertina */}
+                            <View style={[styles.badgeUnderCover, styles.badgeUnderCoverRed]}>
+                              <Text style={styles.badgeUnderCoverTextRed}>SOLO NUOVO</Text>
+                            </View>
+                          </View>
                           <View style={styles.bookDetailsContainer}>
                             <Text style={styles.sampleBookSubject}>{book.disciplina}</Text>
                             <Text style={styles.sampleBookTitle}>{book.titolo}</Text>
                             {book.autori && <Text style={styles.sampleBookAuthor}>{book.autori}</Text>}
                             {book.editore && <Text style={styles.sampleBookEdition}>{book.editore}</Text>}
-                            <View style={styles.priceContainer}>
-                              <View>
-                                <Text style={styles.priceNewLabel}>Nuovo: <Text style={styles.priceNewValue}>€{prezzoNuovo.toFixed(2)}</Text></Text>
-                                <Text style={{ fontSize: 12, color: '#F44336' }}>{book.motivo || 'Da acquistare nuovo'}</Text>
-                              </View>
-                              <View style={{ alignItems: 'center' }}>
-                                <View style={[styles.copieBadge, { backgroundColor: '#ffebee', borderColor: '#F44336' }]}>
-                                  <Text style={[styles.copieBadgeText, { color: '#F44336' }]}>nuovo</Text>
-                                </View>
-                              </View>
+                            <View style={styles.priceContainerCompact}>
+                              <Text style={styles.priceNewLabel}>Nuovo: <Text style={styles.priceNewValue}>€{prezzoNuovo.toFixed(2)}</Text></Text>
+                              <Text style={styles.nuovaEdizioneNote}>{book.motivo || 'Da acquistare nuovo'}</Text>
                             </View>
                           </View>
                         </View>
@@ -2358,5 +2347,140 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  // === NUOVI STILI COMPATTI ===
+  // Barra profili compatta
+  profileSelectorCardCompact: {
+    backgroundColor: '#FFE4C4',
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 8,
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+  },
+  childTabsCompact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  addProfileRectCompact: {
+    width: 70,
+    height: 70,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#1a472a',
+    borderStyle: 'dashed',
+  },
+  addProfileRectTextCompact: {
+    fontSize: 10,
+    color: '#1a472a',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  childRectCompact: {
+    width: 90,
+    height: 70,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  childRectSelectedCompact: {
+    backgroundColor: '#e8f5e9',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  childRectNameCompact: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#1a472a',
+    textAlign: 'center',
+  },
+  childRectClasseCompact: {
+    fontSize: 11,
+    color: '#333',
+    fontWeight: '600',
+  },
+  childRectSchoolCompact: {
+    fontSize: 8,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 10,
+    marginTop: 2,
+  },
+  // Nome del profilo evidenziato nella barra dettagli
+  detailsBarName: {
+    fontWeight: 'bold',
+    color: '#1a472a',
+    textTransform: 'uppercase',
+  },
+  // Container per copertina libro con badge sotto
+  bookCoverContainer: {
+    alignItems: 'center',
+  },
+  // Badge sotto la copertina
+  badgeUnderCover: {
+    marginTop: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    alignItems: 'center',
+  },
+  badgeUnderCoverBlue: {
+    backgroundColor: '#e3f2fd',
+  },
+  badgeUnderCoverGreen: {
+    backgroundColor: '#e8f5e9',
+  },
+  badgeUnderCoverGray: {
+    backgroundColor: '#f5f5f5',
+  },
+  badgeUnderCoverRed: {
+    backgroundColor: '#ffebee',
+  },
+  badgeUnderCoverPurple: {
+    backgroundColor: '#f3e5f5',
+  },
+  badgeUnderCoverText: {
+    fontSize: 9,
+    fontWeight: '600',
+    color: '#666',
+  },
+  badgeUnderCoverTextBlue: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    color: '#2196F3',
+  },
+  badgeUnderCoverTextGreen: {
+    color: '#4CAF50',
+    fontWeight: 'bold',
+  },
+  badgeUnderCoverTextRed: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    color: '#F44336',
+  },
+  badgeUnderCoverTextPurple: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    color: '#9C27B0',
+  },
+  // Prezzi compatti
+  priceContainerCompact: {
+    marginTop: 4,
+  },
+  nuovaEdizioneNote: {
+    fontSize: 10,
+    color: '#F44336',
+    fontStyle: 'italic',
+    marginTop: 2,
   },
 });
