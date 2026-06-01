@@ -7622,26 +7622,27 @@ async def verify_return(
             {"$set": {"status": "active", "sold_at": None, "sold_to": None}}
         )
         
-        # Notifica acquirente
+        # Notifica acquirente - RESO ACCETTATO
         notification_buyer = {
             "id": str(uuid.uuid4()),
             "user_id": order.get("buyer_id"),
             "type": "return_accepted",
-            "title": "Reso accettato!",
-            "message": f"Il reso per '{order.get('book_titolo')}' è stato accettato.\n\nRiceverai il rimborso di €{order.get('totale_acquirente', 0):.2f}",
+            "title": "Reso accettato - Pagamento annullato",
+            "message": f"✅ Il reso per il libro:\n📚 \"{order.get('book_titolo')}\"\n\nè stato ACCETTATO dalla cartolibreria.\n\n💰 Il pagamento di €{order.get('totale_acquirente', 0):.2f} è stato annullato e rimborsato.",
             "order_id": order_id,
             "read": False,
             "created_at": now.isoformat()
         }
         await db.notifications.insert_one(notification_buyer)
         
-        # Notifica venditore
+        # Notifica venditore - RESO ACCETTATO
+        return_reason = order.get("return_reason", "Non specificato")
         notification_seller = {
             "id": str(uuid.uuid4()),
             "user_id": order.get("seller_id"),
             "type": "return_accepted",
-            "title": "Reso accettato",
-            "message": f"Il reso per '{order.get('book_titolo')}' è stato accettato.\n\nIl libro è tornato disponibile nel tuo inventario.",
+            "title": "Reso del libro accettato - Acquisto annullato",
+            "message": f"⚠️ Il reso per il libro:\n📚 \"{order.get('book_titolo')}\"\n\nè stato ACCETTATO.\n\n📝 Motivazione acquirente:\n\"{return_reason}\"\n\nL'acquisto è annullato. Il libro è tornato disponibile nel tuo inventario.",
             "order_id": order_id,
             "read": False,
             "created_at": now.isoformat()
