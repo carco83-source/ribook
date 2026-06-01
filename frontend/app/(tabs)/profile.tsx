@@ -260,7 +260,7 @@ export default function ProfileScreen() {
       <View style={styles.tradesSection}>
         <TouchableOpacity 
           style={styles.tradesSectionHeader}
-          onPress={() => router.push('/(tabs)/transactions')}
+          onPress={() => router.push('/profile/my-exchanges')}
         >
           <View style={styles.tradesSectionHeaderLeft}>
             <Ionicons name="swap-horizontal" size={24} color="#1a472a" />
