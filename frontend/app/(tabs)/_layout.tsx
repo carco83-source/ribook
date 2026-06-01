@@ -72,11 +72,13 @@ export default function TabLayout() {
         const unread = notifications.filter((n: any) => !n.read).length;
         setUnreadNotifications(unread);
         
-        // Fetch cart items (orders in_attesa_pagamento)
+        // Fetch cart items (orders in_attesa_pagamento dove l'utente è ACQUIRENTE)
         const ordersResponse = await axios.get(`${API_URL}/api/user-orders/${userId}`);
         const orders = ordersResponse.data.orders || [];
+        // Conta solo gli ordini dove l'utente è l'ACQUIRENTE (buyer), non il venditore
         const cartOrders = orders.filter((o: any) => 
-          o.status === 'in_attesa_pagamento' || o.status === 'pending_payment'
+          (o.status === 'in_attesa_pagamento' || o.status === 'pending_payment') &&
+          o.buyer_id === userId // IMPORTANTE: Solo ordini dove è acquirente
         );
         setCartItemsCount(cartOrders.length);
       } catch (error) {
