@@ -1,83 +1,17 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  TouchableOpacity,
-  ActivityIndicator,
-  RefreshControl,
-} from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import axios from 'axios';
+import React, { useEffect } from 'react';
+import { useRouter } from 'expo-router';
 
-const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
-
-interface Transaction {
-  id: string;
-  book_titolo: string;
-  buyer_username: string;
-  seller_username: string;
-  bookstore_nome: string;
-  prezzo_totale: number;
-  commissione_app: number;
-  importo_venditore: number;
-  stato: string;
-  buyer_is_premium: boolean;
-  created_at: string;
-}
-
+// Questa pagina è deprecata - redirect a my-exchanges
 export default function TransactionsScreen() {
   const router = useRouter();
-  const [transactions, setTransactions] = useState<{
-    acquisti: Transaction[];
-    vendite: Transaction[];
-  }>({ acquisti: [], vendite: [] });
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'acquisti' | 'vendite'>('acquisti');
-  const [userId, setUserId] = useState<string | null>(null);
 
-  useFocusEffect(
-    useCallback(() => {
-      loadData();
-    }, [])
-  );
+  useEffect(() => {
+    // Redirect alla nuova pagina
+    router.replace('/profile/my-exchanges');
+  }, []);
 
-  const loadData = async () => {
-    try {
-      const storedUserId = await AsyncStorage.getItem('user_id');
-      if (!storedUserId) {
-        router.replace('/');
-        return;
-      }
-      setUserId(storedUserId);
-
-      const response = await axios.get(
-        `${API_URL}/api/transactions/user/${storedUserId}`
-      );
-      setTransactions(response.data);
-    } catch (error) {
-      console.error('Error loading transactions:', error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  const onRefresh = () => {
-    setRefreshing(true);
-    loadData();
-  };
-
-  const getStatoLabel = (stato: string) => {
-    const labels: { [key: string]: { text: string; color: string } } = {
-      in_attesa_consegna: { text: 'In attesa consegna', color: '#FFC107' },
-      in_custodia: { text: 'In custodia', color: '#2196F3' },
-      completato: { text: 'Completato', color: '#4CAF50' },
-      annullato: { text: 'Annullato', color: '#f44336' },
+  return null;
+}
     };
     return labels[stato] || { text: stato, color: '#666' };
   };

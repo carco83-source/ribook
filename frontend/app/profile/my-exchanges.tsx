@@ -73,17 +73,22 @@ export default function MyExchangesScreen() {
   const loadOrders = async () => {
     try {
       const storedUserId = await AsyncStorage.getItem('user_id');
+      console.log('[MyExchanges] storedUserId:', storedUserId);
       setUserId(storedUserId);
       
       if (!storedUserId) {
+        console.log('[MyExchanges] No user ID found');
         setLoading(false);
         return;
       }
 
       const response = await axios.get(`${API_URL}/api/user-orders/${storedUserId}`);
-      setOrders(response.data.orders || []);
+      console.log('[MyExchanges] API response:', JSON.stringify(response.data, null, 2));
+      const ordersData = response.data.orders || [];
+      console.log('[MyExchanges] Orders count:', ordersData.length);
+      setOrders(ordersData);
     } catch (error) {
-      console.error('Error loading orders:', error);
+      console.error('[MyExchanges] Error loading orders:', error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -227,10 +232,13 @@ export default function MyExchangesScreen() {
     const needsSellerAction = isSeller && (item.status === 'in_attesa_conferma_venditore' || item.status === 'pending_seller_confirmation');
     const needsBuyerPayment = isBuyer && (item.status === 'in_attesa_pagamento' || item.status === 'pending_payment');
     
-    // L'acquirente può richiedere reso solo per ordini ritirato (picked_up) entro 72h
-    const canRequestReturn = isBuyer && (item.status === 'picked_up' || item.status === 'ritirato') && item.return_deadline;
+    // Pronto per ritiro - mostra info all'acquirente
+    const isReadyForPickup = isBuyer && (item.status === 'pronto_per_ritiro' || item.status === 'ready_for_pickup');
+    
+    // L'acquirente può richiedere reso solo per ordini ritirato (picked_up/ritirato) entro 72h
+    const canRequestReturn = isBuyer && (item.status === 'picked_up' || item.status === 'ritirato');
     const returnDeadlineDate = item.return_deadline ? new Date(item.return_deadline) : null;
-    const isReturnPeriodValid = returnDeadlineDate && returnDeadlineDate > new Date();
+    const isReturnPeriodValid = returnDeadlineDate ? returnDeadlineDate > new Date() : true; // Se non c'è deadline, permetti reso
 
     return (
       <View style={[styles.orderCard, needsSellerAction && styles.orderCardAction]}>
@@ -308,6 +316,22 @@ export default function MyExchangesScreen() {
             <Ionicons name="refresh" size={18} color="#FF9800" />
             <Text style={styles.returnButtonText}>Richiedi reso (incongruenza)</Text>
           </TouchableOpacity>
+        )}
+
+        {/* Info pronto per ritiro */}
+        {isReadyForPickup && (
+          <View style={styles.pickupInfo}>
+            <Ionicons name="location" size={18} color="#4CAF50" />
+            <View style={styles.pickupInfoText}>
+              <Text style={styles.pickupInfoTitle}>Pronto per il ritiro!</Text>
+              <Text style={styles.pickupInfoSubtitle}>
+                Ritira il libro presso {item.bookstore_name}
+              </Text>
+              <Text style={styles.pickupInfoNote}>
+                Dopo il ritiro avrai 72h per verificare il libro e richiedere un eventuale reso
+              </Text>
+            </View>
+          </View>
         )}
 
         <Text style={styles.orderDate}>{formatDate(item.created_at)}</Text>
@@ -677,5 +701,34 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  // Stili info ritiro
+  pickupInfo: {
+    flexDirection: 'row',
+    backgroundColor: '#E8F5E9',
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 12,
+    gap: 12,
+    alignItems: 'flex-start',
+  },
+  pickupInfoText: {
+    flex: 1,
+  },
+  pickupInfoTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#2E7D32',
+    marginBottom: 4,
+  },
+  pickupInfoSubtitle: {
+    fontSize: 13,
+    color: '#4CAF50',
+    marginBottom: 4,
+  },
+  pickupInfoNote: {
+    fontSize: 11,
+    color: '#666',
+    fontStyle: 'italic',
   },
 });
