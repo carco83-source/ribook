@@ -2067,6 +2067,54 @@ async def delete_listing(listing_id: str, user_id: str):
     await db.listings.delete_one({"id": listing_id})
     return {"message": "Annuncio eliminato"}
 
+@api_router.put("/listings/{listing_id}")
+async def update_listing(listing_id: str, data: dict):
+    """Aggiorna un listing esistente (condizioni, prezzo, foto, descrizione)"""
+    seller_id = data.get("seller_id")
+    if not seller_id:
+        raise HTTPException(status_code=400, detail="seller_id richiesto")
+    
+    listing = await db.listings.find_one({"id": listing_id, "seller_id": seller_id})
+    if not listing:
+        raise HTTPException(status_code=404, detail="Annuncio non trovato o non autorizzato")
+    
+    # Verifica che non ci siano ordini attivi
+    if listing.get("stato") != "disponibile":
+        raise HTTPException(status_code=400, detail="Non puoi modificare un annuncio con ordine attivo")
+    
+    if listing.get("order_id"):
+        raise HTTPException(status_code=400, detail="Non puoi modificare un annuncio con ordine in corso")
+    
+    # Prepara i campi da aggiornare
+    update_fields = {}
+    
+    if "condizioni" in data:
+        update_fields["condizioni"] = data["condizioni"]
+    
+    if "descrizione" in data:
+        update_fields["descrizione"] = data["descrizione"]
+    
+    if "prezzo_vendita" in data:
+        new_price = float(data["prezzo_vendita"])
+        if new_price <= 0:
+            raise HTTPException(status_code=400, detail="Il prezzo deve essere maggiore di 0")
+        update_fields["prezzo_vendita"] = new_price
+    
+    if "foto_base64" in data and data["foto_base64"]:
+        update_fields["foto_base64"] = data["foto_base64"]
+    
+    if not update_fields:
+        raise HTTPException(status_code=400, detail="Nessun campo da aggiornare")
+    
+    update_fields["updated_at"] = datetime.utcnow().isoformat()
+    
+    await db.listings.update_one(
+        {"id": listing_id},
+        {"$set": update_fields}
+    )
+    
+    return {"message": "Annuncio aggiornato con successo", "updated_fields": list(update_fields.keys())}
+
 # ============== BOOK REQUESTS ROUTES ==============
 
 @api_router.post("/requests")

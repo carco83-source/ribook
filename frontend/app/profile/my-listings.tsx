@@ -104,74 +104,103 @@ export default function MyListingsScreen() {
               const coverUrl = listing.cover_url || listing.foto_base64 || 
                 `https://www.ibs.it/images/${listing.book_isbn}_0_0_0_180_50.jpg`;
               const isCustomPrice = listing.is_custom_price;
+              const hasActiveOrder = listing.order_id || listing.stato === 'riservato';
+              const canEdit = listing.stato === 'disponibile' && !hasActiveOrder;
               
               return (
-                <TouchableOpacity 
-                  key={listing.id || index} 
-                  style={styles.listingCard}
-                  onPress={() => router.push(`/listing/${listing.id}`)}
-                >
-                  <Image 
-                    source={{ uri: coverUrl }}
-                    style={styles.listingCover}
-                    resizeMode="cover"
-                  />
-                  <View style={styles.listingContent}>
-                    <View style={styles.listingHeader}>
-                      <View style={[
-                        styles.typeBadge, 
-                        { backgroundColor: isCustomPrice ? '#FFF3E0' : '#E8F5E9' }
-                      ]}>
-                        <Text style={[
-                          styles.typeBadgeText,
-                          { color: isCustomPrice ? '#FF9800' : '#4CAF50' }
-                        ]}>
-                          {isCustomPrice ? 'Non scolastico' : 'Scolastico'}
-                        </Text>
-                      </View>
-                      <Text style={styles.listingPrice}>€{listing.prezzo_vendita?.toFixed(2)}</Text>
-                    </View>
-                    
-                    <Text style={styles.listingTitle} numberOfLines={2}>
-                      {listing.book_titolo || 'Titolo non disponibile'}
-                    </Text>
-                    
-                    {listing.book_autori && (
-                      <Text style={styles.listingAuthor} numberOfLines={1}>
-                        {listing.book_autori}
-                      </Text>
-                    )}
-                    
-                    <View style={styles.listingMeta}>
-                      <View style={[
-                        styles.statusBadge, 
-                        { backgroundColor: listing.stato === 'disponibile' ? '#E8F5E9' : '#FFF8E1' }
-                      ]}>
+                <View key={listing.id || index} style={styles.listingCard}>
+                  <TouchableOpacity 
+                    style={styles.listingCardInner}
+                    onPress={() => router.push(`/listing/${listing.id}`)}
+                  >
+                    <Image 
+                      source={{ uri: coverUrl }}
+                      style={styles.listingCover}
+                      resizeMode="cover"
+                    />
+                    <View style={styles.listingContent}>
+                      <View style={styles.listingHeader}>
                         <View style={[
-                          styles.statusDot,
-                          { backgroundColor: listing.stato === 'disponibile' ? '#4CAF50' : '#FFC107' }
-                        ]} />
-                        <Text style={[
-                          styles.statusText,
-                          { color: listing.stato === 'disponibile' ? '#4CAF50' : '#FF9800' }
+                          styles.typeBadge, 
+                          { backgroundColor: isCustomPrice ? '#FFF3E0' : '#E8F5E9' }
                         ]}>
-                          {listing.stato === 'disponibile' ? 'In vendita' : listing.stato}
-                        </Text>
+                          <Text style={[
+                            styles.typeBadgeText,
+                            { color: isCustomPrice ? '#FF9800' : '#4CAF50' }
+                          ]}>
+                            {isCustomPrice ? 'Non scolastico' : 'Scolastico'}
+                          </Text>
+                        </View>
+                        <Text style={styles.listingPrice}>€{listing.prezzo_vendita?.toFixed(2)}</Text>
                       </View>
                       
-                      {listing.bookstore_names && listing.bookstore_names[0] && (
-                        <View style={styles.locationMeta}>
-                          <Ionicons name="storefront-outline" size={12} color="#888" />
-                          <Text style={styles.locationText} numberOfLines={1}>
-                            {listing.bookstore_names[0]}
+                      <Text style={styles.listingTitle} numberOfLines={2}>
+                        {listing.book_titolo || 'Titolo non disponibile'}
+                      </Text>
+                      
+                      {listing.book_autori && (
+                        <Text style={styles.listingAuthor} numberOfLines={1}>
+                          {listing.book_autori}
+                        </Text>
+                      )}
+                      
+                      <View style={styles.listingMeta}>
+                        <View style={[
+                          styles.statusBadge, 
+                          { backgroundColor: listing.stato === 'disponibile' ? '#E8F5E9' : '#FFF8E1' }
+                        ]}>
+                          <View style={[
+                            styles.statusDot,
+                            { backgroundColor: listing.stato === 'disponibile' ? '#4CAF50' : '#FFC107' }
+                          ]} />
+                          <Text style={[
+                            styles.statusText,
+                            { color: listing.stato === 'disponibile' ? '#4CAF50' : '#FF9800' }
+                          ]}>
+                            {listing.stato === 'disponibile' ? 'In vendita' : listing.stato}
                           </Text>
+                        </View>
+                        
+                        {listing.bookstore_names && listing.bookstore_names[0] && (
+                          <View style={styles.locationMeta}>
+                            <Ionicons name="storefront-outline" size={12} color="#888" />
+                            <Text style={styles.locationText} numberOfLines={1}>
+                              {listing.bookstore_names[0]}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                      
+                      {/* Info condizioni */}
+                      {listing.condizioni && (
+                        <View style={styles.conditionsInfo}>
+                          <Text style={styles.conditionsLabel}>Condizioni: {listing.condizioni}</Text>
                         </View>
                       )}
                     </View>
-                  </View>
+                    
+                    <Ionicons name="chevron-forward" size={20} color="#ccc" />
+                  </TouchableOpacity>
                   
-                  <Ionicons name="chevron-forward" size={20} color="#ccc" />
-                </TouchableOpacity>
+                  {/* Pulsante modifica - solo se non ci sono ordini */}
+                  {canEdit && (
+                    <TouchableOpacity 
+                      style={styles.editButton}
+                      onPress={() => router.push(`/edit-listing/${listing.id}`)}
+                    >
+                      <Ionicons name="create-outline" size={18} color="#2196F3" />
+                      <Text style={styles.editButtonText}>Modifica annuncio</Text>
+                    </TouchableOpacity>
+                  )}
+                  
+                  {/* Info ordine attivo */}
+                  {hasActiveOrder && (
+                    <View style={styles.activeOrderInfo}>
+                      <Ionicons name="time" size={14} color="#FF9800" />
+                      <Text style={styles.activeOrderText}>Ordine in corso - non modificabile</Text>
+                    </View>
+                  )}
+                </View>
               );
             })}
             
@@ -374,5 +403,61 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: '#FF9800',
+  },
+  listingCardInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  conditionsInfo: {
+    marginTop: 6,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+  },
+  conditionsLabel: {
+    fontSize: 11,
+    color: '#666',
+  },
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    marginTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+    backgroundColor: '#E3F2FD',
+    marginHorizontal: -16,
+    marginBottom: -12,
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
+    paddingHorizontal: 16,
+  },
+  editButtonText: {
+    color: '#2196F3',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  activeOrderInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    marginTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+    backgroundColor: '#FFF8E1',
+    marginHorizontal: -16,
+    marginBottom: -12,
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
+    paddingHorizontal: 16,
+  },
+  activeOrderText: {
+    color: '#FF9800',
+    fontSize: 12,
+    fontStyle: 'italic',
   },
 });

@@ -328,15 +328,12 @@ export default function MessaggiScreen() {
         await markNotificationAsRead(item.id);
       }
       
-      // Navigazione opzionale basata sul tipo
+      // Navigazione SOLO per notifiche "vai al carrello" (acquirente)
+      // Le altre notifiche (es. "libro acquistato") restano qui senza navigare
       if (isReadyForPayment) {
         router.push('/(tabs)/sell');
-      } else if (item.data?.order_id) {
-        router.push('/orders');
-      } else if (item.data?.listing_id) {
-        router.push(`/listing/${item.data.listing_id}`);
       }
-      // Per altre notifiche, semplicemente segna come letta senza navigare
+      // NON navigare per altre notifiche - semplicemente segna come letta
     };
     
     // Contenuto della notifica

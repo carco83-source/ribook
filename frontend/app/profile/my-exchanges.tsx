@@ -8,6 +8,8 @@ import {
   ActivityIndicator,
   RefreshControl,
   Alert,
+  Modal,
+  TextInput,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -78,7 +80,7 @@ export default function MyExchangesScreen() {
         return;
       }
 
-      const response = await axios.get(`${API_URL}/api/orders/user/${storedUserId}`);
+      const response = await axios.get(`${API_URL}/api/user-orders/${storedUserId}`);
       setOrders(response.data.orders || []);
     } catch (error) {
       console.error('Error loading orders:', error);
@@ -185,12 +187,50 @@ export default function MyExchangesScreen() {
     return date.toLocaleDateString('it-IT', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
   };
 
+  // Stato per modal reso
+  const [showReturnModal, setShowReturnModal] = useState(false);
+  const [returnReason, setReturnReason] = useState('');
+  const [selectedOrderForReturn, setSelectedOrderForReturn] = useState<Order | null>(null);
+
+  // Acquirente richiede reso
+  const handleRequestReturn = async (order: Order) => {
+    setSelectedOrderForReturn(order);
+    setReturnReason('');
+    setShowReturnModal(true);
+  };
+
+  const submitReturn = async () => {
+    if (!selectedOrderForReturn || !returnReason.trim()) {
+      Alert.alert('Errore', 'Descrivi il motivo del reso');
+      return;
+    }
+    
+    setActionLoading(true);
+    try {
+      await axios.post(`${API_URL}/api/orders/${selectedOrderForReturn.id}/request-return?user_id=${userId}&reason=${encodeURIComponent(returnReason)}`);
+      Alert.alert('Richiesta reso inviata!', 'La cartolibreria verificherà il libro e processerà il reso.');
+      setShowReturnModal(false);
+      setSelectedOrderForReturn(null);
+      setReturnReason('');
+      loadOrders();
+    } catch (error: any) {
+      Alert.alert('Errore', error.response?.data?.detail || 'Errore nella richiesta di reso');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const renderOrder = ({ item }: { item: Order }) => {
     const statusConfig = getStatusConfig(item.status);
     const isSeller = item.seller_id === userId;
     const isBuyer = item.buyer_id === userId;
     const needsSellerAction = isSeller && (item.status === 'in_attesa_conferma_venditore' || item.status === 'pending_seller_confirmation');
     const needsBuyerPayment = isBuyer && (item.status === 'in_attesa_pagamento' || item.status === 'pending_payment');
+    
+    // L'acquirente può richiedere reso solo per ordini ritirato (picked_up) entro 72h
+    const canRequestReturn = isBuyer && (item.status === 'picked_up' || item.status === 'ritirato') && item.return_deadline;
+    const returnDeadlineDate = item.return_deadline ? new Date(item.return_deadline) : null;
+    const isReturnPeriodValid = returnDeadlineDate && returnDeadlineDate > new Date();
 
     return (
       <View style={[styles.orderCard, needsSellerAction && styles.orderCardAction]}>
@@ -258,6 +298,18 @@ export default function MyExchangesScreen() {
           </TouchableOpacity>
         )}
 
+        {/* Opzione reso per acquirente (solo dopo ritiro, entro 72h) */}
+        {canRequestReturn && isReturnPeriodValid && (
+          <TouchableOpacity
+            style={styles.returnButton}
+            onPress={() => handleRequestReturn(item)}
+            disabled={actionLoading}
+          >
+            <Ionicons name="refresh" size={18} color="#FF9800" />
+            <Text style={styles.returnButtonText}>Richiedi reso (incongruenza)</Text>
+          </TouchableOpacity>
+        )}
+
         <Text style={styles.orderDate}>{formatDate(item.created_at)}</Text>
       </View>
     );
@@ -307,6 +359,63 @@ export default function MyExchangesScreen() {
           }
         />
       )}
+
+      {/* Modal Richiesta Reso */}
+      <Modal
+        visible={showReturnModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowReturnModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Richiedi reso</Text>
+              <TouchableOpacity onPress={() => setShowReturnModal(false)}>
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+            
+            <Text style={styles.modalSubtitle}>
+              Descrivi l'incongruenza tra le condizioni dichiarate e quelle reali del libro:
+            </Text>
+            
+            <TextInput
+              style={styles.returnInput}
+              multiline
+              numberOfLines={4}
+              placeholder="Es: Il libro presenta sottolineature non dichiarate, la copertina è danneggiata..."
+              value={returnReason}
+              onChangeText={setReturnReason}
+              textAlignVertical="top"
+            />
+            
+            <Text style={styles.returnNote}>
+              La cartolibreria verificherà il libro. Se l'incongruenza è confermata, riceverai il rimborso completo.
+            </Text>
+            
+            <View style={styles.modalButtons}>
+              <TouchableOpacity 
+                style={styles.cancelButton}
+                onPress={() => setShowReturnModal(false)}
+              >
+                <Text style={styles.cancelButtonText}>Annulla</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.submitButton, !returnReason.trim() && styles.submitButtonDisabled]}
+                onPress={submitReturn}
+                disabled={!returnReason.trim() || actionLoading}
+              >
+                {actionLoading ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.submitButtonText}>Invia richiesta</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -473,5 +582,100 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 8,
     textAlign: 'center',
+  },
+  // Stili per pulsante reso
+  returnButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFF3E0',
+    borderWidth: 1,
+    borderColor: '#FF9800',
+    borderRadius: 8,
+    paddingVertical: 10,
+    marginTop: 12,
+    gap: 8,
+  },
+  returnButtonText: {
+    color: '#FF9800',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  // Stili modal reso
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 12,
+  },
+  returnInput: {
+    backgroundColor: '#f5f5f5',
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 14,
+    minHeight: 120,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  returnNote: {
+    fontSize: 12,
+    color: '#888',
+    marginTop: 12,
+    fontStyle: 'italic',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 20,
+  },
+  cancelButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    color: '#666',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  submitButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 10,
+    backgroundColor: '#FF9800',
+    alignItems: 'center',
+  },
+  submitButtonDisabled: {
+    opacity: 0.5,
+  },
+  submitButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
