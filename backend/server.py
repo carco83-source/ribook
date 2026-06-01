@@ -7545,20 +7545,44 @@ async def request_return(order_id: str, user_id: str = Query(...), reason: str =
     
     await db.orders.update_one({"id": order_id}, {"$set": update_data})
     
-    # Notifica alla cartolibreria
-    notification_bookstore = {
+    # Recupera i dettagli del listing per la scheda libro dettagliata
+    listing = await db.listings.find_one({"id": order.get("listing_id")})
+    listing_details = {}
+    if listing:
+        listing_details = {
+            "condizioni": listing.get("condizioni", "Non specificate"),
+            "descrizione": listing.get("descrizione", "Nessuna descrizione"),
+            "foto_base64": listing.get("foto_base64"),
+            "prezzo_vendita": listing.get("prezzo_vendita"),
+        }
+    
+    # Notifica alla cartolibreria - SALVA IN bookstore_notifications
+    bookstore_notification = {
         "id": str(uuid.uuid4()),
-        "user_id": f"bookstore_{order.get('bookstore_id')}",
         "bookstore_id": order.get("bookstore_id"),
         "type": "return_request",
-        "title": "Richiesta reso in attesa",
-        "message": f"Nuovo reso da verificare:\n📚 {order.get('book_titolo')}\n\n⚠️ Motivazione:\n\"{reason_text}\"\n\nVerifica il libro e approva o rifiuta il reso.",
+        "title": "🔄 Richiesta reso da verificare",
+        "message": f"Nuovo reso da verificare:\n\n📚 LIBRO:\n{order.get('book_titolo')}\n\n👤 ACQUIRENTE: {order.get('buyer_name')}\n👤 VENDITORE: {order.get('seller_name')}\n\n⚠️ MOTIVAZIONE RESO:\n\"{reason_text}\"\n\n📋 CONDIZIONI DICHIARATE DAL VENDITORE:\n{listing_details.get('condizioni', 'Non specificate')}\n\n📝 DESCRIZIONE VENDITORE:\n{listing_details.get('descrizione', 'Nessuna descrizione')}\n\n💰 Prezzo vendita: €{listing_details.get('prezzo_vendita', 0):.2f}\n\nVerifica il libro e approva o rifiuta il reso.",
         "order_id": order_id,
+        "order_code": order.get("order_code"),
         "return_reason": reason_text,
+        "book_details": {
+            "titolo": order.get("book_titolo"),
+            "isbn": order.get("book_isbn"),
+            "autore": order.get("book_autore"),
+            "condizioni": listing_details.get("condizioni"),
+            "descrizione": listing_details.get("descrizione"),
+            "foto": listing_details.get("foto_base64"),
+            "prezzo": listing_details.get("prezzo_vendita"),
+        },
+        "buyer_name": order.get("buyer_name"),
+        "seller_name": order.get("seller_name"),
+        "requires_action": True,
+        "action_type": "verify_return",
         "read": False,
         "created_at": now.isoformat()
     }
-    await db.notifications.insert_one(notification_bookstore)
+    await db.bookstore_notifications.insert_one(bookstore_notification)
     
     # Notifica al venditore CON LA MOTIVAZIONE
     notification_seller = {

@@ -140,7 +140,7 @@ export default function BookstorePortalScreen() {
     }
   };
   
-  const handleVerifyReturn = async (orderId: string, accepted: boolean) => {
+  const handleVerifyReturn = async (orderId: string, accepted: boolean, notificationId?: string) => {
     const actionText = accepted ? 'accettare' : 'rifiutare';
     const confirmText = accepted 
       ? 'Confermi che il libro NON corrisponde alla descrizione? L\'acquirente riceverà un rimborso.'
@@ -160,6 +160,16 @@ export default function BookstorePortalScreen() {
               await axios.post(
                 `${API_URL}/api/orders/${orderId}/verify-return?bookstore_id=${bookstoreId}&accepted=${accepted}&notes=`
               );
+              
+              // Segna la notifica come letta
+              if (notificationId && bookstoreId) {
+                try {
+                  await axios.put(`${API_URL}/api/bookstore/${bookstoreId}/notifications/${notificationId}/read`);
+                } catch (e) {
+                  console.log('Error marking notification as read:', e);
+                }
+              }
+              
               Alert.alert(
                 'Reso verificato',
                 accepted 
@@ -167,9 +177,10 @@ export default function BookstorePortalScreen() {
                   : 'Reso rifiutato. Il venditore riceverà il pagamento.',
                 [{ text: 'OK' }]
               );
-              // Ricarica resi
+              // Ricarica resi e notifiche
               if (bookstoreId) {
                 await loadPendingReturns(bookstoreId);
+                await loadNotifications(bookstoreId);
               }
             } catch (error: any) {
               Alert.alert('Errore', error.response?.data?.detail || 'Errore nella verifica');
@@ -471,30 +482,50 @@ export default function BookstorePortalScreen() {
             </View>
             {notifications.slice(0, 5).map((notif) => {
               const isCompleted = notif.type === 'order_completed';
+              const isReturnRequest = notif.type === 'return_request';
               return (
                 <View 
                   key={notif.id} 
                   style={[
                     styles.notificationCard,
                     !notif.read && styles.notificationUnread,
-                    isCompleted && styles.notificationCompleted
+                    isCompleted && styles.notificationCompleted,
+                    isReturnRequest && styles.notificationReturn
                   ]}
                 >
-                  <View style={[styles.notificationIcon, isCompleted && { backgroundColor: '#e8f5e9' }]}>
+                  <View style={[
+                    styles.notificationIcon, 
+                    isCompleted && { backgroundColor: '#e8f5e9' },
+                    isReturnRequest && { backgroundColor: '#ffebee' }
+                  ]}>
                     <Ionicons 
-                      name={isCompleted ? "checkmark-circle" : "cube"} 
+                      name={isCompleted ? "checkmark-circle" : isReturnRequest ? "arrow-undo" : "cube"} 
                       size={20} 
-                      color={isCompleted ? "#4CAF50" : "#FF9800"} 
+                      color={isCompleted ? "#4CAF50" : isReturnRequest ? "#f44336" : "#FF9800"} 
                     />
                   </View>
                   <View style={styles.notificationContent}>
-                    <Text style={[styles.notificationTitleText, isCompleted && { color: '#4CAF50' }]}>
+                    <Text style={[
+                      styles.notificationTitleText, 
+                      isCompleted && { color: '#4CAF50' },
+                      isReturnRequest && { color: '#f44336' }
+                    ]}>
                       {notif.title}
                     </Text>
-                    <Text style={styles.notificationMessage}>{notif.message}</Text>
+                    <Text style={styles.notificationMessage} numberOfLines={isReturnRequest ? 20 : 5}>
+                      {notif.message}
+                    </Text>
                     {notif.order_code && (
-                      <View style={[styles.notificationCodeBadge, isCompleted && { backgroundColor: '#e8f5e9' }]}>
-                        <Text style={[styles.notificationCodeText, isCompleted && { color: '#4CAF50' }]}>
+                      <View style={[
+                        styles.notificationCodeBadge, 
+                        isCompleted && { backgroundColor: '#e8f5e9' },
+                        isReturnRequest && { backgroundColor: '#ffebee' }
+                      ]}>
+                        <Text style={[
+                          styles.notificationCodeText, 
+                          isCompleted && { color: '#4CAF50' },
+                          isReturnRequest && { color: '#f44336' }
+                        ]}>
                           Codice: {notif.order_code}
                         </Text>
                       </View>
@@ -505,6 +536,25 @@ export default function BookstorePortalScreen() {
                         <Text style={styles.earningsText}>
                           Ricavato: €{notif.commissione_cartolibreria.toFixed(2)}
                         </Text>
+                      </View>
+                    )}
+                    {/* Pulsanti Accetta/Rifiuta per richieste reso */}
+                    {isReturnRequest && notif.order_id && (
+                      <View style={styles.returnActionButtons}>
+                        <TouchableOpacity
+                          style={[styles.returnActionBtn, styles.returnRejectBtn]}
+                          onPress={() => handleVerifyReturn(notif.order_id, false, notif.id)}
+                        >
+                          <Ionicons name="close" size={18} color="#fff" />
+                          <Text style={styles.returnActionBtnText}>Rifiuta</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.returnActionBtn, styles.returnAcceptBtn]}
+                          onPress={() => handleVerifyReturn(notif.order_id, true, notif.id)}
+                        >
+                          <Ionicons name="checkmark" size={18} color="#fff" />
+                          <Text style={styles.returnActionBtnText}>Accetta</Text>
+                        </TouchableOpacity>
                       </View>
                     )}
                   </View>
@@ -1206,5 +1256,25 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '600',
     fontSize: 14,
+  },
+  // Stili per pulsanti nella notifica
+  returnActionButtons: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#ffcdd2',
+  },
+  returnActionBtnText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  // Stile notifica reso
+  notificationReturn: {
+    borderLeftColor: '#f44336',
+    borderLeftWidth: 4,
+    backgroundColor: '#fff8f8',
   },
 });
