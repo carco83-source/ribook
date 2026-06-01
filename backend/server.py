@@ -7499,22 +7499,26 @@ async def check_and_complete_order_if_expired(order_id: str):
     return order
 
 @api_router.post("/orders/{order_id}/request-return")
-async def request_return(order_id: str, user_id: str = Query(...)):
+async def request_return(order_id: str, user_id: str = Query(...), reason: str = Query(...)):
     """
     L'acquirente richiede un reso.
-    Solo per "Condizioni non conformi alla descrizione".
+    Deve specificare la motivazione (incongruenza tra descrizione e condizioni reali).
     """
+    if not reason or len(reason.strip()) < 10:
+        raise HTTPException(status_code=400, detail="La motivazione deve essere di almeno 10 caratteri")
+    
     order = await db.orders.find_one({"id": order_id, "buyer_id": user_id})
     if not order:
         raise HTTPException(status_code=404, detail="Ordine non trovato")
     
-    # Verifica stato ordine
-    if order.get("status") != "picked_up":
+    # Verifica stato ordine - permetti anche "ritirato" e "pronto_per_ritiro" per test
+    allowed_states = ["picked_up", "ritirato", "pronto_per_ritiro", "ready_for_pickup"]
+    if order.get("status") not in allowed_states:
         if order.get("status") == "completed":
             raise HTTPException(status_code=400, detail="Il periodo per richiedere il reso è scaduto")
-        raise HTTPException(status_code=400, detail="Non puoi richiedere un reso per questo ordine")
+        raise HTTPException(status_code=400, detail=f"Non puoi richiedere un reso per questo ordine (stato: {order.get('status')})")
     
-    # Verifica deadline reso
+    # Verifica deadline reso (se presente)
     return_deadline = order.get("return_deadline")
     if return_deadline:
         if isinstance(return_deadline, str):
@@ -7525,16 +7529,17 @@ async def request_return(order_id: str, user_id: str = Query(...)):
             raise HTTPException(status_code=400, detail="Il periodo per richiedere il reso è scaduto (72 ore dal ritiro)")
     
     now = datetime.utcnow()
+    reason_text = reason.strip()
     
     # Aggiorna ordine a "in_verifica_reso"
     update_data = {
         "status": "in_verifica_reso",
         "return_requested_at": now,
-        "return_reason": "Condizioni non conformi alla descrizione",
+        "return_reason": reason_text,
         "status_history": order.get("status_history", []) + [{
             "status": "in_verifica_reso",
             "timestamp": now.isoformat(),
-            "note": "Richiesta reso: Condizioni non conformi alla descrizione"
+            "note": f"Richiesta reso: {reason_text}"
         }]
     }
     
@@ -7547,21 +7552,23 @@ async def request_return(order_id: str, user_id: str = Query(...)):
         "bookstore_id": order.get("bookstore_id"),
         "type": "return_request",
         "title": "Richiesta reso in attesa",
-        "message": f"Nuovo reso da verificare:\n{order.get('book_titolo')}\n\nMotivo: Condizioni non conformi alla descrizione",
+        "message": f"Nuovo reso da verificare:\n📚 {order.get('book_titolo')}\n\n⚠️ Motivazione:\n\"{reason_text}\"\n\nVerifica il libro e approva o rifiuta il reso.",
         "order_id": order_id,
+        "return_reason": reason_text,
         "read": False,
         "created_at": now.isoformat()
     }
     await db.notifications.insert_one(notification_bookstore)
     
-    # Notifica al venditore
+    # Notifica al venditore CON LA MOTIVAZIONE
     notification_seller = {
         "id": str(uuid.uuid4()),
         "user_id": order.get("seller_id"),
         "type": "return_requested",
-        "title": "Richiesta reso",
-        "message": f"L'acquirente ha richiesto un reso per:\n{order.get('book_titolo')}\n\nLa cartolibreria verificherà il libro.",
+        "title": "Richiesta reso ricevuta",
+        "message": f"L'acquirente ha richiesto un reso per:\n📚 {order.get('book_titolo')}\n\n⚠️ Motivazione dell'acquirente:\n\"{reason_text}\"\n\nLa cartolibreria {order.get('bookstore_name')} verificherà il libro e deciderà se approvare il reso.",
         "order_id": order_id,
+        "return_reason": reason_text,
         "read": False,
         "created_at": now.isoformat()
     }

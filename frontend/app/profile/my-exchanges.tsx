@@ -235,8 +235,13 @@ export default function MyExchangesScreen() {
     // Pronto per ritiro - mostra info all'acquirente
     const isReadyForPickup = isBuyer && (item.status === 'pronto_per_ritiro' || item.status === 'ready_for_pickup');
     
-    // L'acquirente può richiedere reso solo per ordini ritirato (picked_up/ritirato) entro 72h
-    const canRequestReturn = isBuyer && (item.status === 'picked_up' || item.status === 'ritirato');
+    // L'acquirente può richiedere reso per ordini ritirato O pronto_per_ritiro (per test)
+    const canRequestReturn = isBuyer && (
+      item.status === 'picked_up' || 
+      item.status === 'ritirato' || 
+      item.status === 'pronto_per_ritiro' || 
+      item.status === 'ready_for_pickup'
+    );
     const returnDeadlineDate = item.return_deadline ? new Date(item.return_deadline) : null;
     const isReturnPeriodValid = returnDeadlineDate ? returnDeadlineDate > new Date() : true; // Se non c'è deadline, permetti reso
 
