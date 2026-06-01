@@ -65,7 +65,7 @@ type TabType = 'messaggi' | 'notifiche';
 
 export default function MessaggiScreen() {
   const router = useRouter();
-  const { refreshNotifications: refreshGlobalNotifications, setUnreadCount: setGlobalUnreadCount } = useNotifications();
+  const { refreshNotifications: refreshGlobalNotifications, decrementUnread } = useNotifications();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -159,8 +159,8 @@ export default function MessaggiScreen() {
       // 3. Decrementa il contatore locale
       setUnreadNotifications(prev => Math.max(0, prev - 1));
       
-      // 4. Aggiorna il contatore globale (per il badge nella tab)
-      setGlobalUnreadCount((prev: number) => Math.max(0, prev - 1));
+      // 4. Decrementa il contatore globale (badge nella tab bar)
+      decrementUnread();
       
     } catch (error) {
       console.error('Error marking notification as read:', error);

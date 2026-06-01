@@ -7,13 +7,15 @@ const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 interface NotificationContextType {
   unreadCount: number;
   refreshNotifications: () => Promise<void>;
-  setUnreadCount: (count: number) => void;
+  setUnreadCount: React.Dispatch<React.SetStateAction<number>>;
+  decrementUnread: () => void;
 }
 
 const NotificationContext = createContext<NotificationContextType>({
   unreadCount: 0,
   refreshNotifications: async () => {},
   setUnreadCount: () => {},
+  decrementUnread: () => {},
 });
 
 export const useNotifications = () => useContext(NotificationContext);
@@ -38,6 +40,11 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
   }, []);
 
+  // Funzione per decrementare il contatore (chiamata quando si legge una notifica)
+  const decrementUnread = useCallback(() => {
+    setUnreadCount(prev => Math.max(0, prev - 1));
+  }, []);
+
   useEffect(() => {
     refreshNotifications();
     
@@ -47,7 +54,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, [refreshNotifications]);
 
   return (
-    <NotificationContext.Provider value={{ unreadCount, refreshNotifications, setUnreadCount }}>
+    <NotificationContext.Provider value={{ unreadCount, refreshNotifications, setUnreadCount, decrementUnread }}>
       {children}
     </NotificationContext.Provider>
   );
