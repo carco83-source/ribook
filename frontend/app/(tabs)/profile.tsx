@@ -79,12 +79,18 @@ export default function ProfileScreen() {
       const statsRes = await axios.get(`${API_URL}/api/users/${userId}/stats`);
       setStats(statsRes.data);
 
-      // Get user transactions
+      // Get user orders (I Miei Scambi) - usa il nuovo endpoint
       try {
-        const transRes = await axios.get(`${API_URL}/api/transactions/user/${userId}`);
-        setTransactions(transRes.data);
+        const ordersRes = await axios.get(`${API_URL}/api/user-orders/${userId}`);
+        const orders = ordersRes.data.orders || [];
+        // Converti gli ordini nel formato transactions per compatibilità
+        setTransactions({
+          acquisti: orders.filter((o: any) => o.buyer_id === userId),
+          vendite: orders.filter((o: any) => o.seller_id === userId)
+        });
       } catch (e) {
-        console.log('No transactions found');
+        console.log('No orders found');
+        setTransactions({ acquisti: [], vendite: [] });
       }
 
       // Get user listings (i miei annunci)
@@ -113,10 +119,23 @@ export default function ProfileScreen() {
 
   const getStatoLabel = (stato: string) => {
     const labels: { [key: string]: { text: string; color: string } } = {
+      // Stati ordini
+      in_attesa_conferma_venditore: { text: 'Attesa conferma', color: '#FF9800' },
+      pending_seller_confirmation: { text: 'Attesa conferma', color: '#FF9800' },
+      in_attesa_pagamento: { text: 'Da pagare', color: '#FF9800' },
+      pending_payment: { text: 'Da pagare', color: '#FF9800' },
+      pagato_attesa_consegna: { text: 'Da consegnare', color: '#2196F3' },
+      pronto_per_ritiro: { text: 'Da ritirare', color: '#4CAF50' },
+      ready_for_pickup: { text: 'Da ritirare', color: '#4CAF50' },
+      picked_up: { text: 'Ritirato', color: '#4CAF50' },
+      ritirato: { text: 'Ritirato', color: '#4CAF50' },
+      completed: { text: 'Completato', color: '#1a472a' },
+      completato: { text: 'Completato', color: '#1a472a' },
+      annullato: { text: 'Annullato', color: '#f44336' },
+      cancelled: { text: 'Annullato', color: '#f44336' },
+      // Stati vecchi per retrocompatibilità
       in_attesa_consegna: { text: 'In attesa', color: '#FFC107' },
       in_custodia: { text: 'In custodia', color: '#2196F3' },
-      completato: { text: 'Completato', color: '#4CAF50' },
-      annullato: { text: 'Annullato', color: '#f44336' },
     };
     return labels[stato] || { text: stato, color: '#666' };
   };
@@ -276,18 +295,11 @@ export default function ProfileScreen() {
         
         {(transactions.acquisti.length + transactions.vendite.length) === 0 ? (
           <View style={styles.tradesEmpty}>
-            <Ionicons name="book-outline" size={48} color="#ccc" />
+            <Ionicons name="swap-horizontal-outline" size={48} color="#ccc" />
             <Text style={styles.tradesEmptyTitle}>Nessuno scambio</Text>
             <Text style={styles.tradesEmptySubtitle}>
-              Non hai ancora messo in vendita o acquistato libri
+              I tuoi acquisti e vendite appariranno qui
             </Text>
-            <TouchableOpacity 
-              style={styles.tradesStartButton}
-              onPress={() => router.push('/(tabs)/search')}
-            >
-              <Ionicons name="add" size={20} color="#fff" />
-              <Text style={styles.tradesStartButtonText}>Inizia a vendere</Text>
-            </TouchableOpacity>
           </View>
         ) : (
           <View style={styles.tradesList}>
@@ -296,34 +308,38 @@ export default function ProfileScreen() {
               .slice(0, showAllTransactions ? undefined : 3)
               .map((trans: any, index: number) => {
                 const isAcquisto = transactions.acquisti.includes(trans);
-                const statoInfo = getStatoLabel(trans.stato);
+                const statoInfo = getStatoLabel(trans.status || trans.stato);
+                const prezzo = isAcquisto ? trans.totale_acquirente : trans.netto_venditore;
                 return (
-                  <View key={trans.id || index} style={styles.tradeCard}>
+                  <TouchableOpacity 
+                    key={trans.id || index} 
+                    style={styles.tradeCard}
+                    onPress={() => router.push('/profile/my-exchanges')}
+                  >
                     <View style={styles.tradeCardHeader}>
                       <View style={[styles.tradeStatusBadge, { backgroundColor: statoInfo.color }]}>
                         <Text style={styles.tradeStatusText}>{statoInfo.text}</Text>
                       </View>
-                      <Text style={styles.tradeCardPrice}>€{trans.prezzo_totale?.toFixed(2)}</Text>
+                      <Text style={styles.tradeCardPrice}>€{prezzo?.toFixed(2) || '0.00'}</Text>
                     </View>
                     <Text style={styles.tradeCardTitle} numberOfLines={1}>
                       {trans.book_titolo}
                     </Text>
-                    <Text style={styles.tradeCardIsbn}>ISBN: {trans.book_isbn}</Text>
                     <View style={styles.tradeCardMeta}>
                       <Ionicons 
-                        name={isAcquisto ? "person" : "pricetag"} 
+                        name={isAcquisto ? "cart" : "pricetag"} 
                         size={14} 
                         color="#666" 
                       />
                       <Text style={styles.tradeCardMetaText}>
-                        {isAcquisto ? `Venditore: ${trans.seller_username}` : `Acquirente: ${trans.buyer_username}`}
+                        {isAcquisto ? `Acquisto` : `Vendita`}
                       </Text>
                     </View>
                     <View style={styles.tradeCardMeta}>
                       <Ionicons name="storefront" size={14} color="#666" />
-                      <Text style={styles.tradeCardMetaText}>{trans.bookstore_nome}</Text>
+                      <Text style={styles.tradeCardMetaText}>{trans.bookstore_name}</Text>
                     </View>
-                  </View>
+                  </TouchableOpacity>
                 );
               })}
             
