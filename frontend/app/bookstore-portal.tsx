@@ -146,51 +146,69 @@ export default function BookstorePortalScreen() {
       ? 'Confermi che il libro NON corrisponde alla descrizione? L\'acquirente riceverà un rimborso.'
       : 'Confermi che il libro corrisponde alla descrizione? Il venditore riceverà il pagamento.';
     
-    Alert.alert(
-      `Conferma ${actionText} reso`,
-      confirmText,
-      [
-        { text: 'Annulla', style: 'cancel' },
-        {
-          text: accepted ? 'Accetta reso' : 'Rifiuta reso',
-          style: accepted ? 'destructive' : 'default',
-          onPress: async () => {
-            setProcessingReturn(true);
-            try {
-              await axios.post(
-                `${API_URL}/api/orders/${orderId}/verify-return?bookstore_id=${bookstoreId}&accepted=${accepted}&notes=`
-              );
-              
-              // Segna la notifica come letta
-              if (notificationId && bookstoreId) {
-                try {
-                  await axios.put(`${API_URL}/api/bookstore/${bookstoreId}/notifications/${notificationId}/read`);
-                } catch (e) {
-                  console.log('Error marking notification as read:', e);
-                }
-              }
-              
-              Alert.alert(
-                'Reso verificato',
-                accepted 
-                  ? 'Reso accettato. L\'acquirente riceverà il rimborso.'
-                  : 'Reso rifiutato. Il venditore riceverà il pagamento.',
-                [{ text: 'OK' }]
-              );
-              // Ricarica resi e notifiche
-              if (bookstoreId) {
-                await loadPendingReturns(bookstoreId);
-                await loadNotifications(bookstoreId);
-              }
-            } catch (error: any) {
-              Alert.alert('Errore', error.response?.data?.detail || 'Errore nella verifica');
-            } finally {
-              setProcessingReturn(false);
-            }
+    // Usa window.confirm su web, Alert.alert su mobile
+    const doVerify = async () => {
+      setProcessingReturn(true);
+      try {
+        await axios.post(
+          `${API_URL}/api/orders/${orderId}/verify-return?bookstore_id=${bookstoreId}&accepted=${accepted}&notes=`
+        );
+        
+        // Segna la notifica come letta
+        if (notificationId && bookstoreId) {
+          try {
+            await axios.put(`${API_URL}/api/bookstore/${bookstoreId}/notifications/${notificationId}/read`);
+          } catch (e) {
+            console.log('Error marking notification as read:', e);
+          }
+        }
+        
+        const successMsg = accepted 
+          ? 'Reso accettato. L\'acquirente riceverà il rimborso.'
+          : 'Reso rifiutato. Il venditore riceverà il pagamento.';
+        
+        if (Platform.OS === 'web') {
+          window.alert(successMsg);
+        } else {
+          Alert.alert('Reso verificato', successMsg, [{ text: 'OK' }]);
+        }
+        
+        // Ricarica resi e notifiche
+        if (bookstoreId) {
+          await loadPendingReturns(bookstoreId);
+          await loadNotifications(bookstoreId);
+        }
+      } catch (error: any) {
+        const errorMsg = error.response?.data?.detail || 'Errore nella verifica';
+        if (Platform.OS === 'web') {
+          window.alert('Errore: ' + errorMsg);
+        } else {
+          Alert.alert('Errore', errorMsg);
+        }
+      } finally {
+        setProcessingReturn(false);
+      }
+    };
+    
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm(`Conferma ${actionText} reso\n\n${confirmText}`);
+      if (confirmed) {
+        await doVerify();
+      }
+    } else {
+      Alert.alert(
+        `Conferma ${actionText} reso`,
+        confirmText,
+        [
+          { text: 'Annulla', style: 'cancel' },
+          {
+            text: accepted ? 'Accetta reso' : 'Rifiuta reso',
+            style: accepted ? 'destructive' : 'default',
+            onPress: doVerify,
           },
-        },
-      ]
-    );
+        ]
+      );
+    }
   };
 
   const handleLogin = async () => {
