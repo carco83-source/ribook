@@ -74,6 +74,7 @@ export default function MessaggiScreen() {
   const [activeTab, setActiveTab] = useState<TabType>('messaggi');
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [expandedNotifications, setExpandedNotifications] = useState<Set<string>>(new Set());
 
   const loadData = async () => {
     try {
@@ -328,13 +329,24 @@ export default function MessaggiScreen() {
         await markNotificationAsRead(item.id);
       }
       
+      // Toggle espansione del testo
+      setExpandedNotifications(prev => {
+        const newSet = new Set(prev);
+        if (newSet.has(item.id)) {
+          newSet.delete(item.id);
+        } else {
+          newSet.add(item.id);
+        }
+        return newSet;
+      });
+      
       // Navigazione SOLO per notifiche "vai al carrello" (acquirente)
-      // Le altre notifiche (es. "libro acquistato") restano qui senza navigare
       if (isReadyForPayment) {
         router.push('/(tabs)/sell');
       }
-      // NON navigare per altre notifiche - semplicemente segna come letta
     };
+    
+    const isExpanded = expandedNotifications.has(item.id);
     
     // Contenuto della notifica
     const notificationContent = (
@@ -355,9 +367,16 @@ export default function MessaggiScreen() {
               </Text>
               <Text style={styles.notifTime}>{formatTime(item.created_at)}</Text>
             </View>
-            <Text style={styles.notifMessage} numberOfLines={isSellerConfirmation ? 8 : 5}>
+            <Text style={styles.notifMessage} numberOfLines={isExpanded ? undefined : (isSellerConfirmation ? 8 : 3)}>
               {item.message}
             </Text>
+            {/* Indicatore espansione */}
+            {!isExpanded && item.message && item.message.length > 100 && (
+              <Text style={styles.expandHint}>Tocca per espandere...</Text>
+            )}
+            {isExpanded && (
+              <Text style={styles.collapseHint}>Tocca per ridurre</Text>
+            )}
             {/* Indicatore "Vai al carrello" per notifiche ready_for_payment */}
             {isReadyForPayment && !isSellerConfirmation && (
               <View style={styles.goToCartIndicator}>
@@ -824,5 +843,18 @@ const styles = StyleSheet.create({
     color: '#1a472a',
     fontWeight: '600',
     flex: 1,
+  },
+  expandHint: {
+    fontSize: 11,
+    color: '#2196F3',
+    fontStyle: 'italic',
+    marginTop: 4,
+  },
+  collapseHint: {
+    fontSize: 11,
+    color: '#888',
+    fontStyle: 'italic',
+    marginTop: 8,
+    textAlign: 'center',
   },
 });
