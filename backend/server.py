@@ -7548,13 +7548,65 @@ async def request_return(order_id: str, user_id: str = Query(...), reason: str =
     # Recupera i dettagli del listing per la scheda libro dettagliata
     listing = await db.listings.find_one({"id": order.get("listing_id")})
     listing_details = {}
+    condition_details_text = "Non disponibili"
+    
     if listing:
         listing_details = {
-            "condizioni": listing.get("condizioni", "Non specificate"),
+            "condizioni": listing.get("condizioni") or listing.get("condizione") or "Non specificate",
             "descrizione": listing.get("descrizione", "Nessuna descrizione"),
             "foto_base64": listing.get("foto_base64"),
             "prezzo_vendita": listing.get("prezzo_vendita"),
         }
+        
+        # Estrai dettagli condizioni specifiche
+        cond = listing.get("condition_details", {})
+        if cond:
+            details_lines = []
+            
+            # Scritte a penna
+            penna_pct = cond.get("penna", 0)
+            if penna_pct > 0:
+                details_lines.append(f"✏️ Scritte a penna: {penna_pct:.0f}%")
+            else:
+                details_lines.append("✏️ Scritte a penna: Nessuna")
+            
+            # Scritte a matita
+            matita_pct = cond.get("matita", 0)
+            if matita_pct > 0:
+                details_lines.append(f"✎ Scritte a matita: {matita_pct:.0f}%")
+            else:
+                details_lines.append("✎ Scritte a matita: Nessuna")
+            
+            # Evidenziature
+            evidenz_pct = cond.get("evidenziatore", 0)
+            if evidenz_pct > 0:
+                details_lines.append(f"🖍️ Evidenziature: {evidenz_pct:.0f}%")
+            else:
+                details_lines.append("🖍️ Evidenziature: Nessuna")
+            
+            # Usura libro
+            usura_pct = cond.get("usura_libro", 0)
+            if usura_pct > 0:
+                details_lines.append(f"📖 Usura libro: {usura_pct:.0f}%")
+            else:
+                details_lines.append("📖 Usura libro: Come nuovo")
+            
+            # Esercizi svolti
+            esercizi_penna = cond.get("esercizi_penna", False)
+            esercizi_matita = cond.get("esercizi_matita", False)
+            esercizi_qty = cond.get("esercizi_quantita", 0)
+            
+            if esercizi_penna or esercizi_matita:
+                esercizi_tipo = []
+                if esercizi_penna:
+                    esercizi_tipo.append("a penna")
+                if esercizi_matita:
+                    esercizi_tipo.append("a matita")
+                details_lines.append(f"📝 Esercizi svolti: Sì ({', '.join(esercizi_tipo)}) - {esercizi_qty} pagine")
+            else:
+                details_lines.append("📝 Esercizi svolti: No")
+            
+            condition_details_text = "\n".join(details_lines)
     
     # Notifica alla cartolibreria - SALVA IN bookstore_notifications
     bookstore_notification = {
@@ -7562,7 +7614,7 @@ async def request_return(order_id: str, user_id: str = Query(...), reason: str =
         "bookstore_id": order.get("bookstore_id"),
         "type": "return_request",
         "title": "🔄 Richiesta reso da verificare",
-        "message": f"Nuovo reso da verificare:\n\n📚 LIBRO:\n{order.get('book_titolo')}\n\n👤 ACQUIRENTE: {order.get('buyer_name')}\n👤 VENDITORE: {order.get('seller_name')}\n\n⚠️ MOTIVAZIONE RESO:\n\"{reason_text}\"\n\n📋 CONDIZIONI DICHIARATE DAL VENDITORE:\n{listing_details.get('condizioni', 'Non specificate')}\n\n📝 DESCRIZIONE VENDITORE:\n{listing_details.get('descrizione', 'Nessuna descrizione')}\n\n💰 Prezzo vendita: €{listing_details.get('prezzo_vendita', 0):.2f}\n\nVerifica il libro e approva o rifiuta il reso.",
+        "message": f"Nuovo reso da verificare:\n\n📚 LIBRO:\n{order.get('book_titolo')}\n\n👤 ACQUIRENTE: {order.get('buyer_name')}\n👤 VENDITORE: {order.get('seller_name')}\n\n⚠️ MOTIVAZIONE RESO:\n\"{reason_text}\"\n\n📋 CONDIZIONI GENERALI:\n{listing_details.get('condizioni', 'Non specificate')}\n\n🔍 DETTAGLI CONDIZIONI DICHIARATE:\n{condition_details_text}\n\n📝 NOTE VENDITORE:\n{listing_details.get('descrizione', 'Nessuna')}\n\n💰 Prezzo vendita: €{listing_details.get('prezzo_vendita', 0):.2f}\n\nVerifica il libro e approva o rifiuta il reso.",
         "order_id": order_id,
         "order_code": order.get("order_code"),
         "return_reason": reason_text,
@@ -7572,6 +7624,7 @@ async def request_return(order_id: str, user_id: str = Query(...), reason: str =
             "autore": order.get("book_autore"),
             "condizioni": listing_details.get("condizioni"),
             "descrizione": listing_details.get("descrizione"),
+            "condition_details": listing.get("condition_details") if listing else None,
             "foto": listing_details.get("foto_base64"),
             "prezzo": listing_details.get("prezzo_vendita"),
         },
