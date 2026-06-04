@@ -75,16 +75,29 @@ export default function AdminPortalScreen() {
     setLoginLoading(true);
     try {
       const response = await axios.post(`${API_URL}/api/admin/login`, {
-        email: email,
+        email: email.trim(),
         password: password
       });
       
-      await AsyncStorage.setItem('admin_id', response.data.user_id);
-      setAdminId(response.data.user_id);
-      setIsLoggedIn(true);
-      loadDashboard(response.data.user_id);
+      if (response.data.success) {
+        await AsyncStorage.setItem('admin_id', response.data.user_id);
+        setAdminId(response.data.user_id);
+        setIsLoggedIn(true);
+        loadDashboard(response.data.user_id);
+      } else {
+        throw new Error('Login fallito');
+      }
     } catch (error: any) {
-      const message = error.response?.data?.detail || 'Credenziali non valide';
+      console.log('Login error:', error);
+      let message = 'Credenziali non valide';
+      if (error.response?.data?.detail) {
+        message = typeof error.response.data.detail === 'string' 
+          ? error.response.data.detail 
+          : JSON.stringify(error.response.data.detail);
+      } else if (error.message) {
+        message = error.message;
+      }
+      
       if (Platform.OS === 'web') {
         window.alert('Errore: ' + message);
       } else {
