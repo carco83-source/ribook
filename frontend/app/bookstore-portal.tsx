@@ -16,6 +16,7 @@ import { useRouter, Stack, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import QRCode from 'react-native-qrcode-svg';
 
 // Conditional import for camera (not available on web)
 let CameraView: any = null;
@@ -82,6 +83,9 @@ export default function BookstorePortalScreen() {
   const [pendingReturns, setPendingReturns] = useState<any[]>([]);
   const [showReturnsModal, setShowReturnsModal] = useState(false);
   const [processingReturn, setProcessingReturn] = useState(false);
+  
+  // Expanded notifications state
+  const [expandedNotifications, setExpandedNotifications] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     checkLoginStatus();
@@ -501,82 +505,192 @@ export default function BookstorePortalScreen() {
             {notifications.slice(0, 5).map((notif) => {
               const isCompleted = notif.type === 'order_completed';
               const isReturnRequest = notif.type === 'return_request';
+              const isExpanded = expandedNotifications.has(notif.id);
+              
+              const toggleExpand = () => {
+                const newExpanded = new Set(expandedNotifications);
+                if (isExpanded) {
+                  newExpanded.delete(notif.id);
+                } else {
+                  newExpanded.add(notif.id);
+                }
+                setExpandedNotifications(newExpanded);
+              };
+              
               return (
-                <View 
+                <TouchableOpacity
                   key={notif.id} 
                   style={[
                     styles.notificationCard,
                     !notif.read && styles.notificationUnread,
                     isCompleted && styles.notificationCompleted,
-                    isReturnRequest && styles.notificationReturn
+                    isReturnRequest && styles.notificationReturn,
+                    isExpanded && styles.notificationExpanded
                   ]}
+                  onPress={toggleExpand}
+                  activeOpacity={0.8}
                 >
-                  <View style={[
-                    styles.notificationIcon, 
-                    isCompleted && { backgroundColor: '#e8f5e9' },
-                    isReturnRequest && { backgroundColor: '#ffebee' }
-                  ]}>
+                  <View style={styles.notificationHeader}>
+                    <View style={[
+                      styles.notificationIcon, 
+                      isCompleted && { backgroundColor: '#e8f5e9' },
+                      isReturnRequest && { backgroundColor: '#ffebee' }
+                    ]}>
+                      <Ionicons 
+                        name={isCompleted ? "checkmark-circle" : isReturnRequest ? "arrow-undo" : "cube"} 
+                        size={20} 
+                        color={isCompleted ? "#4CAF50" : isReturnRequest ? "#f44336" : "#FF9800"} 
+                      />
+                    </View>
+                    <View style={styles.notificationContent}>
+                      <Text style={[
+                        styles.notificationTitleText, 
+                        isCompleted && { color: '#4CAF50' },
+                        isReturnRequest && { color: '#f44336' }
+                      ]}>
+                        {notif.title}
+                      </Text>
+                      {!isExpanded && (
+                        <Text style={styles.notificationMessage} numberOfLines={2}>
+                          {notif.message}
+                        </Text>
+                      )}
+                    </View>
                     <Ionicons 
-                      name={isCompleted ? "checkmark-circle" : isReturnRequest ? "arrow-undo" : "cube"} 
+                      name={isExpanded ? "chevron-up" : "chevron-down"} 
                       size={20} 
-                      color={isCompleted ? "#4CAF50" : isReturnRequest ? "#f44336" : "#FF9800"} 
+                      color="#666" 
                     />
                   </View>
-                  <View style={styles.notificationContent}>
-                    <Text style={[
-                      styles.notificationTitleText, 
-                      isCompleted && { color: '#4CAF50' },
-                      isReturnRequest && { color: '#f44336' }
-                    ]}>
-                      {notif.title}
-                    </Text>
-                    <Text style={styles.notificationMessage} numberOfLines={isReturnRequest ? 20 : 5}>
-                      {notif.message}
-                    </Text>
-                    {notif.order_code && (
-                      <View style={[
-                        styles.notificationCodeBadge, 
-                        isCompleted && { backgroundColor: '#e8f5e9' },
-                        isReturnRequest && { backgroundColor: '#ffebee' }
-                      ]}>
-                        <Text style={[
-                          styles.notificationCodeText, 
-                          isCompleted && { color: '#4CAF50' },
-                          isReturnRequest && { color: '#f44336' }
-                        ]}>
-                          Codice: {notif.order_code}
-                        </Text>
-                      </View>
-                    )}
-                    {isCompleted && notif.commissione_cartolibreria && (
-                      <View style={styles.earningsBadge}>
-                        <Ionicons name="cash" size={14} color="#4CAF50" />
-                        <Text style={styles.earningsText}>
-                          Ricavato: €{notif.commissione_cartolibreria.toFixed(2)}
-                        </Text>
-                      </View>
-                    )}
-                    {/* Pulsanti Accetta/Rifiuta per richieste reso */}
-                    {isReturnRequest && notif.order_id && (
-                      <View style={styles.returnActionButtons}>
-                        <TouchableOpacity
-                          style={[styles.returnActionBtn, styles.returnRejectBtn]}
-                          onPress={() => handleVerifyReturn(notif.order_id, false, notif.id)}
-                        >
-                          <Ionicons name="close" size={18} color="#fff" />
-                          <Text style={styles.returnActionBtnText}>Rifiuta</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[styles.returnActionBtn, styles.returnAcceptBtn]}
-                          onPress={() => handleVerifyReturn(notif.order_id, true, notif.id)}
-                        >
-                          <Ionicons name="checkmark" size={18} color="#fff" />
-                          <Text style={styles.returnActionBtnText}>Accetta</Text>
-                        </TouchableOpacity>
-                      </View>
-                    )}
-                  </View>
-                </View>
+                  
+                  {/* Contenuto espanso */}
+                  {isExpanded && (
+                    <View style={styles.notificationExpandedContent}>
+                      {/* Messaggio completo */}
+                      <Text style={styles.notificationFullMessage}>
+                        {notif.message}
+                      </Text>
+                      
+                      {/* QR Code */}
+                      {notif.order_code && (
+                        <View style={styles.qrCodeContainer}>
+                          <Text style={styles.qrCodeLabel}>Codice ordine</Text>
+                          <View style={styles.qrCodeWrapper}>
+                            <QRCode
+                              value={notif.order_code}
+                              size={120}
+                              backgroundColor="#fff"
+                            />
+                          </View>
+                          <View style={[
+                            styles.notificationCodeBadge, 
+                            isCompleted && { backgroundColor: '#e8f5e9' },
+                            isReturnRequest && { backgroundColor: '#ffebee' }
+                          ]}>
+                            <Text style={[
+                              styles.notificationCodeText, 
+                              isCompleted && { color: '#4CAF50' },
+                              isReturnRequest && { color: '#f44336' }
+                            ]}>
+                              {notif.order_code}
+                            </Text>
+                          </View>
+                        </View>
+                      )}
+                      
+                      {/* Dettagli libro per richieste reso */}
+                      {isReturnRequest && notif.book_details && (
+                        <View style={styles.bookDetailsContainer}>
+                          <Text style={styles.bookDetailsTitle}>Condizioni dichiarate del libro:</Text>
+                          
+                          {notif.book_details.condition_answers && (
+                            <View style={styles.conditionsList}>
+                              {notif.book_details.condition_answers.sottolineature !== undefined && (
+                                <View style={styles.conditionRow}>
+                                  <Ionicons name="pencil" size={16} color="#666" />
+                                  <Text style={styles.conditionLabel}>Scritte/evidenziature:</Text>
+                                  <Text style={styles.conditionValue}>
+                                    {['Nessuna', 'Poche', 'Molte'][notif.book_details.condition_answers.sottolineature] || 'N/D'}
+                                  </Text>
+                                </View>
+                              )}
+                              {notif.book_details.condition_answers.copertina !== undefined && (
+                                <View style={styles.conditionRow}>
+                                  <Ionicons name="book" size={16} color="#666" />
+                                  <Text style={styles.conditionLabel}>Copertina rovinata:</Text>
+                                  <Text style={styles.conditionValue}>
+                                    {['No', 'Un po\'', 'Molto'][notif.book_details.condition_answers.copertina] || 'N/D'}
+                                  </Text>
+                                </View>
+                              )}
+                              {notif.book_details.condition_answers.pagine !== undefined && (
+                                <View style={styles.conditionRow}>
+                                  <Ionicons name="document-text" size={16} color="#666" />
+                                  <Text style={styles.conditionLabel}>Pagine piegate:</Text>
+                                  <Text style={styles.conditionValue}>
+                                    {['Nessuna', 'Qualcuna', 'Molte'][notif.book_details.condition_answers.pagine] || 'N/D'}
+                                  </Text>
+                                </View>
+                              )}
+                              {notif.book_details.condition_answers.esercizi !== undefined && (
+                                <View style={styles.conditionRow}>
+                                  <Ionicons name="create" size={16} color="#666" />
+                                  <Text style={styles.conditionLabel}>Esercizi compilati:</Text>
+                                  <Text style={styles.conditionValue}>
+                                    {['No', 'Qualcuno', 'Molti'][notif.book_details.condition_answers.esercizi] || 'N/D'}
+                                  </Text>
+                                </View>
+                              )}
+                            </View>
+                          )}
+                          
+                          {notif.book_details.note && (
+                            <View style={styles.noteContainer}>
+                              <Text style={styles.noteLabel}>Note del venditore:</Text>
+                              <Text style={styles.noteText}>{notif.book_details.note}</Text>
+                            </View>
+                          )}
+                          
+                          {notif.return_reason && (
+                            <View style={styles.returnReasonContainer}>
+                              <Text style={styles.returnReasonLabel}>Motivo del reso:</Text>
+                              <Text style={styles.returnReasonText}>{notif.return_reason}</Text>
+                            </View>
+                          )}
+                        </View>
+                      )}
+                      
+                      {isCompleted && notif.commissione_cartolibreria && (
+                        <View style={styles.earningsBadge}>
+                          <Ionicons name="cash" size={14} color="#4CAF50" />
+                          <Text style={styles.earningsText}>
+                            Ricavato: €{notif.commissione_cartolibreria.toFixed(2)}
+                          </Text>
+                        </View>
+                      )}
+                      
+                      {/* Pulsanti Accetta/Rifiuta per richieste reso */}
+                      {isReturnRequest && notif.order_id && (
+                        <View style={styles.returnActionButtons}>
+                          <TouchableOpacity
+                            style={[styles.returnActionBtn, styles.returnRejectBtn]}
+                            onPress={() => handleVerifyReturn(notif.order_id, false, notif.id)}
+                          >
+                            <Ionicons name="close" size={18} color="#fff" />
+                            <Text style={styles.returnActionBtnText}>Rifiuta reso</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.returnActionBtn, styles.returnAcceptBtn]}
+                            onPress={() => handleVerifyReturn(notif.order_id, true, notif.id)}
+                          >
+                            <Ionicons name="checkmark" size={18} color="#fff" />
+                            <Text style={styles.returnActionBtnText}>Accetta reso</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                    </View>
+                  )}
+                </TouchableOpacity>
               );
             })}
           </View>
@@ -1294,5 +1408,110 @@ const styles = StyleSheet.create({
     borderLeftColor: '#f44336',
     borderLeftWidth: 4,
     backgroundColor: '#fff8f8',
+  },
+  // Stili per notifiche espandibili
+  notificationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  notificationExpanded: {
+    borderWidth: 2,
+    borderColor: '#1a472a',
+  },
+  notificationExpandedContent: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+  },
+  notificationFullMessage: {
+    fontSize: 14,
+    color: '#333',
+    lineHeight: 22,
+    marginBottom: 16,
+  },
+  qrCodeContainer: {
+    alignItems: 'center',
+    marginBottom: 16,
+    padding: 16,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+  },
+  qrCodeLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 12,
+  },
+  qrCodeWrapper: {
+    padding: 12,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  bookDetailsContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  bookDetailsTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 12,
+  },
+  conditionsList: {
+    gap: 10,
+  },
+  conditionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  conditionLabel: {
+    fontSize: 13,
+    color: '#666',
+    flex: 1,
+  },
+  conditionValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#333',
+  },
+  noteContainer: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+  },
+  noteLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 4,
+  },
+  noteText: {
+    fontSize: 13,
+    color: '#333',
+    fontStyle: 'italic',
+  },
+  returnReasonContainer: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: '#ffebee',
+    borderRadius: 8,
+  },
+  returnReasonLabel: {
+    fontSize: 12,
+    color: '#f44336',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  returnReasonText: {
+    fontSize: 14,
+    color: '#c62828',
+    fontWeight: '500',
   },
 });
