@@ -2428,17 +2428,17 @@ const styles = StyleSheet.create({
   },
   // Badge sotto la copertina
   badgeUnderCover: {
-    marginTop: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+    marginTop: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
     alignItems: 'center',
   },
   badgeUnderCoverBlue: {
     backgroundColor: '#e3f2fd',
   },
   badgeUnderCoverGreen: {
-    backgroundColor: '#e8f5e9',
+    backgroundColor: '#c8e6c9',
   },
   badgeUnderCoverGray: {
     backgroundColor: '#f5f5f5',
@@ -2450,27 +2450,27 @@ const styles = StyleSheet.create({
     backgroundColor: '#f3e5f5',
   },
   badgeUnderCoverText: {
-    fontSize: 11,
+    fontSize: 14,
     fontWeight: 'bold',
     color: '#666',
   },
   badgeUnderCoverTextBlue: {
-    fontSize: 11,
+    fontSize: 14,
     fontWeight: 'bold',
     color: '#2196F3',
   },
   badgeUnderCoverTextGreen: {
-    fontSize: 12,
-    color: '#4CAF50',
+    fontSize: 16,
+    color: '#2e7d32',
     fontWeight: 'bold',
   },
   badgeUnderCoverTextRed: {
-    fontSize: 11,
+    fontSize: 14,
     fontWeight: 'bold',
     color: '#F44336',
   },
   badgeUnderCoverTextPurple: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: 'bold',
     color: '#9C27B0',
   },
