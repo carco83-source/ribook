@@ -530,7 +530,7 @@ export default function BookstorePortalScreen() {
                   onPress={toggleExpand}
                   activeOpacity={0.8}
                 >
-                  <View style={styles.notificationHeader}>
+                  <View style={styles.notificationCardHeader}>
                     <View style={[
                       styles.notificationIcon, 
                       isCompleted && { backgroundColor: '#e8f5e9' },
@@ -1217,13 +1217,17 @@ const styles = StyleSheet.create({
     color: '#e65100',
   },
   notificationCard: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     backgroundColor: '#fff',
     borderRadius: 10,
     padding: 12,
     marginBottom: 8,
     borderLeftWidth: 3,
     borderLeftColor: '#FF9800',
+  },
+  notificationCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   notificationUnread: {
     backgroundColor: '#fffde7',
@@ -1410,13 +1414,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff8f8',
   },
   // Stili per notifiche espandibili
-  notificationHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
   notificationExpanded: {
     borderWidth: 2,
     borderColor: '#1a472a',
+    borderLeftWidth: 2,
   },
   notificationExpandedContent: {
     marginTop: 16,
