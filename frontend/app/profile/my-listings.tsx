@@ -111,7 +111,7 @@ export default function MyListingsScreen() {
                 <View key={listing.id || index} style={styles.listingCard}>
                   <TouchableOpacity 
                     style={styles.listingCardInner}
-                    onPress={() => router.push(`/listing/${listing.id}`)}
+                    onPress={() => router.push(`/my-listing/${listing.id}`)}
                   >
                     <Image 
                       source={{ uri: coverUrl }}
@@ -182,24 +182,6 @@ export default function MyListingsScreen() {
                     <Ionicons name="chevron-forward" size={20} color="#ccc" />
                   </TouchableOpacity>
                   
-                  {/* Pulsante modifica - solo se non ci sono ordini */}
-                  {canEdit && (
-                    <TouchableOpacity 
-                      style={styles.editButton}
-                      onPress={() => router.push(`/edit-listing/${listing.id}`)}
-                    >
-                      <Ionicons name="create-outline" size={18} color="#2196F3" />
-                      <Text style={styles.editButtonText}>Modifica annuncio</Text>
-                    </TouchableOpacity>
-                  )}
-                  
-                  {/* Info ordine attivo */}
-                  {hasActiveOrder && (
-                    <View style={styles.activeOrderInfo}>
-                      <Ionicons name="time" size={14} color="#FF9800" />
-                      <Text style={styles.activeOrderText}>Ordine in corso - non modificabile</Text>
-                    </View>
-                  )}
                 </View>
               );
             })}

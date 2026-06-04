@@ -2103,6 +2103,9 @@ async def update_listing(listing_id: str, data: dict):
     if "foto_base64" in data and data["foto_base64"]:
         update_fields["foto_base64"] = data["foto_base64"]
     
+    if "condition_details" in data and data["condition_details"]:
+        update_fields["condition_details"] = data["condition_details"]
+    
     if not update_fields:
         raise HTTPException(status_code=400, detail="Nessun campo da aggiornare")
     
