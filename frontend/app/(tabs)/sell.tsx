@@ -40,7 +40,6 @@ export default function CartScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
-  const [payingOrderId, setPayingOrderId] = useState<string | null>(null);
   const [payingAll, setPayingAll] = useState(false);
 
   useFocusEffect(
@@ -83,60 +82,25 @@ export default function CartScreen() {
     loadOrders();
   };
 
-  const handlePayOrder = async (order: OrderToPay) => {
+  const handleRemoveOrder = async (order: OrderToPay) => {
     // Su web, usa confirm invece di Alert
     if (Platform.OS === 'web') {
       const confirmed = window.confirm(
-        `Conferma acquisto\n\nStai per acquistare:\n📚 ${order.book_titolo}\n\nTotale: €${order.totale_acquirente.toFixed(2)}`
+        `Rimuovi dal carrello?\n\nVuoi rimuovere "${order.book_titolo}" dal carrello?\n\nL'ordine verrà annullato.`
       );
       
       if (confirmed) {
-        setPayingOrderId(order.id);
         try {
-          await axios.post(`${API_URL}/api/orders/${order.id}/pay?user_id=${userId}`);
-          window.alert(
-            `✅ Acquisto effettuato con successo!\n\n📚 ${order.book_titolo}\n\n🏪 Ritiro presso: ${order.bookstore_name}\n\nIl venditore ha 2 giorni lavorativi per consegnare il libro.\n\n(Presto inseriremo un vero sistema Stripe per i pagamenti)`
-          );
+          await axios.post(`${API_URL}/api/orders/${order.id}/cancel?user_id=${userId}`);
           loadOrders();
         } catch (error: any) {
-          window.alert('Errore: ' + (error.response?.data?.detail || 'Errore nel pagamento'));
-        } finally {
-          setPayingOrderId(null);
+          window.alert('Errore: ' + (error.response?.data?.detail || 'Errore'));
         }
       }
       return;
     }
     
     // Su mobile, usa Alert
-    Alert.alert(
-      'Conferma acquisto',
-      `Stai per acquistare:\n\n📚 ${order.book_titolo}\n\nTotale: €${order.totale_acquirente.toFixed(2)}\n\n(Prezzo: €${order.prezzo_libro.toFixed(2)} + Commissioni: €${(order.commissione_app + order.commissione_cartolibreria).toFixed(2)})`,
-      [
-        { text: 'Annulla', style: 'cancel' },
-        {
-          text: 'Paga ora',
-          onPress: async () => {
-            setPayingOrderId(order.id);
-            try {
-              await axios.post(`${API_URL}/api/orders/${order.id}/pay?user_id=${userId}`);
-              Alert.alert(
-                '✅ Acquisto effettuato con successo!',
-                `📚 ${order.book_titolo}\n\n🏪 Ritiro presso: ${order.bookstore_name}\n\nIl venditore ha 2 giorni lavorativi per consegnare il libro.\n\n(Presto inseriremo un vero sistema Stripe per i pagamenti)`,
-                [{ text: 'OK' }]
-              );
-              loadOrders();
-            } catch (error: any) {
-              Alert.alert('Errore', error.response?.data?.detail || 'Errore nel pagamento');
-            } finally {
-              setPayingOrderId(null);
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const handleRemoveOrder = async (order: OrderToPay) => {
     Alert.alert(
       'Rimuovi dal carrello',
       `Vuoi rimuovere "${order.book_titolo}" dal carrello?\n\nL'ordine verrà annullato.`,
@@ -227,8 +191,6 @@ export default function CartScreen() {
   };
 
   const renderOrder = ({ item }: { item: OrderToPay }) => {
-    const isPaying = payingOrderId === item.id;
-    
     return (
       <View style={styles.orderCard}>
         <View style={styles.orderHeader}>
@@ -271,26 +233,12 @@ export default function CartScreen() {
               <Text style={styles.priceValueSmall}>€{(item.commissione_app + item.commissione_cartolibreria).toFixed(2)}</Text>
             </View>
             <View style={[styles.priceRow, styles.totalRow]}>
-              <Text style={styles.totalLabel}>Totale</Text>
+              <Text style={styles.totalLabel}>Subtotale</Text>
               <Text style={styles.totalValue}>€{item.totale_acquirente.toFixed(2)}</Text>
             </View>
           </View>
         </View>
 
-        <TouchableOpacity
-          style={[styles.payButton, isPaying && styles.payButtonDisabled]}
-          onPress={() => handlePayOrder(item)}
-          disabled={isPaying}
-        >
-          {isPaying ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <>
-              <Ionicons name="card" size={20} color="#fff" />
-              <Text style={styles.payButtonText}>Paga €{item.totale_acquirente.toFixed(2)}</Text>
-            </>
-          )}
-        </TouchableOpacity>
       </View>
     );
   };
@@ -567,23 +515,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#1a472a',
   },
-  payButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#1a472a',
-    padding: 16,
-    borderRadius: 12,
-    gap: 8,
-  },
-  payButtonDisabled: {
-    backgroundColor: '#ccc',
-  },
-  payButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
   footer: {
     position: 'absolute',
     bottom: 0,
@@ -594,11 +525,17 @@ const styles = StyleSheet.create({
     borderTopColor: '#e0e0e0',
     padding: 16,
     paddingBottom: Platform.OS === 'ios' ? 32 : 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 10,
   },
   footerTotal: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 12,
   },
   footerTotalLabel: {
     fontSize: 16,
@@ -608,5 +545,28 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: '#1a472a',
+  },
+  payAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1a472a',
+    padding: 18,
+    borderRadius: 14,
+    gap: 10,
+  },
+  payAllButtonDisabled: {
+    backgroundColor: '#aaa',
+  },
+  payAllButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 18,
+  },
+  footerNote: {
+    fontSize: 12,
+    color: '#888',
+    textAlign: 'center',
+    marginTop: 10,
   },
 });
