@@ -8249,11 +8249,10 @@ async def submit_bookstore_registration(data: BookstoreRegistrationRequestCreate
 async def get_bookstore_requests(admin_id: str = Query(...)):
     """Admin: visualizza tutte le richieste di registrazione cartolibrerie"""
     
-    # In sviluppo: accetta qualsiasi utente come admin
-    # In produzione: verificare is_admin nel database
-    # admin = await db.users.find_one({"id": admin_id})
-    # if not admin or not admin.get("is_admin", False):
-    #     raise HTTPException(status_code=403, detail="Accesso non autorizzato")
+    # Verifica admin
+    admin = await db.users.find_one({"id": admin_id})
+    if not admin or not admin.get("is_admin", False):
+        raise HTTPException(status_code=403, detail="Accesso non autorizzato")
     
     requests = await db.bookstore_requests.find().sort("created_at", -1).to_list(100)
     
@@ -8261,6 +8260,127 @@ async def get_bookstore_requests(admin_id: str = Query(...)):
         req.pop('_id', None)
     
     return {"requests": requests}
+
+# ============ ADMIN LOGIN & DASHBOARD ============
+
+@api_router.post("/admin/login")
+async def admin_login(email: str = Query(...), password: str = Query(...)):
+    """Login admin"""
+    user = await db.users.find_one({"email": email.lower()})
+    if not user:
+        raise HTTPException(status_code=401, detail="Credenziali non valide")
+    
+    if not user.get("is_admin", False):
+        raise HTTPException(status_code=403, detail="Accesso non autorizzato")
+    
+    # Verifica password (in produzione usare hashing)
+    if user.get("password") != password:
+        raise HTTPException(status_code=401, detail="Credenziali non valide")
+    
+    return {
+        "success": True,
+        "user_id": user.get("id"),
+        "email": user.get("email"),
+        "nome": user.get("nome"),
+        "is_admin": True
+    }
+
+@api_router.get("/admin/stats")
+async def get_admin_stats(admin_id: str = Query(...)):
+    """Admin: statistiche generali"""
+    admin = await db.users.find_one({"id": admin_id})
+    if not admin or not admin.get("is_admin", False):
+        raise HTTPException(status_code=403, detail="Accesso non autorizzato")
+    
+    # Conta utenti
+    total_users = await db.users.count_documents({})
+    
+    # Conta cartolibrerie
+    total_bookstores = await db.bookstores.count_documents({})
+    
+    # Conta ordini
+    total_orders = await db.orders.count_documents({})
+    orders_completed = await db.orders.count_documents({"status": "completed"})
+    orders_pending = await db.orders.count_documents({"status": {"$in": ["in_attesa_pagamento", "paid_escrow", "delivering_to_bookstore"]}})
+    
+    # Conta listings
+    total_listings = await db.listings.count_documents({})
+    active_listings = await db.listings.count_documents({"stato": "disponibile"})
+    
+    # Richieste cartolibrerie pending
+    pending_requests = await db.bookstore_requests.count_documents({"status": "pending"})
+    
+    # Reports non risolti
+    pending_reports = await db.reports.count_documents({"status": "pending"})
+    
+    return {
+        "users": {
+            "total": total_users
+        },
+        "bookstores": {
+            "total": total_bookstores,
+            "pending_requests": pending_requests
+        },
+        "orders": {
+            "total": total_orders,
+            "completed": orders_completed,
+            "pending": orders_pending
+        },
+        "listings": {
+            "total": total_listings,
+            "active": active_listings
+        },
+        "reports": {
+            "pending": pending_reports
+        }
+    }
+
+@api_router.get("/admin/users")
+async def get_all_users(admin_id: str = Query(...), skip: int = 0, limit: int = 50):
+    """Admin: lista utenti"""
+    admin = await db.users.find_one({"id": admin_id})
+    if not admin or not admin.get("is_admin", False):
+        raise HTTPException(status_code=403, detail="Accesso non autorizzato")
+    
+    users = await db.users.find().skip(skip).limit(limit).to_list(limit)
+    
+    for user in users:
+        user.pop('_id', None)
+        user.pop('password', None)  # Non esporre password
+    
+    total = await db.users.count_documents({})
+    
+    return {"users": users, "total": total}
+
+@api_router.get("/admin/orders")
+async def get_all_orders(admin_id: str = Query(...), skip: int = 0, limit: int = 50):
+    """Admin: lista ordini"""
+    admin = await db.users.find_one({"id": admin_id})
+    if not admin or not admin.get("is_admin", False):
+        raise HTTPException(status_code=403, detail="Accesso non autorizzato")
+    
+    orders = await db.orders.find().sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
+    
+    for order in orders:
+        order.pop('_id', None)
+    
+    total = await db.orders.count_documents({})
+    
+    return {"orders": orders, "total": total}
+
+@api_router.get("/admin/bookstores")
+async def get_all_bookstores(admin_id: str = Query(...)):
+    """Admin: lista cartolibrerie"""
+    admin = await db.users.find_one({"id": admin_id})
+    if not admin or not admin.get("is_admin", False):
+        raise HTTPException(status_code=403, detail="Accesso non autorizzato")
+    
+    bookstores = await db.bookstores.find().to_list(100)
+    
+    for bs in bookstores:
+        bs.pop('_id', None)
+    
+    return {"bookstores": bookstores}
 
 @api_router.post("/admin/bookstore-requests/{request_id}/approve")
 async def approve_bookstore_request(request_id: str, admin_id: str = Query(...)):
