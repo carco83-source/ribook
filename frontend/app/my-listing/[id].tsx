@@ -20,28 +20,63 @@ import * as ImagePicker from 'expo-image-picker';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
-const CONDITIONS = [
-  { value: 'come_nuovo', label: 'Come nuovo', description: 'Nessun segno di usura' },
-  { value: 'ottime', label: 'Ottime', description: 'Minimi segni di usura' },
-  { value: 'buone', label: 'Buone', description: 'Normali segni di usura' },
-  { value: 'discrete', label: 'Discrete', description: 'Usura evidente ma leggibile' },
+// Stesse domande della creazione
+const CONDITION_QUESTIONS = [
+  {
+    key: 'sottolineature',
+    question: 'Il libro ha scritte o evidenziature?',
+    icon: 'pencil',
+    options: [
+      { value: 0, label: 'Nessuna', emoji: '✨' },
+      { value: 1, label: 'Poche', emoji: '✏️' },
+      { value: 2, label: 'Molte', emoji: '🖊️' },
+    ],
+  },
+  {
+    key: 'copertina',
+    question: 'La copertina è rovinata?',
+    icon: 'book',
+    options: [
+      { value: 0, label: 'No', emoji: '✨' },
+      { value: 1, label: 'Un po\'', emoji: '⚠️' },
+      { value: 2, label: 'Molto', emoji: '📉' },
+    ],
+  },
+  {
+    key: 'pagine',
+    question: 'Le pagine hanno pieghe o orecchie?',
+    icon: 'document-text',
+    options: [
+      { value: 0, label: 'Nessuna', emoji: '✨' },
+      { value: 1, label: 'Qualcuna', emoji: '📄' },
+      { value: 2, label: 'Molte', emoji: '📚' },
+    ],
+  },
+  {
+    key: 'esercizi',
+    question: 'Gli esercizi sono già compilati?',
+    icon: 'create',
+    options: [
+      { value: 0, label: 'No', emoji: '✨' },
+      { value: 1, label: 'Qualcuno', emoji: '📝' },
+      { value: 2, label: 'Molti', emoji: '📋' },
+    ],
+  },
 ];
 
-// Helper per colori percentuali
-const getPercentageColor = (percentage: number): string => {
-  if (percentage === 0) return '#4CAF50';
-  if (percentage <= 25) return '#8BC34A';
-  if (percentage <= 50) return '#FFC107';
-  if (percentage <= 75) return '#FF9800';
-  return '#f44336';
+// Calcola condizione dalle risposte (stesso algoritmo della creazione)
+const calculateCondition = (answers: Record<string, number>) => {
+  const total = Object.values(answers).reduce((sum, val) => sum + val, 0);
+  if (total <= 2) return { key: 'perfetto', label: '🟢 Perfetto', percentage: 70 };
+  if (total <= 5) return { key: 'buono', label: '🟡 Buono', percentage: 50 };
+  return { key: 'molto_usato', label: '🔴 Molto usato', percentage: 30 };
 };
 
-const getPercentageLabel = (percentage: number): string => {
-  if (percentage === 0) return 'Nessuna';
-  if (percentage <= 33) return 'Poche';
-  if (percentage <= 66) return 'Diverse';
-  return 'Molte';
-};
+interface Bookstore {
+  id: string;
+  nome: string;
+  indirizzo: string;
+}
 
 export default function MyListingDetailScreen() {
   const router = useRouter();
@@ -56,48 +91,68 @@ export default function MyListingDetailScreen() {
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   
-  // Editable fields
-  const [condizioni, setCondizioni] = useState('');
-  const [descrizione, setDescrizione] = useState('');
-  const [prezzoVendita, setPrezzoVendita] = useState('');
-  const [foto, setFoto] = useState<string | null>(null);
+  // Editable fields - stessi della creazione
+  const [conditionAnswers, setConditionAnswers] = useState<Record<string, number>>({
+    sottolineature: 0,
+    copertina: 0,
+    pagine: 0,
+    esercizi: 0,
+  });
+  const [note, setNote] = useState('');
+  const [photo, setPhoto] = useState<string | null>(null);
   
-  // Condition details (for editing)
-  const [penna, setPenna] = useState(0);
-  const [matita, setMatita] = useState(0);
-  const [evidenziatore, setEvidenziatore] = useState(0);
-  const [usuraLibro, setUsuraLibro] = useState(0);
-  const [eserciziPenna, setEserciziPenna] = useState(false);
-  const [eserciziMatita, setEserciziMatita] = useState(false);
+  // Fascicoli
+  const [hasFascicoli, setHasFascicoli] = useState(false);
+  const [fascicoliTotali, setFascicoliTotali] = useState(0);
+  const [fascicoliPresenti, setFascicoliPresenti] = useState(0);
+  
+  // Bookstores
+  const [bookstores, setBookstores] = useState<Bookstore[]>([]);
+  const [selectedBookstores, setSelectedBookstores] = useState<string[]>([]);
 
   useEffect(() => {
-    loadListing();
+    loadData();
   }, [id]);
 
-  const loadListing = async () => {
+  const loadData = async () => {
     try {
       const storedUserId = await AsyncStorage.getItem('user_id');
       setUserId(storedUserId);
 
+      // Carica listing
       const response = await axios.get(`${API_URL}/api/listings/${id}`);
       const data = response.data;
       setListing(data);
       
-      // Imposta valori editabili
-      setCondizioni(data.condizioni || 'buone');
-      setDescrizione(data.descrizione || data.note || '');
-      setPrezzoVendita(data.prezzo_vendita?.toString() || '');
-      setFoto(data.foto_base64 || null);
+      // Imposta valori dai dati salvati
+      setNote(data.note || data.descrizione || '');
+      setPhoto(data.foto_base64 || null);
       
-      // Imposta dettagli condizioni
-      if (data.condition_details) {
-        setPenna(data.condition_details.penna || 0);
-        setMatita(data.condition_details.matita || 0);
-        setEvidenziatore(data.condition_details.evidenziatore || 0);
-        setUsuraLibro(data.condition_details.usura_libro || 0);
-        setEserciziPenna(data.condition_details.esercizi_penna || false);
-        setEserciziMatita(data.condition_details.esercizi_matita || false);
+      // Imposta risposte condizioni (se salvate)
+      if (data.condition_answers) {
+        setConditionAnswers(data.condition_answers);
+      } else if (data.condition_details) {
+        // Fallback: prova a ricostruire dalle condition_details
+        setConditionAnswers({
+          sottolineature: data.condition_details.sottolineature || 0,
+          copertina: data.condition_details.copertina || 0,
+          pagine: data.condition_details.pagine || 0,
+          esercizi: data.condition_details.esercizi || 0,
+        });
       }
+      
+      // Fascicoli
+      setHasFascicoli(data.ha_fascicoli || false);
+      setFascicoliTotali(data.fascicoli_totali || 0);
+      setFascicoliPresenti(data.fascicoli_presenti || 0);
+      
+      // Bookstores selezionati
+      setSelectedBookstores(data.bookstore_ids || []);
+      
+      // Carica lista bookstores
+      const bsRes = await axios.get(`${API_URL}/api/bookstores`);
+      setBookstores(bsRes.data);
+      
     } catch (error) {
       console.error('Error loading listing:', error);
       if (Platform.OS === 'web') {
@@ -118,49 +173,61 @@ export default function MyListingDetailScreen() {
   };
 
   const pickImage = async () => {
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [3, 4],
-        quality: 0.7,
-        base64: true,
-      });
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.5,
+      base64: true,
+    });
 
-      if (!result.canceled && result.assets[0].base64) {
-        setFoto(`data:image/jpeg;base64,${result.assets[0].base64}`);
-      }
-    } catch (error) {
-      console.error('Error picking image:', error);
+    if (!result.canceled && result.assets[0].base64) {
+      setPhoto(result.assets[0].base64);
     }
   };
 
-  const handleSave = async () => {
-    if (!prezzoVendita || parseFloat(prezzoVendita) <= 0) {
-      if (Platform.OS === 'web') {
-        window.alert('Inserisci un prezzo valido');
-      } else {
-        Alert.alert('Errore', 'Inserisci un prezzo valido');
-      }
+  const takePhoto = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permesso negato', 'Serve il permesso per usare la fotocamera');
       return;
     }
 
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.5,
+      base64: true,
+    });
+
+    if (!result.canceled && result.assets[0].base64) {
+      setPhoto(result.assets[0].base64);
+    }
+  };
+
+  const calculatePrice = () => {
+    if (!listing) return 0;
+    const condition = calculateCondition(conditionAnswers);
+    const basePrice = listing.prezzo_ministeriale || listing.prezzo_copertina || 0;
+    return (basePrice * condition.percentage) / 100;
+  };
+
+  const handleSave = async () => {
     setSaving(true);
     try {
+      const newPrice = calculatePrice();
+      
       await axios.put(`${API_URL}/api/listings/${id}`, {
-        condizioni,
-        descrizione,
-        prezzo_vendita: parseFloat(prezzoVendita),
-        foto_base64: foto,
         seller_id: userId,
-        condition_details: {
-          penna,
-          matita,
-          evidenziatore,
-          usura_libro: usuraLibro,
-          esercizi_penna: eserciziPenna,
-          esercizi_matita: eserciziMatita,
-        },
+        condition_answers: conditionAnswers,
+        prezzo_vendita: newPrice,
+        note: note || null,
+        descrizione: note || null,
+        foto_base64: photo ? (photo.startsWith('data:') ? photo : `data:image/jpeg;base64,${photo}`) : null,
+        ha_fascicoli: hasFascicoli,
+        fascicoli_totali: fascicoliTotali,
+        fascicoli_presenti: fascicoliPresenti,
+        bookstore_ids: selectedBookstores,
       });
 
       if (Platform.OS === 'web') {
@@ -169,7 +236,7 @@ export default function MyListingDetailScreen() {
         Alert.alert('Successo', 'Annuncio aggiornato con successo!');
       }
       setIsEditing(false);
-      loadListing(); // Ricarica i dati aggiornati
+      loadData();
     } catch (error: any) {
       const message = error.response?.data?.detail || 'Errore durante il salvataggio';
       if (Platform.OS === 'web') {
@@ -253,10 +320,8 @@ export default function MyListingDetailScreen() {
   }
 
   const statusInfo = getStatusInfo();
+  const currentCondition = calculateCondition(conditionAnswers);
   const coverUrl = listing.foto_base64 || `https://www.ibs.it/images/${listing.book_isbn}_0_0_0_180_50.jpg`;
-
-  // Condizioni dettagliate dal listing
-  const cd = listing.condition_details || {};
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -274,7 +339,7 @@ export default function MyListingDetailScreen() {
           </TouchableOpacity>
         )}
         {isEditing && (
-          <TouchableOpacity style={styles.headerBtn} onPress={() => setIsEditing(false)}>
+          <TouchableOpacity style={styles.headerBtn} onPress={() => { setIsEditing(false); loadData(); }}>
             <Ionicons name="close" size={24} color="#f44336" />
           </TouchableOpacity>
         )}
@@ -288,342 +353,293 @@ export default function MyListingDetailScreen() {
           <Text style={[styles.statusText, { color: statusInfo.color }]}>{statusInfo.label}</Text>
         </View>
 
-        {/* Book Cover & Basic Info */}
+        {/* Book Info Card */}
         <View style={styles.bookCard}>
-          {isEditing ? (
-            <TouchableOpacity style={styles.editablePhoto} onPress={pickImage}>
-              <Image source={{ uri: foto || coverUrl }} style={styles.bookCover} resizeMode="cover" />
-              <View style={styles.editPhotoOverlay}>
-                <Ionicons name="camera" size={24} color="#fff" />
-                <Text style={styles.editPhotoText}>Cambia foto</Text>
-              </View>
-            </TouchableOpacity>
-          ) : (
-            <Image source={{ uri: coverUrl }} style={styles.bookCover} resizeMode="cover" />
-          )}
-          
+          <Image source={{ uri: coverUrl }} style={styles.bookCover} resizeMode="cover" />
           <View style={styles.bookInfo}>
             <Text style={styles.bookTitle} numberOfLines={2}>{listing.book_titolo}</Text>
             {listing.book_autori && (
               <Text style={styles.bookAuthor}>{listing.book_autori}</Text>
             )}
             <Text style={styles.bookIsbn}>ISBN: {listing.book_isbn}</Text>
-            
-            {listing.book_materia && (
-              <View style={styles.metaRow}>
-                <Ionicons name="bookmark-outline" size={14} color="#666" />
-                <Text style={styles.metaText}>{listing.book_materia}</Text>
-              </View>
-            )}
-            {listing.book_classe && (
-              <View style={styles.metaRow}>
-                <Ionicons name="school-outline" size={14} color="#666" />
-                <Text style={styles.metaText}>Classe {listing.book_classe}</Text>
-              </View>
-            )}
+            <Text style={styles.bookOriginalPrice}>
+              Prezzo listino: €{(listing.prezzo_ministeriale || listing.prezzo_copertina || 0).toFixed(2)}
+            </Text>
           </View>
         </View>
 
-        {/* Prezzo */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Prezzo di vendita</Text>
-          {isEditing ? (
-            <View style={styles.priceInputContainer}>
-              <Text style={styles.currencySymbol}>€</Text>
-              <TextInput
-                style={styles.priceInput}
-                keyboardType="decimal-pad"
-                placeholder="0.00"
-                value={prezzoVendita}
-                onChangeText={setPrezzoVendita}
-              />
+        {/* Condizioni - STESSO FORMATO DELLA CREAZIONE */}
+        <Text style={styles.sectionTitle}>Condizione del libro</Text>
+        {isEditing && (
+          <Text style={styles.sectionSubtitle}>
+            Rispondi a queste 4 domande - il prezzo viene calcolato automaticamente
+          </Text>
+        )}
+        
+        {CONDITION_QUESTIONS.map((q) => (
+          <View key={q.key} style={styles.questionCard}>
+            <View style={styles.questionHeader}>
+              <Ionicons name={q.icon as any} size={20} color="#1a472a" />
+              <Text style={styles.questionText}>{q.question}</Text>
             </View>
-          ) : (
-            <Text style={styles.priceDisplay}>€{listing.prezzo_vendita?.toFixed(2)}</Text>
-          )}
-          {listing.prezzo_copertina && (
-            <Text style={styles.priceHint}>
-              Prezzo di copertina: €{listing.prezzo_copertina.toFixed(2)}
-            </Text>
-          )}
-        </View>
-
-        {/* Condizioni Generali */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Condizioni generali</Text>
-          {isEditing ? (
-            <View style={styles.conditionsGrid}>
-              {CONDITIONS.map((cond) => (
+            <View style={styles.optionsRow}>
+              {q.options.map((opt) => (
                 <TouchableOpacity
-                  key={cond.value}
+                  key={opt.value}
                   style={[
-                    styles.conditionOption,
-                    condizioni === cond.value && styles.conditionOptionSelected
+                    styles.optionButton,
+                    conditionAnswers[q.key] === opt.value && styles.optionButtonSelected,
+                    !isEditing && styles.optionButtonDisabled,
                   ]}
-                  onPress={() => setCondizioni(cond.value)}
+                  onPress={() => {
+                    if (isEditing) {
+                      setConditionAnswers({ ...conditionAnswers, [q.key]: opt.value });
+                    }
+                  }}
+                  disabled={!isEditing}
                 >
-                  <Text style={[
-                    styles.conditionLabel,
-                    condizioni === cond.value && styles.conditionLabelSelected
-                  ]}>
-                    {cond.label}
+                  <Text style={styles.optionEmoji}>{opt.emoji}</Text>
+                  <Text
+                    style={[
+                      styles.optionLabel,
+                      conditionAnswers[q.key] === opt.value && styles.optionLabelSelected,
+                    ]}
+                  >
+                    {opt.label}
                   </Text>
-                  <Text style={styles.conditionDesc}>{cond.description}</Text>
                 </TouchableOpacity>
               ))}
             </View>
-          ) : (
-            <View style={styles.conditionDisplay}>
-              <Text style={styles.conditionValue}>
-                {CONDITIONS.find(c => c.value === listing.condizioni)?.label || listing.condizioni}
-              </Text>
-            </View>
-          )}
+          </View>
+        ))}
+
+        {/* Risultato condizione e prezzo */}
+        <View style={styles.conditionResult}>
+          <Text style={styles.conditionResultLabel}>Condizione calcolata:</Text>
+          <Text style={styles.conditionResultValue}>{currentCondition.label}</Text>
+          <Text style={styles.conditionResultPrice}>
+            Prezzo: €{calculatePrice().toFixed(2)}
+          </Text>
         </View>
 
-        {/* Dettagli Condizioni */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Stato dettagliato del libro</Text>
-          
-          {isEditing ? (
-            <View style={styles.conditionDetailsEdit}>
-              {/* Slider per Penna */}
-              <View style={styles.sliderRow}>
-                <View style={styles.sliderHeader}>
-                  <Ionicons name="pencil" size={18} color="#666" />
-                  <Text style={styles.sliderLabel}>Scritte a penna</Text>
-                </View>
-                <View style={styles.sliderButtons}>
-                  {[0, 33, 66, 100].map((val) => (
-                    <TouchableOpacity
-                      key={val}
-                      style={[styles.sliderBtn, penna === val && styles.sliderBtnActive]}
-                      onPress={() => setPenna(val)}
-                    >
-                      <Text style={[styles.sliderBtnText, penna === val && styles.sliderBtnTextActive]}>
-                        {getPercentageLabel(val)}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
+        {/* Fascicoli - STESSO FORMATO DELLA CREAZIONE */}
+        <Text style={styles.sectionTitle}>Fascicoli allegati</Text>
+        <View style={styles.fascicoliCard}>
+          <TouchableOpacity
+            style={styles.fascicoliToggle}
+            onPress={() => isEditing && setHasFascicoli(!hasFascicoli)}
+            disabled={!isEditing}
+          >
+            <Ionicons
+              name={hasFascicoli ? 'checkbox' : 'square-outline'}
+              size={24}
+              color={isEditing ? '#1a472a' : '#999'}
+            />
+            <Text style={[styles.fascicoliToggleText, !isEditing && { color: '#666' }]}>
+              Questo libro ha fascicoli/allegati
+            </Text>
+          </TouchableOpacity>
 
-              {/* Slider per Matita */}
-              <View style={styles.sliderRow}>
-                <View style={styles.sliderHeader}>
-                  <Ionicons name="create-outline" size={18} color="#666" />
-                  <Text style={styles.sliderLabel}>Scritte a matita</Text>
-                </View>
-                <View style={styles.sliderButtons}>
-                  {[0, 33, 66, 100].map((val) => (
-                    <TouchableOpacity
-                      key={val}
-                      style={[styles.sliderBtn, matita === val && styles.sliderBtnActive]}
-                      onPress={() => setMatita(val)}
-                    >
-                      <Text style={[styles.sliderBtnText, matita === val && styles.sliderBtnTextActive]}>
-                        {getPercentageLabel(val)}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-
-              {/* Slider per Evidenziatore */}
-              <View style={styles.sliderRow}>
-                <View style={styles.sliderHeader}>
-                  <Ionicons name="color-fill" size={18} color="#666" />
-                  <Text style={styles.sliderLabel}>Pagine evidenziate</Text>
-                </View>
-                <View style={styles.sliderButtons}>
-                  {[0, 33, 66, 100].map((val) => (
-                    <TouchableOpacity
-                      key={val}
-                      style={[styles.sliderBtn, evidenziatore === val && styles.sliderBtnActive]}
-                      onPress={() => setEvidenziatore(val)}
-                    >
-                      <Text style={[styles.sliderBtnText, evidenziatore === val && styles.sliderBtnTextActive]}>
-                        {getPercentageLabel(val)}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-
-              {/* Slider per Usura */}
-              <View style={styles.sliderRow}>
-                <View style={styles.sliderHeader}>
-                  <Ionicons name="document-text" size={18} color="#666" />
-                  <Text style={styles.sliderLabel}>Usura pagine</Text>
-                </View>
-                <View style={styles.sliderButtons}>
-                  {[0, 33, 66, 100].map((val) => (
-                    <TouchableOpacity
-                      key={val}
-                      style={[styles.sliderBtn, usuraLibro === val && styles.sliderBtnActive]}
-                      onPress={() => setUsuraLibro(val)}
-                    >
-                      <Text style={[styles.sliderBtnText, usuraLibro === val && styles.sliderBtnTextActive]}>
-                        {getPercentageLabel(val)}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-
-              {/* Checkbox Esercizi */}
-              <View style={styles.checkboxRow}>
-                <Text style={styles.checkboxGroupLabel}>Esercizi svolti:</Text>
-                <View style={styles.checkboxGroup}>
+          {hasFascicoli && (
+            <View style={styles.fascicoliInputs}>
+              <View style={styles.fascicoliInputRow}>
+                <Text style={styles.fascicoliInputLabel}>Fascicoli totali previsti:</Text>
+                <View style={styles.counterContainer}>
                   <TouchableOpacity
-                    style={styles.checkbox}
-                    onPress={() => setEserciziPenna(!eserciziPenna)}
+                    style={[styles.counterButton, !isEditing && styles.counterButtonDisabled]}
+                    onPress={() => isEditing && setFascicoliTotali(Math.max(0, fascicoliTotali - 1))}
+                    disabled={!isEditing}
                   >
-                    <View style={[styles.checkboxBox, eserciziPenna && styles.checkboxBoxChecked]}>
-                      {eserciziPenna && <Ionicons name="checkmark" size={14} color="#fff" />}
-                    </View>
-                    <Text style={styles.checkboxLabel}>A penna</Text>
+                    <Ionicons name="remove" size={20} color={isEditing ? '#1a472a' : '#999'} />
                   </TouchableOpacity>
-                  
+                  <Text style={styles.counterValue}>{fascicoliTotali}</Text>
                   <TouchableOpacity
-                    style={styles.checkbox}
-                    onPress={() => setEserciziMatita(!eserciziMatita)}
+                    style={[styles.counterButton, !isEditing && styles.counterButtonDisabled]}
+                    onPress={() => isEditing && setFascicoliTotali(fascicoliTotali + 1)}
+                    disabled={!isEditing}
                   >
-                    <View style={[styles.checkboxBox, eserciziMatita && styles.checkboxBoxChecked]}>
-                      {eserciziMatita && <Ionicons name="checkmark" size={14} color="#fff" />}
-                    </View>
-                    <Text style={styles.checkboxLabel}>A matita</Text>
+                    <Ionicons name="add" size={20} color={isEditing ? '#1a472a' : '#999'} />
                   </TouchableOpacity>
                 </View>
               </View>
-            </View>
-          ) : (
-            <View style={styles.conditionDetailsDisplay}>
-              {/* Scritte a penna */}
-              <View style={styles.conditionDetailRow}>
-                <View style={styles.conditionDetailHeader}>
-                  <Ionicons name="pencil" size={18} color="#666" />
-                  <Text style={styles.conditionDetailLabel}>Scritte a penna</Text>
-                </View>
-                <View style={[styles.conditionBadge, { backgroundColor: getPercentageColor(cd.penna || 0) }]}>
-                  <Text style={styles.conditionBadgeText}>{getPercentageLabel(cd.penna || 0)}</Text>
-                </View>
-              </View>
-
-              {/* Scritte a matita */}
-              <View style={styles.conditionDetailRow}>
-                <View style={styles.conditionDetailHeader}>
-                  <Ionicons name="create-outline" size={18} color="#666" />
-                  <Text style={styles.conditionDetailLabel}>Scritte a matita</Text>
-                </View>
-                <View style={[styles.conditionBadge, { backgroundColor: getPercentageColor(cd.matita || 0) }]}>
-                  <Text style={styles.conditionBadgeText}>{getPercentageLabel(cd.matita || 0)}</Text>
+              
+              <View style={styles.fascicoliInputRow}>
+                <Text style={styles.fascicoliInputLabel}>Fascicoli che hai:</Text>
+                <View style={styles.counterContainer}>
+                  <TouchableOpacity
+                    style={[styles.counterButton, !isEditing && styles.counterButtonDisabled]}
+                    onPress={() => isEditing && setFascicoliPresenti(Math.max(0, fascicoliPresenti - 1))}
+                    disabled={!isEditing}
+                  >
+                    <Ionicons name="remove" size={20} color={isEditing ? '#1a472a' : '#999'} />
+                  </TouchableOpacity>
+                  <Text style={styles.counterValue}>{fascicoliPresenti}</Text>
+                  <TouchableOpacity
+                    style={[styles.counterButton, !isEditing && styles.counterButtonDisabled]}
+                    onPress={() => isEditing && setFascicoliPresenti(Math.min(fascicoliTotali, fascicoliPresenti + 1))}
+                    disabled={!isEditing}
+                  >
+                    <Ionicons name="add" size={20} color={isEditing ? '#1a472a' : '#999'} />
+                  </TouchableOpacity>
                 </View>
               </View>
 
-              {/* Pagine evidenziate */}
-              <View style={styles.conditionDetailRow}>
-                <View style={styles.conditionDetailHeader}>
-                  <Ionicons name="color-fill" size={18} color="#666" />
-                  <Text style={styles.conditionDetailLabel}>Pagine evidenziate</Text>
-                </View>
-                <View style={[styles.conditionBadge, { backgroundColor: getPercentageColor(cd.evidenziatore || 0) }]}>
-                  <Text style={styles.conditionBadgeText}>{getPercentageLabel(cd.evidenziatore || 0)}</Text>
-                </View>
-              </View>
-
-              {/* Usura pagine */}
-              <View style={styles.conditionDetailRow}>
-                <View style={styles.conditionDetailHeader}>
-                  <Ionicons name="document-text" size={18} color="#666" />
-                  <Text style={styles.conditionDetailLabel}>Usura pagine</Text>
-                </View>
-                <View style={[styles.conditionBadge, { backgroundColor: getPercentageColor(cd.usura_libro || 0) }]}>
-                  <Text style={styles.conditionBadgeText}>{getPercentageLabel(cd.usura_libro || 0)}</Text>
-                </View>
-              </View>
-
-              {/* Esercizi svolti */}
-              {(cd.esercizi_penna || cd.esercizi_matita) && (
-                <View style={styles.eserciziDisplay}>
-                  <Ionicons name="checkbox" size={18} color="#FF9800" />
-                  <Text style={styles.eserciziLabel}>Esercizi svolti:</Text>
-                  <View style={styles.eserciziTags}>
-                    {cd.esercizi_penna && (
-                      <View style={styles.eserciziTag}>
-                        <Text style={styles.eserciziTagText}>A penna</Text>
-                      </View>
-                    )}
-                    {cd.esercizi_matita && (
-                      <View style={styles.eserciziTag}>
-                        <Text style={styles.eserciziTagText}>A matita</Text>
-                      </View>
-                    )}
-                  </View>
+              {fascicoliTotali > 0 && fascicoliPresenti < fascicoliTotali && (
+                <View style={styles.fascicoliWarning}>
+                  <Ionicons name="warning" size={16} color="#e65100" />
+                  <Text style={styles.fascicoliWarningText}>
+                    Fascicoli mancanti: la condizione sarà "Molto usato"
+                  </Text>
                 </View>
               )}
             </View>
           )}
         </View>
 
-        {/* Descrizione */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Descrizione / Note</Text>
-          {isEditing ? (
-            <TextInput
-              style={styles.descInput}
-              multiline
-              numberOfLines={4}
-              placeholder="Descrivi eventuali difetti, sottolineature, note..."
-              value={descrizione}
-              onChangeText={setDescrizione}
-              textAlignVertical="top"
-            />
+        {/* Punto di ritiro - STESSO FORMATO DELLA CREAZIONE */}
+        <Text style={styles.sectionTitle}>Punto di ritiro</Text>
+        {isEditing && (
+          <Text style={styles.sectionSubtitle}>
+            Seleziona dove consegnerai il libro
+          </Text>
+        )}
+        
+        <View style={styles.bookstoreList}>
+          {bookstores.map((store) => {
+            const isSelected = selectedBookstores.includes(store.id);
+            return (
+              <TouchableOpacity
+                key={store.id}
+                style={[
+                  styles.bookstoreItem,
+                  isSelected && styles.bookstoreItemSelected,
+                  !isEditing && styles.bookstoreItemDisabled,
+                ]}
+                onPress={() => {
+                  if (!isEditing) return;
+                  if (isSelected) {
+                    setSelectedBookstores(selectedBookstores.filter(bsId => bsId !== store.id));
+                  } else {
+                    setSelectedBookstores([...selectedBookstores, store.id]);
+                  }
+                }}
+                disabled={!isEditing}
+              >
+                <Ionicons
+                  name={isSelected ? 'checkbox' : 'square-outline'}
+                  size={24}
+                  color={isSelected ? '#1a472a' : '#999'}
+                />
+                <View style={styles.bookstoreInfo}>
+                  <Text style={styles.bookstoreName}>{store.nome}</Text>
+                  <Text style={styles.bookstoreAddress}>{store.indirizzo}</Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* Foto */}
+        <Text style={styles.sectionTitle}>Foto</Text>
+        {isEditing && (
+          <Text style={styles.sectionSubtitle}>
+            Scatta una foto della pagina peggiore per aumentare la fiducia
+          </Text>
+        )}
+        
+        <View style={styles.photoSection}>
+          {photo ? (
+            <View style={styles.photoPreview}>
+              <Image
+                source={{ uri: photo.startsWith('data:') ? photo : `data:image/jpeg;base64,${photo}` }}
+                style={styles.photoImage}
+              />
+              {isEditing && (
+                <TouchableOpacity
+                  style={styles.removePhotoButton}
+                  onPress={() => setPhoto(null)}
+                >
+                  <Ionicons name="close-circle" size={28} color="#ff4444" />
+                </TouchableOpacity>
+              )}
+            </View>
+          ) : isEditing ? (
+            <View style={styles.photoButtons}>
+              <TouchableOpacity style={styles.photoButton} onPress={takePhoto}>
+                <Ionicons name="camera" size={32} color="#1a472a" />
+                <Text style={styles.photoButtonText}>Scatta foto</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.photoButton} onPress={pickImage}>
+                <Ionicons name="images" size={32} color="#1a472a" />
+                <Text style={styles.photoButtonText}>Galleria</Text>
+              </TouchableOpacity>
+            </View>
           ) : (
-            <Text style={styles.descDisplay}>
-              {listing.descrizione || listing.note || 'Nessuna descrizione'}
-            </Text>
+            <View style={styles.noPhotoPlaceholder}>
+              <Ionicons name="image-outline" size={48} color="#ccc" />
+              <Text style={styles.noPhotoText}>Nessuna foto</Text>
+            </View>
           )}
         </View>
 
-        {/* Punti di ritiro */}
-        {listing.bookstore_names && listing.bookstore_names.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Punti di ritiro</Text>
-            {listing.bookstore_names.map((name: string, index: number) => (
-              <View key={index} style={styles.bookstoreItem}>
-                <Ionicons name="storefront-outline" size={18} color="#1a472a" />
-                <Text style={styles.bookstoreName}>{name}</Text>
-              </View>
-            ))}
+        {/* Note */}
+        <Text style={styles.sectionTitle}>Note</Text>
+        {isEditing ? (
+          <TextInput
+            style={styles.noteInput}
+            placeholder="Aggiungi note sullo stato del libro..."
+            value={note}
+            onChangeText={setNote}
+            multiline
+            numberOfLines={3}
+          />
+        ) : (
+          <View style={styles.noteDisplay}>
+            <Text style={styles.noteText}>{note || 'Nessuna nota'}</Text>
           </View>
         )}
 
+        {/* Riepilogo */}
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryTitle}>Riepilogo</Text>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Condizione:</Text>
+            <Text style={styles.summaryValue}>{currentCondition.label}</Text>
+          </View>
+          {hasFascicoli && fascicoliTotali > 0 && (
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Fascicoli:</Text>
+              <Text style={styles.summaryValue}>
+                {fascicoliPresenti}/{fascicoliTotali}
+              </Text>
+            </View>
+          )}
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Prezzo di vendita:</Text>
+            <Text style={styles.summaryPrice}>€{calculatePrice().toFixed(2)}</Text>
+          </View>
+        </View>
+
         {/* Azioni */}
         {isEditing ? (
-          <View style={styles.editActions}>
-            <TouchableOpacity
-              style={[styles.saveButton, saving && styles.saveButtonDisabled]}
-              onPress={handleSave}
-              disabled={saving}
-            >
-              {saving ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <>
-                  <Ionicons name="checkmark" size={22} color="#fff" />
-                  <Text style={styles.saveButtonText}>Salva modifiche</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={[styles.saveButton, saving && styles.saveButtonDisabled]}
+            onPress={handleSave}
+            disabled={saving}
+          >
+            {saving ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.saveButtonText}>Salva modifiche</Text>
+            )}
+          </TouchableOpacity>
         ) : canEdit() ? (
           <View style={styles.actions}>
             <TouchableOpacity
               style={styles.editButton}
               onPress={() => setIsEditing(true)}
             >
-              <Ionicons name="create-outline" size={20} color="#2196F3" />
+              <Ionicons name="create-outline" size={20} color="#fff" />
               <Text style={styles.editButtonText}>Modifica annuncio</Text>
             </TouchableOpacity>
 
@@ -725,40 +741,18 @@ const styles = StyleSheet.create({
   },
   bookCard: {
     flexDirection: 'row',
-    backgroundColor: '#fff',
+    backgroundColor: '#e8f5e9',
     borderRadius: 12,
-    padding: 12,
+    padding: 16,
     marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#1a472a',
   },
   bookCover: {
-    width: 90,
-    height: 130,
-    borderRadius: 8,
+    width: 70,
+    height: 100,
+    borderRadius: 6,
     backgroundColor: '#f0f0f0',
-  },
-  editablePhoto: {
-    position: 'relative',
-  },
-  editPhotoOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    padding: 8,
-    borderBottomLeftRadius: 8,
-    borderBottomRightRadius: 8,
-    alignItems: 'center',
-  },
-  editPhotoText: {
-    color: '#fff',
-    fontSize: 10,
-    marginTop: 2,
   },
   bookInfo: {
     flex: 1,
@@ -768,296 +762,316 @@ const styles = StyleSheet.create({
   bookTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: '#1a472a',
   },
   bookAuthor: {
     fontSize: 14,
     color: '#666',
-    marginTop: 4,
+    marginTop: 2,
   },
   bookIsbn: {
     fontSize: 12,
-    color: '#999',
+    color: '#888',
     marginTop: 4,
   },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 6,
-  },
-  metaText: {
-    fontSize: 12,
-    color: '#666',
-  },
-  section: {
-    marginBottom: 24,
+  bookOriginalPrice: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1a472a',
+    marginTop: 8,
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: '#1a472a',
+    marginTop: 20,
+    marginBottom: 8,
+  },
+  sectionSubtitle: {
+    fontSize: 13,
+    color: '#666',
     marginBottom: 12,
   },
-  priceDisplay: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#1a472a',
-  },
-  priceInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  questionCard: {
     backgroundColor: '#fff',
     borderRadius: 12,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
+    padding: 16,
+    marginBottom: 12,
   },
-  currencySymbol: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#1a472a',
-    marginRight: 8,
+  questionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
   },
-  priceInput: {
+  questionText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#333',
     flex: 1,
+  },
+  optionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  optionButton: {
+    flex: 1,
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#e0e0e0',
+    backgroundColor: '#fafafa',
+  },
+  optionButtonSelected: {
+    borderColor: '#1a472a',
+    backgroundColor: '#e8f5e9',
+  },
+  optionButtonDisabled: {
+    opacity: 0.8,
+  },
+  optionEmoji: {
+    fontSize: 20,
+    marginBottom: 4,
+  },
+  optionLabel: {
+    fontSize: 12,
+    color: '#666',
+  },
+  optionLabelSelected: {
+    color: '#1a472a',
+    fontWeight: '600',
+  },
+  conditionResult: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#1a472a',
+    marginBottom: 8,
+  },
+  conditionResultLabel: {
+    fontSize: 12,
+    color: '#666',
+  },
+  conditionResultValue: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#1a472a',
-    paddingVertical: 14,
-  },
-  priceHint: {
-    fontSize: 12,
-    color: '#888',
-    marginTop: 8,
-  },
-  conditionsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  conditionOption: {
-    width: '48%',
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 12,
-    borderWidth: 2,
-    borderColor: '#e0e0e0',
-  },
-  conditionOptionSelected: {
-    borderColor: '#1a472a',
-    backgroundColor: '#e8f5e9',
-  },
-  conditionLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-  },
-  conditionLabelSelected: {
-    color: '#1a472a',
-  },
-  conditionDesc: {
-    fontSize: 11,
-    color: '#666',
     marginTop: 4,
   },
-  conditionDisplay: {
-    backgroundColor: '#e8f5e9',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignSelf: 'flex-start',
-  },
-  conditionValue: {
-    fontSize: 16,
-    fontWeight: '600',
+  conditionResultPrice: {
+    fontSize: 20,
+    fontWeight: 'bold',
     color: '#1a472a',
-  },
-  conditionDetailsEdit: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    gap: 20,
-  },
-  sliderRow: {
-    gap: 10,
-  },
-  sliderHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  sliderLabel: {
-    fontSize: 14,
-    color: '#333',
-    fontWeight: '500',
-  },
-  sliderButtons: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  sliderBtn: {
-    flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  sliderBtnActive: {
-    backgroundColor: '#1a472a',
-  },
-  sliderBtnText: {
-    fontSize: 11,
-    color: '#666',
-    fontWeight: '500',
-  },
-  sliderBtnTextActive: {
-    color: '#fff',
-  },
-  checkboxRow: {
     marginTop: 8,
   },
-  checkboxGroupLabel: {
-    fontSize: 14,
-    color: '#333',
-    fontWeight: '500',
-    marginBottom: 10,
-  },
-  checkboxGroup: {
-    flexDirection: 'row',
-    gap: 20,
-  },
-  checkbox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  checkboxBox: {
-    width: 22,
-    height: 22,
-    borderRadius: 4,
-    borderWidth: 2,
-    borderColor: '#1a472a',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkboxBoxChecked: {
-    backgroundColor: '#1a472a',
-  },
-  checkboxLabel: {
-    fontSize: 14,
-    color: '#333',
-  },
-  conditionDetailsDisplay: {
+  fascicoliCard: {
     backgroundColor: '#fff',
     borderRadius: 12,
     padding: 16,
-    gap: 16,
   },
-  conditionDetailRow: {
+  fascicoliToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  fascicoliToggleText: {
+    fontSize: 14,
+    color: '#333',
+  },
+  fascicoliInputs: {
+    marginTop: 16,
+    gap: 12,
+  },
+  fascicoliInputRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  conditionDetailHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  conditionDetailLabel: {
+  fascicoliInputLabel: {
     fontSize: 14,
     color: '#666',
   },
-  conditionBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
+  counterContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
-  conditionBadgeText: {
-    fontSize: 12,
+  counterButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#e8f5e9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  counterButtonDisabled: {
+    backgroundColor: '#f0f0f0',
+  },
+  counterValue: {
+    fontSize: 18,
     fontWeight: '600',
-    color: '#fff',
+    minWidth: 24,
+    textAlign: 'center',
   },
-  eserciziDisplay: {
+  fascicoliWarning: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-    flexWrap: 'wrap',
+    backgroundColor: '#fff3e0',
+    padding: 12,
+    borderRadius: 8,
   },
-  eserciziLabel: {
-    fontSize: 14,
-    color: '#FF9800',
-    fontWeight: '600',
-  },
-  eserciziTags: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  eserciziTag: {
-    backgroundColor: '#FFF3E0',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#FF9800',
-  },
-  eserciziTagText: {
+  fascicoliWarningText: {
     fontSize: 12,
-    color: '#FF9800',
-    fontWeight: '500',
+    color: '#e65100',
+    flex: 1,
   },
-  descInput: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 14,
-    fontSize: 14,
-    minHeight: 100,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-  },
-  descDisplay: {
-    fontSize: 14,
-    color: '#666',
-    lineHeight: 20,
-    backgroundColor: '#fff',
-    padding: 14,
-    borderRadius: 12,
+  bookstoreList: {
+    gap: 8,
   },
   bookstoreItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
     backgroundColor: '#fff',
-    padding: 12,
-    borderRadius: 10,
-    marginBottom: 8,
+    padding: 16,
+    borderRadius: 12,
+    gap: 12,
+  },
+  bookstoreItemSelected: {
+    backgroundColor: '#e8f5e9',
+    borderWidth: 1,
+    borderColor: '#1a472a',
+  },
+  bookstoreItemDisabled: {
+    opacity: 0.7,
+  },
+  bookstoreInfo: {
+    flex: 1,
   },
   bookstoreName: {
     fontSize: 14,
+    fontWeight: '600',
     color: '#333',
+  },
+  bookstoreAddress: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
+  },
+  photoSection: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+  },
+  photoButtons: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  photoButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+    borderWidth: 2,
+    borderColor: '#e0e0e0',
+    borderStyle: 'dashed',
+    borderRadius: 12,
+  },
+  photoButtonText: {
+    marginTop: 8,
+    color: '#1a472a',
+    fontWeight: '500',
+  },
+  photoPreview: {
+    position: 'relative',
+  },
+  photoImage: {
+    width: '100%',
+    height: 200,
+    borderRadius: 12,
+  },
+  removePhotoButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: '#fff',
+    borderRadius: 14,
+  },
+  noPhotoPlaceholder: {
+    alignItems: 'center',
+    padding: 32,
+  },
+  noPhotoText: {
+    marginTop: 8,
+    color: '#999',
+    fontSize: 14,
+  },
+  noteInput: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  noteDisplay: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+  },
+  noteText: {
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 20,
+  },
+  summaryCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 16,
+  },
+  summaryTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 12,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  summaryLabel: {
+    fontSize: 14,
+    color: '#666',
+  },
+  summaryValue: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '500',
+  },
+  summaryPrice: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1a472a',
   },
   actions: {
     gap: 12,
-    marginTop: 10,
-  },
-  editActions: {
-    marginTop: 10,
+    marginTop: 16,
   },
   editButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#E3F2FD',
+    backgroundColor: '#1a472a',
     padding: 16,
     borderRadius: 12,
     gap: 8,
   },
   editButtonText: {
-    color: '#2196F3',
+    color: '#fff',
     fontSize: 16,
     fontWeight: '600',
   },
@@ -1076,21 +1090,19 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   saveButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
     backgroundColor: '#1a472a',
-    borderRadius: 12,
     paddingVertical: 16,
-    gap: 8,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 16,
   },
   saveButtonDisabled: {
     opacity: 0.6,
   },
   saveButtonText: {
     color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: 'bold',
   },
   notEditableNotice: {
     flexDirection: 'row',
@@ -1099,7 +1111,7 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     gap: 10,
-    marginTop: 10,
+    marginTop: 16,
   },
   notEditableText: {
     flex: 1,

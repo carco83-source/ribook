@@ -2069,7 +2069,7 @@ async def delete_listing(listing_id: str, user_id: str):
 
 @api_router.put("/listings/{listing_id}")
 async def update_listing(listing_id: str, data: dict):
-    """Aggiorna un listing esistente (condizioni, prezzo, foto, descrizione)"""
+    """Aggiorna un listing esistente (condizioni, prezzo, foto, descrizione, fascicoli, bookstores)"""
     seller_id = data.get("seller_id")
     if not seller_id:
         raise HTTPException(status_code=400, detail="seller_id richiesto")
@@ -2094,6 +2094,9 @@ async def update_listing(listing_id: str, data: dict):
     if "descrizione" in data:
         update_fields["descrizione"] = data["descrizione"]
     
+    if "note" in data:
+        update_fields["note"] = data["note"]
+    
     if "prezzo_vendita" in data:
         new_price = float(data["prezzo_vendita"])
         if new_price <= 0:
@@ -2105,6 +2108,33 @@ async def update_listing(listing_id: str, data: dict):
     
     if "condition_details" in data and data["condition_details"]:
         update_fields["condition_details"] = data["condition_details"]
+    
+    # Nuovi campi: condition_answers (stesso formato della creazione)
+    if "condition_answers" in data:
+        update_fields["condition_answers"] = data["condition_answers"]
+    
+    # Fascicoli
+    if "ha_fascicoli" in data:
+        update_fields["ha_fascicoli"] = data["ha_fascicoli"]
+    
+    if "fascicoli_totali" in data:
+        update_fields["fascicoli_totali"] = data["fascicoli_totali"]
+    
+    if "fascicoli_presenti" in data:
+        update_fields["fascicoli_presenti"] = data["fascicoli_presenti"]
+    
+    # Bookstores - aggiorna anche i nomi
+    if "bookstore_ids" in data:
+        bookstore_ids = data["bookstore_ids"]
+        update_fields["bookstore_ids"] = bookstore_ids
+        
+        # Recupera i nomi delle cartolibrerie
+        bookstore_names = []
+        for bs_id in bookstore_ids:
+            bs = await db.bookstores.find_one({"id": bs_id})
+            if bs:
+                bookstore_names.append(bs.get("nome", ""))
+        update_fields["bookstore_names"] = bookstore_names
     
     if not update_fields:
         raise HTTPException(status_code=400, detail="Nessun campo da aggiornare")
