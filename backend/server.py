@@ -6949,11 +6949,14 @@ async def pay_orders_batch(user_id: str = Query(...), order_ids: str = Query(...
     orders = await db.orders.find({
         "id": {"$in": ids},
         "buyer_id": user_id,
-        "status": "pending_payment"
+        "status": {"$in": ["pending_payment", "in_attesa_pagamento"]}
     }).to_list(50)
     
     if len(orders) != len(ids):
-        raise HTTPException(status_code=400, detail="Alcuni ordini non trovati o non pagabili")
+        # Cerca quali mancano per un messaggio di errore più utile
+        found_ids = [o.get("id") for o in orders]
+        missing = [i for i in ids if i not in found_ids]
+        raise HTTPException(status_code=400, detail=f"Alcuni ordini non trovati o non pagabili: {missing}")
     
     # Raggruppa per venditore + cartolibreria
     from collections import defaultdict
@@ -6986,12 +6989,12 @@ async def pay_orders_batch(user_id: str = Query(...), order_ids: str = Query(...
             update_data = {
                 "payment_intent_id": payment_intent_id,
                 "payment_status": "paid",
-                "status": "paid_escrow",
+                "status": "pagato_attesa_consegna",
                 "paid_at": now,
                 "batch_code": batch_code if len(group_orders) > 1 else None,
                 "batch_id": batch_id if len(group_orders) > 1 else None,
                 "status_history": order.get("status_history", []) + [{
-                    "status": "paid_escrow",
+                    "status": "pagato_attesa_consegna",
                     "timestamp": now.isoformat(),
                     "note": f"Pagamento batch - codice condiviso: {batch_code}" if len(group_orders) > 1 else "Pagamento ricevuto"
                 }]
@@ -7001,7 +7004,7 @@ async def pay_orders_batch(user_id: str = Query(...), order_ids: str = Query(...
             # Riserva il listing
             await db.listings.update_one(
                 {"id": order.get("listing_id")},
-                {"$set": {"status": "reserved", "reserved_by": user_id, "order_id": order.get("id")}}
+                {"$set": {"status": "reserved", "stato": "riservato", "reserved_by": user_id, "order_id": order.get("id")}}
             )
             paid_orders.append(order)
         

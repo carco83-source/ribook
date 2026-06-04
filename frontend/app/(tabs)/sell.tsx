@@ -41,6 +41,7 @@ export default function CartScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [payingOrderId, setPayingOrderId] = useState<string | null>(null);
+  const [payingAll, setPayingAll] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -159,6 +160,70 @@ export default function CartScreen() {
 
   const calculateTotal = () => {
     return orders.reduce((sum, order) => sum + order.totale_acquirente, 0);
+  };
+
+  // Pagamento unico per tutti gli ordini nel carrello
+  const handlePayAll = async () => {
+    if (orders.length === 0) return;
+    
+    const total = calculateTotal();
+    const booksList = orders.map(o => `• ${o.book_titolo}`).join('\n');
+    
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm(
+        `Conferma acquisto\n\nStai per acquistare ${orders.length} libri:\n${booksList}\n\nTotale: €${total.toFixed(2)}`
+      );
+      
+      if (confirmed) {
+        setPayingAll(true);
+        try {
+          const orderIds = orders.map(o => o.id).join(',');
+          await axios.post(`${API_URL}/api/orders/pay-batch?user_id=${userId}&order_ids=${orderIds}`);
+          
+          const bookstores = [...new Set(orders.map(o => o.bookstore_name))];
+          window.alert(
+            `✅ Acquisto completato!\n\n${orders.length} libri acquistati per €${total.toFixed(2)}\n\n🏪 Ritiro presso:\n${bookstores.join('\n')}\n\nI venditori hanno 2 giorni lavorativi per consegnare.`
+          );
+          loadOrders();
+        } catch (error: any) {
+          window.alert('Errore: ' + (error.response?.data?.detail || 'Errore nel pagamento'));
+        } finally {
+          setPayingAll(false);
+        }
+      }
+      return;
+    }
+    
+    // Su mobile, usa Alert
+    Alert.alert(
+      'Conferma acquisto',
+      `Stai per acquistare ${orders.length} libri:\n\n${booksList}\n\nTotale: €${total.toFixed(2)}`,
+      [
+        { text: 'Annulla', style: 'cancel' },
+        {
+          text: `Paga €${total.toFixed(2)}`,
+          onPress: async () => {
+            setPayingAll(true);
+            try {
+              const orderIds = orders.map(o => o.id).join(',');
+              await axios.post(`${API_URL}/api/orders/pay-batch?user_id=${userId}&order_ids=${orderIds}`);
+              
+              const bookstores = [...new Set(orders.map(o => o.bookstore_name))];
+              Alert.alert(
+                '✅ Acquisto completato!',
+                `${orders.length} libri acquistati per €${total.toFixed(2)}\n\n🏪 Ritiro presso:\n${bookstores.join('\n')}\n\nI venditori hanno 2 giorni lavorativi per consegnare.`,
+                [{ text: 'OK' }]
+              );
+              loadOrders();
+            } catch (error: any) {
+              Alert.alert('Errore', error.response?.data?.detail || 'Errore nel pagamento');
+            } finally {
+              setPayingAll(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const renderOrder = ({ item }: { item: OrderToPay }) => {
@@ -294,12 +359,34 @@ export default function CartScreen() {
             }
           />
           
-          {/* Footer con totale */}
+          {/* Footer con totale e pulsante PAGA TUTTO */}
           <View style={styles.footer}>
             <View style={styles.footerTotal}>
               <Text style={styles.footerTotalLabel}>Totale carrello</Text>
               <Text style={styles.footerTotalValue}>€{calculateTotal().toFixed(2)}</Text>
             </View>
+            
+            {/* Pulsante PAGA TUTTO */}
+            <TouchableOpacity
+              style={[styles.payAllButton, payingAll && styles.payAllButtonDisabled]}
+              onPress={handlePayAll}
+              disabled={payingAll || orders.length === 0}
+            >
+              {payingAll ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="wallet" size={22} color="#fff" />
+                  <Text style={styles.payAllButtonText}>
+                    Paga tutto €{calculateTotal().toFixed(2)}
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+            
+            <Text style={styles.footerNote}>
+              {orders.length > 1 ? 'I fondi verranno divisi tra i venditori' : 'Pagamento sicuro'}
+            </Text>
           </View>
         </>
       )}
