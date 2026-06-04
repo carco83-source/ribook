@@ -197,7 +197,11 @@ export default function CreateListingScreen() {
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permesso negato', 'Serve il permesso per accedere alla galleria');
+      if (Platform.OS === 'web') {
+        window.alert('Serve il permesso per accedere alla galleria');
+      } else {
+        Alert.alert('Permesso negato', 'Serve il permesso per accedere alla galleria');
+      }
       return;
     }
 
@@ -217,7 +221,11 @@ export default function CreateListingScreen() {
   const takePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permesso negato', 'Serve il permesso per usare la fotocamera');
+      if (Platform.OS === 'web') {
+        window.alert('Serve il permesso per usare la fotocamera');
+      } else {
+        Alert.alert('Permesso negato', 'Serve il permesso per usare la fotocamera');
+      }
       return;
     }
 
@@ -251,7 +259,11 @@ export default function CreateListingScreen() {
 
   const handleSubmit = async () => {
     if (!selectedBook) {
-      Alert.alert('Errore', 'Seleziona un libro');
+      if (Platform.OS === 'web') {
+        window.alert('Seleziona un libro');
+      } else {
+        Alert.alert('Errore', 'Seleziona un libro');
+      }
       return;
     }
 
@@ -270,17 +282,24 @@ export default function CreateListingScreen() {
         foto_base64: photo || null,
       });
 
-      Alert.alert(
-        'Annuncio creato!',
-        `Il tuo libro è ora in vendita a €${finalPrice.toFixed(2)}`,
-        [{ text: 'OK', onPress: () => router.back() }]
-      );
+      if (Platform.OS === 'web') {
+        window.alert(`Annuncio creato! Il tuo libro è ora in vendita a €${finalPrice.toFixed(2)}`);
+        router.back();
+      } else {
+        Alert.alert(
+          'Annuncio creato!',
+          `Il tuo libro è ora in vendita a €${finalPrice.toFixed(2)}`,
+          [{ text: 'OK', onPress: () => router.back() }]
+        );
+      }
     } catch (error: any) {
       console.error('Error creating listing:', error);
-      Alert.alert(
-        'Errore',
-        error.response?.data?.detail || 'Impossibile creare l\'annuncio'
-      );
+      const message = error.response?.data?.detail || 'Impossibile creare l\'annuncio';
+      if (Platform.OS === 'web') {
+        window.alert('Errore: ' + message);
+      } else {
+        Alert.alert('Errore', message);
+      }
     } finally {
       setLoading(false);
     }
