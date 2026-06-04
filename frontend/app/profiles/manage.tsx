@@ -9,6 +9,7 @@ import {
   Modal,
   Alert,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -77,13 +78,21 @@ export default function ManageProfilesScreen() {
 
   const handleAddProfile = async () => {
     if (!newProfile.nome_figlio || !newProfile.scuola || !newProfile.classe || !newProfile.sezione) {
-      Alert.alert('Errore', 'Compila tutti i campi');
+      if (Platform.OS === 'web') {
+        window.alert('Compila tutti i campi');
+      } else {
+        Alert.alert('Errore', 'Compila tutti i campi');
+      }
       return;
     }
 
     try {
       await axios.post(`${API_URL}/api/users/${userId}/profiles`, newProfile);
-      Alert.alert('Fatto!', 'Profilo aggiunto con successo');
+      if (Platform.OS === 'web') {
+        window.alert('Profilo aggiunto con successo!');
+      } else {
+        Alert.alert('Fatto!', 'Profilo aggiunto con successo');
+      }
       setModalVisible(false);
       setNewProfile({
         nome_figlio: '',
@@ -95,7 +104,12 @@ export default function ManageProfilesScreen() {
       });
       loadProfiles();
     } catch (error: any) {
-      Alert.alert('Errore', error.response?.data?.detail || 'Errore durante l\'aggiunta');
+      const message = error.response?.data?.detail || 'Errore durante l\'aggiunta';
+      if (Platform.OS === 'web') {
+        window.alert('Errore: ' + message);
+      } else {
+        Alert.alert('Errore', message);
+      }
     }
   };
 
@@ -118,38 +132,64 @@ export default function ManageProfilesScreen() {
         }
       }
       
-      Alert.alert('Fatto!', 'Profilo attivato');
+      if (Platform.OS === 'web') {
+        window.alert('Profilo attivato!');
+      } else {
+        Alert.alert('Fatto!', 'Profilo attivato');
+      }
     } catch (error: any) {
-      Alert.alert('Errore', error.response?.data?.detail || 'Errore durante l\'attivazione');
+      const message = error.response?.data?.detail || 'Errore durante l\'attivazione';
+      if (Platform.OS === 'web') {
+        window.alert('Errore: ' + message);
+      } else {
+        Alert.alert('Errore', message);
+      }
     }
   };
 
   const handleDeleteProfile = async (profileId: string) => {
     if (profileId === 'main') {
-      Alert.alert('Errore', 'Non puoi eliminare il profilo principale');
+      if (Platform.OS === 'web') {
+        window.alert('Non puoi eliminare il profilo principale');
+      } else {
+        Alert.alert('Errore', 'Non puoi eliminare il profilo principale');
+      }
       return;
     }
 
-    Alert.alert(
-      'Conferma eliminazione',
-      'Sei sicuro di voler eliminare questo profilo?',
-      [
-        { text: 'Annulla', style: 'cancel' },
-        {
-          text: 'Elimina',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await axios.delete(`${API_URL}/api/users/${userId}/profiles/${profileId}`);
-              Alert.alert('Fatto!', 'Profilo eliminato');
-              loadProfiles();
-            } catch (error: any) {
-              Alert.alert('Errore', error.response?.data?.detail || 'Errore durante l\'eliminazione');
-            }
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm('Sei sicuro di voler eliminare questo profilo?');
+      if (confirmed) {
+        try {
+          await axios.delete(`${API_URL}/api/users/${userId}/profiles/${profileId}`);
+          window.alert('Profilo eliminato!');
+          loadProfiles();
+        } catch (error: any) {
+          window.alert('Errore: ' + (error.response?.data?.detail || 'Errore durante l\'eliminazione'));
+        }
+      }
+    } else {
+      Alert.alert(
+        'Conferma eliminazione',
+        'Sei sicuro di voler eliminare questo profilo?',
+        [
+          { text: 'Annulla', style: 'cancel' },
+          {
+            text: 'Elimina',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                await axios.delete(`${API_URL}/api/users/${userId}/profiles/${profileId}`);
+                Alert.alert('Fatto!', 'Profilo eliminato');
+                loadProfiles();
+              } catch (error: any) {
+                Alert.alert('Errore', error.response?.data?.detail || 'Errore durante l\'eliminazione');
+              }
+            },
           },
-        },
-      ]
-    );
+        ]
+      );
+    }
   };
 
   const getScuoleByTipo = () => {
