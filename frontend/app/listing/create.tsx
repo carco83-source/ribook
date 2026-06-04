@@ -139,6 +139,10 @@ export default function CreateListingScreen() {
   // Bookstores - MULTIPLE selection
   const [bookstores, setBookstores] = useState<Bookstore[]>([]);
   const [selectedBookstores, setSelectedBookstores] = useState<string[]>([]);
+  
+  // Custom price option
+  const [useCustomPrice, setUseCustomPrice] = useState(false);
+  const [customPrice, setCustomPrice] = useState('');
 
   useEffect(() => {
     loadInitialData();
@@ -231,8 +235,18 @@ export default function CreateListingScreen() {
 
   const calculatePrice = () => {
     if (!selectedBook) return 0;
+    if (useCustomPrice && customPrice) {
+      return parseFloat(customPrice) || 0;
+    }
     const condition = calculateCondition(conditionAnswers);
     return (getBookPrice(selectedBook) * condition.percentage) / 100;
+  };
+
+  const getFinalPrice = () => {
+    if (useCustomPrice && customPrice) {
+      return parseFloat(customPrice) || 0;
+    }
+    return calculatePrice();
   };
 
   const handleSubmit = async () => {
@@ -243,9 +257,11 @@ export default function CreateListingScreen() {
 
     setLoading(true);
     try {
+      const finalPrice = getFinalPrice();
       await axios.post(`${API_URL}/api/listings?user_id=${userId}`, {
         book_id: selectedBook.id,
-        condition_answers: conditionAnswers,
+        condition_answers: useCustomPrice ? null : conditionAnswers,
+        prezzo_vendita: useCustomPrice ? finalPrice : null,
         ha_fascicoli: hasFascicoli,
         fascicoli_totali: fascicoliTotali,
         fascicoli_presenti: fascicoliPresenti,
@@ -256,7 +272,7 @@ export default function CreateListingScreen() {
 
       Alert.alert(
         'Annuncio creato!',
-        `Il tuo libro è ora in vendita a €${calculatePrice().toFixed(2)}`,
+        `Il tuo libro è ora in vendita a €${finalPrice.toFixed(2)}`,
         [{ text: 'OK', onPress: () => router.back() }]
       );
     } catch (error: any) {
@@ -366,52 +382,118 @@ export default function CreateListingScreen() {
         {/* Step 2: Condition Questions */}
         {selectedBook && (
           <>
-            <Text style={styles.sectionTitle}>2. Condizione del libro</Text>
-            <Text style={styles.sectionSubtitle}>
-              Rispondi a queste 4 domande - il prezzo viene calcolato automaticamente
-            </Text>
+            <Text style={styles.sectionTitle}>2. Prezzo di vendita</Text>
             
-            {CONDITION_QUESTIONS.map((q) => (
-              <View key={q.key} style={styles.questionCard}>
-                <View style={styles.questionHeader}>
-                  <Ionicons name={q.icon as any} size={20} color="#1a472a" />
-                  <Text style={styles.questionText}>{q.question}</Text>
-                </View>
-                <View style={styles.optionsRow}>
-                  {q.options.map((opt) => (
-                    <TouchableOpacity
-                      key={opt.value}
-                      style={[
-                        styles.optionButton,
-                        conditionAnswers[q.key] === opt.value && styles.optionButtonSelected,
-                      ]}
-                      onPress={() =>
-                        setConditionAnswers({ ...conditionAnswers, [q.key]: opt.value })
-                      }
-                    >
-                      <Text style={styles.optionEmoji}>{opt.emoji}</Text>
-                      <Text
-                        style={[
-                          styles.optionLabel,
-                          conditionAnswers[q.key] === opt.value && styles.optionLabelSelected,
-                        ]}
-                      >
-                        {opt.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            ))}
-
-            {/* Condition Result */}
-            <View style={styles.conditionResult}>
-              <Text style={styles.conditionResultLabel}>Condizione calcolata:</Text>
-              <Text style={styles.conditionResultValue}>{currentCondition.label}</Text>
-              <Text style={styles.conditionResultPrice}>
-                Prezzo: €{calculatePrice().toFixed(2)}
-              </Text>
+            {/* Toggle prezzo automatico/personalizzato */}
+            <View style={styles.priceToggleContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.priceToggleOption,
+                  !useCustomPrice && styles.priceToggleOptionSelected
+                ]}
+                onPress={() => setUseCustomPrice(false)}
+              >
+                <Ionicons 
+                  name={!useCustomPrice ? "radio-button-on" : "radio-button-off"} 
+                  size={20} 
+                  color={!useCustomPrice ? "#1a472a" : "#999"} 
+                />
+                <Text style={[
+                  styles.priceToggleText,
+                  !useCustomPrice && styles.priceToggleTextSelected
+                ]}>
+                  Prezzo automatico
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[
+                  styles.priceToggleOption,
+                  useCustomPrice && styles.priceToggleOptionSelected
+                ]}
+                onPress={() => setUseCustomPrice(true)}
+              >
+                <Ionicons 
+                  name={useCustomPrice ? "radio-button-on" : "radio-button-off"} 
+                  size={20} 
+                  color={useCustomPrice ? "#1a472a" : "#999"} 
+                />
+                <Text style={[
+                  styles.priceToggleText,
+                  useCustomPrice && styles.priceToggleTextSelected
+                ]}>
+                  Prezzo personalizzato
+                </Text>
+              </TouchableOpacity>
             </View>
+
+            {/* Prezzo personalizzato */}
+            {useCustomPrice ? (
+              <View style={styles.customPriceCard}>
+                <Text style={styles.customPriceLabel}>Inserisci il prezzo desiderato:</Text>
+                <View style={styles.customPriceInputContainer}>
+                  <Text style={styles.currencySymbol}>€</Text>
+                  <TextInput
+                    style={styles.customPriceInput}
+                    keyboardType="decimal-pad"
+                    placeholder="0.00"
+                    value={customPrice}
+                    onChangeText={setCustomPrice}
+                  />
+                </View>
+                <Text style={styles.customPriceHint}>
+                  Prezzo di copertina: €{getBookPrice(selectedBook).toFixed(2)}
+                </Text>
+              </View>
+            ) : (
+              <>
+                <Text style={styles.sectionSubtitle}>
+                  Rispondi a queste 4 domande - il prezzo viene calcolato automaticamente
+                </Text>
+                
+                {CONDITION_QUESTIONS.map((q) => (
+                  <View key={q.key} style={styles.questionCard}>
+                    <View style={styles.questionHeader}>
+                      <Ionicons name={q.icon as any} size={20} color="#1a472a" />
+                      <Text style={styles.questionText}>{q.question}</Text>
+                    </View>
+                    <View style={styles.optionsRow}>
+                      {q.options.map((opt) => (
+                        <TouchableOpacity
+                          key={opt.value}
+                          style={[
+                            styles.optionButton,
+                            conditionAnswers[q.key] === opt.value && styles.optionButtonSelected,
+                          ]}
+                          onPress={() =>
+                            setConditionAnswers({ ...conditionAnswers, [q.key]: opt.value })
+                          }
+                        >
+                          <Text style={styles.optionEmoji}>{opt.emoji}</Text>
+                          <Text
+                            style={[
+                              styles.optionLabel,
+                              conditionAnswers[q.key] === opt.value && styles.optionLabelSelected,
+                            ]}
+                          >
+                            {opt.label}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                ))}
+
+                {/* Condition Result */}
+                <View style={styles.conditionResult}>
+                  <Text style={styles.conditionResultLabel}>Condizione calcolata:</Text>
+                  <Text style={styles.conditionResultValue}>{currentCondition.label}</Text>
+                  <Text style={styles.conditionResultPrice}>
+                    Prezzo: €{calculatePrice().toFixed(2)}
+                  </Text>
+                </View>
+              </>
+            )}
           </>
         )}
 
@@ -605,10 +687,18 @@ export default function CreateListingScreen() {
               <Text style={styles.summaryLabel}>Libro:</Text>
               <Text style={styles.summaryValue}>{selectedBook.titolo}</Text>
             </View>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Condizione:</Text>
-              <Text style={styles.summaryValue}>{currentCondition.label}</Text>
-            </View>
+            {!useCustomPrice && (
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Condizione:</Text>
+                <Text style={styles.summaryValue}>{currentCondition.label}</Text>
+              </View>
+            )}
+            {useCustomPrice && (
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Tipo prezzo:</Text>
+                <Text style={styles.summaryValue}>Personalizzato</Text>
+              </View>
+            )}
             {hasFascicoli && fascicoliTotali > 0 && (
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Fascicoli:</Text>
@@ -619,7 +709,7 @@ export default function CreateListingScreen() {
             )}
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Prezzo di vendita:</Text>
-              <Text style={styles.summaryPrice}>€{calculatePrice().toFixed(2)}</Text>
+              <Text style={styles.summaryPrice}>€{getFinalPrice().toFixed(2)}</Text>
             </View>
           </View>
         )}
@@ -1017,5 +1107,73 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#2e7d32',
     fontWeight: '500',
+  },
+  priceToggleContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  priceToggleOption: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#fff',
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#e0e0e0',
+  },
+  priceToggleOptionSelected: {
+    borderColor: '#1a472a',
+    backgroundColor: '#e8f5e9',
+  },
+  priceToggleText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  priceToggleTextSelected: {
+    color: '#1a472a',
+    fontWeight: '600',
+  },
+  customPriceCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 20,
+    borderWidth: 2,
+    borderColor: '#1a472a',
+  },
+  customPriceLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 12,
+  },
+  customPriceInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f9f9f9',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  currencySymbol: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1a472a',
+    marginRight: 8,
+  },
+  customPriceInput: {
+    flex: 1,
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#1a472a',
+    paddingVertical: 16,
+  },
+  customPriceHint: {
+    fontSize: 12,
+    color: '#888',
+    marginTop: 12,
+    textAlign: 'center',
   },
 });

@@ -10,6 +10,7 @@ import {
   Alert,
   Platform,
   TextInput,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -86,9 +87,6 @@ export default function MyListingDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [listing, setListing] = useState<any>(null);
   const [userId, setUserId] = useState<string | null>(null);
-  
-  // Editing state
-  const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   
   // Editable fields - stessi della creazione
@@ -109,6 +107,10 @@ export default function MyListingDetailScreen() {
   // Bookstores
   const [bookstores, setBookstores] = useState<Bookstore[]>([]);
   const [selectedBookstores, setSelectedBookstores] = useState<string[]>([]);
+  
+  // Custom price option
+  const [useCustomPrice, setUseCustomPrice] = useState(false);
+  const [customPrice, setCustomPrice] = useState('');
 
   useEffect(() => {
     loadData();
@@ -128,9 +130,11 @@ export default function MyListingDetailScreen() {
       setNote(data.note || data.descrizione || '');
       setPhoto(data.foto_base64 || null);
       
-      // Imposta risposte condizioni (se salvate)
+      // Determina se è stato usato un prezzo personalizzato
+      // Se non ci sono condition_answers salvate, probabilmente era un prezzo custom
       if (data.condition_answers) {
         setConditionAnswers(data.condition_answers);
+        setUseCustomPrice(false);
       } else if (data.condition_details) {
         // Fallback: prova a ricostruire dalle condition_details
         setConditionAnswers({
@@ -139,6 +143,11 @@ export default function MyListingDetailScreen() {
           pagine: data.condition_details.pagine || 0,
           esercizi: data.condition_details.esercizi || 0,
         });
+        setUseCustomPrice(false);
+      } else {
+        // Prezzo personalizzato
+        setUseCustomPrice(true);
+        setCustomPrice(data.prezzo_vendita?.toString() || '');
       }
       
       // Fascicoli
@@ -205,22 +214,43 @@ export default function MyListingDetailScreen() {
     }
   };
 
-  const calculatePrice = () => {
+  const getBasePrice = () => {
     if (!listing) return 0;
+    return listing.prezzo_ministeriale || listing.prezzo_copertina || 0;
+  };
+
+  const calculatePrice = () => {
+    if (useCustomPrice && customPrice) {
+      return parseFloat(customPrice) || 0;
+    }
     const condition = calculateCondition(conditionAnswers);
-    const basePrice = listing.prezzo_ministeriale || listing.prezzo_copertina || 0;
-    return (basePrice * condition.percentage) / 100;
+    return (getBasePrice() * condition.percentage) / 100;
+  };
+
+  const getFinalPrice = () => {
+    if (useCustomPrice && customPrice) {
+      return parseFloat(customPrice) || 0;
+    }
+    return calculatePrice();
   };
 
   const handleSave = async () => {
+    const finalPrice = getFinalPrice();
+    if (finalPrice <= 0) {
+      if (Platform.OS === 'web') {
+        window.alert('Inserisci un prezzo valido');
+      } else {
+        Alert.alert('Errore', 'Inserisci un prezzo valido');
+      }
+      return;
+    }
+
     setSaving(true);
     try {
-      const newPrice = calculatePrice();
-      
       await axios.put(`${API_URL}/api/listings/${id}`, {
         seller_id: userId,
-        condition_answers: conditionAnswers,
-        prezzo_vendita: newPrice,
+        condition_answers: useCustomPrice ? null : conditionAnswers,
+        prezzo_vendita: finalPrice,
         note: note || null,
         descrizione: note || null,
         foto_base64: photo ? (photo.startsWith('data:') ? photo : `data:image/jpeg;base64,${photo}`) : null,
@@ -235,8 +265,7 @@ export default function MyListingDetailScreen() {
       } else {
         Alert.alert('Successo', 'Annuncio aggiornato con successo!');
       }
-      setIsEditing(false);
-      loadData();
+      router.back();
     } catch (error: any) {
       const message = error.response?.data?.detail || 'Errore durante il salvataggio';
       if (Platform.OS === 'web') {
@@ -322,9 +351,13 @@ export default function MyListingDetailScreen() {
   const statusInfo = getStatusInfo();
   const currentCondition = calculateCondition(conditionAnswers);
   const coverUrl = listing.foto_base64 || `https://www.ibs.it/images/${listing.book_isbn}_0_0_0_180_50.jpg`;
+  const editable = canEdit();
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={[styles.container, { paddingTop: insets.top }]}
+    >
       <Stack.Screen options={{ headerShown: false }} />
       
       {/* Header */}
@@ -332,110 +365,174 @@ export default function MyListingDetailScreen() {
         <TouchableOpacity style={styles.headerBtn} onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Il mio annuncio</Text>
-        {canEdit() && !isEditing && (
-          <TouchableOpacity style={styles.headerBtn} onPress={() => setIsEditing(true)}>
-            <Ionicons name="create-outline" size={24} color="#2196F3" />
-          </TouchableOpacity>
-        )}
-        {isEditing && (
-          <TouchableOpacity style={styles.headerBtn} onPress={() => { setIsEditing(false); loadData(); }}>
-            <Ionicons name="close" size={24} color="#f44336" />
-          </TouchableOpacity>
-        )}
-        {!isEditing && !canEdit() && <View style={{ width: 40 }} />}
+        <Text style={styles.headerTitle}>{editable ? 'Modifica annuncio' : 'Dettagli annuncio'}</Text>
+        <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
+      <ScrollView 
+        style={styles.content} 
+        contentContainerStyle={styles.contentContainer}
+        keyboardShouldPersistTaps="handled"
+      >
         {/* Status Badge */}
         <View style={[styles.statusBadge, { backgroundColor: statusInfo.bg }]}>
           <View style={[styles.statusDot, { backgroundColor: statusInfo.color }]} />
           <Text style={[styles.statusText, { color: statusInfo.color }]}>{statusInfo.label}</Text>
         </View>
 
-        {/* Book Info Card */}
-        <View style={styles.bookCard}>
-          <Image source={{ uri: coverUrl }} style={styles.bookCover} resizeMode="cover" />
-          <View style={styles.bookInfo}>
-            <Text style={styles.bookTitle} numberOfLines={2}>{listing.book_titolo}</Text>
+        {/* Book Info Card - come nella creazione */}
+        <View style={styles.selectedBookCard}>
+          <View style={styles.selectedBookInfo}>
+            <Text style={styles.selectedBookTitle}>{listing.book_titolo}</Text>
             {listing.book_autori && (
-              <Text style={styles.bookAuthor}>{listing.book_autori}</Text>
+              <Text style={styles.selectedBookAuthor}>{listing.book_autori}</Text>
             )}
-            <Text style={styles.bookIsbn}>ISBN: {listing.book_isbn}</Text>
-            <Text style={styles.bookOriginalPrice}>
-              Prezzo listino: €{(listing.prezzo_ministeriale || listing.prezzo_copertina || 0).toFixed(2)}
+            <Text style={styles.selectedBookISBN}>ISBN: {listing.book_isbn}</Text>
+            <Text style={styles.selectedBookPrice}>
+              Prezzo listino: €{getBasePrice().toFixed(2)}
             </Text>
           </View>
         </View>
 
-        {/* Condizioni - STESSO FORMATO DELLA CREAZIONE */}
-        <Text style={styles.sectionTitle}>Condizione del libro</Text>
-        {isEditing && (
-          <Text style={styles.sectionSubtitle}>
-            Rispondi a queste 4 domande - il prezzo viene calcolato automaticamente
-          </Text>
-        )}
+        {/* STEP 2: Prezzo di vendita - IDENTICO ALLA CREAZIONE */}
+        <Text style={styles.sectionTitle}>Prezzo di vendita</Text>
         
-        {CONDITION_QUESTIONS.map((q) => (
-          <View key={q.key} style={styles.questionCard}>
-            <View style={styles.questionHeader}>
-              <Ionicons name={q.icon as any} size={20} color="#1a472a" />
-              <Text style={styles.questionText}>{q.question}</Text>
+        {editable ? (
+          <>
+            {/* Toggle prezzo automatico/personalizzato */}
+            <View style={styles.priceToggleContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.priceToggleOption,
+                  !useCustomPrice && styles.priceToggleOptionSelected
+                ]}
+                onPress={() => setUseCustomPrice(false)}
+              >
+                <Ionicons 
+                  name={!useCustomPrice ? "radio-button-on" : "radio-button-off"} 
+                  size={20} 
+                  color={!useCustomPrice ? "#1a472a" : "#999"} 
+                />
+                <Text style={[
+                  styles.priceToggleText,
+                  !useCustomPrice && styles.priceToggleTextSelected
+                ]}>
+                  Prezzo automatico
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[
+                  styles.priceToggleOption,
+                  useCustomPrice && styles.priceToggleOptionSelected
+                ]}
+                onPress={() => setUseCustomPrice(true)}
+              >
+                <Ionicons 
+                  name={useCustomPrice ? "radio-button-on" : "radio-button-off"} 
+                  size={20} 
+                  color={useCustomPrice ? "#1a472a" : "#999"} 
+                />
+                <Text style={[
+                  styles.priceToggleText,
+                  useCustomPrice && styles.priceToggleTextSelected
+                ]}>
+                  Prezzo personalizzato
+                </Text>
+              </TouchableOpacity>
             </View>
-            <View style={styles.optionsRow}>
-              {q.options.map((opt) => (
-                <TouchableOpacity
-                  key={opt.value}
-                  style={[
-                    styles.optionButton,
-                    conditionAnswers[q.key] === opt.value && styles.optionButtonSelected,
-                    !isEditing && styles.optionButtonDisabled,
-                  ]}
-                  onPress={() => {
-                    if (isEditing) {
-                      setConditionAnswers({ ...conditionAnswers, [q.key]: opt.value });
-                    }
-                  }}
-                  disabled={!isEditing}
-                >
-                  <Text style={styles.optionEmoji}>{opt.emoji}</Text>
-                  <Text
-                    style={[
-                      styles.optionLabel,
-                      conditionAnswers[q.key] === opt.value && styles.optionLabelSelected,
-                    ]}
-                  >
-                    {opt.label}
+
+            {/* Prezzo personalizzato */}
+            {useCustomPrice ? (
+              <View style={styles.customPriceCard}>
+                <Text style={styles.customPriceLabel}>Inserisci il prezzo desiderato:</Text>
+                <View style={styles.customPriceInputContainer}>
+                  <Text style={styles.currencySymbol}>€</Text>
+                  <TextInput
+                    style={styles.customPriceInput}
+                    keyboardType="decimal-pad"
+                    placeholder="0.00"
+                    value={customPrice}
+                    onChangeText={setCustomPrice}
+                  />
+                </View>
+                <Text style={styles.customPriceHint}>
+                  Prezzo di copertina: €{getBasePrice().toFixed(2)}
+                </Text>
+              </View>
+            ) : (
+              <>
+                <Text style={styles.sectionSubtitle}>
+                  Rispondi a queste 4 domande - il prezzo viene calcolato automaticamente
+                </Text>
+                
+                {CONDITION_QUESTIONS.map((q) => (
+                  <View key={q.key} style={styles.questionCard}>
+                    <View style={styles.questionHeader}>
+                      <Ionicons name={q.icon as any} size={20} color="#1a472a" />
+                      <Text style={styles.questionText}>{q.question}</Text>
+                    </View>
+                    <View style={styles.optionsRow}>
+                      {q.options.map((opt) => (
+                        <TouchableOpacity
+                          key={opt.value}
+                          style={[
+                            styles.optionButton,
+                            conditionAnswers[q.key] === opt.value && styles.optionButtonSelected,
+                          ]}
+                          onPress={() =>
+                            setConditionAnswers({ ...conditionAnswers, [q.key]: opt.value })
+                          }
+                        >
+                          <Text style={styles.optionEmoji}>{opt.emoji}</Text>
+                          <Text
+                            style={[
+                              styles.optionLabel,
+                              conditionAnswers[q.key] === opt.value && styles.optionLabelSelected,
+                            ]}
+                          >
+                            {opt.label}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                ))}
+
+                {/* Condition Result */}
+                <View style={styles.conditionResult}>
+                  <Text style={styles.conditionResultLabel}>Condizione calcolata:</Text>
+                  <Text style={styles.conditionResultValue}>{currentCondition.label}</Text>
+                  <Text style={styles.conditionResultPrice}>
+                    Prezzo: €{calculatePrice().toFixed(2)}
                   </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+                </View>
+              </>
+            )}
+          </>
+        ) : (
+          <View style={styles.conditionResult}>
+            <Text style={styles.conditionResultLabel}>Prezzo attuale:</Text>
+            <Text style={styles.conditionResultPrice}>
+              €{listing.prezzo_vendita?.toFixed(2)}
+            </Text>
           </View>
-        ))}
+        )}
 
-        {/* Risultato condizione e prezzo */}
-        <View style={styles.conditionResult}>
-          <Text style={styles.conditionResultLabel}>Condizione calcolata:</Text>
-          <Text style={styles.conditionResultValue}>{currentCondition.label}</Text>
-          <Text style={styles.conditionResultPrice}>
-            Prezzo: €{calculatePrice().toFixed(2)}
-          </Text>
-        </View>
-
-        {/* Fascicoli - STESSO FORMATO DELLA CREAZIONE */}
+        {/* STEP 3: Fascicoli - IDENTICO ALLA CREAZIONE */}
         <Text style={styles.sectionTitle}>Fascicoli allegati</Text>
         <View style={styles.fascicoliCard}>
           <TouchableOpacity
             style={styles.fascicoliToggle}
-            onPress={() => isEditing && setHasFascicoli(!hasFascicoli)}
-            disabled={!isEditing}
+            onPress={() => editable && setHasFascicoli(!hasFascicoli)}
+            disabled={!editable}
           >
             <Ionicons
               name={hasFascicoli ? 'checkbox' : 'square-outline'}
               size={24}
-              color={isEditing ? '#1a472a' : '#999'}
+              color={editable ? '#1a472a' : '#999'}
             />
-            <Text style={[styles.fascicoliToggleText, !isEditing && { color: '#666' }]}>
+            <Text style={[styles.fascicoliToggleText, !editable && { color: '#666' }]}>
               Questo libro ha fascicoli/allegati
             </Text>
           </TouchableOpacity>
@@ -446,19 +543,19 @@ export default function MyListingDetailScreen() {
                 <Text style={styles.fascicoliInputLabel}>Fascicoli totali previsti:</Text>
                 <View style={styles.counterContainer}>
                   <TouchableOpacity
-                    style={[styles.counterButton, !isEditing && styles.counterButtonDisabled]}
-                    onPress={() => isEditing && setFascicoliTotali(Math.max(0, fascicoliTotali - 1))}
-                    disabled={!isEditing}
+                    style={[styles.counterButton, !editable && styles.counterButtonDisabled]}
+                    onPress={() => editable && setFascicoliTotali(Math.max(0, fascicoliTotali - 1))}
+                    disabled={!editable}
                   >
-                    <Ionicons name="remove" size={20} color={isEditing ? '#1a472a' : '#999'} />
+                    <Ionicons name="remove" size={20} color={editable ? '#1a472a' : '#999'} />
                   </TouchableOpacity>
                   <Text style={styles.counterValue}>{fascicoliTotali}</Text>
                   <TouchableOpacity
-                    style={[styles.counterButton, !isEditing && styles.counterButtonDisabled]}
-                    onPress={() => isEditing && setFascicoliTotali(fascicoliTotali + 1)}
-                    disabled={!isEditing}
+                    style={[styles.counterButton, !editable && styles.counterButtonDisabled]}
+                    onPress={() => editable && setFascicoliTotali(fascicoliTotali + 1)}
+                    disabled={!editable}
                   >
-                    <Ionicons name="add" size={20} color={isEditing ? '#1a472a' : '#999'} />
+                    <Ionicons name="add" size={20} color={editable ? '#1a472a' : '#999'} />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -467,19 +564,19 @@ export default function MyListingDetailScreen() {
                 <Text style={styles.fascicoliInputLabel}>Fascicoli che hai:</Text>
                 <View style={styles.counterContainer}>
                   <TouchableOpacity
-                    style={[styles.counterButton, !isEditing && styles.counterButtonDisabled]}
-                    onPress={() => isEditing && setFascicoliPresenti(Math.max(0, fascicoliPresenti - 1))}
-                    disabled={!isEditing}
+                    style={[styles.counterButton, !editable && styles.counterButtonDisabled]}
+                    onPress={() => editable && setFascicoliPresenti(Math.max(0, fascicoliPresenti - 1))}
+                    disabled={!editable}
                   >
-                    <Ionicons name="remove" size={20} color={isEditing ? '#1a472a' : '#999'} />
+                    <Ionicons name="remove" size={20} color={editable ? '#1a472a' : '#999'} />
                   </TouchableOpacity>
                   <Text style={styles.counterValue}>{fascicoliPresenti}</Text>
                   <TouchableOpacity
-                    style={[styles.counterButton, !isEditing && styles.counterButtonDisabled]}
-                    onPress={() => isEditing && setFascicoliPresenti(Math.min(fascicoliTotali, fascicoliPresenti + 1))}
-                    disabled={!isEditing}
+                    style={[styles.counterButton, !editable && styles.counterButtonDisabled]}
+                    onPress={() => editable && setFascicoliPresenti(Math.min(fascicoliTotali, fascicoliPresenti + 1))}
+                    disabled={!editable}
                   >
-                    <Ionicons name="add" size={20} color={isEditing ? '#1a472a' : '#999'} />
+                    <Ionicons name="add" size={20} color={editable ? '#1a472a' : '#999'} />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -496,9 +593,9 @@ export default function MyListingDetailScreen() {
           )}
         </View>
 
-        {/* Punto di ritiro - STESSO FORMATO DELLA CREAZIONE */}
+        {/* STEP 4: Punto di ritiro - IDENTICO ALLA CREAZIONE */}
         <Text style={styles.sectionTitle}>Punto di ritiro</Text>
-        {isEditing && (
+        {editable && (
           <Text style={styles.sectionSubtitle}>
             Seleziona dove consegnerai il libro
           </Text>
@@ -513,17 +610,16 @@ export default function MyListingDetailScreen() {
                 style={[
                   styles.bookstoreItem,
                   isSelected && styles.bookstoreItemSelected,
-                  !isEditing && styles.bookstoreItemDisabled,
                 ]}
                 onPress={() => {
-                  if (!isEditing) return;
+                  if (!editable) return;
                   if (isSelected) {
                     setSelectedBookstores(selectedBookstores.filter(bsId => bsId !== store.id));
                   } else {
                     setSelectedBookstores([...selectedBookstores, store.id]);
                   }
                 }}
-                disabled={!isEditing}
+                disabled={!editable}
               >
                 <Ionicons
                   name={isSelected ? 'checkbox' : 'square-outline'}
@@ -539,11 +635,11 @@ export default function MyListingDetailScreen() {
           })}
         </View>
 
-        {/* Foto */}
-        <Text style={styles.sectionTitle}>Foto</Text>
-        {isEditing && (
+        {/* STEP 5: Foto - IDENTICO ALLA CREAZIONE */}
+        <Text style={styles.sectionTitle}>Foto (consigliata)</Text>
+        {editable && (
           <Text style={styles.sectionSubtitle}>
-            Scatta una foto della pagina peggiore per aumentare la fiducia
+            📸 Scatta una foto della pagina peggiore per aumentare la fiducia
           </Text>
         )}
         
@@ -554,7 +650,7 @@ export default function MyListingDetailScreen() {
                 source={{ uri: photo.startsWith('data:') ? photo : `data:image/jpeg;base64,${photo}` }}
                 style={styles.photoImage}
               />
-              {isEditing && (
+              {editable && (
                 <TouchableOpacity
                   style={styles.removePhotoButton}
                   onPress={() => setPhoto(null)}
@@ -563,7 +659,7 @@ export default function MyListingDetailScreen() {
                 </TouchableOpacity>
               )}
             </View>
-          ) : isEditing ? (
+          ) : editable ? (
             <View style={styles.photoButtons}>
               <TouchableOpacity style={styles.photoButton} onPress={takePhoto}>
                 <Ionicons name="camera" size={32} color="#1a472a" />
@@ -582,9 +678,9 @@ export default function MyListingDetailScreen() {
           )}
         </View>
 
-        {/* Note */}
-        <Text style={styles.sectionTitle}>Note</Text>
-        {isEditing ? (
+        {/* STEP 6: Note - IDENTICO ALLA CREAZIONE */}
+        <Text style={styles.sectionTitle}>Note (opzionale)</Text>
+        {editable ? (
           <TextInput
             style={styles.noteInput}
             placeholder="Aggiungi note sullo stato del libro..."
@@ -599,13 +695,25 @@ export default function MyListingDetailScreen() {
           </View>
         )}
 
-        {/* Riepilogo */}
+        {/* Riepilogo - IDENTICO ALLA CREAZIONE */}
         <View style={styles.summaryCard}>
           <Text style={styles.summaryTitle}>Riepilogo</Text>
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Condizione:</Text>
-            <Text style={styles.summaryValue}>{currentCondition.label}</Text>
+            <Text style={styles.summaryLabel}>Libro:</Text>
+            <Text style={styles.summaryValue}>{listing.book_titolo}</Text>
           </View>
+          {!useCustomPrice && (
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Condizione:</Text>
+              <Text style={styles.summaryValue}>{currentCondition.label}</Text>
+            </View>
+          )}
+          {useCustomPrice && (
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Tipo prezzo:</Text>
+              <Text style={styles.summaryValue}>Personalizzato</Text>
+            </View>
+          )}
           {hasFascicoli && fascicoliTotali > 0 && (
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Fascicoli:</Text>
@@ -616,31 +724,23 @@ export default function MyListingDetailScreen() {
           )}
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Prezzo di vendita:</Text>
-            <Text style={styles.summaryPrice}>€{calculatePrice().toFixed(2)}</Text>
+            <Text style={styles.summaryPrice}>€{getFinalPrice().toFixed(2)}</Text>
           </View>
         </View>
 
         {/* Azioni */}
-        {isEditing ? (
-          <TouchableOpacity
-            style={[styles.saveButton, saving && styles.saveButtonDisabled]}
-            onPress={handleSave}
-            disabled={saving}
-          >
-            {saving ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Text style={styles.saveButtonText}>Salva modifiche</Text>
-            )}
-          </TouchableOpacity>
-        ) : canEdit() ? (
+        {editable ? (
           <View style={styles.actions}>
             <TouchableOpacity
-              style={styles.editButton}
-              onPress={() => setIsEditing(true)}
+              style={[styles.submitButton, saving && styles.submitButtonDisabled]}
+              onPress={handleSave}
+              disabled={saving}
             >
-              <Ionicons name="create-outline" size={20} color="#fff" />
-              <Text style={styles.editButtonText}>Modifica annuncio</Text>
+              {saving ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.submitButtonText}>Salva modifiche</Text>
+              )}
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -660,7 +760,7 @@ export default function MyListingDetailScreen() {
           </View>
         )}
       </ScrollView>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -739,42 +839,34 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  bookCard: {
+  selectedBookCard: {
     flexDirection: 'row',
     backgroundColor: '#e8f5e9',
     borderRadius: 12,
     padding: 16,
-    marginBottom: 20,
     borderWidth: 1,
     borderColor: '#1a472a',
+    marginBottom: 8,
   },
-  bookCover: {
-    width: 70,
-    height: 100,
-    borderRadius: 6,
-    backgroundColor: '#f0f0f0',
-  },
-  bookInfo: {
+  selectedBookInfo: {
     flex: 1,
-    marginLeft: 12,
-    justifyContent: 'center',
   },
-  bookTitle: {
+  selectedBookTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: '#1a472a',
   },
-  bookAuthor: {
+  selectedBookAuthor: {
     fontSize: 14,
     color: '#666',
     marginTop: 2,
   },
-  bookIsbn: {
+  selectedBookISBN: {
     fontSize: 12,
     color: '#888',
     marginTop: 4,
   },
-  bookOriginalPrice: {
+  selectedBookPrice: {
     fontSize: 14,
     fontWeight: '600',
     color: '#1a472a',
@@ -791,6 +883,74 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#666',
     marginBottom: 12,
+  },
+  priceToggleContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  priceToggleOption: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#fff',
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#e0e0e0',
+  },
+  priceToggleOptionSelected: {
+    borderColor: '#1a472a',
+    backgroundColor: '#e8f5e9',
+  },
+  priceToggleText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  priceToggleTextSelected: {
+    color: '#1a472a',
+    fontWeight: '600',
+  },
+  customPriceCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 20,
+    borderWidth: 2,
+    borderColor: '#1a472a',
+  },
+  customPriceLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 12,
+  },
+  customPriceInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f9f9f9',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  currencySymbol: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1a472a',
+    marginRight: 8,
+  },
+  customPriceInput: {
+    flex: 1,
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#1a472a',
+    paddingVertical: 16,
+  },
+  customPriceHint: {
+    fontSize: 12,
+    color: '#888',
+    marginTop: 12,
+    textAlign: 'center',
   },
   questionCard: {
     backgroundColor: '#fff',
@@ -826,9 +986,6 @@ const styles = StyleSheet.create({
   optionButtonSelected: {
     borderColor: '#1a472a',
     backgroundColor: '#e8f5e9',
-  },
-  optionButtonDisabled: {
-    opacity: 0.8,
   },
   optionEmoji: {
     fontSize: 20,
@@ -944,9 +1101,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#1a472a',
   },
-  bookstoreItemDisabled: {
-    opacity: 0.7,
-  },
   bookstoreInfo: {
     flex: 1,
   },
@@ -1051,6 +1205,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#333',
     fontWeight: '500',
+    flex: 1,
+    textAlign: 'right',
+    marginLeft: 8,
   },
   summaryPrice: {
     fontSize: 20,
@@ -1061,19 +1218,19 @@ const styles = StyleSheet.create({
     gap: 12,
     marginTop: 16,
   },
-  editButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+  submitButton: {
     backgroundColor: '#1a472a',
-    padding: 16,
+    paddingVertical: 16,
     borderRadius: 12,
-    gap: 8,
+    alignItems: 'center',
   },
-  editButtonText: {
+  submitButtonDisabled: {
+    opacity: 0.6,
+  },
+  submitButtonText: {
     color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: 'bold',
   },
   deleteButton: {
     flexDirection: 'row',
@@ -1088,21 +1245,6 @@ const styles = StyleSheet.create({
     color: '#f44336',
     fontSize: 16,
     fontWeight: '600',
-  },
-  saveButton: {
-    backgroundColor: '#1a472a',
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 16,
-  },
-  saveButtonDisabled: {
-    opacity: 0.6,
-  },
-  saveButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
   },
   notEditableNotice: {
     flexDirection: 'row',
