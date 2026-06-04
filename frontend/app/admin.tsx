@@ -74,7 +74,10 @@ export default function AdminPortalScreen() {
 
     setLoginLoading(true);
     try {
-      const response = await axios.post(`${API_URL}/api/admin/login?email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`);
+      const response = await axios.post(`${API_URL}/api/admin/login`, {
+        email: email,
+        password: password
+      });
       
       await AsyncStorage.setItem('admin_id', response.data.user_id);
       setAdminId(response.data.user_id);
