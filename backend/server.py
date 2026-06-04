@@ -5053,18 +5053,27 @@ async def generate_books_pdf(user_id: str, child_id: str):
     tipo_scuola_label = "SCUOLA SECONDARIA DI I GRADO" if child_tipo == "primo_grado" else "SCUOLA SECONDARIA DI II GRADO"
     classe_label = f"{child_classe} {child_sezione}"
     
+    # Logo RiBook - usa immagine invece di testo
+    import os
+    logo_path = os.path.join(os.path.dirname(__file__), 'assets', 'ribook-logo.png')
+    
+    # Crea l'elemento logo se il file esiste, altrimenti usa testo fallback
+    if os.path.exists(logo_path):
+        logo_img = Image(logo_path, width=4*cm, height=1.5*cm)
+    else:
+        logo_img = Paragraph("<b><font size='20'>RiBook</font></b>", ParagraphStyle('Code', fontSize=11, fontName='Helvetica-Bold', alignment=TA_CENTER))
+    
     header_data = [[
         Paragraph(f"<b>{scuola_nome.upper()}</b><br/><font size='8'>{child_codice_scuola}</font><br/>88100 Catanzaro", header_style),
-        Paragraph("<b><font size='20'>RiLiBro</font></b>", ParagraphStyle('Code', fontSize=11, fontName='Helvetica-Bold', alignment=TA_CENTER)),
+        logo_img,
         Paragraph(f"<b>ELENCO DEI LIBRI DI TESTO<br/>ADOTTATI O CONSIGLIATI</b><br/><br/>Tipo Scuola: {tipo_scuola_label}<br/>Classe: {classe_label}<br/>Anno Scolastico 2025-2026", 
                  ParagraphStyle('RightHeader', fontSize=9, leading=11, alignment=TA_LEFT))
     ]]
     
     header_table = Table(header_data, colWidths=[7*cm, 5*cm, 9*cm])
     header_table.setStyle(TableStyle([
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('ALIGN', (1, 0), (1, 0), 'CENTER'),
-        ('BOX', (1, 0), (1, 0), 1, colors.black),
     ]))
     elements.append(header_table)
     elements.append(Spacer(1, 0.5*cm))
