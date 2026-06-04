@@ -6884,6 +6884,11 @@ async def pay_order(order_id: str, user_id: str = Query(...)):
         {"$set": {"status": "reserved", "stato": "riservato", "reserved_by": user_id, "order_id": order_id}}
     )
     
+    # Recupera il listing per le condizioni dettagliate
+    listing = await db.listings.find_one({"id": order.get("listing_id")})
+    condition_answers = listing.get("condition_answers") if listing else None
+    listing_note = listing.get("note") or listing.get("descrizione") if listing else None
+    
     # Notifica al venditore con QR code E indirizzo cartolibreria
     address_line = f"\n📍 {bookstore_address}" if bookstore_address else ""
     seller_notification = {
@@ -6915,25 +6920,33 @@ async def pay_order(order_id: str, user_id: str = Query(...)):
     }
     await db.notifications.insert_one(seller_notification)
     
-    # Notifica alla cartolibreria
+    # Notifica alla cartolibreria con TUTTI i dettagli
     bookstore_notification = {
         "id": str(uuid.uuid4()),
         "bookstore_id": order.get("bookstore_id"),
         "user_id": f"bookstore_{order.get('bookstore_id')}",
         "type": "incoming_book_delivery",
-        "title": "Libro acquistato in arrivo",
-        "message": f"È stato acquistato il seguente testo:\n📚 {order.get('book_titolo')}\n\nAlla consegna da parte del venditore, scansionare il QR oppure inserire il codice:\n🔐 {order.get('order_code')}\n\nVerificare inoltre le condizioni dichiarate del testo:\n📋 {order.get('book_condizioni', 'Non specificate')}",
+        "title": "📦 LIBRO IN ARRIVO - Consegna venditore",
+        "message": f"📚 LIBRO: {order.get('book_titolo')}\n\n👤 VENDITORE: {order.get('seller_name')}\n🛒 ACQUIRENTE: {order.get('buyer_name')}\n\nAlla consegna, verifica il CODICE e le CONDIZIONI del libro.",
         "order_id": order_id,
         "order_code": order.get("order_code"),
         "book_titolo": order.get("book_titolo"),
+        "book_isbn": order.get("book_isbn"),
         "book_condizioni": order.get("book_condizioni"),
         "seller_name": order.get("seller_name"),
         "buyer_name": order.get("buyer_name"),
+        "book_details": {
+            "titolo": order.get("book_titolo"),
+            "isbn": order.get("book_isbn"),
+            "condition_answers": condition_answers,
+            "note": listing_note,
+            "prezzo": order.get("prezzo_libro"),
+        },
+        "show_qr": True,
         "read": False,
         "created_at": now.isoformat()
     }
     await db.bookstore_notifications.insert_one(bookstore_notification)
-    await db.notifications.insert_one(bookstore_notification)
     
     # Notifica all'acquirente
     buyer_notification = {
@@ -7148,6 +7161,12 @@ async def mark_delivered_to_bookstore(order_id: str, user_id: str = Query(...)):
     
     await db.orders.update_one({"id": order_id}, {"$set": update_data})
     
+    # Recupera i dettagli del listing per le condizioni
+    listing = await db.listings.find_one({"id": order.get("listing_id")})
+    condition_answers = listing.get("condition_answers") if listing else None
+    condition_details = listing.get("condition_details") if listing else None
+    listing_note = listing.get("note") or listing.get("descrizione") if listing else None
+    
     # Notifica all'acquirente
     notification = {
         "id": str(uuid.uuid4()),
@@ -7160,6 +7179,31 @@ async def mark_delivered_to_bookstore(order_id: str, user_id: str = Query(...)):
         "created_at": now.isoformat()
     }
     await db.notifications.insert_one(notification)
+    
+    # Notifica alla CARTOLIBRERIA per la consegna del venditore
+    bookstore_delivery_notification = {
+        "id": str(uuid.uuid4()),
+        "bookstore_id": order.get("bookstore_id"),
+        "type": "seller_delivery",
+        "title": "📦 CONSEGNA VENDITORE",
+        "message": f"Il venditore sta per consegnare un libro.\n\n📚 LIBRO: {order.get('book_titolo')}\n\n👤 VENDITORE: {order.get('seller_name')}\n🛒 ACQUIRENTE: {order.get('buyer_name')}\n\nVerifica il codice e le condizioni del libro prima di accettare la consegna.",
+        "order_id": order_id,
+        "order_code": order.get("order_code"),
+        "book_title": order.get("book_titolo"),
+        "book_isbn": order.get("book_isbn"),
+        "seller_name": order.get("seller_name"),
+        "buyer_name": order.get("buyer_name"),
+        "book_details": {
+            "titolo": order.get("book_titolo"),
+            "isbn": order.get("book_isbn"),
+            "condition_answers": condition_answers,
+            "condition_details": condition_details,
+            "note": listing_note,
+        },
+        "read": False,
+        "created_at": now.isoformat()
+    }
+    await db.bookstore_notifications.insert_one(bookstore_delivery_notification)
     
     return {"success": True, "status": "delivering_to_bookstore"}
 

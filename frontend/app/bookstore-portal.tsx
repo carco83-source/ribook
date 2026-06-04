@@ -598,10 +598,32 @@ export default function BookstorePortalScreen() {
                         </View>
                       )}
                       
-                      {/* Dettagli libro per richieste reso */}
-                      {isReturnRequest && notif.book_details && (
+                      {/* Dettagli libro - per TUTTE le notifiche con book_details */}
+                      {notif.book_details && (
                         <View style={styles.bookDetailsContainer}>
-                          <Text style={styles.bookDetailsTitle}>Condizioni dichiarate del libro:</Text>
+                          <Text style={styles.bookDetailsTitle}>
+                            {isReturnRequest ? 'Condizioni dichiarate del libro:' : '📋 Condizioni del libro da verificare:'}
+                          </Text>
+                          
+                          {/* Info venditore/acquirente */}
+                          {(notif.seller_name || notif.buyer_name) && (
+                            <View style={styles.partiesInfo}>
+                              {notif.seller_name && (
+                                <View style={styles.partyRow}>
+                                  <Ionicons name="person" size={16} color="#1a472a" />
+                                  <Text style={styles.partyLabel}>Venditore:</Text>
+                                  <Text style={styles.partyValue}>{notif.seller_name}</Text>
+                                </View>
+                              )}
+                              {notif.buyer_name && (
+                                <View style={styles.partyRow}>
+                                  <Ionicons name="cart" size={16} color="#2196F3" />
+                                  <Text style={styles.partyLabel}>Acquirente:</Text>
+                                  <Text style={styles.partyValue}>{notif.buyer_name}</Text>
+                                </View>
+                              )}
+                            </View>
+                          )}
                           
                           {notif.book_details.condition_answers && (
                             <View style={styles.conditionsList}>
@@ -1463,6 +1485,28 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333',
     marginBottom: 12,
+  },
+  partiesInfo: {
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    gap: 8,
+  },
+  partyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  partyLabel: {
+    fontSize: 13,
+    color: '#666',
+  },
+  partyValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#333',
+    flex: 1,
   },
   conditionsList: {
     gap: 10,
