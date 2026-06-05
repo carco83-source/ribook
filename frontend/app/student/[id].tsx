@@ -10,6 +10,7 @@ import {
   Platform,
   Alert,
   ImageBackground,
+  ActionSheetIOS,
 } from 'react-native';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,6 +18,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import * as Print from 'expo-print';
+import * as WebBrowser from 'expo-web-browser';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:8001';
 
@@ -169,8 +172,51 @@ export default function StudentDetailScreen() {
       if (Platform.OS === 'web') {
         // On web, open PDF in new tab
         window.open(pdfUrl, '_blank');
+      } else if (Platform.OS === 'ios') {
+        // On iOS, show action sheet with options
+        const filename = `lista_libri_${child.nome_figlio}_${child.classe}${tipoLabel}.pdf`;
+        const fileUri = FileSystem.cacheDirectory + filename;
+        
+        // First download the PDF
+        const downloadResult = await FileSystem.downloadAsync(pdfUrl, fileUri);
+        
+        if (downloadResult.status === 200) {
+          ActionSheetIOS.showActionSheetWithOptions(
+            {
+              options: ['Annulla', 'Condividi/Salva su File', 'Stampa'],
+              cancelButtonIndex: 0,
+              title: 'Lista Libri PDF',
+              message: 'Scegli come vuoi gestire il PDF'
+            },
+            async (buttonIndex) => {
+              try {
+                if (buttonIndex === 1) {
+                  // Condividi - apre il menu di condivisione iOS dove può salvare su File
+                  if (await Sharing.isAvailableAsync()) {
+                    await Sharing.shareAsync(downloadResult.uri, {
+                      mimeType: 'application/pdf',
+                      dialogTitle: 'Salva o Condividi Lista Libri',
+                      UTI: 'com.adobe.pdf'
+                    });
+                  }
+                } else if (buttonIndex === 2) {
+                  // Stampa direttamente
+                  await Print.printAsync({
+                    uri: downloadResult.uri,
+                    orientation: Print.Orientation.landscape // Stampa in orizzontale
+                  });
+                }
+              } catch (err) {
+                console.error('Error handling PDF action:', err);
+                showAlert('Errore', 'Si è verificato un errore');
+              }
+            }
+          );
+        } else {
+          showAlert('Errore', 'Impossibile scaricare il PDF');
+        }
       } else {
-        // On mobile, download and share
+        // On Android, download and share
         const filename = `lista_libri_${child.nome_figlio}_${child.classe}${tipoLabel}.pdf`;
         const fileUri = FileSystem.documentDirectory + filename;
         
@@ -180,10 +226,14 @@ export default function StudentDetailScreen() {
           if (await Sharing.isAvailableAsync()) {
             await Sharing.shareAsync(downloadResult.uri, {
               mimeType: 'application/pdf',
-              dialogTitle: 'Condividi Lista Libri'
+              dialogTitle: 'Salva o Condividi Lista Libri'
             });
           } else {
-            showAlert('PDF Scaricato', `File salvato: ${filename}`);
+            // Fallback: try to print
+            await Print.printAsync({
+              uri: downloadResult.uri,
+              orientation: Print.Orientation.landscape
+            });
           }
         } else {
           showAlert('Errore', 'Impossibile scaricare il PDF');
