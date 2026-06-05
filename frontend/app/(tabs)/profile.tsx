@@ -575,11 +575,11 @@ const styles = StyleSheet.create({
   },
   profileLogoBackground: {
     position: 'absolute',
-    top: 20,
-    left: '50%',
-    width: 200,
-    height: 80,
-    marginLeft: -100,
+    top: 10,
+    left: 0,
+    right: 0,
+    width: '100%',
+    height: 120,
     opacity: 1,
   },
   profileHeaderContent: {
