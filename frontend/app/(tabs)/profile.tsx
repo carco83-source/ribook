@@ -10,6 +10,7 @@ import {
   Platform,
   Image,
   ImageBackground,
+  useWindowDimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -47,6 +48,7 @@ const showAlert = (title: string, message: string) => {
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
   const [loading, setLoading] = useState(true);
   const [upgrading, setUpgrading] = useState(false);
   const [userData, setUserData] = useState<any>(null);
@@ -55,6 +57,22 @@ export default function ProfileScreen() {
   const [showAllTransactions, setShowAllTransactions] = useState(false);
   const [myListings, setMyListings] = useState<any[]>([]);
   const [loadingListings, setLoadingListings] = useState(false);
+
+  // Calcola dimensioni logo responsive
+  const getLogoSize = () => {
+    if (width >= 1024) {
+      // Desktop/PC Web
+      return { width: 400, height: 160, top: 15 };
+    } else if (width >= 768) {
+      // Tablet/iPad
+      return { width: 320, height: 130, top: 12 };
+    } else {
+      // Smartphone/iPhone
+      return { width: 220, height: 90, top: 10 };
+    }
+  };
+  
+  const logoSize = getLogoSize();
 
   useEffect(() => {
     loadUserData();
@@ -238,13 +256,25 @@ export default function ProfileScreen() {
     <ScrollView style={styles.container}>
       {/* Profile Header con Logo RiBook */}
       <View style={styles.profileHeader}>
-        {/* Logo RiBook come sfondo */}
+        {/* Logo RiBook come sfondo - dimensioni responsive */}
         <Image 
           source={require('../../assets/images/ribook-logo.png')}
-          style={styles.profileLogoBackground}
+          style={[
+            styles.profileLogoBackground,
+            {
+              width: logoSize.width,
+              height: logoSize.height,
+              top: logoSize.top,
+              left: '50%',
+              marginLeft: -logoSize.width / 2,
+            }
+          ]}
           resizeMode="contain"
         />
-        <View style={styles.profileHeaderContent}>
+        <View style={[
+          styles.profileHeaderContent,
+          { paddingTop: logoSize.height + logoSize.top + 20 }
+        ]}>
           <View style={styles.avatarContainer}>
             <Ionicons name="person" size={48} color="#1a472a" />
           </View>
@@ -572,14 +602,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#fff',
     position: 'relative',
+    overflow: 'hidden',
   },
   profileLogoBackground: {
     position: 'absolute',
-    top: 10,
-    left: 0,
-    right: 0,
-    width: '100%',
-    height: 120,
     opacity: 1,
   },
   profileHeaderContent: {
