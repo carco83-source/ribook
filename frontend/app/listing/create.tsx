@@ -18,7 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import * as ImagePicker from 'expo-image-picker';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { BarCodeScanner } from 'expo-barcode-scanner';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -135,8 +135,8 @@ export default function CreateListingScreen() {
   
   // Scanner ISBN state
   const [showScanner, setShowScanner] = useState(false);
-  const [permission, requestPermission] = useCameraPermissions();
-  const [scannerProcessing, setScannerProcessing] = useState(false);
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [scanned, setScanned] = useState(false);
   
   // Fascicoli state
   const [hasFascicoli, setHasFascicoli] = useState(false);
@@ -204,33 +204,34 @@ export default function CreateListingScreen() {
   // Funzione per aprire lo scanner
   const openScanner = async () => {
     if (Platform.OS === 'web') {
-      // Su web non possiamo usare la camera per barcode nativamente
       if (Platform.OS === 'web') {
-        window.alert('La scansione barcode non è disponibile su web. Inserisci il codice ISBN manualmente.');
+        window.alert('La scansione barcode non è disponibile su web. Inserisci il codice ISBN manualmente nel campo di ricerca.');
       }
       return;
     }
     
-    if (!permission?.granted) {
-      const result = await requestPermission();
-      if (!result.granted) {
-        Alert.alert('Permesso negato', 'Serve il permesso per usare la fotocamera');
-        return;
-      }
+    const { status } = await BarCodeScanner.requestPermissionsAsync();
+    setHasPermission(status === 'granted');
+    
+    if (status === 'granted') {
+      setScanned(false);
+      setShowScanner(true);
+    } else {
+      Alert.alert('Permesso negato', 'Serve il permesso per usare la fotocamera per la scansione');
     }
-    setShowScanner(true);
   };
 
   // Gestione scansione barcode
   const handleBarcodeScanned = async ({ type, data }: { type: string; data: string }) => {
-    if (scannerProcessing) return;
+    if (scanned) return;
+    setScanned(true);
+    
+    console.log('Barcode scanned:', type, data);
     
     // ISBN-13 inizia con 978 o 979, ISBN-10 ha 10 cifre
     const cleanData = data.replace(/[^0-9X]/gi, '');
     
-    if (cleanData.length === 13 && (cleanData.startsWith('978') || cleanData.startsWith('979'))) {
-      // Valid ISBN-13
-      setScannerProcessing(true);
+    if (cleanData.length >= 10) {
       setShowScanner(false);
       setSearchQuery(cleanData);
       
@@ -240,31 +241,26 @@ export default function CreateListingScreen() {
         if (response.data) {
           setSelectedBook(response.data);
           setSearchResults([]);
-          if (Platform.OS === 'web') {
-            window.alert(`Libro trovato: ${response.data.titolo}`);
-          } else {
-            Alert.alert('Libro trovato!', response.data.titolo);
-          }
+          Alert.alert('Libro trovato!', response.data.titolo);
         } else {
           // Prova ricerca generica
           const searchRes = await axios.get(`${API_URL}/api/books`, { 
             params: { search: cleanData, limit: 5 } 
           });
-          setSearchResults(searchRes.data || []);
+          if (searchRes.data && searchRes.data.length > 0) {
+            setSearchResults(searchRes.data);
+            Alert.alert('Codice rilevato', `ISBN: ${cleanData}\nTrovati ${searchRes.data.length} risultati`);
+          } else {
+            Alert.alert('Codice rilevato', `ISBN: ${cleanData}\nNessun libro trovato nel database. Puoi cercarlo manualmente.`);
+          }
         }
       } catch (error) {
         console.error('Error searching ISBN:', error);
-        // Fallback a ricerca manuale
-        setSearchResults([]);
+        Alert.alert('Codice rilevato', `ISBN: ${cleanData}\nErrore nella ricerca. Prova a cercare manualmente.`);
       }
-      
-      setScannerProcessing(false);
-    } else if (cleanData.length === 10) {
-      // ISBN-10
-      setScannerProcessing(true);
-      setShowScanner(false);
-      setSearchQuery(cleanData);
-      setScannerProcessing(false);
+    } else {
+      Alert.alert('Codice non valido', 'Il codice scansionato non sembra essere un ISBN valido. Riprova.');
+      setScanned(false);
     }
   };
 
@@ -396,21 +392,31 @@ export default function CreateListingScreen() {
           </TouchableOpacity>
         </View>
         
-        {permission?.granted ? (
+        {hasPermission ? (
           <View style={styles.cameraContainer}>
-            <CameraView
-              style={styles.camera}
-              facing="back"
-              barcodeScannerSettings={{
-                barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39'],
-              }}
-              onBarcodeScanned={scannerProcessing ? undefined : handleBarcodeScanned}
+            <BarCodeScanner
+              onBarCodeScanned={scanned ? undefined : handleBarcodeScanned}
+              style={StyleSheet.absoluteFillObject}
+              barCodeTypes={[
+                BarCodeScanner.Constants.BarCodeType.ean13,
+                BarCodeScanner.Constants.BarCodeType.ean8,
+                BarCodeScanner.Constants.BarCodeType.upc_a,
+                BarCodeScanner.Constants.BarCodeType.upc_e,
+              ]}
             />
             <View style={styles.cameraOverlay}>
               <View style={styles.scanFrame} />
               <Text style={styles.scanHint}>
-                Inquadra il codice a barre ISBN del libro
+                Inquadra il codice a barre ISBN sul retro del libro
               </Text>
+              {scanned && (
+                <TouchableOpacity 
+                  style={styles.rescanButton}
+                  onPress={() => setScanned(false)}
+                >
+                  <Text style={styles.rescanButtonText}>Tocca per scansionare di nuovo</Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         ) : (
@@ -421,7 +427,7 @@ export default function CreateListingScreen() {
             </Text>
             <TouchableOpacity 
               style={styles.permissionButton}
-              onPress={requestPermission}
+              onPress={openScanner}
             >
               <Text style={styles.permissionButtonText}>Concedi permesso</Text>
             </TouchableOpacity>
@@ -434,11 +440,12 @@ export default function CreateListingScreen() {
           <View style={styles.manualInputRow}>
             <TextInput
               style={styles.manualInput}
-              placeholder="Codice ISBN (13 cifre)"
+              placeholder="Codice ISBN (es: 9788824750011)"
               keyboardType="numeric"
               maxLength={13}
-              onChangeText={(text) => {
-                if (text.length === 13) {
+              onSubmitEditing={(e) => {
+                const text = e.nativeEvent.text;
+                if (text.length >= 10) {
                   handleBarcodeScanned({ type: 'manual', data: text });
                 }
               }}
@@ -1400,6 +1407,18 @@ const styles = StyleSheet.create({
     color: '#fff',
     textAlign: 'center',
     paddingHorizontal: 32,
+  },
+  rescanButton: {
+    marginTop: 20,
+    backgroundColor: '#1a472a',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  rescanButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
   permissionContainer: {
     flex: 1,
