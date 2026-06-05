@@ -19,6 +19,8 @@ export default function RootLayout() {
           contentStyle: {
             backgroundColor: '#f5f5f5',
           },
+          // Disabilita animazione per mostrare tabs sotto
+          animation: 'none',
         }}
       >
         <Stack.Screen name="index" options={{ headerShown: false }} />
@@ -28,31 +30,19 @@ export default function RootLayout() {
         <Stack.Screen name="listing/create" options={{ title: 'Vendi un Libro' }} />
         <Stack.Screen name="listing/[id]" options={{ title: 'Dettaglio Libro' }} />
         <Stack.Screen name="chat/[listingId]" options={{ title: 'Chat' }} />
-        {/* Pagine profilo come modal per mantenere tabs visibili */}
-        <Stack.Screen 
-          name="profile/my-listings" 
-          options={{ 
-            title: 'I Miei Annunci',
-            presentation: 'modal',
-            headerShown: false,
-          }} 
-        />
-        <Stack.Screen 
-          name="profile/my-exchanges" 
-          options={{ 
-            title: 'I Miei Scambi',
-            presentation: 'modal',
-            headerShown: false,
-          }} 
-        />
-        <Stack.Screen 
-          name="edit-listing/[id]" 
-          options={{ 
-            title: 'Modifica Annuncio',
-            presentation: 'modal',
-            headerShown: false,
-          }} 
-        />
+        <Stack.Screen name="chat/[conversationId]" options={{ title: 'Chat' }} />
+        <Stack.Screen name="profile/my-listings" options={{ title: 'I Miei Annunci' }} />
+        <Stack.Screen name="profile/my-exchanges" options={{ title: 'I Miei Scambi' }} />
+        <Stack.Screen name="edit-listing/[id]" options={{ title: 'Modifica Annuncio' }} />
+        <Stack.Screen name="my-listing/[id]" options={{ title: 'Modifica Annuncio' }} />
+        <Stack.Screen name="student/[id]" options={{ title: 'Dettagli Alunno' }} />
+        <Stack.Screen name="radar/[childId]" options={{ title: 'Radar Libri' }} />
+        <Stack.Screen name="profiles/manage" options={{ title: 'Gestisci Profili' }} />
+        <Stack.Screen name="orders" options={{ title: 'I Miei Ordini' }} />
+        <Stack.Screen name="cart" options={{ title: 'Carrello' }} />
+        <Stack.Screen name="sell-form" options={{ title: 'Vendi Libro' }} />
+        <Stack.Screen name="bookstore-portal" options={{ title: 'Portale Cartolibreria', headerShown: false }} />
+        <Stack.Screen name="admin" options={{ title: 'Admin', headerShown: false }} />
       </Stack>
     </NotificationProvider>
   );

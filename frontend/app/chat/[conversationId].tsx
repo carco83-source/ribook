@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import GlobalTabBar from '../../components/GlobalTabBar';
 
 const API_BASE = process.env.EXPO_PUBLIC_BACKEND_URL 
   ? `${process.env.EXPO_PUBLIC_BACKEND_URL}/api`
@@ -279,7 +280,7 @@ export default function ChatScreen() {
       />
 
       {/* Input Area */}
-      <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+      <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, 16) + 70 }]}>
         <TextInput
           style={styles.textInput}
           placeholder="Scrivi un messaggio..."
@@ -301,6 +302,9 @@ export default function ChatScreen() {
           )}
         </TouchableOpacity>
       </View>
+      
+      {/* Tab Bar Globale */}
+      <GlobalTabBar currentTab="chats" />
     </KeyboardAvoidingView>
   );
 }
