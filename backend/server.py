@@ -7996,12 +7996,21 @@ async def cancel_order(order_id: str, user_id: str = Query(...), reason: str = Q
     if not order:
         raise HTTPException(status_code=404, detail="Ordine non trovato")
     
-    # Può essere annullato solo se in pending_seller_confirmation, pending_payment o paid_escrow (con rimborso simulato)
-    if order.get("status") not in ["pending_seller_confirmation", "pending_payment", "paid_escrow"]:
+    # Può essere annullato solo se in questi stati
+    cancellable_statuses = [
+        "pending_seller_confirmation", 
+        "pending_payment", 
+        "paid_escrow",
+        "in_attesa_pagamento",  # Ordini nel carrello
+        "in_attesa_conferma"    # In attesa conferma venditore
+    ]
+    
+    if order.get("status") not in cancellable_statuses:
         raise HTTPException(status_code=400, detail="Ordine non annullabile in questo stato")
     
     now = datetime.utcnow()
     is_refund = order.get("status") == "paid_escrow"
+    is_buyer = order.get("buyer_id") == user_id
     
     update_data = {
         "status": "refunded" if is_refund else "cancelled",
@@ -8009,7 +8018,7 @@ async def cancel_order(order_id: str, user_id: str = Query(...), reason: str = Q
         "status_history": order.get("status_history", []) + [{
             "status": "refunded" if is_refund else "cancelled",
             "timestamp": now.isoformat(),
-            "note": f"Annullato da {'acquirente' if order.get('buyer_id') == user_id else 'venditore'}. {reason}"
+            "note": f"Annullato da {'acquirente' if is_buyer else 'venditore'}. {reason}"
         }]
     }
     
@@ -8018,21 +8027,39 @@ async def cancel_order(order_id: str, user_id: str = Query(...), reason: str = Q
     # Ripristina listing
     await db.listings.update_one(
         {"id": order.get("listing_id")},
-        {"$set": {"status": "available"}, "$unset": {"reserved_by": "", "order_id": ""}}
+        {"$set": {"status": "available", "stato": "disponibile"}, "$unset": {"reserved_by": "", "order_id": ""}}
     )
     
     # Notifica all'altra parte
-    other_user_id = order.get("seller_id") if order.get("buyer_id") == user_id else order.get("buyer_id")
-    notification = {
-        "id": str(uuid.uuid4()),
-        "user_id": other_user_id,
-        "type": "order_cancelled",
-        "title": "Ordine annullato",
-        "message": f"L'ordine per '{order.get('book_titolo')[:40]}' è stato annullato." + (" Il rimborso è stato elaborato." if is_refund else ""),
-        "order_id": order_id,
-        "read": False,
-        "created_at": now.isoformat()
-    }
+    other_user_id = order.get("seller_id") if is_buyer else order.get("buyer_id")
+    
+    if is_buyer:
+        # Acquirente annulla - notifica al venditore
+        notification = {
+            "id": str(uuid.uuid4()),
+            "user_id": other_user_id,
+            "type": "order_cancelled_by_buyer",
+            "title": "Acquisto annullato dall'acquirente",
+            "message": f"L'acquirente non è più interessato all'acquisto del libro:\n\n📚 {order.get('book_titolo')}\n\nIl libro è tornato disponibile nel tuo inventario.",
+            "order_id": order_id,
+            "book_titolo": order.get("book_titolo"),
+            "read": False,
+            "created_at": now.isoformat()
+        }
+    else:
+        # Venditore annulla
+        notification = {
+            "id": str(uuid.uuid4()),
+            "user_id": other_user_id,
+            "type": "order_cancelled",
+            "title": "Ordine annullato dal venditore",
+            "message": f"Il venditore ha annullato l'ordine per:\n\n📚 {order.get('book_titolo')}" + ("\n\nIl rimborso è stato elaborato." if is_refund else ""),
+            "order_id": order_id,
+            "book_titolo": order.get("book_titolo"),
+            "read": False,
+            "created_at": now.isoformat()
+        }
+    
     await db.notifications.insert_one(notification)
     
     return {
