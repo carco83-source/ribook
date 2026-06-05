@@ -507,6 +507,16 @@ export default function BookstorePortalScreen() {
               const isReturnRequest = notif.type === 'return_request';
               const isExpanded = expandedNotifications.has(notif.id);
               
+              // Determina lo stato della notifica per i colori
+              // ROSSO pastello = in attesa (paid_escrow, delivering_to_bookstore, new_order)
+              // ARANCIONE pastello = consegnato alla cartolibreria (ready_for_pickup)
+              // VERDE pastello = ritirato/completato (order_completed, picked_up)
+              const orderStatus = notif.order_status || notif.status || '';
+              const isPending = ['paid_escrow', 'delivering_to_bookstore', 'new_order', 'seller_delivery'].includes(notif.type) || 
+                               ['paid_escrow', 'delivering_to_bookstore'].includes(orderStatus);
+              const isDelivered = notif.type === 'ready_for_pickup' || orderStatus === 'ready_for_pickup';
+              const isPickedUp = isCompleted || notif.type === 'picked_up' || orderStatus === 'completed';
+              
               const toggleExpand = () => {
                 const newExpanded = new Set(expandedNotifications);
                 if (isExpanded) {
@@ -523,7 +533,10 @@ export default function BookstorePortalScreen() {
                   style={[
                     styles.notificationCard,
                     !notif.read && styles.notificationUnread,
-                    isCompleted && styles.notificationCompleted,
+                    // Applica colori basati sullo stato
+                    isPending && styles.notificationPending,
+                    isDelivered && styles.notificationDelivered,
+                    isPickedUp && styles.notificationPickedUp,
                     isReturnRequest && styles.notificationReturn,
                     isExpanded && styles.notificationExpanded
                   ]}
@@ -533,19 +546,33 @@ export default function BookstorePortalScreen() {
                   <View style={styles.notificationCardHeader}>
                     <View style={[
                       styles.notificationIcon, 
-                      isCompleted && { backgroundColor: '#e8f5e9' },
+                      isPending && { backgroundColor: '#ffcdd2' },
+                      isDelivered && { backgroundColor: '#ffe0b2' },
+                      isPickedUp && { backgroundColor: '#c8e6c9' },
                       isReturnRequest && { backgroundColor: '#ffebee' }
                     ]}>
                       <Ionicons 
-                        name={isCompleted ? "checkmark-circle" : isReturnRequest ? "arrow-undo" : "cube"} 
+                        name={
+                          isPickedUp ? "checkmark-circle" : 
+                          isDelivered ? "time" :
+                          isReturnRequest ? "arrow-undo" : 
+                          isPending ? "cube" : "cube"
+                        } 
                         size={20} 
-                        color={isCompleted ? "#4CAF50" : isReturnRequest ? "#f44336" : "#FF9800"} 
+                        color={
+                          isPickedUp ? "#4CAF50" : 
+                          isDelivered ? "#ff9800" :
+                          isReturnRequest ? "#f44336" : 
+                          isPending ? "#e53935" : "#FF9800"
+                        } 
                       />
                     </View>
                     <View style={styles.notificationContent}>
                       <Text style={[
                         styles.notificationTitleText, 
-                        isCompleted && { color: '#4CAF50' },
+                        isPending && { color: '#c62828' },
+                        isDelivered && { color: '#e65100' },
+                        isPickedUp && { color: '#2e7d32' },
                         isReturnRequest && { color: '#f44336' }
                       ]}>
                         {notif.title}
@@ -584,15 +611,41 @@ export default function BookstorePortalScreen() {
                           </View>
                           <View style={[
                             styles.notificationCodeBadge, 
-                            isCompleted && { backgroundColor: '#e8f5e9' },
+                            isPending && { backgroundColor: '#ffcdd2' },
+                            isDelivered && { backgroundColor: '#ffe0b2' },
+                            isPickedUp && { backgroundColor: '#c8e6c9' },
                             isReturnRequest && { backgroundColor: '#ffebee' }
                           ]}>
                             <Text style={[
                               styles.notificationCodeText, 
-                              isCompleted && { color: '#4CAF50' },
+                              isPending && { color: '#c62828' },
+                              isDelivered && { color: '#e65100' },
+                              isPickedUp && { color: '#2e7d32' },
                               isReturnRequest && { color: '#f44336' }
                             ]}>
                               {notif.order_code}
+                            </Text>
+                          </View>
+                          
+                          {/* Status indicator con icona */}
+                          <View style={[
+                            styles.statusIndicator,
+                            isPending && { backgroundColor: '#ffcdd2' },
+                            isDelivered && { backgroundColor: '#ffe0b2' },
+                            isPickedUp && { backgroundColor: '#c8e6c9' }
+                          ]}>
+                            <Ionicons 
+                              name={isPickedUp ? "checkmark-circle" : isDelivered ? "time" : "cube"} 
+                              size={16} 
+                              color={isPickedUp ? "#2e7d32" : isDelivered ? "#e65100" : "#c62828"} 
+                            />
+                            <Text style={[
+                              styles.statusIndicatorText,
+                              isPending && { color: '#c62828' },
+                              isDelivered && { color: '#e65100' },
+                              isPickedUp && { color: '#2e7d32' }
+                            ]}>
+                              {isPickedUp ? '✓ Ritirato' : isDelivered ? '⏱ In attesa ritiro' : '📦 In arrivo'}
                             </Text>
                           </View>
                         </View>
@@ -1435,6 +1488,22 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
     backgroundColor: '#fff8f8',
   },
+  // Stili per stati notifica cartolibreria
+  notificationPending: {
+    backgroundColor: '#ffcdd2', // Rosso pastello - in attesa consegna
+    borderLeftColor: '#e53935',
+    borderLeftWidth: 4,
+  },
+  notificationDelivered: {
+    backgroundColor: '#ffe0b2', // Arancione pastello - consegnato, in attesa ritiro
+    borderLeftColor: '#ff9800',
+    borderLeftWidth: 4,
+  },
+  notificationPickedUp: {
+    backgroundColor: '#c8e6c9', // Verde pastello - ritirato
+    borderLeftColor: '#4CAF50',
+    borderLeftWidth: 4,
+  },
   // Stili per notifiche espandibili
   notificationExpanded: {
     borderWidth: 2,
@@ -1471,6 +1540,19 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#e0e0e0',
+  },
+  statusIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginTop: 12,
+    gap: 6,
+  },
+  statusIndicatorText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
   bookDetailsContainer: {
     backgroundColor: '#fff',
