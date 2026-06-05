@@ -237,15 +237,16 @@ export default function ProfileScreen() {
   return (
     <ScrollView style={styles.container}>
       {/* Profile Header con Logo RiBook */}
-      <ImageBackground 
-        source={require('../../assets/images/ribook-text-only.png')}
-        style={styles.profileHeader}
-        imageStyle={styles.profileHeaderImage}
-        resizeMode="contain"
-      >
-        <View style={styles.profileHeaderOverlay}>
+      <View style={styles.profileHeader}>
+        {/* Logo RiBook come sfondo */}
+        <Image 
+          source={require('../../assets/images/ribook-logo.png')}
+          style={styles.profileLogoBackground}
+          resizeMode="contain"
+        />
+        <View style={styles.profileHeaderContent}>
           <View style={styles.avatarContainer}>
-            <Ionicons name="person" size={48} color="#fff" />
+            <Ionicons name="person" size={48} color="#1a472a" />
           </View>
           <Text style={styles.userName}>{userData?.nome || 'Utente'}</Text>
           <Text style={styles.userUsername}>{userData?.username}</Text>
@@ -273,7 +274,7 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           </View>
         </View>
-      </ImageBackground>
+      </View>
 
       {/* Sezione Scambi */}
       <View style={styles.tradesSection}>
@@ -569,16 +570,23 @@ const styles = StyleSheet.create({
   profileHeader: {
     minHeight: 280,
     justifyContent: 'center',
+    backgroundColor: '#fff',
+    position: 'relative',
   },
-  profileHeaderImage: {
-    opacity: 0.4,
-    resizeMode: 'contain',
+  profileLogoBackground: {
+    position: 'absolute',
+    top: 20,
+    left: '50%',
+    width: 200,
+    height: 80,
+    marginLeft: -100,
+    opacity: 1,
   },
-  profileHeaderOverlay: {
-    backgroundColor: 'rgba(255, 228, 196, 0.95)',
+  profileHeaderContent: {
     alignItems: 'center',
     paddingVertical: 32,
     paddingHorizontal: 24,
+    paddingTop: 100,
     width: '100%',
     minHeight: 280,
     justifyContent: 'center',
@@ -598,10 +606,12 @@ const styles = StyleSheet.create({
     width: 96,
     height: 96,
     borderRadius: 48,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: '#e8f5e9',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
+    borderWidth: 2,
+    borderColor: '#1a472a',
   },
   userName: {
     fontSize: 24,
