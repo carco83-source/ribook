@@ -9835,7 +9835,7 @@ def check_message_content(content: str, sender_name: str = "", other_user_name: 
         if not (digits_only.startswith('978') or digits_only.startswith('979')):
             return False, error_msg
     
-    # 4. Blocca numeri scritti in lettere
+    # 4. Blocca numeri scritti in lettere - ANCHE SINGOLI
     number_words = [
         r'\bzero\b', r'\buno\b', r'\bdue\b', r'\btre\b', r'\bquattro\b',
         r'\bcinque\b', r'\bsei\b', r'\bsette\b', r'\botto\b', r'\bnove\b',
@@ -9844,34 +9844,51 @@ def check_message_content(content: str, sender_name: str = "", other_user_name: 
         r'\bventi\b', r'\btrenta\b', r'\bquaranta\b', r'\bcinquanta\b',
         r'\bsessanta\b', r'\bsettanta\b', r'\bottanta\b', r'\bnovanta\b', r'\bcento\b',
     ]
-    number_word_count = 0
     for pattern in number_words:
         if re.search(pattern, content_lower):
-            number_word_count += 1
-    if number_word_count >= 2:
-        return False, error_msg
+            return False, error_msg
     
-    # 5. Blocca pattern di presentazione nome (RAFFINATO - evita falsi positivi)
-    # Pattern che NON dipendono da "sono + parola" generico
+    # 4b. Blocca parole indirizzi SINGOLE (via, piazza, viale, ecc.) - case insensitive
+    address_single_words = [
+        r'\bvia\b', r'\bviale\b', r'\bv\.le\b', r'\bv\.\b',
+        r'\bpiazza\b', r'\bp\.zza\b', r'\bp\.za\b', r'\bpiazzale\b', r'\bp\.le\b',
+        r'\bcorso\b', r'\bc\.so\b',
+        r'\blargo\b', r'\bl\.go\b',
+        r'\bvicolo\b', r'\bvic\.\b',
+        r'\btraversa\b', r'\btrav\b', r'\btrav\.\b',
+        r'\bcontrada\b', r'\bc\.da\b',
+        r'\bstrada\b', r'\bstr\.\b',
+        r'\blocalità\b', r'\bloc\.\b', r'\bloc\b',
+    ]
+    for pattern in address_single_words:
+        if re.search(pattern, content_lower):
+            return False, error_msg
+    
+    # 5. Blocca pattern di presentazione nome - SEMPRE BLOCCATI
     name_patterns = [
-        r'\bmi\s*chiamo\b',           # "mi chiamo"
-        r'\bmi\s*famo\b',             # dialettale
-        r'\bil\s*mio\s*nome\b',       # "il mio nome"
-        r'\bchiamami\b',
-        r'\bcontattami\b',
-        r'\bscrivimi\b',
-        r'\bchiama\s*me\b',
-        r'\bscrivi\s*a\b',
-        r'\bio\s+sono\s+[A-Z]',       # "io sono Mario" (con maiuscola)
-        r'\bmi\s+presento\b',         # "mi presento"
-        r'\bpiacere\s*,?\s*[A-Z]',    # "piacere, Mario" (con maiuscola)
-        r'\bciao\s+sono\s+[A-Z]',     # "ciao sono Mario" (con maiuscola)
-        r'\bsalve\s+sono\s+[A-Z]',    # "salve sono Mario" (con maiuscola)
-        r'\bhey\s+sono\s+[A-Z]',      # "hey sono Mario" (con maiuscola)
-        r'\bmi\s+dico\b',             # "mi dico"
+        r'mi\s*chiamo',           # "mi chiamo"
+        r'mi\s*famo',             # dialettale
+        r'il\s*mio\s*nome',       # "il mio nome"
+        r'mio\s*nome',            # "mio nome"
+        r'chiamo\s*\w+',          # "chiamo Mario"
+        r'chiamami',
+        r'contattami',
+        r'scrivimi',
+        r'chiama\s*me',
+        r'scrivi\s*a',
+        r'io\s+sono',             # "io sono"
+        r'mi\s+presento',         # "mi presento"
+        r'piacere\s*,',           # "piacere,"
+        r'ciao\s+sono',           # "ciao sono"
+        r'salve\s+sono',          # "salve sono"
+        r'hey\s+sono',            # "hey sono"
+        r'mi\s+dico',             # "mi dico"
+        r'sono\s+io',             # "sono io"
+        r'nome\s+è',              # "nome è"
+        r'nome\s*:',              # "nome:"
     ]
     for pattern in name_patterns:
-        if re.search(pattern, content):  # Nota: usa content, non content_lower per maiuscole
+        if re.search(pattern, content_lower):
             return False, error_msg
     
     # 5b. Blocca "sono + NOME" solo se seguito da un nome dalla lista
