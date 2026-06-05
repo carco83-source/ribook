@@ -5028,25 +5028,25 @@ async def generate_books_pdf(user_id: str, child_id: str):
         }).to_list(200)
         books = old_books
     
-    # Create PDF - LANDSCAPE A4
+    # Create PDF - PORTRAIT A4 (verticale per iOS)
     buffer = io.BytesIO()
-    page_width, page_height = landscape(A4)
+    page_width, page_height = A4  # Portrait orientation
     doc = SimpleDocTemplate(
         buffer, 
-        pagesize=landscape(A4), 
-        topMargin=0.8*cm, 
-        bottomMargin=0.8*cm,
-        leftMargin=1*cm, 
-        rightMargin=1*cm
+        pagesize=A4,  # Portrait 
+        topMargin=0.6*cm, 
+        bottomMargin=0.6*cm,
+        leftMargin=0.5*cm, 
+        rightMargin=0.5*cm
     )
     
     elements = []
     styles = getSampleStyleSheet()
     
-    # Styles
-    header_style = ParagraphStyle('Header', fontSize=9, leading=11)
-    cell_style = ParagraphStyle('Cell', fontSize=7, leading=9, wordWrap='CJK')
-    cell_bold = ParagraphStyle('CellBold', fontSize=7, leading=9, fontName='Helvetica-Bold', wordWrap='CJK')
+    # Styles - font più piccoli per formato verticale
+    header_style = ParagraphStyle('Header', fontSize=8, leading=10)
+    cell_style = ParagraphStyle('Cell', fontSize=6, leading=8, wordWrap='CJK')
+    cell_bold = ParagraphStyle('CellBold', fontSize=6, leading=8, fontName='Helvetica-Bold', wordWrap='CJK')
     
     # Header
     scuola_nome = child_scuola.split('-')[0].strip() if '-' in child_scuola else child_scuola
@@ -5059,40 +5059,41 @@ async def generate_books_pdf(user_id: str, child_id: str):
     
     # Crea l'elemento logo se il file esiste, altrimenti usa testo fallback
     if os.path.exists(logo_path):
-        logo_img = Image(logo_path, width=4*cm, height=1.5*cm)
+        logo_img = Image(logo_path, width=3*cm, height=1.2*cm)
     else:
-        logo_img = Paragraph("<b><font size='20'>RiBook</font></b>", ParagraphStyle('Code', fontSize=11, fontName='Helvetica-Bold', alignment=TA_CENTER))
+        logo_img = Paragraph("<b><font size='16'>RiBook</font></b>", ParagraphStyle('Code', fontSize=11, fontName='Helvetica-Bold', alignment=TA_CENTER))
     
     header_data = [[
-        Paragraph(f"<b>{scuola_nome.upper()}</b><br/><font size='8'>{child_codice_scuola}</font><br/>88100 Catanzaro", header_style),
+        Paragraph(f"<b>{scuola_nome.upper()}</b><br/><font size='7'>{child_codice_scuola}</font><br/>88100 Catanzaro", header_style),
         logo_img,
         Paragraph(f"<b>ELENCO DEI LIBRI DI TESTO<br/>ADOTTATI O CONSIGLIATI</b><br/><br/>Tipo Scuola: {tipo_scuola_label}<br/>Classe: {classe_label}<br/>Anno Scolastico 2025-2026", 
-                 ParagraphStyle('RightHeader', fontSize=9, leading=11, alignment=TA_LEFT))
+                 ParagraphStyle('RightHeader', fontSize=7, leading=9, alignment=TA_LEFT))
     ]]
     
-    header_table = Table(header_data, colWidths=[7*cm, 5*cm, 9*cm])
+    header_table = Table(header_data, colWidths=[5.5*cm, 3.5*cm, 7*cm])
     header_table.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('ALIGN', (1, 0), (1, 0), 'CENTER'),
     ]))
     elements.append(header_table)
-    elements.append(Spacer(1, 0.5*cm))
+    elements.append(Spacer(1, 0.4*cm))
     
-    # Table header
+    # Table header - colonne ridotte per portrait
     table_data = [[
-        Paragraph('<b>Materia / Disciplina</b>', cell_bold),
-        Paragraph('<b>Codice Volume</b>', cell_bold),
+        Paragraph('<b>Materia</b>', cell_bold),
+        Paragraph('<b>ISBN</b>', cell_bold),
         Paragraph('<b>Autore</b>', cell_bold),
-        Paragraph('<b>Titolo / Sottotitolo</b>', cell_bold),
+        Paragraph('<b>Titolo</b>', cell_bold),
         Paragraph('<b>Vol.</b>', cell_bold),
         Paragraph('<b>Editore</b>', cell_bold),
         Paragraph('<b>Prezzo</b>', cell_bold),
-        Paragraph('<b>Nuova<br/>Adoz.</b>', cell_bold),
-        Paragraph('<b>Da<br/>Acq.</b>', cell_bold),
+        Paragraph('<b>Nuova</b>', cell_bold),
+        Paragraph('<b>Acq.</b>', cell_bold),
         Paragraph('<b>Cons.</b>', cell_bold),
     ]]
     
-    col_widths = [3.2*cm, 2.5*cm, 4*cm, 7*cm, 1*cm, 3*cm, 1.3*cm, 1.2*cm, 1.2*cm, 1.2*cm]
+    # Colonne ottimizzate per A4 Portrait (larghezza ~19.5cm disponibili)
+    col_widths = [2.2*cm, 2.2*cm, 2.8*cm, 5.5*cm, 0.6*cm, 2.2*cm, 1.1*cm, 0.9*cm, 0.8*cm, 0.8*cm]
     
     # Totale libri da acquistare
     total_price = 0
