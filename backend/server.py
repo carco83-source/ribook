@@ -9245,34 +9245,88 @@ async def can_review_listing(listing_id: str, user_id: str):
 import re
 
 BLOCKED_PATTERNS = [
-    # Phone numbers (Italian and international)
-    r'\+?\d{2,4}[\s\-]?\d{3,4}[\s\-]?\d{3,4}[\s\-]?\d{0,4}',
-    r'\d{3}[\s\-]?\d{3}[\s\-]?\d{4}',
-    r'\d{10,}',
-    # Email addresses
-    r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',
     # Social media handles/keywords
     r'(?i)(instagram|facebook|whatsapp|telegram|messenger|twitter|tiktok|snapchat)',
     r'(?i)(ig:|fb:|wa\.me|t\.me)',
-    r'@[a-zA-Z0-9_]+',
     # Common contact phrases
     r'(?i)(chiamami|contattami|scrivimi su|il mio numero|la mia mail|mio contatto)',
     r'(?i)(ci vediamo|incontriamoci|dove abiti|il tuo numero|la tua mail)',
+    # Indirizzi (via, piazza, viale, etc.)
+    r'(?i)\b(via|viale|v\.le|piazza|p\.zza|p\.za|piazzale|trav|traversa|corso|c\.so|largo|vicolo)\s+[a-zA-Z]',
 ]
 
 def contains_blocked_content(message: str, user_nome: str = None, user_cognome: str = None) -> tuple[bool, str]:
     """Check if message contains blocked content. Returns (is_blocked, reason)"""
+    
+    message_lower = message.lower()
     
     # Check against regex patterns
     for pattern in BLOCKED_PATTERNS:
         if re.search(pattern, message):
             return True, "Il messaggio contiene informazioni di contatto non permesse"
     
-    # Check if message contains user's real name
-    if user_nome and user_nome.lower() in message.lower():
-        return True, "Non puoi condividere il tuo nome reale"
-    if user_cognome and user_cognome.lower() in message.lower():
-        return True, "Non puoi condividere il tuo cognome reale"
+    # Blocca @ (chiocciola) - sia il simbolo che la parola
+    if '@' in message or 'chiocciola' in message_lower:
+        return True, "Non è possibile condividere indirizzi email"
+    
+    # Blocca numeri di telefono: più di 3 cifre consecutive, ESCLUDE codici ISBN (iniziano con 978)
+    # Trova tutte le sequenze di numeri (anche con spazi/trattini)
+    # Rimuovi spazi e trattini per contare le cifre
+    cleaned_for_numbers = re.sub(r'[^\d]', '', message)
+    
+    # Trova gruppi di numeri nel messaggio originale
+    number_groups = re.findall(r'[\d\s\-\.]{4,}', message)
+    for num_group in number_groups:
+        digits_only = re.sub(r'[^\d]', '', num_group)
+        # Se ha più di 3 cifre e NON inizia con 978 (ISBN), blocca
+        if len(digits_only) > 3 and not digits_only.startswith('978'):
+            return True, "Non è possibile condividere numeri di telefono"
+    
+    # Blocca anche numeri scritti in lettere se sono tanti insieme
+    numeri_parole = ['zero', 'uno', 'due', 'tre', 'quattro', 'cinque', 'sei', 'sette', 'otto', 'nove', 'dieci']
+    count_numeri_parole = sum(1 for n in numeri_parole if n in message_lower)
+    if count_numeri_parole > 3:
+        return True, "Non è possibile condividere numeri di telefono"
+    
+    # Check if message contains user's real name (con variazioni)
+    if user_nome:
+        nome_lower = user_nome.lower().strip()
+        if len(nome_lower) >= 3:
+            # Nome esatto
+            if nome_lower in message_lower:
+                return True, "Non puoi condividere il tuo nome reale"
+            
+            # Nome senza vocale finale (Valerio -> Valeri)
+            if nome_lower[-1] in 'aeiou' and len(nome_lower) > 3:
+                nome_troncato = nome_lower[:-1]
+                # Cerca il nome troncato come parola (con possibili consonanti dopo)
+                pattern_nome = rf'\b{re.escape(nome_troncato)}[bcdfghjklmnpqrstvwxyz]*\b'
+                if re.search(pattern_nome, message_lower):
+                    return True, "Non puoi condividere il tuo nome reale"
+            
+            # Nome con consonanti aggiunte (Valerio -> Valerios)
+            pattern_nome_extra = rf'\b{re.escape(nome_lower)}[bcdfghjklmnpqrstvwxyz]+\b'
+            if re.search(pattern_nome_extra, message_lower):
+                return True, "Non puoi condividere il tuo nome reale"
+    
+    if user_cognome:
+        cognome_lower = user_cognome.lower().strip()
+        if len(cognome_lower) >= 3:
+            # Cognome esatto
+            if cognome_lower in message_lower:
+                return True, "Non puoi condividere il tuo cognome reale"
+            
+            # Cognome senza vocale finale
+            if cognome_lower[-1] in 'aeiou' and len(cognome_lower) > 3:
+                cognome_troncato = cognome_lower[:-1]
+                pattern_cognome = rf'\b{re.escape(cognome_troncato)}[bcdfghjklmnpqrstvwxyz]*\b'
+                if re.search(pattern_cognome, message_lower):
+                    return True, "Non puoi condividere il tuo cognome reale"
+            
+            # Cognome con consonanti aggiunte
+            pattern_cognome_extra = rf'\b{re.escape(cognome_lower)}[bcdfghjklmnpqrstvwxyz]+\b'
+            if re.search(pattern_cognome_extra, message_lower):
+                return True, "Non puoi condividere il tuo cognome reale"
     
     return False, ""
 
