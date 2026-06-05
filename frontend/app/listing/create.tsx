@@ -11,12 +11,14 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
+  Modal,
 } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import * as ImagePicker from 'expo-image-picker';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -131,6 +133,11 @@ export default function CreateListingScreen() {
   const [photo, setPhoto] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   
+  // Scanner ISBN state
+  const [showScanner, setShowScanner] = useState(false);
+  const [permission, requestPermission] = useCameraPermissions();
+  const [scannerProcessing, setScannerProcessing] = useState(false);
+  
   // Fascicoli state
   const [hasFascicoli, setHasFascicoli] = useState(false);
   const [fascicoliTotali, setFascicoliTotali] = useState(0);
@@ -193,6 +200,73 @@ export default function CreateListingScreen() {
     }, 300);
     return () => clearTimeout(timer);
   }, [searchQuery]);
+
+  // Funzione per aprire lo scanner
+  const openScanner = async () => {
+    if (Platform.OS === 'web') {
+      // Su web non possiamo usare la camera per barcode nativamente
+      if (Platform.OS === 'web') {
+        window.alert('La scansione barcode non è disponibile su web. Inserisci il codice ISBN manualmente.');
+      }
+      return;
+    }
+    
+    if (!permission?.granted) {
+      const result = await requestPermission();
+      if (!result.granted) {
+        Alert.alert('Permesso negato', 'Serve il permesso per usare la fotocamera');
+        return;
+      }
+    }
+    setShowScanner(true);
+  };
+
+  // Gestione scansione barcode
+  const handleBarcodeScanned = async ({ type, data }: { type: string; data: string }) => {
+    if (scannerProcessing) return;
+    
+    // ISBN-13 inizia con 978 o 979, ISBN-10 ha 10 cifre
+    const cleanData = data.replace(/[^0-9X]/gi, '');
+    
+    if (cleanData.length === 13 && (cleanData.startsWith('978') || cleanData.startsWith('979'))) {
+      // Valid ISBN-13
+      setScannerProcessing(true);
+      setShowScanner(false);
+      setSearchQuery(cleanData);
+      
+      // Cerca direttamente il libro con questo ISBN
+      try {
+        const response = await axios.get(`${API_URL}/api/books/search/${cleanData}`);
+        if (response.data) {
+          setSelectedBook(response.data);
+          setSearchResults([]);
+          if (Platform.OS === 'web') {
+            window.alert(`Libro trovato: ${response.data.titolo}`);
+          } else {
+            Alert.alert('Libro trovato!', response.data.titolo);
+          }
+        } else {
+          // Prova ricerca generica
+          const searchRes = await axios.get(`${API_URL}/api/books`, { 
+            params: { search: cleanData, limit: 5 } 
+          });
+          setSearchResults(searchRes.data || []);
+        }
+      } catch (error) {
+        console.error('Error searching ISBN:', error);
+        // Fallback a ricerca manuale
+        setSearchResults([]);
+      }
+      
+      setScannerProcessing(false);
+    } else if (cleanData.length === 10) {
+      // ISBN-10
+      setScannerProcessing(true);
+      setShowScanner(false);
+      setSearchQuery(cleanData);
+      setScannerProcessing(false);
+    }
+  };
 
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -307,11 +381,82 @@ export default function CreateListingScreen() {
 
   const currentCondition = calculateCondition(conditionAnswers);
 
+  // Scanner Modal Component
+  const ScannerModal = () => (
+    <Modal
+      visible={showScanner}
+      animationType="slide"
+      onRequestClose={() => setShowScanner(false)}
+    >
+      <View style={styles.scannerContainer}>
+        <View style={styles.scannerHeader}>
+          <Text style={styles.scannerTitle}>Scansiona il codice ISBN</Text>
+          <TouchableOpacity onPress={() => setShowScanner(false)}>
+            <Ionicons name="close" size={28} color="#333" />
+          </TouchableOpacity>
+        </View>
+        
+        {permission?.granted ? (
+          <View style={styles.cameraContainer}>
+            <CameraView
+              style={styles.camera}
+              facing="back"
+              barcodeScannerSettings={{
+                barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39'],
+              }}
+              onBarcodeScanned={scannerProcessing ? undefined : handleBarcodeScanned}
+            />
+            <View style={styles.cameraOverlay}>
+              <View style={styles.scanFrame} />
+              <Text style={styles.scanHint}>
+                Inquadra il codice a barre ISBN del libro
+              </Text>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.permissionContainer}>
+            <Ionicons name="camera-outline" size={64} color="#ccc" />
+            <Text style={styles.permissionText}>
+              Permesso fotocamera necessario
+            </Text>
+            <TouchableOpacity 
+              style={styles.permissionButton}
+              onPress={requestPermission}
+            >
+              <Text style={styles.permissionButtonText}>Concedi permesso</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+        
+        {/* Input manuale ISBN */}
+        <View style={styles.manualInputContainer}>
+          <Text style={styles.manualInputLabel}>Oppure inserisci manualmente:</Text>
+          <View style={styles.manualInputRow}>
+            <TextInput
+              style={styles.manualInput}
+              placeholder="Codice ISBN (13 cifre)"
+              keyboardType="numeric"
+              maxLength={13}
+              onChangeText={(text) => {
+                if (text.length === 13) {
+                  handleBarcodeScanned({ type: 'manual', data: text });
+                }
+              }}
+            />
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
+      {/* Scanner Modal */}
+      <ScannerModal />
+      
       <Stack.Screen 
         options={{ 
           title: 'Vendi un libro',
@@ -374,6 +519,15 @@ export default function CreateListingScreen() {
                 value={searchQuery}
                 onChangeText={setSearchQuery}
               />
+              {/* Pulsante scanner barcode - solo su mobile */}
+              {Platform.OS !== 'web' && (
+                <TouchableOpacity 
+                  style={styles.scanButton}
+                  onPress={openScanner}
+                >
+                  <Ionicons name="barcode-outline" size={24} color="#1a472a" />
+                </TouchableOpacity>
+              )}
             </View>
 
             {searchResults.length > 0 && (
@@ -1194,5 +1348,105 @@ const styles = StyleSheet.create({
     color: '#888',
     marginTop: 12,
     textAlign: 'center',
+  },
+  // Scanner styles
+  scanButton: {
+    padding: 8,
+    marginLeft: 8,
+  },
+  scannerContainer: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  scannerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    paddingTop: 50,
+    backgroundColor: '#f5f5f5',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  scannerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+  },
+  cameraContainer: {
+    flex: 1,
+    position: 'relative',
+  },
+  camera: {
+    flex: 1,
+  },
+  cameraOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.3)',
+  },
+  scanFrame: {
+    width: 280,
+    height: 150,
+    borderWidth: 3,
+    borderColor: '#1a472a',
+    borderRadius: 12,
+    backgroundColor: 'transparent',
+  },
+  scanHint: {
+    marginTop: 24,
+    fontSize: 16,
+    color: '#fff',
+    textAlign: 'center',
+    paddingHorizontal: 32,
+  },
+  permissionContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  permissionText: {
+    fontSize: 16,
+    color: '#666',
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  permissionButton: {
+    marginTop: 24,
+    backgroundColor: '#1a472a',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  permissionButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  manualInputContainer: {
+    padding: 16,
+    backgroundColor: '#f5f5f5',
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+  },
+  manualInputLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 8,
+  },
+  manualInputRow: {
+    flexDirection: 'row',
+  },
+  manualInput: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
   },
 });
