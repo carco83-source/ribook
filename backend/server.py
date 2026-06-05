@@ -9746,6 +9746,7 @@ async def get_conversation_messages(conversation_id: str):
 
 # Lista di nomi propri italiani comuni da bloccare
 NOMI_ITALIANI = [
+    # Nomi maschili comuni
     'marco', 'luca', 'andrea', 'matteo', 'lorenzo', 'alessandro', 'francesco', 'leonardo',
     'riccardo', 'gabriele', 'tommaso', 'edoardo', 'federico', 'giuseppe', 'antonio',
     'giovanni', 'pietro', 'davide', 'simone', 'filippo', 'michele', 'nicola', 'stefano',
@@ -9753,8 +9754,26 @@ NOMI_ITALIANI = [
     'vincenzo', 'salvatore', 'domenico', 'raffaele', 'carlo', 'mario', 'luigi', 'franco',
     'giulio', 'enrico', 'sergio', 'claudio', 'maurizio', 'luciano', 'bruno', 'gianluca',
     'christian', 'manuel', 'valerio', 'nicholas', 'alex', 'kevin', 'thomas', 'samuel',
-    'diego', 'jacopo', 'samuele', 'nicholas', 'dennis', 'cristian', 'mirko', 'ivan',
-    # Nomi femminili
+    'diego', 'jacopo', 'samuele', 'dennis', 'cristian', 'mirko', 'ivan',
+    # Nomi maschili aggiuntivi
+    'orazio', 'rocco', 'carmelo', 'calogero', 'pasquale', 'gennaro', 'ciro', 'aniello',
+    'agostino', 'alfredo', 'amedeo', 'angelo', 'arturo', 'aurelio', 'benito', 'beniamino',
+    'bernardo', 'camillo', 'carmine', 'cesare', 'corrado', 'cosimo', 'costantino', 'dario',
+    'dino', 'donato', 'egidio', 'elia', 'enzo', 'ernesto', 'ettore', 'eugenio', 'ezio',
+    'fabrizio', 'felice', 'ferdinando', 'filiberto', 'flavio', 'fulvio', 'gaetano',
+    'gerardo', 'germano', 'giacomo', 'gianfranco', 'gianmarco', 'gianpaolo', 'gilberto',
+    'gino', 'giordano', 'guglielmo', 'guido', 'gustavo', 'ignazio', 'isidoro', 'italo',
+    'lamberto', 'lauro', 'leandro', 'leone', 'livio', 'loris', 'lucio', 'luigi', 'marcello',
+    'marino', 'martino', 'massimiliano', 'mauro', 'nando', 'narciso', 'natale', 'natalino',
+    'nazario', 'nello', 'nereo', 'nevio', 'nunzio', 'oliviero', 'omar', 'onofrio', 'oreste',
+    'orlando', 'oscar', 'osvaldo', 'otello', 'ottavio', 'ottorino', 'pancrazio', 'patrizio',
+    'pellegrino', 'pier', 'piero', 'primo', 'prospero', 'quirino', 'raimondo', 'remo',
+    'renato', 'renzo', 'rinaldo', 'rodolfo', 'rolando', 'romeo', 'rosario', 'ruggero',
+    'sabatino', 'sandro', 'santino', 'santo', 'saverio', 'sebastiano', 'secondo', 'serafino',
+    'severino', 'silvano', 'silvio', 'siro', 'tancredi', 'tarcisio', 'teodoro', 'tiberio',
+    'tiziano', 'tobia', 'tullio', 'ubaldo', 'ugo', 'umberto', 'urbano', 'valentino', 'vasco',
+    'vittorio', 'walter', 'zeno',
+    # Nomi femminili comuni
     'giulia', 'sofia', 'aurora', 'alice', 'ginevra', 'emma', 'giorgia', 'martina',
     'sara', 'chiara', 'anna', 'gaia', 'elena', 'francesca', 'valentina', 'alessia',
     'beatrice', 'elisa', 'rebecca', 'camilla', 'vittoria', 'noemi', 'nicole', 'matilde',
@@ -9763,13 +9782,36 @@ NOMI_ITALIANI = [
     'paola', 'roberta', 'silvia', 'simona', 'serena', 'stefania', 'teresa', 'valeria',
     'vanessa', 'veronica', 'virginia', 'maria', 'rosa', 'angela', 'giovanna', 'patrizia',
     'barbara', 'sabrina', 'manuela', 'emanuela', 'antonella', 'raffaella', 'rossella',
+    # Nomi femminili aggiuntivi
+    'ada', 'adele', 'adriana', 'agata', 'agnese', 'alberta', 'alessandra', 'amalia',
+    'ambra', 'amelia', 'anastasia', 'angelica', 'anita', 'annalisa', 'annamaria',
+    'antonia', 'antonietta', 'assunta', 'azzurra', 'benedetta', 'berenice', 'bruna',
+    'brunella', 'carla', 'carmela', 'carolina', 'caterina', 'cecilia', 'cinzia', 'clara',
+    'clarissa', 'clelia', 'clotilde', 'concetta', 'cornelia', 'cosima', 'debora', 'diana',
+    'dina', 'dolores', 'domenica', 'donatella', 'dora', 'edvige', 'elvira', 'enrica',
+    'erminia', 'ester', 'eugenia', 'eva', 'fabiana', 'fabiola', 'fiorella', 'flora',
+    'franca', 'fulvia', 'gabriella', 'gelsomina', 'gertrude', 'giacinta', 'gilda',
+    'gina', 'giorgina', 'giuseppa', 'giuseppina', 'grazia', 'graziella', 'ida', 'immacolata',
+    'ines', 'irene', 'irma', 'isabella', 'ivana', 'lea', 'leda', 'letizia', 'lidia',
+    'liliana', 'lina', 'linda', 'lisa', 'livia', 'lorena', 'lorenza', 'loredana', 'luana',
+    'luciana', 'luisa', 'maddalena', 'mafalda', 'marcella', 'margherita', 'mariangela',
+    'marianna', 'marilena', 'marina', 'marisa', 'maristella', 'marzia', 'maura', 'melania',
+    'milena', 'mirella', 'miriam', 'nadia', 'natalia', 'nicoletta', 'nilde', 'nunzia',
+    'olga', 'ornella', 'orsola', 'palmira', 'pamela', 'pietrina', 'pina', 'rachele',
+    'renata', 'rita', 'romina', 'rosalia', 'rosanna', 'rosaria', 'rosamaria', 'rosina',
+    'rossana', 'ruth', 'samanta', 'samantha', 'sandra', 'santina', 'silvana', 'sonia',
+    'stella', 'susanna', 'tania', 'tatiana', 'tina', 'tiziana', 'vera', 'wanda', 'wilma',
     # Nomi stranieri comuni in Italia
     'mohamed', 'ahmed', 'ali', 'omar', 'adam', 'david', 'daniel', 'gabriel', 'michael',
     'jason', 'brian', 'ryan', 'dylan', 'jordan', 'justin', 'brandon', 'tyler', 'william',
     'james', 'john', 'robert', 'richard', 'joseph', 'charles', 'steven', 'anthony',
-    # Diminutivi comuni
+    'fatima', 'aisha', 'amira', 'layla', 'yasmine', 'nadia', 'sarah', 'jennifer', 'emily',
+    'jessica', 'ashley', 'amanda', 'stephanie', 'michelle', 'kimberly', 'melissa', 'linda',
+    # Diminutivi e varianti comuni
     'ale', 'fra', 'fede', 'ste', 'matte', 'andre', 'giuly', 'vale', 'lore', 'nico',
     'miki', 'roby', 'tommy', 'dani', 'simo', 'max', 'gigi', 'toni', 'peppe', 'nino',
+    'ciro', 'mimmo', 'totò', 'ciccio', 'beppe', 'gino', 'pippo', 'rino', 'nanni',
+    'titti', 'lella', 'lilli', 'nene', 'ceci', 'gigia', 'peppa', 'titty', 'sissy',
 ]
 
 def check_message_content(content: str, sender_name: str = "", other_user_name: str = "") -> tuple[bool, str]:
