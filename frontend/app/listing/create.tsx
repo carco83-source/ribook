@@ -204,9 +204,7 @@ export default function CreateListingScreen() {
   // Funzione per aprire lo scanner
   const openScanner = async () => {
     if (Platform.OS === 'web') {
-      if (Platform.OS === 'web') {
-        window.alert('La scansione barcode non è disponibile su web. Inserisci il codice ISBN manualmente nel campo di ricerca.');
-      }
+      window.alert('La scansione barcode non è disponibile su web. Inserisci il codice ISBN manualmente nel campo di ricerca.');
       return;
     }
     
@@ -221,46 +219,90 @@ export default function CreateListingScreen() {
     }
   };
 
-  // Gestione scansione barcode
-  const handleBarcodeScanned = async ({ type, data }: { type: string; data: string }) => {
+  // Gestione scansione barcode - MIGLIORATA
+  const handleBarcodeScanned = ({ type, data }: { type: string; data: string }) => {
+    // Evita scansioni multiple
     if (scanned) return;
+    
+    console.log('=== BARCODE SCANNED ===');
+    console.log('Type:', type);
+    console.log('Raw data:', data);
+    
+    // Pulisci il codice
+    const cleanData = data.replace(/[^0-9X]/gi, '');
+    console.log('Clean data:', cleanData);
+    
+    // Verifica lunghezza minima ISBN
+    if (cleanData.length < 10) {
+      console.log('Codice troppo corto, ignoro');
+      return; // Ignora codici troppo corti senza bloccare
+    }
+    
+    // BLOCCA IMMEDIATAMENTE altre scansioni
     setScanned(true);
     
-    console.log('Barcode scanned:', type, data);
-    
-    // ISBN-13 inizia con 978 o 979, ISBN-10 ha 10 cifre
-    const cleanData = data.replace(/[^0-9X]/gi, '');
-    
-    if (cleanData.length >= 10) {
-      setShowScanner(false);
-      setSearchQuery(cleanData);
-      
-      // Cerca direttamente il libro con questo ISBN
+    // Feedback immediato con vibrazione se disponibile
+    if (Platform.OS !== 'web') {
       try {
-        const response = await axios.get(`${API_URL}/api/books/search/${cleanData}`);
-        if (response.data) {
-          setSelectedBook(response.data);
-          setSearchResults([]);
-          Alert.alert('Libro trovato!', response.data.titolo);
-        } else {
-          // Prova ricerca generica
-          const searchRes = await axios.get(`${API_URL}/api/books`, { 
-            params: { search: cleanData, limit: 5 } 
-          });
-          if (searchRes.data && searchRes.data.length > 0) {
-            setSearchResults(searchRes.data);
-            Alert.alert('Codice rilevato', `ISBN: ${cleanData}\nTrovati ${searchRes.data.length} risultati`);
-          } else {
-            Alert.alert('Codice rilevato', `ISBN: ${cleanData}\nNessun libro trovato nel database. Puoi cercarlo manualmente.`);
-          }
-        }
-      } catch (error) {
-        console.error('Error searching ISBN:', error);
-        Alert.alert('Codice rilevato', `ISBN: ${cleanData}\nErrore nella ricerca. Prova a cercare manualmente.`);
+        const Haptics = require('expo-haptics');
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } catch (e) {
+        // Haptics non disponibile, continua comunque
       }
-    } else {
-      Alert.alert('Codice non valido', 'Il codice scansionato non sembra essere un ISBN valido. Riprova.');
-      setScanned(false);
+    }
+    
+    // Chiudi scanner SUBITO
+    setShowScanner(false);
+    
+    // Mostra alert immediato
+    Alert.alert(
+      'ISBN Rilevato!', 
+      `Codice: ${cleanData}\n\nCerco il libro nel database...`,
+      [{ text: 'OK' }]
+    );
+    
+    // Imposta il codice nel campo di ricerca
+    setSearchQuery(cleanData);
+    
+    // Cerca il libro in background
+    searchBookByISBN(cleanData);
+  };
+  
+  // Funzione separata per ricerca ISBN
+  const searchBookByISBN = async (isbn: string) => {
+    try {
+      console.log('Searching for ISBN:', isbn);
+      
+      // Prima prova ricerca diretta per ISBN
+      const response = await axios.get(`${API_URL}/api/books/search/${isbn}`);
+      console.log('Search response:', response.data);
+      
+      if (response.data && response.data.titolo) {
+        setSelectedBook(response.data);
+        setSearchResults([]);
+        Alert.alert('Libro trovato!', response.data.titolo);
+      } else {
+        // Prova ricerca generica
+        const searchRes = await axios.get(`${API_URL}/api/books`, { 
+          params: { search: isbn, limit: 10 } 
+        });
+        
+        if (searchRes.data && searchRes.data.length > 0) {
+          setSearchResults(searchRes.data);
+          Alert.alert('Risultati', `Trovati ${searchRes.data.length} libri. Seleziona quello corretto.`);
+        } else {
+          Alert.alert(
+            'Libro non trovato', 
+            `ISBN: ${isbn}\n\nIl libro non è nel nostro database. Puoi cercarlo per titolo o aggiungerlo manualmente.`
+          );
+        }
+      }
+    } catch (error) {
+      console.error('Error searching ISBN:', error);
+      Alert.alert(
+        'Ricerca completata', 
+        `ISBN: ${isbn} inserito nel campo di ricerca.\n\nProva a cercare per titolo se non trovi risultati.`
+      );
     }
   };
 
