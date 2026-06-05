@@ -169,74 +169,41 @@ export default function StudentDetailScreen() {
       const tipoLabel = isMedia ? 'MEDIA' : 'SUP';
       const pdfUrl = `${API_URL}/api/profiles/${userId}/children/${child.id}/books-pdf`;
       
+      console.log('PDF URL:', pdfUrl); // Debug
+      
       if (Platform.OS === 'web') {
         // On web, open PDF in new tab
         window.open(pdfUrl, '_blank');
-      } else if (Platform.OS === 'ios') {
-        // On iOS, show action sheet with options
-        const filename = `lista_libri_${child.nome_figlio}_${child.classe}${tipoLabel}.pdf`;
-        const fileUri = FileSystem.cacheDirectory + filename;
-        
-        // First download the PDF
-        const downloadResult = await FileSystem.downloadAsync(pdfUrl, fileUri);
-        
-        if (downloadResult.status === 200) {
-          ActionSheetIOS.showActionSheetWithOptions(
-            {
-              options: ['Annulla', 'Condividi/Salva su File', 'Stampa'],
-              cancelButtonIndex: 0,
-              title: 'Lista Libri PDF',
-              message: 'Scegli come vuoi gestire il PDF'
-            },
-            async (buttonIndex) => {
-              try {
-                if (buttonIndex === 1) {
-                  // Condividi - apre il menu di condivisione iOS dove può salvare su File
-                  if (await Sharing.isAvailableAsync()) {
-                    await Sharing.shareAsync(downloadResult.uri, {
-                      mimeType: 'application/pdf',
-                      dialogTitle: 'Salva o Condividi Lista Libri',
-                      UTI: 'com.adobe.pdf'
-                    });
-                  }
-                } else if (buttonIndex === 2) {
-                  // Stampa direttamente
-                  await Print.printAsync({
-                    uri: downloadResult.uri,
-                    orientation: Print.Orientation.landscape // Stampa in orizzontale
-                  });
-                }
-              } catch (err) {
-                console.error('Error handling PDF action:', err);
-                showAlert('Errore', 'Si è verificato un errore');
-              }
-            }
-          );
-        } else {
-          showAlert('Errore', 'Impossibile scaricare il PDF');
-        }
       } else {
-        // On Android, download and share
-        const filename = `lista_libri_${child.nome_figlio}_${child.classe}${tipoLabel}.pdf`;
-        const fileUri = FileSystem.documentDirectory + filename;
-        
-        const downloadResult = await FileSystem.downloadAsync(pdfUrl, fileUri);
-        
-        if (downloadResult.status === 200) {
-          if (await Sharing.isAvailableAsync()) {
-            await Sharing.shareAsync(downloadResult.uri, {
-              mimeType: 'application/pdf',
-              dialogTitle: 'Salva o Condividi Lista Libri'
-            });
-          } else {
-            // Fallback: try to print
-            await Print.printAsync({
-              uri: downloadResult.uri,
-              orientation: Print.Orientation.landscape
-            });
+        // Su iOS e Android: usa WebBrowser per aprire il PDF
+        // Questo apre Safari/Chrome dove l'utente può salvare il PDF
+        try {
+          const result = await WebBrowser.openBrowserAsync(pdfUrl, {
+            presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
+            controlsColor: '#1a472a',
+            toolbarColor: '#f5f5f5',
+            enableBarCollapsing: true,
+          });
+          console.log('WebBrowser result:', result);
+          
+          if (result.type === 'cancel' || result.type === 'dismiss') {
+            // L'utente ha chiuso il browser, mostra istruzioni
+            if (Platform.OS === 'ios') {
+              showAlert(
+                'Salva il PDF', 
+                'Per salvare il PDF:\n\n1. Riapri il link\n2. Tocca l\'icona condivisione (quadrato con freccia su)\n3. Seleziona "Salva su File"'
+              );
+            }
           }
-        } else {
-          showAlert('Errore', 'Impossibile scaricare il PDF');
+        } catch (browserError) {
+          console.error('WebBrowser error:', browserError);
+          // Fallback: prova con Linking
+          const canOpen = await Linking.canOpenURL(pdfUrl);
+          if (canOpen) {
+            await Linking.openURL(pdfUrl);
+          } else {
+            showAlert('Errore', 'Impossibile aprire il PDF');
+          }
         }
       }
     } catch (error) {
