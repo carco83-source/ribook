@@ -58,39 +58,69 @@ export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [cartItemsCount, setCartItemsCount] = useState(0);
+  const [unreadMessages, setUnreadMessages] = useState(0);
   
-  // Fetch unread notifications count and cart items
+  // Fetch unread notifications count, messages and cart items
   useEffect(() => {
     const fetchCounts = async () => {
       try {
         const userId = await AsyncStorage.getItem('user_id');
-        if (!userId) return;
+        if (!userId) {
+          console.log('No userId found for badge counts');
+          return;
+        }
         
         // Fetch notifications
-        const notifResponse = await axios.get(`${API_URL}/api/notifications/${userId}`);
-        const notifications = notifResponse.data.notifications || [];
-        const unread = notifications.filter((n: any) => !n.read).length;
-        setUnreadNotifications(unread);
+        try {
+          const notifResponse = await axios.get(`${API_URL}/api/notifications/${userId}`);
+          const notifications = notifResponse.data.notifications || [];
+          const unread = notifications.filter((n: any) => !n.read).length;
+          setUnreadNotifications(unread);
+        } catch (e) {
+          console.log('Error fetching notifications:', e);
+        }
+        
+        // Fetch unread messages from conversations
+        try {
+          const convResponse = await axios.get(`${API_URL}/api/conversations/${userId}`);
+          const conversations = convResponse.data.conversations || [];
+          let totalUnreadMessages = 0;
+          for (const conv of conversations) {
+            if (conv.unread_count && conv.unread_count > 0) {
+              totalUnreadMessages += conv.unread_count;
+            }
+          }
+          setUnreadMessages(totalUnreadMessages);
+        } catch (e) {
+          console.log('Error fetching conversations:', e);
+        }
         
         // Fetch cart items (orders in_attesa_pagamento dove l'utente è ACQUIRENTE)
-        const ordersResponse = await axios.get(`${API_URL}/api/user-orders/${userId}`);
-        const orders = ordersResponse.data.orders || [];
-        // Conta solo gli ordini dove l'utente è l'ACQUIRENTE (buyer), non il venditore
-        const cartOrders = orders.filter((o: any) => 
-          (o.status === 'in_attesa_pagamento' || o.status === 'pending_payment') &&
-          o.buyer_id === userId // IMPORTANTE: Solo ordini dove è acquirente
-        );
-        setCartItemsCount(cartOrders.length);
+        try {
+          const ordersResponse = await axios.get(`${API_URL}/api/user-orders/${userId}`);
+          const orders = ordersResponse.data.orders || [];
+          // Conta solo gli ordini dove l'utente è l'ACQUIRENTE (buyer), non il venditore
+          const cartOrders = orders.filter((o: any) => 
+            (o.status === 'in_attesa_pagamento' || o.status === 'pending_payment') &&
+            o.buyer_id === userId // IMPORTANTE: Solo ordini dove è acquirente
+          );
+          setCartItemsCount(cartOrders.length);
+        } catch (e) {
+          console.log('Error fetching orders:', e);
+        }
       } catch (error) {
         console.error('Error fetching counts:', error);
       }
     };
     
     fetchCounts();
-    // Refresh every 15 seconds
-    const interval = setInterval(fetchCounts, 15000);
+    // Refresh every 10 seconds for faster badge updates
+    const interval = setInterval(fetchCounts, 10000);
     return () => clearInterval(interval);
   }, []);
+  
+  // Calcola il totale di notifiche non lette (notifiche + messaggi)
+  const totalUnread = unreadNotifications + unreadMessages;
   
   // Calcola l'altezza della tab bar in base alla piattaforma
   // Per Android aggiungiamo spazio extra per la navigation bar di sistema
@@ -200,7 +230,7 @@ export default function TabLayout() {
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="chatbubbles" size={size} color={color} />
           ),
-          tabBarBadge: unreadNotifications > 0 ? unreadNotifications : undefined,
+          tabBarBadge: totalUnread > 0 ? (totalUnread > 9 ? '9+' : totalUnread) : undefined,
           tabBarBadgeStyle: {
             backgroundColor: '#f44336',
             fontSize: 10,
