@@ -9782,27 +9782,58 @@ def check_message_content(content: str, sender_name: str = "", other_user_name: 
     content_lower = content.lower()
     error_msg = "Solo informazioni relative al libro"
     
-    # 0. Blocca nomi propri italiani
+    # 0. Blocca nomi propri italiani (anche con variazioni)
     for nome in NOMI_ITALIANI:
         # Cerca il nome come parola intera (non parte di altre parole)
         if re.search(rf'\b{nome}\b', content_lower):
             return False, error_msg
+        
+        # Nome senza vocale finale (Valerio -> Valeri)
+        if nome[-1] in 'aeiou' and len(nome) > 3:
+            nome_troncato = nome[:-1]
+            # Nome troncato + eventualmente consonanti dopo (Valeri, Valeris, Valerix)
+            if re.search(rf'\b{nome_troncato}[bcdfghjklmnpqrstvwxyz]*\b', content_lower):
+                return False, error_msg
+        
+        # Nome con consonanti aggiunte (Valerio -> Valerios, Valeriox)
+        if re.search(rf'\b{nome}[bcdfghjklmnpqrstvwxyz]+\b', content_lower):
+            return False, error_msg
     
-    # 1. Blocca email (pattern con @)
-    email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
-    if re.search(email_pattern, content):
+    # 0b. Blocca anche il nome del mittente se fornito (con variazioni)
+    if sender_name and len(sender_name) >= 3:
+        sender_lower = sender_name.lower().strip()
+        if sender_lower in content_lower:
+            return False, error_msg
+        # Variazione senza vocale finale
+        if sender_lower[-1] in 'aeiou' and len(sender_lower) > 3:
+            sender_troncato = sender_lower[:-1]
+            if re.search(rf'\b{re.escape(sender_troncato)}[bcdfghjklmnpqrstvwxyz]*\b', content_lower):
+                return False, error_msg
+        # Variazione con consonanti aggiunte
+        if re.search(rf'\b{re.escape(sender_lower)}[bcdfghjklmnpqrstvwxyz]+\b', content_lower):
+            return False, error_msg
+    
+    # 1. Blocca @ (sia simbolo che parola "chiocciola")
+    if '@' in content:
         return False, error_msg
     
-    # 2. Blocca QUALSIASI sequenza di 4+ cifre (anche con spazi/trattini/punti)
+    # 2. Blocca QUALSIASI sequenza di 4+ cifre TRANNE codici ISBN (iniziano con 978)
     content_no_spaces = re.sub(r'[\s\-\.\(\)/,]', '', content)
-    if re.search(r'\d{4,}', content_no_spaces):
-        return False, error_msg
+    # Trova tutti i gruppi di numeri
+    number_matches = re.findall(r'\d{4,}', content_no_spaces)
+    for num in number_matches:
+        # Permetti SOLO codici ISBN (iniziano con 978 o 979)
+        if not (num.startswith('978') or num.startswith('979')):
+            return False, error_msg
     
     # 3. Blocca numeri scritti con spazi tra le cifre (es: "3 3 3 1 2 3")
+    # Ma permetti se è un ISBN
     digits_and_spaces = re.sub(r'[^\d\s]', '', content)
     digits_only = re.sub(r'\s', '', digits_and_spaces)
     if len(digits_only) >= 4:
-        return False, error_msg
+        # Controlla se potrebbe essere un ISBN
+        if not (digits_only.startswith('978') or digits_only.startswith('979')):
+            return False, error_msg
     
     # 4. Blocca numeri scritti in lettere
     number_words = [
@@ -9930,6 +9961,23 @@ def check_message_content(content: str, sender_name: str = "", other_user_name: 
         r'bit\.ly', r'tinyurl', r'goo\.gl',
     ]
     for pattern in url_patterns:
+        if re.search(pattern, content_lower):
+            return False, error_msg
+    
+    # 11. Blocca indirizzi stradali (via, piazza, viale, etc.)
+    address_patterns = [
+        r'\b(via|v\.)\s+[a-zA-Z]',
+        r'\b(viale|v\.le)\s+[a-zA-Z]',
+        r'\b(piazza|p\.zza|p\.za|piazzale|p\.le)\s+[a-zA-Z]',
+        r'\b(corso|c\.so)\s+[a-zA-Z]',
+        r'\b(largo|l\.go)\s+[a-zA-Z]',
+        r'\b(vicolo|vic\.)\s+[a-zA-Z]',
+        r'\b(trav|traversa)\s+[a-zA-Z]',
+        r'\b(contrada|c\.da)\s+[a-zA-Z]',
+        r'\b(strada|str\.)\s+[a-zA-Z]',
+        r'\b(loc|località)\s+[a-zA-Z]',
+    ]
+    for pattern in address_patterns:
         if re.search(pattern, content_lower):
             return False, error_msg
     

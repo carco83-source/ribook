@@ -71,7 +71,7 @@ export default function MessaggiScreen() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [userId, setUserId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<TabType>('messaggi');
+  const [activeTab, setActiveTab] = useState<TabType>('notifiche');
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [expandedNotifications, setExpandedNotifications] = useState<Set<string>>(new Set());
@@ -472,22 +472,8 @@ export default function MessaggiScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Tab Switcher */}
+      {/* Tab Switcher - Notifiche a sinistra, Messaggi a destra */}
       <View style={styles.tabContainer}>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'messaggi' && styles.tabActive]}
-          onPress={() => setActiveTab('messaggi')}
-        >
-          <Ionicons 
-            name="chatbubbles" 
-            size={20} 
-            color={activeTab === 'messaggi' ? '#1a472a' : '#888'} 
-          />
-          <Text style={[styles.tabText, activeTab === 'messaggi' && styles.tabTextActive]}>
-            Messaggi
-          </Text>
-        </TouchableOpacity>
-        
         <TouchableOpacity
           style={[styles.tab, activeTab === 'notifiche' && styles.tabActive]}
           onPress={() => setActiveTab('notifiche')}
@@ -510,30 +496,24 @@ export default function MessaggiScreen() {
             Notifiche
           </Text>
         </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'messaggi' && styles.tabActive]}
+          onPress={() => setActiveTab('messaggi')}
+        >
+          <Ionicons 
+            name="chatbubbles" 
+            size={20} 
+            color={activeTab === 'messaggi' ? '#1a472a' : '#888'} 
+          />
+          <Text style={[styles.tabText, activeTab === 'messaggi' && styles.tabTextActive]}>
+            Messaggi
+          </Text>
+        </TouchableOpacity>
       </View>
 
-      {/* Content */}
-      {activeTab === 'messaggi' ? (
-        conversations.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Ionicons name="chatbubbles-outline" size={64} color="#ccc" />
-            <Text style={styles.emptyTitle}>Nessuna conversazione</Text>
-            <Text style={styles.emptySubtitle}>
-              Quando contatterai un venditore, la chat apparirà qui
-            </Text>
-          </View>
-        ) : (
-          <FlatList
-            data={conversations}
-            renderItem={renderConversation}
-            keyExtractor={(item) => item.id}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-            }
-            contentContainerStyle={styles.listContent}
-          />
-        )
-      ) : (
+      {/* Content - Prima Notifiche, poi Messaggi */}
+      {activeTab === 'notifiche' ? (
         notifications.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Ionicons name="notifications-outline" size={64} color="#ccc" />
@@ -546,6 +526,26 @@ export default function MessaggiScreen() {
           <FlatList
             data={notifications}
             renderItem={renderNotification}
+            keyExtractor={(item) => item.id}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+            contentContainerStyle={styles.listContent}
+          />
+        )
+      ) : (
+        conversations.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="chatbubbles-outline" size={64} color="#ccc" />
+            <Text style={styles.emptyTitle}>Nessuna conversazione</Text>
+            <Text style={styles.emptySubtitle}>
+              Quando contatterai un venditore, la chat apparirà qui
+            </Text>
+          </View>
+        ) : (
+          <FlatList
+            data={conversations}
+            renderItem={renderConversation}
             keyExtractor={(item) => item.id}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
