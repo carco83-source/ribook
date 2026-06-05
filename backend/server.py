@@ -7729,12 +7729,18 @@ async def request_return(order_id: str, user_id: str = Query(...), reason: str =
     await db.bookstore_notifications.insert_one(bookstore_notification)
     
     # Notifica al venditore CON LA MOTIVAZIONE
+    bookstore_name_clean = order.get('bookstore_name', 'la cartolibreria')
+    # Evita duplicati come "La cartolibreria Cartolibreria NiCa"
+    if bookstore_name_clean.lower().startswith('cartolibreria'):
+        bookstore_prefix = ""
+    else:
+        bookstore_prefix = "La cartolibreria "
     notification_seller = {
         "id": str(uuid.uuid4()),
         "user_id": order.get("seller_id"),
         "type": "return_requested",
         "title": "Richiesta reso ricevuta",
-        "message": f"L'acquirente ha richiesto un reso per:\n📚 {order.get('book_titolo')}\n\n⚠️ Motivazione dell'acquirente:\n\"{reason_text}\"\n\nLa cartolibreria {order.get('bookstore_name')} verificherà il libro e deciderà se approvare il reso.",
+        "message": f"L'acquirente ha richiesto un reso per:\n📚 {order.get('book_titolo')}\n\n⚠️ Motivazione dell'acquirente:\n\"{reason_text}\"\n\n{bookstore_prefix}{bookstore_name_clean} verificherà il libro e deciderà se approvare il reso.",
         "order_id": order_id,
         "return_reason": reason_text,
         "read": False,
@@ -7805,13 +7811,16 @@ async def verify_return(
         
         # Notifica venditore - RESO ACCETTATO
         return_reason = order.get("return_reason", "Non specificato")
+        bookstore_name = order.get("bookstore_name", "la cartolibreria")
+        order_code = order.get("code", "")
         notification_seller = {
             "id": str(uuid.uuid4()),
             "user_id": order.get("seller_id"),
             "type": "return_accepted",
             "title": "Reso del libro accettato - Acquisto annullato",
-            "message": f"⚠️ Il reso per il libro:\n📚 \"{order.get('book_titolo')}\"\n\nè stato ACCETTATO.\n\n📝 Motivazione acquirente:\n\"{return_reason}\"\n\nL'acquisto è annullato. Il libro è tornato disponibile nel tuo inventario.",
+            "message": f"⚠️ Il reso per il libro:\n📚 \"{order.get('book_titolo')}\"\n\nè stato ACCETTATO.\n\n📝 Motivazione acquirente:\n\"{return_reason}\"\n\nL'acquisto è annullato. Il libro è tornato disponibile nel tuo inventario.\n\nRecati presso {bookstore_name} per ritirare il libro.",
             "order_id": order_id,
+            "order_code": order_code,
             "read": False,
             "created_at": now.isoformat()
         }

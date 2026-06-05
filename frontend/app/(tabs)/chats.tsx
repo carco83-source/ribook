@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { useNotifications } from '../../context/NotificationContext';
+import QRCode from 'react-native-qrcode-svg';
 
 const API_BASE = process.env.EXPO_PUBLIC_BACKEND_URL 
   ? `${process.env.EXPO_PUBLIC_BACKEND_URL}/api`
@@ -375,7 +376,25 @@ export default function MessaggiScreen() {
               <Text style={styles.expandHint}>Tocca per espandere...</Text>
             )}
             {isExpanded && (
-              <Text style={styles.collapseHint}>Tocca per ridurre</Text>
+              <>
+                {/* QR Code per notifica "Acquisto annullato" (return_accepted) */}
+                {item.type === 'return_accepted' && item.order_code && (
+                  <View style={styles.qrCodeSection}>
+                    <Text style={styles.qrCodeLabel}>Codice ritiro libro:</Text>
+                    <View style={styles.qrCodeWrapper}>
+                      <QRCode
+                        value={item.order_code}
+                        size={100}
+                        backgroundColor="#fff"
+                      />
+                    </View>
+                    <View style={styles.qrCodeBadge}>
+                      <Text style={styles.qrCodeText}>{item.order_code}</Text>
+                    </View>
+                  </View>
+                )}
+                <Text style={styles.collapseHint}>Tocca per ridurre</Text>
+              </>
             )}
             {/* Indicatore "Vai al carrello" per notifiche ready_for_payment */}
             {isReadyForPayment && !isSellerConfirmation && (
@@ -856,5 +875,44 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     marginTop: 8,
     textAlign: 'center',
+  },
+  // Stili per QR Code nella notifica
+  qrCodeSection: {
+    alignItems: 'center',
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+  },
+  qrCodeLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 12,
+  },
+  qrCodeWrapper: {
+    padding: 12,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#1a472a',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  qrCodeBadge: {
+    marginTop: 10,
+    backgroundColor: '#e8f5e9',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  qrCodeText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1a472a',
+    letterSpacing: 2,
   },
 });
