@@ -9848,7 +9848,7 @@ def check_message_content(content: str, sender_name: str = "", other_user_name: 
     for pattern in number_words:
         if re.search(pattern, content_lower):
             number_word_count += 1
-    if number_word_count >= 3:
+    if number_word_count >= 2:
         return False, error_msg
     
     # 5. Blocca pattern di presentazione nome (RAFFINATO - evita falsi positivi)

@@ -21,13 +21,6 @@ const API_BASE = process.env.EXPO_PUBLIC_BACKEND_URL
   ? `${process.env.EXPO_PUBLIC_BACKEND_URL}/api`
   : Constants.expoConfig?.extra?.apiUrl || '/api';
 
-// Domande preimpostate
-const PRESET_QUESTIONS = [
-  'I fascicoli ci sono tutti?',
-  'Il libro corrisponde alle condizioni indicate?',
-  'Puoi mandarmi altre foto?',
-];
-
 interface Message {
   id: string;
   conversation_id: string;
@@ -61,7 +54,6 @@ export default function ChatScreen() {
   const [newMessage, setNewMessage] = useState('');
   const [conversation, setConversation] = useState<ConversationInfo | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
-  const [showPresets, setShowPresets] = useState(true);
 
   const loadChat = async () => {
     try {
@@ -81,10 +73,7 @@ export default function ChatScreen() {
         const msgData = await msgResponse.json();
         setMessages(msgData.messages || []);
         
-        // Hide presets if there are already messages
-        if (msgData.messages && msgData.messages.length > 0) {
-          setShowPresets(false);
-        }
+        // Hide presets if there are already messages - RIMOSSO
       }
 
       // Mark messages as read
@@ -153,7 +142,6 @@ export default function ChatScreen() {
         const data = await response.json();
         setMessages((prev) => [...prev, data.message]);
         setNewMessage('');
-        setShowPresets(false);
         
         // Scroll to bottom
         setTimeout(() => {
@@ -171,10 +159,6 @@ export default function ChatScreen() {
     } finally {
       setSending(false);
     }
-  };
-
-  const handlePresetQuestion = (question: string) => {
-    sendMessage(question);
   };
 
   const getOtherUserName = () => {
@@ -294,22 +278,6 @@ export default function ChatScreen() {
         }
       />
 
-      {/* Preset Questions */}
-      {showPresets && messages.length === 0 && (
-        <View style={styles.presetsContainer}>
-          <Text style={styles.presetsTitle}>Domande frequenti:</Text>
-          {PRESET_QUESTIONS.map((question, index) => (
-            <TouchableOpacity
-              key={index}
-              style={styles.presetButton}
-              onPress={() => handlePresetQuestion(question)}
-            >
-              <Text style={styles.presetText}>{question}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
-
       {/* Input Area */}
       <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
         <TextInput
@@ -420,28 +388,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#888',
     marginTop: 12,
-  },
-  presetsContainer: {
-    backgroundColor: '#fff',
-    padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
-  },
-  presetsTitle: {
-    fontSize: 13,
-    color: '#666',
-    marginBottom: 12,
-  },
-  presetButton: {
-    backgroundColor: '#f0f0f0',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    marginBottom: 8,
-  },
-  presetText: {
-    fontSize: 14,
-    color: '#333',
   },
   inputContainer: {
     flexDirection: 'row',
