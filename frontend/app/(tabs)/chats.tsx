@@ -377,21 +377,54 @@ export default function MessaggiScreen() {
             )}
             {isExpanded && (
               <>
-                {/* QR Code per notifica "Acquisto annullato" (return_accepted) */}
-                {item.type === 'return_accepted' && item.order_code && (
-                  <View style={styles.qrCodeSection}>
-                    <Text style={styles.qrCodeLabel}>Codice ritiro libro:</Text>
-                    <View style={styles.qrCodeWrapper}>
-                      <QRCode
-                        value={item.order_code}
-                        size={100}
-                        backgroundColor="#fff"
-                      />
+                {/* QR Code per notifiche con order_code */}
+                {(item.order_code || item.data?.order_code) && (
+                  ['order_paid_waiting', 'order_paid_deliver', 'return_accepted', 'ready_for_pickup', 'order_ready_pickup'].includes(item.type) && (
+                    <View style={styles.qrCodeSection}>
+                      <Text style={styles.qrCodeLabel}>
+                        {item.type === 'order_paid_deliver' ? 'Codice consegna:' : 
+                         item.type === 'order_paid_waiting' ? 'Codice ritiro:' : 
+                         item.type === 'return_accepted' ? 'Codice ritiro libro:' :
+                         'Codice ordine:'}
+                      </Text>
+                      <View style={styles.qrCodeWrapper}>
+                        <QRCode
+                          value={item.order_code || item.data?.order_code}
+                          size={120}
+                          backgroundColor="#fff"
+                        />
+                      </View>
+                      <View style={styles.qrCodeBadge}>
+                        <Text style={styles.qrCodeText}>{item.order_code || item.data?.order_code}</Text>
+                      </View>
+                      {/* Dettagli libro se disponibili */}
+                      {item.book_details && (
+                        <View style={styles.bookDetailsSection}>
+                          <Text style={styles.bookDetailsTitle}>Dettagli libro:</Text>
+                          <Text style={styles.bookDetailsText}>📚 {item.book_details.titolo}</Text>
+                          {item.book_details.condizioni && (
+                            <Text style={styles.bookDetailsText}>📖 Condizioni: {item.book_details.condizioni}</Text>
+                          )}
+                          {item.book_details.prezzo && (
+                            <Text style={styles.bookDetailsText}>💰 Prezzo: €{item.book_details.prezzo?.toFixed(2)}</Text>
+                          )}
+                        </View>
+                      )}
+                      {/* Info cartolibreria */}
+                      {(item.bookstore_name || item.data?.bookstore_name) && (
+                        <View style={styles.bookstoreInfo}>
+                          <Text style={styles.bookstoreInfoText}>
+                            🏪 {item.bookstore_name || item.data?.bookstore_name}
+                          </Text>
+                          {(item.bookstore_address || item.data?.bookstore_address) && (
+                            <Text style={styles.bookstoreAddressText}>
+                              📍 {item.bookstore_address || item.data?.bookstore_address}
+                            </Text>
+                          )}
+                        </View>
+                      )}
                     </View>
-                    <View style={styles.qrCodeBadge}>
-                      <Text style={styles.qrCodeText}>{item.order_code}</Text>
-                    </View>
-                  </View>
+                  )
                 )}
                 <Text style={styles.collapseHint}>Tocca per ridurre</Text>
               </>
@@ -914,5 +947,41 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#1a472a',
     letterSpacing: 2,
+  },
+  bookDetailsSection: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+    alignItems: 'flex-start',
+    width: '100%',
+  },
+  bookDetailsTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 6,
+  },
+  bookDetailsText: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 4,
+  },
+  bookstoreInfo: {
+    marginTop: 12,
+    padding: 10,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
+    width: '100%',
+  },
+  bookstoreInfoText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1a472a',
+  },
+  bookstoreAddressText: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
   },
 });

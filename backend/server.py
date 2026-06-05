@@ -6957,23 +6957,37 @@ async def pay_order(order_id: str, user_id: str = Query(...)):
     }
     await db.bookstore_notifications.insert_one(bookstore_notification)
     
-    # Notifica all'acquirente
+    # Notifica all'acquirente CON QR code e dettagli libro
     buyer_notification = {
         "id": str(uuid.uuid4()),
         "user_id": order.get("buyer_id"),
         "type": "order_paid_waiting",
         "title": "Acquisto completato con successo!",
-        "message": f"📚 {order.get('book_titolo')}\n\nOrdine confermato.\nRiceverai una notifica quando il testo sarà disponibile per il ritiro.",
+        "message": f"📚 {order.get('book_titolo')}\n\n📖 Condizioni: {order.get('book_condizioni', 'Non specificate')}\n\nOrdine confermato.\nRiceverai una notifica quando il testo sarà disponibile per il ritiro presso:\n🏪 {order.get('bookstore_name')}\n\nCodice ritiro: {order.get('order_code')}",
         "order_id": order_id,
         "order_code": order.get("order_code"),
         "bookstore_name": order.get("bookstore_name"),
+        "bookstore_address": bookstore_address,
+        "book_titolo": order.get("book_titolo"),
+        "book_condizioni": order.get("book_condizioni"),
+        "book_details": {
+            "titolo": order.get("book_titolo"),
+            "isbn": order.get("book_isbn"),
+            "condizioni": order.get("book_condizioni"),
+            "condition_answers": condition_answers,
+            "note": listing_note,
+            "prezzo": order.get("prezzo_libro"),
+        },
         "data": {
             "order_id": order_id,
             "order_code": order.get("order_code"),
             "book_titolo": order.get("book_titolo"),
+            "book_condizioni": order.get("book_condizioni"),
             "bookstore_name": order.get("bookstore_name"),
-            "show_qr": True
+            "show_qr": True,
+            "role": "buyer"
         },
+        "show_qr": True,
         "read": False,
         "persistent": True,
         "created_at": now.isoformat()

@@ -168,47 +168,39 @@ export default function StudentDetailScreen() {
       const isMedia = child.tipo_scuola === 'primo_grado';
       const tipoLabel = isMedia ? 'MEDIA' : 'SUP';
       const pdfUrl = `${API_URL}/api/profiles/${userId}/children/${child.id}/books-pdf`;
+      const filename = `lista_libri_${child.nome_figlio}_${child.classe}${tipoLabel}.pdf`;
       
-      console.log('PDF URL:', pdfUrl); // Debug
+      console.log('PDF URL:', pdfUrl);
       
       if (Platform.OS === 'web') {
         // On web, open PDF in new tab
         window.open(pdfUrl, '_blank');
       } else {
-        // Su iOS e Android: usa WebBrowser per aprire il PDF
-        // Questo apre Safari/Chrome dove l'utente può salvare il PDF
-        try {
-          const result = await WebBrowser.openBrowserAsync(pdfUrl, {
-            presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
-            controlsColor: '#1a472a',
-            toolbarColor: '#f5f5f5',
-            enableBarCollapsing: true,
-          });
-          console.log('WebBrowser result:', result);
-          
-          if (result.type === 'cancel' || result.type === 'dismiss') {
-            // L'utente ha chiuso il browser, mostra istruzioni
-            if (Platform.OS === 'ios') {
-              showAlert(
-                'Salva il PDF', 
-                'Per salvare il PDF:\n\n1. Riapri il link\n2. Tocca l\'icona condivisione (quadrato con freccia su)\n3. Seleziona "Salva su File"'
-              );
-            }
-          }
-        } catch (browserError) {
-          console.error('WebBrowser error:', browserError);
-          // Fallback: prova con Linking
-          const canOpen = await Linking.canOpenURL(pdfUrl);
-          if (canOpen) {
-            await Linking.openURL(pdfUrl);
+        // Su iOS e Android: scarica il file e poi condividi
+        const fileUri = FileSystem.cacheDirectory + filename;
+        
+        console.log('Downloading to:', fileUri);
+        const downloadResult = await FileSystem.downloadAsync(pdfUrl, fileUri);
+        console.log('Download result:', downloadResult.status);
+        
+        if (downloadResult.status === 200) {
+          // Condividi il file - funziona su iOS e Android
+          if (await Sharing.isAvailableAsync()) {
+            await Sharing.shareAsync(downloadResult.uri, {
+              mimeType: 'application/pdf',
+              dialogTitle: 'Condividi Lista Libri PDF',
+              UTI: 'com.adobe.pdf' // Importante per iOS
+            });
           } else {
-            showAlert('Errore', 'Impossibile aprire il PDF');
+            showAlert('Errore', 'Condivisione non disponibile su questo dispositivo');
           }
+        } else {
+          showAlert('Errore', `Impossibile scaricare il PDF (${downloadResult.status})`);
         }
       }
     } catch (error) {
       console.error('Error downloading PDF:', error);
-      showAlert('Errore', 'Si è verificato un errore durante il download');
+      showAlert('Errore', `Errore: ${error instanceof Error ? error.message : 'Sconosciuto'}`);
     } finally {
       setDownloadingPdf(false);
     }
