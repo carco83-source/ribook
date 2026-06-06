@@ -95,13 +95,14 @@ export default function RegisterScreen() {
         password,
       });
 
-      const { user } = response.data;
+      // Il backend ritorna { message, user_id, username }
+      const { user_id, username } = response.data;
 
       // Salva i dati dell'utente
-      await AsyncStorage.setItem('user_id', user.id);
-      await AsyncStorage.setItem('username', user.email);
-      await AsyncStorage.setItem('user_nome', user.nome);
-      await AsyncStorage.setItem('is_premium', String(user.is_premium || false));
+      await AsyncStorage.setItem('user_id', user_id);
+      await AsyncStorage.setItem('username', username);
+      await AsyncStorage.setItem('user_nome', nome.trim());
+      await AsyncStorage.setItem('is_premium', 'false');
 
       // Vai alla home
       router.replace('/(tabs)');
