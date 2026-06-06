@@ -524,7 +524,7 @@ export default function ListingDetailScreen() {
       <View style={styles.content}>
         {/* Book Details */}
         <View style={styles.priceRow}>
-          <Text style={styles.price}>€{(total + commission).toFixed(2)}</Text>
+          <Text style={styles.price}>€{total.toFixed(2)}</Text>
           <View style={styles.conditionBadge}>
             <Text style={styles.conditionText}>
               {getConditionLabel(getListingCondition(listing))}
@@ -913,7 +913,7 @@ export default function ListingDetailScreen() {
         <View style={styles.priceBreakdown}>
           <View style={styles.priceRow}>
             <Text style={styles.priceRowLabel}>Costo del testo usato</Text>
-            <Text style={styles.priceRowValue}>€{(total + commission).toFixed(2)}</Text>
+            <Text style={styles.priceRowValue}>€{total.toFixed(2)}</Text>
           </View>
           <Text style={styles.priceSubLabel}>comprensivo di gestione RB</Text>
           
@@ -944,8 +944,8 @@ export default function ListingDetailScreen() {
             <ActivityIndicator color="#fff" />
           ) : (
             <>
-              <Ionicons name="flash" size={24} color="#fff" />
-              <Text style={styles.purchaseButtonText}>Acquista ora</Text>
+              <Ionicons name="paper-plane" size={24} color="#fff" />
+              <Text style={styles.purchaseButtonText}>Richiedi disponibilità</Text>
             </>
           )}
         </TouchableOpacity>
