@@ -107,8 +107,24 @@ export default function RegisterScreen() {
       // Vai alla home
       router.replace('/(tabs)');
     } catch (error: any) {
-      console.error('Registration error:', error.response?.data || error.message);
-      const message = error.response?.data?.detail || 'Errore durante la registrazione';
+      console.error('Registration error:', error);
+      console.error('Response data:', error.response?.data);
+      console.error('Response status:', error.response?.status);
+      
+      let message = 'Errore durante la registrazione';
+      if (error.response?.data?.detail) {
+        message = error.response.data.detail;
+      } else if (error.message) {
+        message = error.message;
+      }
+      
+      // Mostra alert per debug
+      if (Platform.OS === 'web') {
+        window.alert(`Errore: ${message}\n\nStatus: ${error.response?.status || 'N/A'}`);
+      } else {
+        Alert.alert('Errore Registrazione', message);
+      }
+      
       setErrorMessage(message);
     } finally {
       setLoading(false);
