@@ -419,84 +419,113 @@ export default function CreateListingScreen() {
 
   const currentCondition = calculateCondition(conditionAnswers);
 
-  // Scanner Modal Component
-  const ScannerModal = () => (
-    <Modal
-      visible={showScanner}
-      animationType="slide"
-      onRequestClose={() => setShowScanner(false)}
-    >
-      <View style={styles.scannerContainer}>
-        <View style={styles.scannerHeader}>
-          <Text style={styles.scannerTitle}>Scansiona il codice ISBN</Text>
-          <TouchableOpacity onPress={() => setShowScanner(false)}>
-            <Ionicons name="close" size={28} color="#333" />
-          </TouchableOpacity>
-        </View>
+  // Scanner Modal Component - SEMPLIFICATO
+  const ScannerModal = () => {
+    // Handler locale per evitare problemi di closure
+    const onScan = (result: { type: string; data: string }) => {
+      console.log('>>> SCAN DETECTED <<<');
+      console.log('Type:', result.type);
+      console.log('Data:', result.data);
+      
+      if (scanned) {
+        console.log('Already scanned, ignoring');
+        return;
+      }
+      
+      const cleanData = result.data.replace(/[^0-9]/g, '');
+      console.log('Clean data:', cleanData, 'Length:', cleanData.length);
+      
+      if (cleanData.length >= 10) {
+        console.log('Valid ISBN detected!');
+        setScanned(true);
+        setShowScanner(false);
+        setSearchQuery(cleanData);
         
-        {hasPermission ? (
-          <View style={styles.cameraContainer}>
-            <BarCodeScanner
-              onBarCodeScanned={scanned ? undefined : handleBarcodeScanned}
-              style={StyleSheet.absoluteFillObject}
-              barCodeTypes={[
-                BarCodeScanner.Constants.BarCodeType.ean13,
-                BarCodeScanner.Constants.BarCodeType.ean8,
-                BarCodeScanner.Constants.BarCodeType.upc_a,
-                BarCodeScanner.Constants.BarCodeType.upc_e,
-              ]}
-            />
-            <View style={styles.cameraOverlay}>
-              <View style={styles.scanFrame} />
-              <Text style={styles.scanHint}>
-                Inquadra il codice a barre ISBN sul retro del libro
-              </Text>
-              {scanned && (
-                <TouchableOpacity 
-                  style={styles.rescanButton}
-                  onPress={() => setScanned(false)}
-                >
-                  <Text style={styles.rescanButtonText}>Tocca per scansionare di nuovo</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          </View>
-        ) : (
-          <View style={styles.permissionContainer}>
-            <Ionicons name="camera-outline" size={64} color="#ccc" />
-            <Text style={styles.permissionText}>
-              Permesso fotocamera necessario
-            </Text>
+        // Alert immediato
+        setTimeout(() => {
+          Alert.alert('ISBN Rilevato!', `Codice: ${cleanData}`, [
+            { text: 'OK', onPress: () => searchBookByISBN(cleanData) }
+          ]);
+        }, 100);
+      }
+    };
+    
+    return (
+      <Modal
+        visible={showScanner}
+        animationType="slide"
+        onRequestClose={() => setShowScanner(false)}
+      >
+        <View style={styles.scannerContainer}>
+          <View style={styles.scannerHeader}>
+            <Text style={styles.scannerTitle}>Scansiona ISBN</Text>
             <TouchableOpacity 
-              style={styles.permissionButton}
-              onPress={openScanner}
+              onPress={() => {
+                setShowScanner(false);
+                setScanned(false);
+              }}
+              style={{ padding: 10 }}
             >
-              <Text style={styles.permissionButtonText}>Concedi permesso</Text>
+              <Ionicons name="close-circle" size={32} color="#333" />
             </TouchableOpacity>
           </View>
-        )}
-        
-        {/* Input manuale ISBN */}
-        <View style={styles.manualInputContainer}>
-          <Text style={styles.manualInputLabel}>Oppure inserisci manualmente:</Text>
-          <View style={styles.manualInputRow}>
+          
+          {hasPermission ? (
+            <View style={{ flex: 1 }}>
+              <BarCodeScanner
+                onBarCodeScanned={onScan}
+                style={{ flex: 1 }}
+                barCodeTypes={[
+                  BarCodeScanner.Constants.BarCodeType.ean13,
+                  BarCodeScanner.Constants.BarCodeType.ean8,
+                ]}
+              />
+              <View style={styles.scanOverlay}>
+                <View style={styles.scanFrameNew} />
+                <Text style={styles.scanHintNew}>
+                  Inquadra il codice a barre
+                </Text>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.permissionContainer}>
+              <Ionicons name="camera-outline" size={64} color="#ccc" />
+              <Text style={styles.permissionText}>
+                Permesso fotocamera necessario
+              </Text>
+              <TouchableOpacity 
+                style={styles.permissionButton}
+                onPress={openScanner}
+              >
+                <Text style={styles.permissionButtonText}>Richiedi permesso</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+          
+          {/* Input manuale sempre visibile */}
+          <View style={styles.manualInputContainer}>
+            <Text style={styles.manualInputLabel}>Inserisci manualmente l'ISBN:</Text>
             <TextInput
               style={styles.manualInput}
-              placeholder="Codice ISBN (es: 9788824750011)"
-              keyboardType="numeric"
+              placeholder="978..."
+              keyboardType="number-pad"
               maxLength={13}
               onSubmitEditing={(e) => {
-                const text = e.nativeEvent.text;
+                const text = e.nativeEvent.text.replace(/[^0-9]/g, '');
                 if (text.length >= 10) {
-                  handleBarcodeScanned({ type: 'manual', data: text });
+                  setScanned(true);
+                  setShowScanner(false);
+                  setSearchQuery(text);
+                  searchBookByISBN(text);
                 }
               }}
+              returnKeyType="search"
             />
           </View>
         </View>
-      </View>
-    </Modal>
-  );
+      </Modal>
+    );
+  };
 
   return (
     <KeyboardAvoidingView
@@ -1449,6 +1478,27 @@ const styles = StyleSheet.create({
     color: '#fff',
     textAlign: 'center',
     paddingHorizontal: 32,
+  },
+  scanOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  scanFrameNew: {
+    width: 280,
+    height: 120,
+    borderWidth: 3,
+    borderColor: '#00ff00',
+    borderRadius: 8,
+    backgroundColor: 'transparent',
+  },
+  scanHintNew: {
+    marginTop: 20,
+    fontSize: 18,
+    color: '#fff',
+    fontWeight: 'bold',
+    textAlign: 'center',
   },
   rescanButton: {
     marginTop: 20,
