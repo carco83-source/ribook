@@ -552,16 +552,22 @@ class Match(BaseModel):
 
 @api_router.post("/auth/register")
 async def register_user(user_data: UserCreate):
+    print(f"=== REGISTRATION ATTEMPT ===")
+    print(f"Email: {user_data.email}")
+    print(f"Nome: {user_data.nome}")
+    print(f"Cognome: {user_data.cognome}")
+    
     # Check if email already exists
-    existing = await db.users.find_one({"email": user_data.email})
+    existing = await db.users.find_one({"email": user_data.email.lower()})
     if existing:
+        print(f"Email già esistente!")
         raise HTTPException(status_code=400, detail="Email già registrata")
     
     # Create user with auto-generated username
     user = User(
         nome=user_data.nome,
         cognome=user_data.cognome,
-        email=user_data.email,
+        email=user_data.email.lower(),
         telefono=user_data.telefono,
         password_hash=hash_password(user_data.password),
         scuola=user_data.scuola,
@@ -572,6 +578,7 @@ async def register_user(user_data: UserCreate):
     )
     
     await db.users.insert_one(user.dict())
+    print(f"Utente creato con ID: {user.id}")
     return {"message": "Registrazione completata", "user_id": user.id, "username": user.username}
 
 @api_router.post("/auth/login")
