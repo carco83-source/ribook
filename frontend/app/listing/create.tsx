@@ -18,7 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import * as ImagePicker from 'expo-image-picker';
-import { BarCodeScanner } from 'expo-barcode-scanner';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -133,9 +133,9 @@ export default function CreateListingScreen() {
   const [photo, setPhoto] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   
-  // Scanner ISBN state
+  // Scanner ISBN state - NUOVO API expo-camera
   const [showScanner, setShowScanner] = useState(false);
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   
   // Fascicoli state
@@ -208,15 +208,17 @@ export default function CreateListingScreen() {
       return;
     }
     
-    const { status } = await BarCodeScanner.requestPermissionsAsync();
-    setHasPermission(status === 'granted');
-    
-    if (status === 'granted') {
-      setScanned(false);
-      setShowScanner(true);
-    } else {
-      Alert.alert('Permesso negato', 'Serve il permesso per usare la fotocamera per la scansione');
+    // Richiedi permesso se non già concesso
+    if (!permission?.granted) {
+      const result = await requestPermission();
+      if (!result.granted) {
+        Alert.alert('Permesso negato', 'Serve il permesso per usare la fotocamera');
+        return;
+      }
     }
+    
+    setScanned(false);
+    setShowScanner(true);
   };
 
   // Gestione scansione barcode - MIGLIORATA
@@ -419,11 +421,11 @@ export default function CreateListingScreen() {
 
   const currentCondition = calculateCondition(conditionAnswers);
 
-  // Scanner Modal Component - SEMPLIFICATO
+  // Scanner Modal Component - USA CameraView (nuovo API expo-camera)
   const ScannerModal = () => {
-    // Handler locale per evitare problemi di closure
-    const onScan = (result: { type: string; data: string }) => {
-      console.log('>>> SCAN DETECTED <<<');
+    // Handler per scansione barcode
+    const handleBarcodeScan = (result: { data: string; type: string }) => {
+      console.log('=== BARCODE SCANNED ===');
       console.log('Type:', result.type);
       console.log('Data:', result.data);
       
@@ -436,17 +438,14 @@ export default function CreateListingScreen() {
       console.log('Clean data:', cleanData, 'Length:', cleanData.length);
       
       if (cleanData.length >= 10) {
-        console.log('Valid ISBN detected!');
+        console.log('Valid ISBN!');
         setScanned(true);
         setShowScanner(false);
         setSearchQuery(cleanData);
         
-        // Alert immediato
-        setTimeout(() => {
-          Alert.alert('ISBN Rilevato!', `Codice: ${cleanData}`, [
-            { text: 'OK', onPress: () => searchBookByISBN(cleanData) }
-          ]);
-        }, 100);
+        Alert.alert('ISBN Rilevato!', `Codice: ${cleanData}`, [
+          { text: 'OK', onPress: () => searchBookByISBN(cleanData) }
+        ]);
       }
     };
     
@@ -470,20 +469,20 @@ export default function CreateListingScreen() {
             </TouchableOpacity>
           </View>
           
-          {hasPermission ? (
+          {permission?.granted ? (
             <View style={{ flex: 1 }}>
-              <BarCodeScanner
-                onBarCodeScanned={onScan}
+              <CameraView
                 style={{ flex: 1 }}
-                barCodeTypes={[
-                  BarCodeScanner.Constants.BarCodeType.ean13,
-                  BarCodeScanner.Constants.BarCodeType.ean8,
-                ]}
+                facing="back"
+                onBarcodeScanned={scanned ? undefined : handleBarcodeScan}
+                barcodeScannerSettings={{
+                  barcodeTypes: ['ean13', 'ean8'],
+                }}
               />
               <View style={styles.scanOverlay}>
                 <View style={styles.scanFrameNew} />
                 <Text style={styles.scanHintNew}>
-                  Inquadra il codice a barre
+                  Inquadra il codice a barre ISBN
                 </Text>
               </View>
             </View>
@@ -495,7 +494,7 @@ export default function CreateListingScreen() {
               </Text>
               <TouchableOpacity 
                 style={styles.permissionButton}
-                onPress={openScanner}
+                onPress={requestPermission}
               >
                 <Text style={styles.permissionButtonText}>Richiedi permesso</Text>
               </TouchableOpacity>
