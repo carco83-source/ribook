@@ -168,6 +168,15 @@ export default function CreateListingScreen() {
     }
   };
 
+  // Check if query looks like an ISBN
+  const isISBNQuery = (query: string): boolean => {
+    const cleanQuery = query.replace(/[^0-9]/g, '');
+    // ISBN-13 starts with 978 or 979 and has 13 digits
+    // ISBN-10 has 10 digits
+    return (cleanQuery.length === 13 && (cleanQuery.startsWith('978') || cleanQuery.startsWith('979'))) ||
+           (cleanQuery.length === 10);
+  };
+
   // Search books by query (title or ISBN)
   const searchBooks = async (query: string) => {
     if (query.length < 3) {
@@ -175,8 +184,16 @@ export default function CreateListingScreen() {
       return;
     }
     
+    // Se sembra un ISBN, usa la ricerca specifica per ISBN
+    if (isISBNQuery(query)) {
+      const cleanISBN = query.replace(/[^0-9]/g, '');
+      console.log('Detected ISBN query:', cleanISBN);
+      await searchBookByISBN(cleanISBN);
+      return;
+    }
+    
     try {
-      // Get user info for class filtering
+      // Get user info for class filtering (solo per ricerca per titolo)
       const userInfo = await AsyncStorage.getItem('user_info');
       const user = userInfo ? JSON.parse(userInfo) : null;
       
@@ -221,55 +238,6 @@ export default function CreateListingScreen() {
     setShowScanner(true);
   };
 
-  // Gestione scansione barcode - MIGLIORATA
-  const handleBarcodeScanned = ({ type, data }: { type: string; data: string }) => {
-    // Evita scansioni multiple
-    if (scanned) return;
-    
-    console.log('=== BARCODE SCANNED ===');
-    console.log('Type:', type);
-    console.log('Raw data:', data);
-    
-    // Pulisci il codice
-    const cleanData = data.replace(/[^0-9X]/gi, '');
-    console.log('Clean data:', cleanData);
-    
-    // Verifica lunghezza minima ISBN
-    if (cleanData.length < 10) {
-      console.log('Codice troppo corto, ignoro');
-      return; // Ignora codici troppo corti senza bloccare
-    }
-    
-    // BLOCCA IMMEDIATAMENTE altre scansioni
-    setScanned(true);
-    
-    // Feedback immediato con vibrazione se disponibile
-    if (Platform.OS !== 'web') {
-      try {
-        const Haptics = require('expo-haptics');
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } catch (e) {
-        // Haptics non disponibile, continua comunque
-      }
-    }
-    
-    // Chiudi scanner SUBITO
-    setShowScanner(false);
-    
-    // Mostra alert immediato
-    Alert.alert(
-      'ISBN Rilevato!', 
-      `Codice: ${cleanData}\n\nCerco il libro nel database...`,
-      [{ text: 'OK' }]
-    );
-    
-    // Imposta il codice nel campo di ricerca
-    setSearchQuery(cleanData);
-    
-    // Cerca il libro in background
-    searchBookByISBN(cleanData);
-  };
-  
   // Funzione separata per ricerca ISBN
   const searchBookByISBN = async (isbn: string) => {
     try {
@@ -445,39 +413,69 @@ export default function CreateListingScreen() {
 
   const currentCondition = calculateCondition(conditionAnswers);
 
+  // Handler per scansione barcode - FUORI dal Modal per evitare problemi di stato
+  const handleBarcodeScan = (result: { data: string; type: string }) => {
+    console.log('=== BARCODE SCANNED ===');
+    console.log('Type:', result.type);
+    console.log('Data:', result.data);
+    console.log('Scanned state:', scanned);
+    
+    // Se già scansionato, ignora
+    if (scanned) {
+      console.log('Already scanned, ignoring');
+      return;
+    }
+    
+    const cleanData = result.data.replace(/[^0-9]/g, '');
+    console.log('Clean data:', cleanData, 'Length:', cleanData.length);
+    
+    // Verifica che sia un codice valido (ISBN-10 o ISBN-13)
+    if (cleanData.length >= 10 && cleanData.length <= 13) {
+      console.log('Valid ISBN detected!');
+      
+      // BLOCCA IMMEDIATAMENTE altre scansioni
+      setScanned(true);
+      
+      // Haptic feedback
+      if (Platform.OS !== 'web') {
+        try {
+          const Haptics = require('expo-haptics');
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        } catch (e) {
+          console.log('Haptics not available');
+        }
+      }
+      
+      // Chiudi scanner
+      setShowScanner(false);
+      
+      // Imposta query
+      setSearchQuery(cleanData);
+      
+      // Mostra alert e cerca
+      Alert.alert('ISBN Rilevato!', `Codice: ${cleanData}`, [
+        { 
+          text: 'Cerca libro', 
+          onPress: () => {
+            searchBookByISBN(cleanData);
+          }
+        }
+      ]);
+    } else {
+      console.log('Code too short or invalid, length:', cleanData.length);
+    }
+  };
+
   // Scanner Modal Component - USA CameraView (nuovo API expo-camera)
   const ScannerModal = () => {
-    // Handler per scansione barcode
-    const handleBarcodeScan = (result: { data: string; type: string }) => {
-      console.log('=== BARCODE SCANNED ===');
-      console.log('Type:', result.type);
-      console.log('Data:', result.data);
-      
-      if (scanned) {
-        console.log('Already scanned, ignoring');
-        return;
-      }
-      
-      const cleanData = result.data.replace(/[^0-9]/g, '');
-      console.log('Clean data:', cleanData, 'Length:', cleanData.length);
-      
-      if (cleanData.length >= 10) {
-        console.log('Valid ISBN!');
-        setScanned(true);
-        setShowScanner(false);
-        setSearchQuery(cleanData);
-        
-        Alert.alert('ISBN Rilevato!', `Codice: ${cleanData}`, [
-          { text: 'OK', onPress: () => searchBookByISBN(cleanData) }
-        ]);
-      }
-    };
-    
     return (
       <Modal
         visible={showScanner}
         animationType="slide"
-        onRequestClose={() => setShowScanner(false)}
+        onRequestClose={() => {
+          setShowScanner(false);
+          setScanned(false);
+        }}
       >
         <View style={styles.scannerContainer}>
           <View style={styles.scannerHeader}>
@@ -500,7 +498,7 @@ export default function CreateListingScreen() {
                 facing="back"
                 onBarcodeScanned={scanned ? undefined : handleBarcodeScan}
                 barcodeScannerSettings={{
-                  barcodeTypes: ['ean13', 'ean8'],
+                  barcodeTypes: ['ean13', 'ean8', 'qr', 'code128', 'code39'],
                 }}
               />
               <View style={styles.scanOverlay}>
@@ -508,6 +506,14 @@ export default function CreateListingScreen() {
                 <Text style={styles.scanHintNew}>
                   Inquadra il codice a barre ISBN
                 </Text>
+                {scanned && (
+                  <TouchableOpacity 
+                    style={styles.rescanButton}
+                    onPress={() => setScanned(false)}
+                  >
+                    <Text style={styles.rescanButtonText}>Scansiona di nuovo</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
           ) : (
@@ -527,7 +533,7 @@ export default function CreateListingScreen() {
           
           {/* Input manuale sempre visibile */}
           <View style={styles.manualInputContainer}>
-            <Text style={styles.manualInputLabel}>Inserisci manualmente l'ISBN:</Text>
+            <Text style={styles.manualInputLabel}>Inserisci manualmente ISBN:</Text>
             <TextInput
               style={styles.manualInput}
               placeholder="978..."
@@ -834,7 +840,7 @@ export default function CreateListingScreen() {
                     <View style={styles.fascicoliWarning}>
                       <Ionicons name="warning" size={16} color="#e65100" />
                       <Text style={styles.fascicoliWarningText}>
-                        Fascicoli mancanti: la condizione sarà "Molto usato"
+                        Fascicoli mancanti: la condizione sarà Molto usato
                       </Text>
                     </View>
                   )}
