@@ -371,63 +371,38 @@ export default function MessaggiScreen() {
             <Text style={styles.notifMessage} numberOfLines={isExpanded ? undefined : (isSellerConfirmation ? 8 : 3)}>
               {item.message}
             </Text>
+            
+            {/* QR Code SEMPRE VISIBILE per ordini con show_qr_always o quando espanso */}
+            {(item.order_code || item.data?.order_code) && 
+              ['order_paid_waiting', 'order_paid_deliver', 'return_accepted', 'ready_for_pickup', 'order_ready_pickup'].includes(item.type) && (
+                (item.show_qr_always || isExpanded) && (
+                  <View style={styles.qrCodeSection}>
+                    <Text style={styles.qrCodeLabel}>Codice ordine</Text>
+                    <View style={styles.qrCodeWrapper}>
+                      <QRCode
+                        value={item.order_code || item.data?.order_code}
+                        size={120}
+                        backgroundColor="#fff"
+                      />
+                    </View>
+                    <View style={styles.qrCodeBadge}>
+                      <Text style={styles.qrCodeText}>{item.order_code || item.data?.order_code}</Text>
+                    </View>
+                    {/* Status indicator */}
+                    <View style={styles.statusIndicator}>
+                      <Ionicons name="cube" size={16} color="#e65100" />
+                      <Text style={styles.statusIndicatorText}>📦 In arrivo</Text>
+                    </View>
+                  </View>
+                )
+            )}
+            
             {/* Indicatore espansione */}
-            {!isExpanded && item.message && item.message.length > 100 && (
+            {!isExpanded && item.message && item.message.length > 100 && !item.show_qr_always && (
               <Text style={styles.expandHint}>Tocca per espandere...</Text>
             )}
             {isExpanded && (
-              <>
-                {/* QR Code per notifiche con order_code */}
-                {(item.order_code || item.data?.order_code) && (
-                  ['order_paid_waiting', 'order_paid_deliver', 'return_accepted', 'ready_for_pickup', 'order_ready_pickup'].includes(item.type) && (
-                    <View style={styles.qrCodeSection}>
-                      <Text style={styles.qrCodeLabel}>
-                        {item.type === 'order_paid_deliver' ? 'Codice consegna:' : 
-                         item.type === 'order_paid_waiting' ? 'Codice ritiro:' : 
-                         item.type === 'return_accepted' ? 'Codice ritiro libro:' :
-                         'Codice ordine:'}
-                      </Text>
-                      <View style={styles.qrCodeWrapper}>
-                        <QRCode
-                          value={item.order_code || item.data?.order_code}
-                          size={120}
-                          backgroundColor="#fff"
-                        />
-                      </View>
-                      <View style={styles.qrCodeBadge}>
-                        <Text style={styles.qrCodeText}>{item.order_code || item.data?.order_code}</Text>
-                      </View>
-                      {/* Dettagli libro se disponibili */}
-                      {item.book_details && (
-                        <View style={styles.bookDetailsSection}>
-                          <Text style={styles.bookDetailsTitle}>Dettagli libro:</Text>
-                          <Text style={styles.bookDetailsText}>📚 {item.book_details.titolo}</Text>
-                          {item.book_details.condizioni && (
-                            <Text style={styles.bookDetailsText}>📖 Condizioni: {item.book_details.condizioni}</Text>
-                          )}
-                          {item.book_details.prezzo && (
-                            <Text style={styles.bookDetailsText}>💰 Prezzo: €{item.book_details.prezzo?.toFixed(2)}</Text>
-                          )}
-                        </View>
-                      )}
-                      {/* Info cartolibreria */}
-                      {(item.bookstore_name || item.data?.bookstore_name) && (
-                        <View style={styles.bookstoreInfo}>
-                          <Text style={styles.bookstoreInfoText}>
-                            🏪 {item.bookstore_name || item.data?.bookstore_name}
-                          </Text>
-                          {(item.bookstore_address || item.data?.bookstore_address) && (
-                            <Text style={styles.bookstoreAddressText}>
-                              📍 {item.bookstore_address || item.data?.bookstore_address}
-                            </Text>
-                          )}
-                        </View>
-                      )}
-                    </View>
-                  )
-                )}
-                <Text style={styles.collapseHint}>Tocca per ridurre</Text>
-              </>
+              <Text style={styles.collapseHint}>Tocca per ridurre</Text>
             )}
             {/* Indicatore "Vai al carrello" per notifiche ready_for_payment */}
             {isReadyForPayment && !isSellerConfirmation && (

@@ -6906,20 +6906,22 @@ async def pay_order(order_id: str, user_id: str = Query(...)):
     condition_answers = listing.get("condition_answers") if listing else None
     listing_note = listing.get("note") or listing.get("descrizione") if listing else None
     
-    # Notifica al venditore con QR code E indirizzo cartolibreria
+    # Notifica al venditore - STESSO FORMATO CARTOLIBRERIA
     address_line = f"\n📍 {bookstore_address}" if bookstore_address else ""
     seller_notification = {
         "id": str(uuid.uuid4()),
         "user_id": order.get("seller_id"),
         "type": "order_paid_deliver",
-        "title": "📦 LIBRO VENDUTO! Consegna entro 2 giorni",
-        "message": f"Il tuo libro è stato acquistato!\n\n📚 LIBRO: {order.get('book_titolo')}\n📖 Condizioni: {order.get('book_condizioni', 'N/D')}\n\n⏰ HAI 2 GIORNI per consegnarlo presso:\n🏪 {order.get('bookstore_name')}{address_line}\n\n🔐 CODICE CONSEGNA: {order.get('order_code')}\n\n⬇️ TOCCA per vedere il QR CODE da mostrare alla cartolibreria",
+        "title": "NUOVO ORDINE IN ARRIVO",
+        "message": f"CODICE: {order.get('order_code')}\n\nLIBRO:\n{order.get('book_titolo')}\n\nCONDIZIONI: {order.get('book_condizioni', 'N/D')}\n\nVENDITORE: {order.get('seller_username', 'Tu')}\nACQUIRENTE: {order.get('buyer_username', 'Acquirente')}\n\n🏪 CONSEGNA presso:\n{order.get('bookstore_name')}{address_line}\n\n⏰ Hai 2 giorni per consegnare il libro",
         "order_id": order_id,
         "order_code": order.get("order_code"),
         "bookstore_name": order.get("bookstore_name"),
         "bookstore_address": bookstore_address,
         "book_titolo": order.get("book_titolo"),
         "book_condizioni": order.get("book_condizioni"),
+        "seller_username": order.get("seller_username"),
+        "buyer_username": order.get("buyer_username"),
         "book_details": {
             "titolo": order.get("book_titolo"),
             "isbn": order.get("book_isbn"),
@@ -6929,18 +6931,8 @@ async def pay_order(order_id: str, user_id: str = Query(...)):
             "prezzo": order.get("prezzo_libro"),
         },
         "delivery_deadline": delivery_deadline.isoformat(),
-        "data": {
-            "order_id": order_id,
-            "order_code": order.get("order_code"),
-            "book_titolo": order.get("book_titolo"),
-            "book_condizioni": order.get("book_condizioni"),
-            "bookstore_name": order.get("bookstore_name"),
-            "bookstore_address": bookstore_address,
-            "netto_venditore": order.get("netto_venditore"),
-            "show_qr": True,
-            "role": "seller"
-        },
         "show_qr": True,
+        "show_qr_always": True,
         "requires_action": True,
         "read": False,
         "persistent": True,
@@ -6976,19 +6968,21 @@ async def pay_order(order_id: str, user_id: str = Query(...)):
     }
     await db.bookstore_notifications.insert_one(bookstore_notification)
     
-    # Notifica all'acquirente CON QR code e dettagli libro
+    # Notifica all'acquirente - STESSO FORMATO CARTOLIBRERIA
     buyer_notification = {
         "id": str(uuid.uuid4()),
         "user_id": order.get("buyer_id"),
         "type": "order_paid_waiting",
-        "title": "✅ ACQUISTO COMPLETATO!",
-        "message": f"Il tuo ordine è stato confermato!\n\n📚 LIBRO: {order.get('book_titolo')}\n📖 Condizioni: {order.get('book_condizioni', 'Non specificate')}\n\nRiceverai una notifica quando il libro sarà disponibile per il ritiro presso:\n🏪 {order.get('bookstore_name')}\n\n🔐 CODICE RITIRO: {order.get('order_code')}\n\n⬇️ TOCCA per vedere il QR CODE da mostrare quando ritiri il libro",
+        "title": "NUOVO ORDINE IN ARRIVO",
+        "message": f"CODICE: {order.get('order_code')}\n\nLIBRO:\n{order.get('book_titolo')}\n\nCONDIZIONI: {order.get('book_condizioni', 'N/D')}\n\nVENDITORE: {order.get('seller_username', 'Venditore')}\nACQUIRENTE: {order.get('buyer_username', 'Tu')}\n\n🏪 RITIRO presso:\n{order.get('bookstore_name')}\n📍 {bookstore_address if bookstore_address else ''}\n\nRiceverai una notifica quando il libro sarà pronto",
         "order_id": order_id,
         "order_code": order.get("order_code"),
         "bookstore_name": order.get("bookstore_name"),
         "bookstore_address": bookstore_address,
         "book_titolo": order.get("book_titolo"),
         "book_condizioni": order.get("book_condizioni"),
+        "seller_username": order.get("seller_username"),
+        "buyer_username": order.get("buyer_username"),
         "book_details": {
             "titolo": order.get("book_titolo"),
             "isbn": order.get("book_isbn"),
@@ -6997,17 +6991,8 @@ async def pay_order(order_id: str, user_id: str = Query(...)):
             "note": listing_note,
             "prezzo": order.get("prezzo_libro"),
         },
-        "data": {
-            "order_id": order_id,
-            "order_code": order.get("order_code"),
-            "book_titolo": order.get("book_titolo"),
-            "book_condizioni": order.get("book_condizioni"),
-            "bookstore_name": order.get("bookstore_name"),
-            "bookstore_address": bookstore_address,
-            "show_qr": True,
-            "role": "buyer"
-        },
         "show_qr": True,
+        "show_qr_always": True,
         "read": False,
         "persistent": True,
         "created_at": now.isoformat()

@@ -559,6 +559,7 @@ export default function RadarScreen() {
                           <Text style={styles.sampleBookTitle}>{book.titolo}</Text>
                           {book.autori && <Text style={styles.sampleBookAuthor}>{book.autori}</Text>}
                           {book.editore && <Text style={styles.sampleBookEdition}>{book.editore}</Text>}
+                          {book.isbn && <Text style={styles.isbnText}>ISBN: {book.isbn}</Text>}
                           <View style={styles.priceContainerCompact}>
                             <Text style={styles.priceNewLabel}>Nuovo: <Text style={styles.priceNewValue}>€{prezzoNuovo.toFixed(2)}</Text></Text>
                             <Text style={styles.priceUsedLabel}>Vendi a: <Text style={styles.priceUsedValue}>€{prezzoUsato.toFixed(2)}</Text></Text>
@@ -633,6 +634,7 @@ export default function RadarScreen() {
                             <Text style={styles.sampleBookTitle}>{book.titolo}</Text>
                             {book.autori && <Text style={styles.sampleBookAuthor}>{book.autori}</Text>}
                             {book.editore && <Text style={styles.sampleBookEdition}>{book.editore}</Text>}
+                            {book.isbn && <Text style={styles.isbnText}>ISBN: {book.isbn}</Text>}
                             <View style={styles.priceContainerCompact}>
                               <Text style={styles.priceNewLabel}>Nuovo: <Text style={styles.priceNewValue}>€{prezzoNuovo.toFixed(2)}</Text></Text>
                               <Text style={styles.priceUsedLabel}>Usato da: <Text style={styles.priceUsedValue}>€{prezzoUsato.toFixed(2)}</Text></Text>
@@ -737,6 +739,7 @@ export default function RadarScreen() {
                             <Text style={styles.sampleBookTitle}>{book.titolo || book.titolo_vecchio}</Text>
                             {book.autori && <Text style={styles.sampleBookAuthor}>{book.autori}</Text>}
                             {book.editore && <Text style={styles.sampleBookEdition}>{book.editore}</Text>}
+                            {book.isbn && <Text style={styles.isbnText}>ISBN: {book.isbn}</Text>}
                             <View style={styles.priceContainerCompact}>
                               <Text style={styles.priceNewLabel}>Nuovo: <Text style={styles.priceNewValue}>€{prezzoNuovo.toFixed(2)}</Text></Text>
                               {copie > 0 && (
@@ -796,6 +799,7 @@ export default function RadarScreen() {
                             <Text style={styles.sampleBookTitle}>{book.titolo}</Text>
                             {book.autori && <Text style={styles.sampleBookAuthor}>{book.autori}</Text>}
                             {book.editore && <Text style={styles.sampleBookEdition}>{book.editore}</Text>}
+                            {book.isbn && <Text style={styles.isbnText}>ISBN: {book.isbn}</Text>}
                             <View style={styles.priceContainerCompact}>
                               <Text style={styles.priceNewLabel}>Nuovo: <Text style={styles.priceNewValue}>€{prezzoNuovo.toFixed(2)}</Text></Text>
                               <Text style={styles.nuovaEdizioneNote}>{book.motivo || 'Da acquistare nuovo'}</Text>
