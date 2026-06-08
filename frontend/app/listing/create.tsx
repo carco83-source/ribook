@@ -251,7 +251,12 @@ export default function CreateListingScreen() {
         // Libro trovato nel database o nelle adozioni
         setSelectedBook(lookupRes.data);
         setSearchResults([]);
-        Alert.alert('Libro trovato!', lookupRes.data.titolo);
+        // Feedback all'utente
+        if (Platform.OS === 'web') {
+          window.alert(`Libro trovato!\n\n${lookupRes.data.titolo}`);
+        } else {
+          Alert.alert('Libro trovato!', lookupRes.data.titolo);
+        }
         return;
       }
       
@@ -262,7 +267,11 @@ export default function CreateListingScreen() {
       
       if (searchRes.data && searchRes.data.length > 0) {
         setSearchResults(searchRes.data);
-        Alert.alert('Risultati', `Trovati ${searchRes.data.length} libri. Seleziona quello corretto.`);
+        if (Platform.OS === 'web') {
+          window.alert(`Trovati ${searchRes.data.length} libri. Seleziona quello corretto dalla lista.`);
+        } else {
+          Alert.alert('Risultati', `Trovati ${searchRes.data.length} libri. Seleziona quello corretto.`);
+        }
       } else {
         // ISBN non trovato - mostra messaggio chiaro
         if (Platform.OS === 'web') {
@@ -285,7 +294,7 @@ export default function CreateListingScreen() {
         if (searchRes.data && searchRes.data.length > 0) {
           setSearchResults(searchRes.data);
         }
-      } catch (e) {
+      } catch (_e) {
         // Ignora errore secondario
       }
       
@@ -441,26 +450,20 @@ export default function CreateListingScreen() {
         try {
           const Haptics = require('expo-haptics');
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        } catch (e) {
+        } catch (_e) {
           console.log('Haptics not available');
         }
       }
       
-      // Chiudi scanner
+      // Chiudi scanner SUBITO
       setShowScanner(false);
       
-      // Imposta query
+      // Imposta query nel campo di ricerca
       setSearchQuery(cleanData);
       
-      // Mostra alert e cerca
-      Alert.alert('ISBN Rilevato!', `Codice: ${cleanData}`, [
-        { 
-          text: 'Cerca libro', 
-          onPress: () => {
-            searchBookByISBN(cleanData);
-          }
-        }
-      ]);
+      // CERCA IMMEDIATAMENTE senza aspettare click utente
+      console.log('Searching ISBN immediately:', cleanData);
+      searchBookByISBN(cleanData);
     } else {
       console.log('Code too short or invalid, length:', cleanData.length);
     }
