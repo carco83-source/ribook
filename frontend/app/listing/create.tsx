@@ -275,36 +275,60 @@ export default function CreateListingScreen() {
     try {
       console.log('Searching for ISBN:', isbn);
       
-      // Prima prova ricerca diretta per ISBN
-      const response = await axios.get(`${API_URL}/api/books/search/${isbn}`);
-      console.log('Search response:', response.data);
+      // Usa lookup che non lancia 404 e cerca anche nelle adozioni
+      const lookupRes = await axios.get(`${API_URL}/api/books/lookup/${isbn}`);
+      console.log('Lookup response:', lookupRes.data);
       
-      if (response.data && response.data.titolo) {
-        setSelectedBook(response.data);
+      if (lookupRes.data && lookupRes.data.titolo && lookupRes.data.source !== 'not_found') {
+        // Libro trovato nel database o nelle adozioni
+        setSelectedBook(lookupRes.data);
         setSearchResults([]);
-        Alert.alert('Libro trovato!', response.data.titolo);
+        Alert.alert('Libro trovato!', lookupRes.data.titolo);
+        return;
+      }
+      
+      // Se lookup ritorna not_found, prova ricerca generica
+      const searchRes = await axios.get(`${API_URL}/api/books`, { 
+        params: { search: isbn, limit: 10 } 
+      });
+      
+      if (searchRes.data && searchRes.data.length > 0) {
+        setSearchResults(searchRes.data);
+        Alert.alert('Risultati', `Trovati ${searchRes.data.length} libri. Seleziona quello corretto.`);
       } else {
-        // Prova ricerca generica
-        const searchRes = await axios.get(`${API_URL}/api/books`, { 
-          params: { search: isbn, limit: 10 } 
-        });
-        
-        if (searchRes.data && searchRes.data.length > 0) {
-          setSearchResults(searchRes.data);
-          Alert.alert('Risultati', `Trovati ${searchRes.data.length} libri. Seleziona quello corretto.`);
+        // ISBN non trovato - mostra messaggio chiaro
+        if (Platform.OS === 'web') {
+          window.alert(`ISBN: ${isbn}\n\nQuesto libro non è nel database delle adozioni scolastiche.\n\nProva a cercarlo per TITOLO nel campo di ricerca.`);
         } else {
           Alert.alert(
-            'Libro non trovato', 
-            `ISBN: ${isbn}\n\nIl libro non è nel nostro database. Puoi cercarlo per titolo o aggiungerlo manualmente.`
+            'Libro non nel database', 
+            `ISBN: ${isbn}\n\nQuesto libro non è presente nelle adozioni scolastiche della tua zona.\n\nProva a cercarlo per TITOLO.`,
+            [{ text: 'OK' }]
           );
         }
       }
     } catch (error) {
       console.error('Error searching ISBN:', error);
-      Alert.alert(
-        'Ricerca completata', 
-        `ISBN: ${isbn} inserito nel campo di ricerca.\n\nProva a cercare per titolo se non trovi risultati.`
-      );
+      // Anche in caso di errore, prova ricerca generica
+      try {
+        const searchRes = await axios.get(`${API_URL}/api/books`, { 
+          params: { search: isbn, limit: 10 } 
+        });
+        if (searchRes.data && searchRes.data.length > 0) {
+          setSearchResults(searchRes.data);
+        }
+      } catch (e) {
+        // Ignora errore secondario
+      }
+      
+      if (Platform.OS === 'web') {
+        window.alert(`ISBN ${isbn} non trovato.\n\nProva a cercare per titolo.`);
+      } else {
+        Alert.alert(
+          'Ricerca completata', 
+          `ISBN: ${isbn}\n\nProva a cercare per TITOLO se non trovi risultati.`
+        );
+      }
     }
   };
 
