@@ -606,7 +606,7 @@ export default function SellFormScreen() {
             <Text style={styles.sectionTitle}>Condizioni del libro</Text>
             
             {/* Scritte a penna */}
-            <Text style={styles.conditionCategoryLabel}>Scritte a penna</Text>
+            <Text style={styles.conditionCategoryLabelBold}>SCRITTE A PENNA</Text>
             <View style={styles.dotsRow}>
               {CONDITION_LABELS.map((label, idx) => (
                 <TouchableOpacity
@@ -627,9 +627,15 @@ export default function SellFormScreen() {
                 </TouchableOpacity>
               ))}
             </View>
+            {scrittePenna > 0 && (
+              <View style={styles.eserciziFlag}>
+                <Ionicons name="flag" size={14} color="#FF9800" />
+                <Text style={styles.eserciziFlagText}>Esercizi svolti</Text>
+              </View>
+            )}
 
             {/* Scritte a matita */}
-            <Text style={styles.conditionCategoryLabel}>Scritte a matita</Text>
+            <Text style={styles.conditionCategoryLabelBold}>SCRITTE A MATITA</Text>
             <View style={styles.dotsRow}>
               {CONDITION_LABELS.map((label, idx) => (
                 <TouchableOpacity
@@ -650,9 +656,15 @@ export default function SellFormScreen() {
                 </TouchableOpacity>
               ))}
             </View>
+            {scritteMatita > 0 && (
+              <View style={styles.eserciziFlag}>
+                <Ionicons name="flag" size={14} color="#FF9800" />
+                <Text style={styles.eserciziFlagText}>Esercizi svolti</Text>
+              </View>
+            )}
 
             {/* Pagine evidenziate */}
-            <Text style={styles.conditionCategoryLabel}>Pagine evidenziate</Text>
+            <Text style={styles.conditionCategoryLabelBold}>PAGINE EVIDENZIATE</Text>
             <View style={styles.dotsRow}>
               {CONDITION_LABELS.map((label, idx) => (
                 <TouchableOpacity
@@ -675,7 +687,7 @@ export default function SellFormScreen() {
             </View>
 
             {/* Usura pagine (pieghe/orecchie) */}
-            <Text style={styles.conditionCategoryLabel}>Usura pagine (pieghe/orecchie)</Text>
+            <Text style={styles.conditionCategoryLabelBold}>USURA PAGINE (PIEGHE/ORECCHIE)</Text>
             <View style={styles.dotsRow}>
               {CONDITION_LABELS.map((label, idx) => (
                 <TouchableOpacity
@@ -695,59 +707,6 @@ export default function SellFormScreen() {
                   <Text style={styles.dotLabel}>{label}</Text>
                 </TouchableOpacity>
               ))}
-            </View>
-
-            {/* Esercizi svolti - con checkbox tipo */}
-            <View style={styles.eserciziSection}>
-              <Text style={styles.conditionCategoryLabel}>Esercizi svolti</Text>
-              <View style={styles.eserciziCheckboxRow}>
-                <Text style={styles.eserciziLabel}>a matita</Text>
-                <TouchableOpacity
-                  style={[
-                    styles.eserciziCheckbox,
-                    { backgroundColor: '#29B6F6' },
-                    eserciziMatita && styles.eserciziCheckboxSelected
-                  ]}
-                  onPress={() => setEserciziMatita(!eserciziMatita)}
-                >
-                  {eserciziMatita && <Ionicons name="checkmark" size={14} color="#fff" />}
-                </TouchableOpacity>
-                <Text style={styles.eserciziLabel}>a penna</Text>
-                <TouchableOpacity
-                  style={[
-                    styles.eserciziCheckbox,
-                    { backgroundColor: '#29B6F6' },
-                    eserciziPenna && styles.eserciziCheckboxSelected
-                  ]}
-                  onPress={() => setEserciziPenna(!eserciziPenna)}
-                >
-                  {eserciziPenna && <Ionicons name="checkmark" size={14} color="#fff" />}
-                </TouchableOpacity>
-              </View>
-              
-              {/* Quantità esercizi - solo se almeno uno è selezionato */}
-              {(eserciziMatita || eserciziPenna) && (
-                <View style={styles.dotsRow}>
-                  {CONDITION_LABELS_MASC.map((label, idx) => (
-                    <TouchableOpacity
-                      key={idx}
-                      style={styles.dotContainer}
-                      onPress={() => setEserciziQuantita(idx)}
-                    >
-                      <View style={[
-                        styles.conditionDot,
-                        { backgroundColor: CONDITION_COLORS[idx] },
-                        eserciziQuantita === idx && styles.conditionDotSelected
-                      ]}>
-                        {eserciziQuantita === idx && (
-                          <Ionicons name="checkmark" size={14} color="#fff" />
-                        )}
-                      </View>
-                      <Text style={styles.dotLabel}>{label}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
             </View>
           </View>
         )}
@@ -776,16 +735,16 @@ export default function SellFormScreen() {
               ]}
               onPress={() => setSelectedPriceOption(price.prezzoAcquirente ?? null)}
             >
-              <View style={styles.priceOptionLeft}>
+              <View style={styles.priceOptionHeader}>
                 <Ionicons 
                   name={selectedPriceOption === price.prezzoAcquirente ? "radio-button-on" : "radio-button-off"} 
                   size={22} 
                   color={selectedPriceOption === price.prezzoAcquirente ? "#1a472a" : "#666"} 
                 />
-                <Text style={styles.priceLabel}>{price.label}</Text>
+                <Text style={styles.priceLabelBold}>{price.label}</Text>
               </View>
-              <View style={styles.priceOptionRight}>
-                <Text style={styles.priceEarningMain}>Guadagni: €{price.guadagnoVenditore?.toFixed(2)}</Text>
+              <View style={styles.priceOptionDetails}>
+                <Text style={styles.priceEarningMain}>Guadagni: <Text style={styles.priceEarningValue}>€{price.guadagnoVenditore?.toFixed(2)}</Text></Text>
                 <Text style={styles.priceAcquirente}>L'acquirente pagherà €{price.prezzoAcquirente?.toFixed(2)}</Text>
               </View>
             </TouchableOpacity>
@@ -820,11 +779,14 @@ export default function SellFormScreen() {
                 </TouchableOpacity>
               </>
             ) : (
-              <>
-                <Ionicons name="camera" size={32} color="#FF9800" />
-                <Text style={styles.coverPhotoText}>Scatta una foto della copertina F/R aperta</Text>
+              <View style={styles.coverPhotoContent}>
+                <View style={styles.coverPhotoIcons}>
+                  <Ionicons name="camera" size={28} color="#FF9800" />
+                  <Ionicons name="book-outline" size={28} color="#FF9800" style={{ marginLeft: 8 }} />
+                </View>
+                <Text style={styles.coverPhotoText}>Apri il libro e scatta una foto che mostri contemporaneamente la copertina davanti e quella dietro.</Text>
                 <Text style={styles.coverPhotoHint}>Obbligatoria</Text>
-              </>
+              </View>
             )}
           </TouchableOpacity>
 
@@ -1087,6 +1049,35 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     textDecorationLine: 'underline',
   },
+  conditionCategoryLabelBold: {
+    fontSize: 13,
+    color: '#444',
+    textAlign: 'center',
+    marginTop: 16,
+    marginBottom: 8,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  eserciziFlag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFF3E0',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginTop: 4,
+    marginBottom: 8,
+    alignSelf: 'center',
+    gap: 6,
+  },
+  eserciziFlagText: {
+    fontSize: 12,
+    color: '#FF9800',
+    fontWeight: '600',
+  },
   // Stile nota fascicoli
   fascicoliNote: {
     flexDirection: 'row',
@@ -1190,9 +1181,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   priceOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     padding: 14,
     borderRadius: 10,
     borderWidth: 2,
@@ -1203,6 +1191,15 @@ const styles = StyleSheet.create({
     borderColor: '#1a472a',
     backgroundColor: '#f0f8f0',
   },
+  priceOptionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 8,
+  },
+  priceOptionDetails: {
+    paddingLeft: 34,
+  },
   priceOptionLeft: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1210,6 +1207,11 @@ const styles = StyleSheet.create({
   },
   priceLabel: {
     fontSize: 14,
+    color: '#333',
+  },
+  priceLabelBold: {
+    fontSize: 15,
+    fontWeight: 'bold',
     color: '#333',
   },
   priceOptionRight: {
@@ -1226,12 +1228,16 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   priceEarningMain: {
-    fontSize: 18,
+    fontSize: 15,
+    color: '#4CAF50',
+  },
+  priceEarningValue: {
+    fontSize: 17,
     fontWeight: 'bold',
     color: '#4CAF50',
   },
   priceAcquirente: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#888',
     marginTop: 2,
   },
@@ -1264,16 +1270,27 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: 10,
   },
+  coverPhotoContent: {
+    alignItems: 'center',
+    padding: 16,
+  },
+  coverPhotoIcons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
   coverPhotoText: {
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '500',
     color: '#FF9800',
-    marginTop: 8,
+    textAlign: 'center',
+    paddingHorizontal: 8,
+    lineHeight: 20,
   },
   coverPhotoHint: {
     fontSize: 12,
     color: '#999',
-    marginTop: 4,
+    marginTop: 8,
   },
   photoGrid: {
     flexDirection: 'row',
