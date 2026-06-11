@@ -131,6 +131,7 @@ export default function CreateListingScreen() {
   });
   const [note, setNote] = useState('');
   const [photo, setPhoto] = useState<string | null>(null);
+  const [showPhotoModal, setShowPhotoModal] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   
   // Scanner ISBN state - NUOVO API expo-camera
@@ -912,18 +913,25 @@ export default function CreateListingScreen() {
         {/* Step 5: Photo */}
         {selectedBook && (
           <>
-            <Text style={styles.sectionTitle}>5. Foto (consigliata)</Text>
+            <Text style={styles.sectionTitle}>5. Foto copertina (obbligatoria)</Text>
             <Text style={styles.sectionSubtitle}>
-              📸 Scatta una foto della pagina peggiore per aumentare la fiducia
+              📸 Scatta una foto della copertina del libro
             </Text>
             
             <View style={styles.photoSection}>
               {photo ? (
                 <View style={styles.photoPreview}>
-                  <Image
-                    source={{ uri: `data:image/jpeg;base64,${photo}` }}
-                    style={styles.photoImage}
-                  />
+                  <TouchableOpacity onPress={() => setShowPhotoModal(true)}>
+                    <Image
+                      source={{ uri: `data:image/jpeg;base64,${photo}` }}
+                      style={styles.photoImage}
+                      resizeMode="cover"
+                    />
+                    <View style={styles.photoZoomHint}>
+                      <Ionicons name="expand" size={20} color="#fff" />
+                      <Text style={styles.photoZoomHintText}>Tocca per ingrandire</Text>
+                    </View>
+                  </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.removePhotoButton}
                     onPress={() => setPhoto(null)}
@@ -932,18 +940,45 @@ export default function CreateListingScreen() {
                   </TouchableOpacity>
                 </View>
               ) : (
-                <View style={styles.photoButtons}>
-                  <TouchableOpacity style={styles.photoButton} onPress={takePhoto}>
-                    <Ionicons name="camera" size={32} color="#1a472a" />
-                    <Text style={styles.photoButtonText}>Scatta foto</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.photoButton} onPress={pickImage}>
-                    <Ionicons name="images" size={32} color="#1a472a" />
-                    <Text style={styles.photoButtonText}>Galleria</Text>
-                  </TouchableOpacity>
+                <View style={styles.photoPlaceholder}>
+                  <View style={styles.photoButtons}>
+                    <TouchableOpacity style={styles.photoButton} onPress={takePhoto}>
+                      <Ionicons name="camera" size={32} color="#1a472a" />
+                      <Text style={styles.photoButtonText}>Scatta foto</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.photoButton} onPress={pickImage}>
+                      <Ionicons name="images" size={32} color="#1a472a" />
+                      <Text style={styles.photoButtonText}>Galleria</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={styles.photoPlaceholderText}>Proporzione copertina libro (3:4)</Text>
                 </View>
               )}
             </View>
+            
+            {/* Modal per visualizzare foto a schermo intero */}
+            <Modal
+              visible={showPhotoModal}
+              transparent={true}
+              animationType="fade"
+              onRequestClose={() => setShowPhotoModal(false)}
+            >
+              <View style={styles.photoModalOverlay}>
+                <TouchableOpacity 
+                  style={styles.photoModalClose}
+                  onPress={() => setShowPhotoModal(false)}
+                >
+                  <Ionicons name="close-circle" size={40} color="#fff" />
+                </TouchableOpacity>
+                {photo && (
+                  <Image
+                    source={{ uri: `data:image/jpeg;base64,${photo}` }}
+                    style={styles.photoModalImage}
+                    resizeMode="contain"
+                  />
+                )}
+              </View>
+            </Modal>
           </>
         )}
 
@@ -1288,6 +1323,25 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
   },
+  photoPlaceholder: {
+    backgroundColor: '#f9f9f9',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#e0e0e0',
+    borderStyle: 'dashed',
+    aspectRatio: 3/4,
+    maxHeight: 320,
+    justifyContent: 'center',
+    alignItems: 'center',
+    alignSelf: 'center',
+    width: '60%',
+  },
+  photoPlaceholderText: {
+    marginTop: 16,
+    fontSize: 11,
+    color: '#999',
+    textAlign: 'center',
+  },
   photoButtons: {
     flexDirection: 'row',
     gap: 16,
@@ -1296,10 +1350,8 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
-    borderWidth: 2,
-    borderColor: '#e0e0e0',
-    borderStyle: 'dashed',
+    padding: 20,
+    backgroundColor: '#f5f5f5',
     borderRadius: 12,
   },
   photoButtonText: {
@@ -1309,11 +1361,32 @@ const styles = StyleSheet.create({
   },
   photoPreview: {
     position: 'relative',
+    alignSelf: 'center',
+    width: '60%',
+    maxWidth: 220,
+    aspectRatio: 3/4,
   },
   photoImage: {
     width: '100%',
-    height: 200,
+    height: '100%',
     borderRadius: 12,
+  },
+  photoZoomHint: {
+    position: 'absolute',
+    bottom: 8,
+    left: 8,
+    right: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 8,
+    padding: 6,
+    gap: 6,
+  },
+  photoZoomHintText: {
+    color: '#fff',
+    fontSize: 11,
   },
   removePhotoButton: {
     position: 'absolute',
@@ -1321,6 +1394,22 @@ const styles = StyleSheet.create({
     right: 8,
     backgroundColor: '#fff',
     borderRadius: 14,
+  },
+  photoModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  photoModalClose: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    zIndex: 10,
+  },
+  photoModalImage: {
+    width: '90%',
+    height: '80%',
   },
   noteInput: {
     backgroundColor: '#fff',
