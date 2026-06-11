@@ -243,14 +243,12 @@ export default function SellFormScreen() {
     usuraScore += (scritteMatita / 3) * 15;     // Max 15 punti
     usuraScore += (condGenerale / 3) * 20;      // Max 20 punti
     
-    // Esercizi svolti incidono come scritture aggiuntive
-    if (eserciziPenna && eserciziQuantita > 0) {
-      // Esercizi a penna: incidenza maggiore (come scritte a penna x1.5)
-      usuraScore += (eserciziQuantita / 3) * 25;
+    // "Con esercizi svolti" come aggravante leggera (5 punti per ogni tipo)
+    if (eserciziPenna) {
+      usuraScore += 5;
     }
-    if (eserciziMatita && eserciziQuantita > 0) {
-      // Esercizi a matita: incidenza media
-      usuraScore += (eserciziQuantita / 3) * 12;
+    if (eserciziMatita) {
+      usuraScore += 5;
     }
     
     // Cap a 100
@@ -639,7 +637,7 @@ export default function SellFormScreen() {
                 ]}>
                   {eserciziPenna && <Ionicons name="checkmark" size={14} color="#fff" />}
                 </View>
-                <Text style={styles.eserciziCheckboxLabel}>Esercizi svolti (opzionale)</Text>
+                <Text style={styles.eserciziCheckboxLabel}>Con esercizi svolti</Text>
               </TouchableOpacity>
             )}
 
@@ -677,7 +675,7 @@ export default function SellFormScreen() {
                 ]}>
                   {eserciziMatita && <Ionicons name="checkmark" size={14} color="#fff" />}
                 </View>
-                <Text style={styles.eserciziCheckboxLabel}>Esercizi svolti (opzionale)</Text>
+                <Text style={styles.eserciziCheckboxLabel}>Con esercizi svolti</Text>
               </TouchableOpacity>
             )}
 
