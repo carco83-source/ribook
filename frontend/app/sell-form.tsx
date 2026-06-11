@@ -567,7 +567,10 @@ export default function SellFormScreen() {
             {selectedBook.disciplina && <Text style={styles.bookDiscipline}>{selectedBook.disciplina}</Text>}
             <Text style={styles.bookIsbn}>ISBN: {selectedBook.isbn}</Text>
             {selectedBook.prezzo_copertina && (
-              <Text style={styles.bookPrice}>Prezzo copertina: €{selectedBook.prezzo_copertina.toFixed(2)}</Text>
+              <View style={styles.bookPriceRow}>
+                <Text style={styles.bookPriceLabel}>Prezzo copertina: </Text>
+                <Text style={styles.bookPriceValue}>€{selectedBook.prezzo_copertina.toFixed(2)}</Text>
+              </View>
             )}
           </View>
         </View>
@@ -576,7 +579,7 @@ export default function SellFormScreen() {
         <View style={styles.fascicoliNote}>
           <Ionicons name="information-circle-outline" size={18} color="#666" />
           <Text style={styles.fascicoliNoteText}>
-            Il libro, se previsti, è completo di tutti i fascicoli
+            Il libro si intende comprensivo di fascicoli, se previsti.
           </Text>
         </View>
 
@@ -794,7 +797,6 @@ export default function SellFormScreen() {
           <Text style={styles.sectionTitle}>Foto del libro</Text>
           
           {/* Foto copertina - OBBLIGATORIA */}
-          <Text style={styles.photoLabel}>Foto copertina <Text style={styles.requiredStar}>*</Text></Text>
           <TouchableOpacity
             style={[
               styles.coverPhotoSlot, 
@@ -820,7 +822,7 @@ export default function SellFormScreen() {
             ) : (
               <>
                 <Ionicons name="camera" size={32} color="#FF9800" />
-                <Text style={styles.coverPhotoText}>Scatta foto copertina</Text>
+                <Text style={styles.coverPhotoText}>Scatta una foto della copertina F/R aperta</Text>
                 <Text style={styles.coverPhotoHint}>Obbligatoria</Text>
               </>
             )}
@@ -993,6 +995,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#1a472a',
     fontWeight: '600',
+  },
+  bookPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  bookPriceLabel: {
+    fontSize: 16,
+    color: '#1a472a',
+  },
+  bookPriceValue: {
+    fontSize: 18,
+    color: '#1a472a',
+    fontWeight: 'bold',
   },
   section: {
     backgroundColor: '#fff',

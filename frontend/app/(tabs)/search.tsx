@@ -540,7 +540,10 @@ export default function SearchSellScreen() {
                   {vendiBook.autori && <Text style={styles.bookAuthor}>{vendiBook.autori}</Text>}
                   <Text style={styles.bookIsbn}>ISBN: {vendiBook.isbn}</Text>
                   {vendiBook.prezzo_copertina && vendiBook.prezzo_copertina > 0 && (
-                    <Text style={styles.bookPrice}>Prezzo copertina: €{vendiBook.prezzo_copertina.toFixed(2)}</Text>
+                    <View style={styles.bookPriceRow}>
+                      <Text style={styles.bookPriceLabel}>Prezzo copertina: </Text>
+                      <Text style={styles.bookPriceValue}>€{vendiBook.prezzo_copertina.toFixed(2)}</Text>
+                    </View>
                   )}
                 </View>
                 <TouchableOpacity style={styles.actionButton} onPress={goToSellBook}>
@@ -788,6 +791,20 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#1a472a',
     fontWeight: '600',
+  },
+  bookPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  bookPriceLabel: {
+    fontSize: 14,
+    color: '#1a472a',
+  },
+  bookPriceValue: {
+    fontSize: 16,
+    color: '#1a472a',
+    fontWeight: 'bold',
   },
   availabilityBadge: {
     backgroundColor: '#e8f5e9',
