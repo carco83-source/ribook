@@ -627,11 +627,20 @@ export default function SellFormScreen() {
                 </TouchableOpacity>
               ))}
             </View>
+            {/* Checkbox Esercizi svolti a penna - opzionale */}
             {scrittePenna > 0 && (
-              <View style={styles.eserciziFlag}>
-                <Ionicons name="flag" size={14} color="#FF9800" />
-                <Text style={styles.eserciziFlagText}>Esercizi svolti</Text>
-              </View>
+              <TouchableOpacity 
+                style={styles.eserciziCheckboxRow}
+                onPress={() => setEserciziPenna(!eserciziPenna)}
+              >
+                <View style={[
+                  styles.eserciziCheckbox,
+                  eserciziPenna && styles.eserciziCheckboxSelected
+                ]}>
+                  {eserciziPenna && <Ionicons name="checkmark" size={14} color="#fff" />}
+                </View>
+                <Text style={styles.eserciziCheckboxLabel}>Esercizi svolti (opzionale)</Text>
+              </TouchableOpacity>
             )}
 
             {/* Scritte a matita */}
@@ -656,11 +665,20 @@ export default function SellFormScreen() {
                 </TouchableOpacity>
               ))}
             </View>
+            {/* Checkbox Esercizi svolti a matita - opzionale */}
             {scritteMatita > 0 && (
-              <View style={styles.eserciziFlag}>
-                <Ionicons name="flag" size={14} color="#FF9800" />
-                <Text style={styles.eserciziFlagText}>Esercizi svolti</Text>
-              </View>
+              <TouchableOpacity 
+                style={styles.eserciziCheckboxRow}
+                onPress={() => setEserciziMatita(!eserciziMatita)}
+              >
+                <View style={[
+                  styles.eserciziCheckbox,
+                  eserciziMatita && styles.eserciziCheckboxSelected
+                ]}>
+                  {eserciziMatita && <Ionicons name="checkmark" size={14} color="#fff" />}
+                </View>
+                <Text style={styles.eserciziCheckboxLabel}>Esercizi svolti (opzionale)</Text>
+              </TouchableOpacity>
             )}
 
             {/* Pagine evidenziate */}
@@ -1137,25 +1155,33 @@ const styles = StyleSheet.create({
   },
   eserciziCheckboxRow: {
     flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
-    gap: 12,
+    justifyContent: 'center',
+    marginTop: 8,
     marginBottom: 12,
+    gap: 10,
   },
   eserciziLabel: {
     fontSize: 14,
     color: '#333',
   },
   eserciziCheckbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 22,
+    height: 22,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: '#FF9800',
+    backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
-    opacity: 0.4,
   },
   eserciziCheckboxSelected: {
-    opacity: 1,
+    backgroundColor: '#FF9800',
+    borderColor: '#FF9800',
+  },
+  eserciziCheckboxLabel: {
+    fontSize: 13,
+    color: '#666',
   },
   conditionResult: {
     flexDirection: 'row',
