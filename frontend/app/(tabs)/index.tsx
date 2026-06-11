@@ -644,13 +644,13 @@ export default function RadarScreen() {
                       );
                     })}
                   </View>
-                  {/* Pulsante Cerca questi libri */}
+                  {/* Pulsante Cerca altri libri */}
                   <TouchableOpacity
                     style={[styles.viewSellersButton, { backgroundColor: '#4CAF50', marginTop: 12 }]}
                     onPress={() => router.push('/(tabs)/search')}
                   >
                     <Ionicons name="search" size={18} color="#fff" />
-                    <Text style={styles.viewSellersButtonText}>Cerca questi libri</Text>
+                    <Text style={styles.viewSellersButtonText}>Cerca altri libri</Text>
                     <Ionicons name="arrow-forward" size={14} color="#fff" />
                   </TouchableOpacity>
                 </View>
