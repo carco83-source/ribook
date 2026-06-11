@@ -237,21 +237,41 @@ export default function SellFormScreen() {
     // Ogni valore va da 0 a 3
     
     // Calcolo punteggio usura (0-100)
-    let usuraScore = 0;
-    usuraScore += (scrittePenna / 3) * 40;      // Max 40 punti
-    usuraScore += (pagineEvidenziate / 3) * 25; // Max 25 punti
-    usuraScore += (scritteMatita / 3) * 15;     // Max 15 punti
-    usuraScore += (condGenerale / 3) * 20;      // Max 20 punti
+    // Il PRIMO salto (Nessuna → Poche) è il più grande
+    // I salti successivi (Poche → Diverse → Molte) sono più piccoli
+    // Ordine incidenza: Penna > Evidenziate > Matita > Usura
     
-    // "Con esercizi svolti" come aggravante leggera (5 punti per ogni tipo)
+    let usuraScore = 0;
+    
+    // Scritte a penna: MASSIMA incidenza
+    // Nessuna=0, Poche=25 (GRANDE salto!), Diverse=35, Molte=45
+    const pesoPenna = [0, 25, 35, 45];
+    usuraScore += pesoPenna[scrittePenna];
+    
+    // Pagine evidenziate: MEDIA incidenza  
+    // Nessuna=0, Poche=15 (grande salto), Diverse=20, Molte=25
+    const pesoEvidenziate = [0, 15, 20, 25];
+    usuraScore += pesoEvidenziate[pagineEvidenziate];
+    
+    // Scritte a matita: LEGGERA incidenza
+    // Nessuna=0, Poche=8 (salto), Diverse=11, Molte=14
+    const pesoMatita = [0, 8, 11, 14];
+    usuraScore += pesoMatita[scritteMatita];
+    
+    // Usura pagine: MINIMA incidenza
+    // Nessuna=0, Poche=4 (salto), Diverse=6, Molte=8
+    const pesoUsura = [0, 4, 6, 8];
+    usuraScore += pesoUsura[condGenerale];
+    
+    // "Con esercizi svolti" come aggravante aggiuntiva
     if (eserciziPenna) {
-      usuraScore += 5;
+      usuraScore += 6; // Esercizi a penna: incidenza maggiore
     }
     if (eserciziMatita) {
-      usuraScore += 5;
+      usuraScore += 3; // Esercizi a matita: incidenza minore
     }
     
-    // Cap a 100
+    // Cap a 100 (max teorico: 45+25+14+8+6+3 = 101)
     usuraScore = Math.min(100, usuraScore);
     
     // Range prezzo: 30% (usura 100) - 70% (usura 0) del nuovo
