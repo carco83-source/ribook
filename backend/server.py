@@ -785,18 +785,28 @@ async def get_schools(tipo: Optional[str] = None):
     """Get all schools, optionally filtered by type (Media/Superiore)"""
     query = {}
     if tipo:
-        query["tipo"] = tipo
+        # Normalizza il tipo per la query (media/superiore)
+        tipo_lower = tipo.lower()
+        if tipo_lower in ["media", "medie", "mm"]:
+            query["tipo"] = "media"
+        elif tipo_lower in ["superiore", "superiori", "nt"]:
+            query["tipo"] = "superiore"
+        else:
+            query["tipo"] = tipo
     
     schools = await db.schools.find(query).to_list(None)
     
-    # Format response
+    # Format response - supporta sia vecchio che nuovo schema
     result = []
     for school in schools:
+        codice = school.get("codice_meccanografico") or school.get("codice")
         result.append({
-            "codice": school.get("codice"),
+            "codice": codice,
             "nome": school.get("nome"),
-            "tipo": school.get("tipo"),
-            "comune": school.get("comune", "Catanzaro")
+            "tipo": school.get("tipo", "").capitalize(),
+            "comune": school.get("comune", "CATANZARO"),
+            "has_books_2026": school.get("has_books_2026", True),
+            "anno_scolastico": school.get("anno_scolastico", "2026/2027")
         })
     
     return result
