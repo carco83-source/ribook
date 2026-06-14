@@ -5123,22 +5123,26 @@ async def generate_books_pdf(user_id: str, child_id: str):
     if not child_codice_scuola:
         raise HTTPException(status_code=400, detail="Codice scuola non configurato")
     
-    # Get books from NEW adozioni collection (per sezione)
-    adozione = await db.adozioni.find_one({
+    # Get books from adozioni collection - NUOVO SCHEMA (singoli documenti con anno_corso stringa)
+    adozioni_query = {
         "codice_scuola": child_codice_scuola,
-        "classe": child_classe,
-        "sezione": child_sezione.upper()
-    })
+        "anno_corso": str(child_classe),  # anno_corso è una stringa nel nuovo schema
+        "sezione": {"$regex": f"^{child_sezione}$", "$options": "i"}
+    }
     
-    books = adozione.get('libri', []) if adozione else []
+    books = await db.adozioni.find(adozioni_query).to_list(length=100)
     
-    # Fallback to old books collection if no adozione found
+    # Fallback se nessun libro trovato con sezione specifica
     if not books:
-        old_books = await db.books.find({
-            "scuole_adottanti": child_codice_scuola,
-            "anni_corso": child_classe
-        }).to_list(200)
-        books = old_books
+        fallback_query = {
+            "codice_scuola": child_codice_scuola,
+            "anno_corso": str(child_classe)
+        }
+        all_books = await db.adozioni.find(fallback_query).to_list(length=200)
+        if all_books:
+            # Prendi la prima sezione disponibile
+            prima_sezione = all_books[0].get("sezione")
+            books = [b for b in all_books if b.get("sezione") == prima_sezione]
     
     # Create PDF - PORTRAIT A4 (verticale per iOS)
     buffer = io.BytesIO()
