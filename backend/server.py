@@ -4608,22 +4608,39 @@ async def get_child_analysis_v2(user_id: str, child_id: str):
     ciclo_info = get_ciclo_info(child_tipo, child_classe)
     
     # ================================================
-    # 1. CARICA LIBRI DELLA CLASSE CORRENTE (2025/2026)
+    # 1. CARICA LIBRI DELLA CLASSE CORRENTE (2026/2027)
     # ================================================
-    adozione_corrente = await db.adozioni.find_one({
+    # NUOVA STRUTTURA: ogni documento è un singolo libro
+    libri_correnti = await db.adozioni.find({
         "codice_scuola": child_codice_scuola,
-        "classe": child_classe,
+        "anno_corso": str(child_classe),
         "sezione": child_sezione
-    })
+    }).to_list(None)
     
-    if not adozione_corrente:
+    if not libri_correnti:
         # Fallback: cerca qualsiasi sezione
-        adozione_corrente = await db.adozioni.find_one({
+        libri_fallback = await db.adozioni.find({
             "codice_scuola": child_codice_scuola,
-            "classe": child_classe
-        })
+            "anno_corso": str(child_classe)
+        }).to_list(None)
+        
+        if libri_fallback:
+            # Usa la prima sezione trovata
+            prima_sezione = libri_fallback[0].get("sezione")
+            libri_correnti = [l for l in libri_fallback if l.get("sezione") == prima_sezione]
     
-    libri_correnti = adozione_corrente.get("libri", []) if adozione_corrente else []
+    # Trasforma nel formato atteso
+    libri_correnti = [{
+        "isbn": l.get("isbn"),
+        "titolo": l.get("titolo"),
+        "disciplina": l.get("disciplina"),
+        "editore": l.get("editore"),
+        "prezzo_copertina": l.get("prezzo_copertina", 0),
+        "volume": l.get("volume", ""),
+        "consigliato": l.get("consigliato", False),
+        "da_acquistare": l.get("da_acquistare", True),
+        "nuova_adozione": l.get("nuova_adozione", False),
+    } for l in libri_correnti]
     
     # ================================================
     # 2. CLASSIFICA OGNI LIBRO (DA COMPRARE)
@@ -5163,14 +5180,26 @@ async def generate_books_html(user_id: str, child_id: str):
     child_sezione = child_profile.get("sezione", "A")
     child_codice_scuola = child_profile.get("codice_scuola", child_profile.get("school_code", ""))
     
-    # Get books from adozioni
+    # Get books from adozioni - NUOVA STRUTTURA con anno_corso stringa
     adozioni_query = {
         "codice_scuola": child_codice_scuola,
-        "classe": child_classe,
+        "anno_corso": str(child_classe),
         "sezione": {"$regex": f"^{child_sezione}$", "$options": "i"}
     }
     
     books = await db.adozioni.find(adozioni_query).to_list(length=100)
+    
+    # Fallback se nessun libro trovato con sezione specifica
+    if not books:
+        fallback_query = {
+            "codice_scuola": child_codice_scuola,
+            "anno_corso": str(child_classe)
+        }
+        all_books = await db.adozioni.find(fallback_query).to_list(length=200)
+        if all_books:
+            # Prendi la prima sezione disponibile
+            prima_sezione = all_books[0].get("sezione")
+            books = [b for b in all_books if b.get("sezione") == prima_sezione]
     
     # Build HTML
     books_html = ""
