@@ -1315,7 +1315,7 @@ async def search_books_generic(q: str = Query(..., min_length=3), limit: int = Q
 # ============== POPULAR BOOKS API ==============
 
 @api_router.get("/books/popular")
-async def get_popular_books(anno_scolastico: str = "2025/2026", limit: int = 12):
+async def get_popular_books(anno_scolastico: str = "2026/2027", limit: int = 12):
     """
     Restituisce i libri più presenti nelle liste di adozione per l'anno scolastico specificato.
     Predisposto per supportare anche 2026/2027 quando verrà inserito.
@@ -3380,39 +3380,81 @@ async def get_child_compatibility(user_id: str, child_id: str):
     # NUOVA LOGICA: USA COLLEZIONE ADOZIONI
     # ========================================
     
-    async def get_books_from_adozioni(codice_scuola: str, classe: int, sezione: str, anno_scolastico: str = "2025/2026") -> list:
+    async def get_books_from_adozioni(codice_scuola: str, classe: int, sezione: str, anno_scolastico: str = "2026/2027") -> list:
         """Recupera libri dalla collezione adozioni per una specifica combinazione.
         Se la sezione non esiste, usa la prima sezione disponibile (fallback).
         
-        anno_scolastico: "2025/2026" (corrente) o "2024/2025" (storico)
+        anno_scolastico: "2026/2027" (corrente) o "2026/2027" (storico)
+        
+        NOTA: Nella nuova struttura, ogni documento in 'adozioni' è un singolo libro.
+        Il campo è 'anno_corso' (stringa) non 'classe' (intero).
         """
         # Scegli la collezione in base all'anno scolastico
-        if anno_scolastico == "2024/2025":
+        if anno_scolastico == "2025/2026":
+            collection = db.adozioni_2025_2026
+        elif anno_scolastico == "2024/2025":
             collection = db.adozioni_2024_2025
         else:
+            # Default: collezione corrente 2026/2027
             collection = db.adozioni
         
+        # Converte classe in stringa per il match
+        classe_str = str(classe)
+        
         # Prima prova con la sezione esatta
-        adozione = await collection.find_one({
+        libri = await collection.find({
             "codice_scuola": codice_scuola,
-            "classe": classe,
+            "anno_corso": classe_str,
             "sezione": sezione.upper()
-        })
-        if adozione:
-            return adozione.get('libri', [])
+        }).to_list(None)
+        
+        if libri:
+            # Trasforma ogni documento adozione nel formato libro atteso
+            return [{
+                "isbn": libro.get("isbn"),
+                "titolo": libro.get("titolo"),
+                "sottotitolo": libro.get("sottotitolo", ""),
+                "autori": libro.get("autori"),
+                "editore": libro.get("editore"),
+                "disciplina": libro.get("disciplina"),
+                "prezzo_copertina": libro.get("prezzo_copertina", 0),
+                "volume": libro.get("volume", ""),
+                "is_volume_unico": libro.get("volume", "").upper() == "U",
+                "da_acquistare": libro.get("da_acquistare", True),
+                "consigliato": libro.get("consigliato", False),
+                "nuova_adozione": libro.get("nuova_adozione", False),
+            } for libro in libri]
         
         # FALLBACK: Se la sezione non esiste, usa qualsiasi sezione disponibile per quella classe
-        adozione_fallback = await collection.find_one({
+        libri_fallback = await collection.find({
             "codice_scuola": codice_scuola,
-            "classe": classe
-        })
-        if adozione_fallback:
-            return adozione_fallback.get('libri', [])
+            "anno_corso": classe_str
+        }).to_list(None)
+        
+        if libri_fallback:
+            # Prendi solo la prima sezione trovata per evitare duplicati
+            prima_sezione = libri_fallback[0].get("sezione") if libri_fallback else None
+            if prima_sezione:
+                libri_filtrati = [l for l in libri_fallback if l.get("sezione") == prima_sezione]
+                return [{
+                    "isbn": libro.get("isbn"),
+                    "titolo": libro.get("titolo"),
+                    "sottotitolo": libro.get("sottotitolo", ""),
+                    "autori": libro.get("autori"),
+                    "editore": libro.get("editore"),
+                    "disciplina": libro.get("disciplina"),
+                    "prezzo_copertina": libro.get("prezzo_copertina", 0),
+                    "volume": libro.get("volume", ""),
+                    "is_volume_unico": libro.get("volume", "").upper() == "U",
+                    "da_acquistare": libro.get("da_acquistare", True),
+                    "consigliato": libro.get("consigliato", False),
+                    "nuova_adozione": libro.get("nuova_adozione", False),
+                } for libro in libri_filtrati]
         
         return []
     
-    # Carica libri della MIA classe/sezione (anno corrente 2025/2026)
-    all_my_books = await get_books_from_adozioni(child_codice_scuola, child_classe, child_sezione, "2025/2026")
+    # Carica libri della MIA classe/sezione (anno corrente 2026/2027)
+    all_my_books = await get_books_from_adozioni(child_codice_scuola, child_classe, child_sezione, "2026/2027")
     
     # Separa libri in categorie:
     # 1. Libri da acquistare obbligatori (da_acquistare=True) - NON volumi unici
@@ -3425,7 +3467,7 @@ async def get_child_compatibility(user_id: str, child_id: str):
     if classe_precedente:
         # Per i libri VENDIBILI: lo studente vende ciò che aveva l'anno scorso (2024/2025)
         # nella sua classe PRECEDENTE (es. era in 2ª l'anno scorso, ora è in 3ª)
-        all_libri_prec = await get_books_from_adozioni(child_codice_scuola, classe_precedente, child_sezione, "2024/2025")
+        all_libri_prec = await get_books_from_adozioni(child_codice_scuola, classe_precedente, child_sezione, "2025/2026")
     
     # Funzione per verificare se un libro "consigliato" è in realtà da acquistare
     # perché è la continuazione di una serie dalla classe precedente
@@ -3693,7 +3735,7 @@ async def get_child_compatibility(user_id: str, child_id: str):
     # =====================================================
     libri_nuovi_studenti = []
     if classe_precedente:
-        libri_nuovi_studenti = await get_books_from_adozioni(child_codice_scuola, classe_precedente, child_sezione, "2025/2026")
+        libri_nuovi_studenti = await get_books_from_adozioni(child_codice_scuola, classe_precedente, child_sezione, "2026/2027")
     
     # Crea mappa ISBN -> libro per confronto veloce
     isbn_nuovi_studenti = {b.get('isbn'): b for b in libri_nuovi_studenti if b.get('isbn')}
@@ -3704,7 +3746,7 @@ async def get_child_compatibility(user_id: str, child_id: str):
             disc_nuovi_studenti[disc] = b
     
     # Carica TUTTI i libri della classe attuale per verificare volumi unici che servono ancora
-    all_my_books_full = await get_books_from_adozioni(child_codice_scuola, child_classe, child_sezione, "2025/2026")
+    all_my_books_full = await get_books_from_adozioni(child_codice_scuola, child_classe, child_sezione, "2026/2027")
     isbn_my_books = {b.get('isbn'): b for b in all_my_books_full if b.get('isbn')}
     
     for key_prec, book_prec in prec_books_disc.items():  # Itera sui libri dell'anno scorso
@@ -4054,7 +4096,7 @@ async def get_child_compatibility(user_id: str, child_id: str):
                     # Cerca nelle adozioni delle classi precedenti
                     classe_acquisto = None
                     for classe_check in range(child_classe - 1, 0, -1):
-                        libri_classe = await get_books_from_adozioni(child_codice_scuola, classe_check, child_sezione, "2025/2026")
+                        libri_classe = await get_books_from_adozioni(child_codice_scuola, classe_check, child_sezione, "2026/2027")
                         for l in libri_classe:
                             if l.get('isbn') == isbn and l.get('da_acquistare', False):
                                 classe_acquisto = classe_check
@@ -5378,43 +5420,83 @@ async def get_books_to_sell(user_id: str, child_id: str):
     # === LOGICA ALLINEATA AL RADAR ===
     # USA LA STESSA LOGICA DEL COMPATIBILITY ENDPOINT (collezione adozioni)
     
-    async def get_books_from_adozioni(codice_scuola: str, classe: int, sezione: str, anno_scolastico: str = "2025/2026") -> list:
+    async def get_books_from_adozioni(codice_scuola: str, classe: int, sezione: str, anno_scolastico: str = "2026/2027") -> list:
         """Recupera libri dalla collezione adozioni per una specifica combinazione.
         Se la sezione non esiste, usa la prima sezione disponibile (fallback).
         
-        anno_scolastico: "2025/2026" (corrente) o "2024/2025" (storico)
+        anno_scolastico: "2026/2027" (corrente) o "2025/2026" (storico)
+        
+        NOTA: Nella nuova struttura, ogni documento in 'adozioni' è un singolo libro.
+        Il campo è 'anno_corso' (stringa) non 'classe' (intero).
         """
         # Scegli la collezione in base all'anno scolastico
-        if anno_scolastico == "2024/2025":
-            collection = db.adozioni_2024_2025
+        if anno_scolastico == "2025/2026":
+            collection = db.adozioni_2025_2026
         else:
+            # Default: collezione corrente 2026/2027
             collection = db.adozioni
         
+        # Converte classe in stringa per il match
+        classe_str = str(classe)
+        
         # Prima prova con la sezione esatta
-        adozione = await collection.find_one({
+        libri = await collection.find({
             "codice_scuola": codice_scuola,
-            "classe": classe,
+            "anno_corso": classe_str,
             "sezione": sezione.upper()
-        })
-        if adozione:
-            return adozione.get('libri', [])
+        }).to_list(None)
+        
+        if libri:
+            # Trasforma ogni documento adozione nel formato libro atteso
+            return [{
+                "isbn": libro.get("isbn"),
+                "titolo": libro.get("titolo"),
+                "sottotitolo": libro.get("sottotitolo", ""),
+                "autori": libro.get("autori"),
+                "editore": libro.get("editore"),
+                "disciplina": libro.get("disciplina"),
+                "prezzo_copertina": libro.get("prezzo_copertina", 0),
+                "volume": libro.get("volume", ""),
+                "is_volume_unico": libro.get("volume", "").upper() == "U",
+                "da_acquistare": libro.get("da_acquistare", True),
+                "consigliato": libro.get("consigliato", False),
+                "nuova_adozione": libro.get("nuova_adozione", False),
+            } for libro in libri]
         
         # FALLBACK: Se la sezione non esiste, usa qualsiasi sezione disponibile per quella classe
-        adozione_fallback = await collection.find_one({
+        libri_fallback = await collection.find({
             "codice_scuola": codice_scuola,
-            "classe": classe
-        })
-        if adozione_fallback:
-            return adozione_fallback.get('libri', [])
+            "anno_corso": classe_str
+        }).to_list(None)
+        
+        if libri_fallback:
+            # Prendi solo la prima sezione trovata per evitare duplicati
+            prima_sezione = libri_fallback[0].get("sezione") if libri_fallback else None
+            if prima_sezione:
+                libri_filtrati = [l for l in libri_fallback if l.get("sezione") == prima_sezione]
+                return [{
+                    "isbn": libro.get("isbn"),
+                    "titolo": libro.get("titolo"),
+                    "sottotitolo": libro.get("sottotitolo", ""),
+                    "autori": libro.get("autori"),
+                    "editore": libro.get("editore"),
+                    "disciplina": libro.get("disciplina"),
+                    "prezzo_copertina": libro.get("prezzo_copertina", 0),
+                    "volume": libro.get("volume", ""),
+                    "is_volume_unico": libro.get("volume", "").upper() == "U",
+                    "da_acquistare": libro.get("da_acquistare", True),
+                    "consigliato": libro.get("consigliato", False),
+                    "nuova_adozione": libro.get("nuova_adozione", False),
+                } for libro in libri_filtrati]
         
         return []
     
     # Carica libri della classe PRECEDENTE che LO STUDENTE HA USATO L'ANNO SCORSO (2024/2025)
     child_sezione = child_profile.get("sezione", "A").upper()
-    libri_precedente = await get_books_from_adozioni(child_codice_scuola, classe_compratori, child_sezione, "2024/2025")
+    libri_precedente = await get_books_from_adozioni(child_codice_scuola, classe_compratori, child_sezione, "2025/2026")
     
     # Carica libri della classe ATTUALE per i COMPRATORI (2025/2026)
-    libri_compratori = await get_books_from_adozioni(child_codice_scuola, classe_compratori, child_sezione, "2025/2026")
+    libri_compratori = await get_books_from_adozioni(child_codice_scuola, classe_compratori, child_sezione, "2026/2027")
     
     # Organizza per disciplina (libri dei compratori) - SOLO libri obbligatori
     compratori_disc = {}
@@ -5551,7 +5633,7 @@ async def get_books_to_sell(user_id: str, child_id: str):
     # (libri che in 3ª hanno da_acquistare=False, erano da comprare in 1ª o 2ª)
     if not isMedia and child_classe == 3:
         # Carica libri del 3° anno (classe attuale)
-        libri_3_anno = await get_books_from_adozioni(child_codice_scuola, 3, child_sezione, "2025/2026")
+        libri_3_anno = await get_books_from_adozioni(child_codice_scuola, 3, child_sezione, "2026/2027")
         
         # Per ogni libro della 3ª con da_acquistare=False → era comprato prima
         for libro in libri_3_anno:
@@ -5566,7 +5648,7 @@ async def get_books_to_sell(user_id: str, child_id: str):
                 
                 # Cerca in quale classe era da comprare (1ª o 2ª)
                 for classe_check in [1, 2]:
-                    libri_classe = await get_books_from_adozioni(child_codice_scuola, classe_check, child_sezione, "2025/2026")
+                    libri_classe = await get_books_from_adozioni(child_codice_scuola, classe_check, child_sezione, "2026/2027")
                     for l in libri_classe:
                         if l.get('isbn') == isbn and l.get('da_acquistare', False):
                             vendibili.append({
