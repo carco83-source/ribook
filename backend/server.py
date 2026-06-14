@@ -2773,6 +2773,8 @@ async def get_class_compatibility(user_id: str):
                     "autori": b.get("autori", ""),
                     "prezzo": b.get("prezzo_copertina", 0),
                     "volume": b.get("volume", ""),
+                    "is_volume_unico": b.get("is_volume_unico", False) or b.get("volume", "").upper() == "U",
+                    "nuova_adozione": b.get("nuova_adozione", False),
                     "titolo_base": get_series_name(b.get("titolo", ""))
                 }
         return result
@@ -3540,26 +3542,34 @@ async def get_child_compatibility(user_id: str, child_id: str):
         LOGICA CORRETTA per determinare se un libro può essere comprato USATO.
         
         Per le SCUOLE MEDIE:
-        - Un libro può essere comprato usato se lo stesso ISBN era presente nelle 3ª dell'anno precedente (2025/2026)
-        - Questo vale per TUTTI i libri triennali (volume unico), non solo Grammatica/Tecnologia
-        - Gli studenti di 3ª dell'anno scorso ora hanno finito le medie e possono vendere i loro libri
         
-        Per gli ANNUALI:
-        - Confronta con la stessa classe dell'anno precedente
-        - Se il libro era presente, può essere comprato usato
+        1. VOLUMI UNICI (triennali) - Vol. U:
+           - DEVE essere presente nelle 3ª dell'anno precedente (2025/2026)
+           - Chi era in 3ª l'anno scorso ha finito le medie e può vendere
+           - Se è presente solo nelle 1ª/2ª del 2025/2026, significa che è stato
+             adottato di recente e nessuno lo sta vendendo ancora
+        
+        2. LIBRI ANNUALI (Vol. 1, 2, 3):
+           - Cerca nella STESSA CLASSE dell'anno precedente
+           - Es: Vol. 1 di antologia → cerca nelle 1ª del 2025/2026
+           - Chi era in 1ª l'anno scorso ora è in 2ª e può vendere il Vol. 1
         
         Returns: (can_buy_used: bool, motivo: str)
         """
         isbn = libro.get("isbn", "")
-        is_volume_unico = libro.get("is_volume_unico", False) or libro.get("volume", "").upper() == "U"
+        volume = libro.get("volume", "").upper().strip()
+        is_volume_unico = volume == "U"
         
         if not isbn:
             return False, "ISBN mancante"
         
         if tipo_scuola == "primo_grado":  # Scuola Media
-            # Per VOLUMI UNICI (triennali): cerca nelle 3ª dell'anno precedente
+            
             if is_volume_unico:
-                # Cerca in TUTTE le 3ª della stessa scuola
+                # VOLUMI UNICI: DEVE essere presente nelle 3ª dell'anno precedente
+                # Solo chi ha finito le medie può vendere i volumi unici triennali
+                
+                # Cerca nelle 3ª della stessa scuola
                 docs_3a = await db.adozioni_2025_2026.find({
                     "codice_scuola": codice_scuola,
                     "classe": 3
@@ -3572,33 +3582,47 @@ async def get_child_compatibility(user_id: str, child_id: str):
                 
                 # Fallback: cerca in altre scuole medie di Catanzaro
                 docs_3a_altre = await db.adozioni_2025_2026.find({
-                    "codice_scuola": {"$regex": "^CZMM", "$ne": codice_scuola},
+                    "codice_scuola": {"$regex": "^CZMM"},
                     "classe": 3
-                }).to_list(100)
+                }).to_list(200)
                 
                 for doc in docs_3a_altre:
                     for l in doc.get("libri", []):
                         if l.get("isbn") == isbn:
                             return True, "Volume unico presente in altre 3ª 2025/2026 - disponibile usato"
                 
-                return False, "Volume unico NON presente in 3ª 2025/2026 - da comprare nuovo"
+                # NON trovato in 3ª - il libro è stato adottato di recente
+                # Chi ce l'ha (1ª o 2ª del 2025/2026) lo userà ancora
+                return False, "Volume unico triennale - adozione recente, non ancora disponibile usato"
             
-            # Per LIBRI ANNUALI: cerca nella stessa classe dell'anno precedente
             else:
-                docs_classe = await db.adozioni_2025_2026.find({
+                # LIBRI ANNUALI (Vol. 1, 2, 3): cerca nella STESSA CLASSE dell'anno precedente
+                # Es: se sono in 1ª e cerco Vol. 1, cerco nelle 1ª del 2025/2026
+                # Chi era in 1ª l'anno scorso ora è in 2ª e può vendere
+                docs_stessa_classe = await db.adozioni_2025_2026.find({
                     "codice_scuola": codice_scuola,
                     "classe": child_classe
                 }).to_list(20)
                 
-                for doc in docs_classe:
+                for doc in docs_stessa_classe:
                     for l in doc.get("libri", []):
                         if l.get("isbn") == isbn:
-                            return True, f"Libro annuale confermato dalla {child_classe}ª 2025/2026 - disponibile usato"
+                            return True, f"Libro annuale presente in {child_classe}ª 2025/2026 - disponibile usato"
                 
-                # Non trovato = libro nuovo o cambiato
-                return False, "Libro non presente nell'anno precedente - probabilmente nuova adozione"
+                # Fallback: cerca in altre scuole medie
+                docs_altre = await db.adozioni_2025_2026.find({
+                    "codice_scuola": {"$regex": "^CZMM"},
+                    "classe": child_classe
+                }).to_list(200)
+                
+                for doc in docs_altre:
+                    for l in doc.get("libri", []):
+                        if l.get("isbn") == isbn:
+                            return True, f"Libro annuale presente in altre {child_classe}ª 2025/2026 - disponibile usato"
+                
+                return False, f"Libro annuale NON presente in {child_classe}ª 2025/2026 - nuova adozione"
         
-        # Per SUPERIORI: logica esistente (TODO: implementare se necessario)
+        # Per SUPERIORI: logica esistente
         return True, "Superiori - logica standard"
     
     # Carica libri della MIA classe/sezione (anno corrente 2026/2027)
@@ -3850,6 +3874,7 @@ async def get_child_compatibility(user_id: str, child_id: str):
             disc = b.get("disciplina", "").strip().upper()
             isbn = b.get("isbn", "")
             titolo = b.get("titolo", "")
+            volume = b.get("volume", "").upper().strip()
             
             # Usa ISBN come chiave primaria se disponibile, altrimenti disciplina + titolo
             if isbn:
@@ -3865,12 +3890,13 @@ async def get_child_compatibility(user_id: str, child_id: str):
                     "editore": b.get("editore", "").strip().upper(),
                     "autori": b.get("autori", ""),
                     "prezzo": b.get("prezzo_copertina", 0),
+                    "volume": volume,
+                    "is_volume_unico": volume == "U" or b.get("is_volume_unico", False),
                     "titolo_base": get_series_name(titolo),
                     "libri_multipli": [b],
-                    "is_volume_unico": b.get("is_volume_unico", False),
                     "nuova_adozione": b.get("nuova_adozione", False),
-                    "da_acquistare": b.get("da_acquistare", True),  # IMPORTANTE per volumi unici
-                    "disciplina_originale": disc  # Mantiene la disciplina originale
+                    "da_acquistare": b.get("da_acquistare", True),
+                    "disciplina_originale": disc
                 }
         return result
     
