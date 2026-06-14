@@ -3501,6 +3501,84 @@ async def get_child_compatibility(user_id: str, child_id: str):
         
         return []
     
+    # ========================================
+    # HELPER: IDENTIFICA LIBRI DI STRUMENTO MUSICALE
+    # ========================================
+    def is_libro_strumento_musicale(libro: dict) -> bool:
+        """
+        Identifica se un libro è di STRUMENTO musicale (da escludere dal calcolo).
+        I libri di strumento hanno nel titolo riferimenti a strumenti specifici.
+        Mantiene solo il libro di TESTO (es. "Prima la Musica").
+        """
+        titolo = libro.get("titolo", "").upper()
+        disciplina = libro.get("disciplina", "").upper()
+        
+        # Solo per disciplina MUSICA
+        if "MUSIC" not in disciplina:
+            return False
+        
+        # Parole chiave che identificano libri di STRUMENTO (da escludere)
+        strumenti_keywords = [
+            "CHITARRA", "PIANOFORTE", "PIANO", "VIOLINO", "VIOLA", "VIOLONCELLO",
+            "FLAUTO", "CLARINETTO", "SAXOFONO", "SASSOFONO", "TROMBA", "TROMBONE",
+            "PERCUSSIONI", "BATTERIA", "TASTIERA", "FISARMONICA", "OBOE", "FAGOTTO",
+            "METODO", "TECNICA FONDAMENTALE", "ANTOLOGIA PIANISTICA", "LEZIONI DI",
+            "SCUOLA DEL", "SCUOLA DI", "METODO PER", "PRIME LEZIONI"
+        ]
+        
+        for keyword in strumenti_keywords:
+            if keyword in titolo:
+                return True
+        
+        return False
+    
+    # ========================================
+    # HELPER: VERIFICA GRAMMATICA/TECNOLOGIA USATO
+    # ========================================
+    async def can_buy_used_grammar_tech(libro: dict, codice_scuola: str, tipo_scuola: str) -> bool:
+        """
+        Per GRAMMATICA e TECNOLOGIA nelle medie:
+        Si può comprare usato SOLO se il libro era presente nelle 3ª dell'anno precedente.
+        
+        Questo perché questi libri sono volumi unici usati per tutto il triennio,
+        quindi chi era in 3ª l'anno scorso ora non ne ha più bisogno e può venderlo.
+        """
+        if tipo_scuola != "primo_grado":
+            return True  # Per superiori, logica diversa
+        
+        disciplina = libro.get("disciplina", "").upper()
+        isbn = libro.get("isbn", "")
+        
+        # Applica solo a Grammatica e Tecnologia
+        if "GRAMM" not in disciplina and "TECNOL" not in disciplina and "ITALIANO" not in disciplina:
+            return True  # Altri libri seguono la logica normale
+        
+        # Verifica se il libro era adottato in 3ª nell'anno precedente (2025/2026)
+        # La collezione 2025/2026 ha struttura diversa: {classe: int, libri: [...]}
+        doc_3a = await db.adozioni_2025_2026.find_one({
+            "codice_scuola": codice_scuola,
+            "classe": 3
+        })
+        
+        if doc_3a:
+            libri_3a = doc_3a.get("libri", [])
+            for l in libri_3a:
+                if l.get("isbn") == isbn:
+                    return True  # Il libro era in 3ª, può essere comprato usato
+        
+        # Fallback: cerca in TUTTE le scuole medie di Catanzaro
+        docs_3a_tutte = await db.adozioni_2025_2026.find({
+            "codice_scuola": {"$regex": "^CZMM"},  # Solo scuole medie CZ
+            "classe": 3
+        }).to_list(50)
+        
+        for doc in docs_3a_tutte:
+            for l in doc.get("libri", []):
+                if l.get("isbn") == isbn:
+                    return True  # Trovato in qualche 3ª, può essere usato
+        
+        return False  # Non trovato in 3ª, deve essere comprato nuovo
+    
     # Carica libri della MIA classe/sezione (anno corrente 2026/2027)
     all_my_books = await get_books_from_adozioni(child_codice_scuola, child_classe, child_sezione, "2026/2027")
     
@@ -3588,6 +3666,18 @@ async def get_child_compatibility(user_id: str, child_id: str):
     is_scuola_media = (child_tipo == "primo_grado")
     
     for libro in all_my_books:
+        # ========================================
+        # FILTRO LIBRI DI STRUMENTO MUSICALE
+        # ========================================
+        # I libri di strumento (chitarra, pianoforte, flauto, etc.) NON vanno nel calcolo
+        # ma rimangono nella lista PDF originale
+        if is_libro_strumento_musicale(libro):
+            # Marca il libro come "da non calcolare" ma lo tiene per il PDF
+            libro["escluso_calcolo"] = True
+            libro["motivo_esclusione"] = "Libro di strumento musicale - non incluso nel calcolo"
+            my_books_consigliati.append(libro)  # Va nei consigliati (non obbligatori)
+            continue
+        
         if is_scuola_media:
             # SCUOLA MEDIA: i consigliati vanno trattati come obbligatori
             if is_prima_classe:
@@ -4027,8 +4117,26 @@ async def get_child_compatibility(user_id: str, child_id: str):
                 })
         
         # REGOLA 3: Libro Annuale con nuova_adozione=False → potenzialmente USATO
+        # ECCEZIONE: Per GRAMMATICA e TECNOLOGIA nelle medie, serve verifica speciale
         else:
-            if copie_disponibili > 0:
+            # Check speciale per Grammatica/Tecnologia nelle medie
+            disc_upper = disc.upper()
+            is_grammar_tech_media = (
+                is_scuola_media and 
+                ("GRAMM" in disc_upper or "TECNOL" in disc_upper or "ITALIAN" in disc_upper)
+            )
+            
+            # Se è Grammatica/Tecnologia nelle medie, verifica se può essere comprato usato
+            can_buy_used = True
+            motivo_no_usato = ""
+            
+            if is_grammar_tech_media:
+                # Verifica se il libro era in 3ª nell'anno precedente
+                can_buy_used = await can_buy_used_grammar_tech(my_book, child_codice_scuola, child_tipo)
+                if not can_buy_used:
+                    motivo_no_usato = "Volume unico Grammatica/Tecnologia - non disponibile usato per 1ª classe"
+            
+            if can_buy_used and copie_disponibili > 0:
                 comprare_usato.append({
                     "isbn": isbn,
                     "disciplina": disc,
@@ -4040,7 +4148,7 @@ async def get_child_compatibility(user_id: str, child_id: str):
                     "copie_disponibili": copie_disponibili,
                     "status": "USATO DISPONIBILE"
                 })
-            else:
+            elif can_buy_used:
                 # Nessuna copia in vendita ma potenzialmente disponibile
                 comprare_usato.append({
                     "isbn": isbn,
@@ -4053,6 +4161,20 @@ async def get_child_compatibility(user_id: str, child_id: str):
                     "copie_disponibili": 0,
                     "status": "CERCA USATO",
                     "motivo": "Libro annuale confermato - cerca copie usate"
+                })
+            else:
+                # Grammatica/Tecnologia non acquistabile usato per 1ª media
+                comprare_nuovo.append({
+                    "isbn": isbn,
+                    "disciplina": disc,
+                    "titolo": my_book["titolo"],
+                    "editore": my_book["editore"],
+                    "prezzo": my_book["prezzo"],
+                    "copie_usate_disponibili": 0,
+                    "is_nuova_edizione": False,
+                    "is_nuova_adozione": False,
+                    "is_volume_unico": False,
+                    "motivo": motivo_no_usato
                 })
     
     # Calcoli finali
@@ -4645,11 +4767,43 @@ async def get_child_analysis_v2(user_id: str, child_id: str):
     # ================================================
     # 2. CLASSIFICA OGNI LIBRO (DA COMPRARE)
     # ================================================
+    
+    # Helper per identificare libri di strumento musicale
+    def is_libro_strumento_musicale(libro: dict) -> bool:
+        """Identifica se un libro è di STRUMENTO musicale (da escludere dal calcolo)."""
+        titolo = libro.get("titolo", "").upper()
+        disciplina = libro.get("disciplina", "").upper()
+        
+        if "MUSIC" not in disciplina:
+            return False
+        
+        strumenti_keywords = [
+            "CHITARRA", "PIANOFORTE", "PIANO", "VIOLINO", "VIOLA", "VIOLONCELLO",
+            "FLAUTO", "CLARINETTO", "SAXOFONO", "SASSOFONO", "TROMBA", "TROMBONE",
+            "PERCUSSIONI", "BATTERIA", "TASTIERA", "FISARMONICA", "OBOE", "FAGOTTO",
+            "METODO", "TECNICA FONDAMENTALE", "ANTOLOGIA PIANISTICA", "LEZIONI DI",
+            "SCUOLA DEL", "SCUOLA DI", "METODO PER", "PRIME LEZIONI"
+        ]
+        
+        return any(keyword in titolo for keyword in strumenti_keywords)
+    
     da_comprare_nuovi = []
     da_comprare_usati = []
     gia_posseduti = []
+    libri_strumento_esclusi = []  # Per tenere traccia dei libri di strumento esclusi
     
     for libro in libri_correnti:
+        # FILTRO: Escludi libri di strumento musicale dal calcolo
+        if is_libro_strumento_musicale(libro):
+            libri_strumento_esclusi.append({
+                "isbn": libro.get("isbn", ""),
+                "titolo": libro.get("titolo", "")[:60],
+                "disciplina": libro.get("disciplina", ""),
+                "prezzo_copertina": libro.get("prezzo_copertina", 0),
+                "motivo_esclusione": "Libro di strumento musicale"
+            })
+            continue  # Salta questo libro
+        
         stato, motivo, copie = await calcola_stato_acquisto(
             db, libro, child_classe, child_tipo, child_codice_scuola, child_sezione
         )
@@ -4907,12 +5061,17 @@ async def get_child_analysis_v2(user_id: str, child_id: str):
         # GIÀ POSSEDUTI - per compatibilità
         "libri_gia_posseduti": gia_posseduti,
         
+        # Libri di strumento musicale (esclusi dal calcolo)
+        "libri_strumento_esclusi": libri_strumento_esclusi,
+        
         # TETTO DI SPESA MINISTERIALE
         # Il tetto si applica al TOTALE TESTI NUOVI (prezzo copertina di tutti i libri da comprare)
         "tetto_spesa": calcola_tetto_spesa(child_tipo, child_classe, totale_testi_nuovi_per_tetto),
         
         "summary": {
-            "totale_libri": len(libri_correnti),
+            "totale_libri": len(libri_correnti) - len(libri_strumento_esclusi),  # Escludi strumenti
+            "totale_libri_originale": len(libri_correnti),  # Totale originale per riferimento
+            "libri_strumento_esclusi": len(libri_strumento_esclusi),
             "da_comprare_nuovi": len(da_comprare_nuovi),
             "da_comprare_usati": len(da_comprare_usati),
             "gia_posseduti": len(gia_posseduti),
