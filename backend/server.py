@@ -2457,12 +2457,12 @@ async def get_purchasable_books_for_user(user_id: str):
             })
             continue
         
-        # Determine cycle limits
+        # Determine cycle limits - NUOVA LOGICA (scambi tra cicli permessi)
         if tipo == "primo_grado":
             cycle_max = 3  # Medie: 1-2-3
         else:
-            # Superiori: biennio 1-2, triennio 3-4-5
-            cycle_max = 2 if classe <= 2 else 5
+            # Superiori: scambi tra TUTTI i 5 anni (nessuna restrizione biennio/triennio)
+            cycle_max = 5
         
         # La classe dei libri che mi servono (prossimo anno)
         classe_prossimo_anno = classe + 1 if classe < cycle_max else None
@@ -2697,29 +2697,26 @@ async def get_class_compatibility(user_id: str):
     if not codice_scuola:
         return {"error": "Codice scuola non trovato", "user_classe": user_classe}
     
-    # === GESTIONE CICLI SCOLASTICI ===
+    # === GESTIONE CICLI SCOLASTICI - NUOVA LOGICA ===
     # Scuola media (primo grado): ciclo unico 1-2-3
-    # Scuola superiore (secondo grado): 
-    #   - Biennio: 1-2
-    #   - Triennio: 3-4-5
+    # Scuola superiore (secondo grado): SCAMBI ANCHE TRA CICLI (biennio ↔ triennio)
+    #   - Es: 3° può vendere a 2°
     
     def get_cycle_info(classe: int, tipo_scuola: str):
         """
         Restituisce info sul ciclo: (classe_min, classe_max, nome_ciclo)
+        NOTA: Per superiori ora permettiamo scambi tra cicli, quindi usiamo 1-5 come range
         """
         if tipo_scuola == "primo_grado":
             # Scuola media: ciclo unico 1-2-3
             return (1, 3, "media")
         else:
-            # Scuola superiore
-            if classe <= 2:
-                return (1, 2, "biennio")
-            else:
-                return (3, 5, "triennio")
+            # Scuola superiore: SCAMBI TRA TUTTI I 5 ANNI (nessuna restrizione biennio/triennio)
+            return (1, 5, "superiore")
     
     cycle_min, cycle_max, cycle_name = get_cycle_info(user_classe, user_tipo)
     
-    # Classi adiacenti NELLO STESSO CICLO
+    # Classi adiacenti (ora senza restrizione cicli per superiori)
     classe_precedente = user_classe - 1 if user_classe > cycle_min else None
     classe_successiva = user_classe + 1 if user_classe < cycle_max else None
     
@@ -2985,20 +2982,20 @@ async def get_child_compatibility(user_id: str, child_id: str):
         similarity = len(common) / max(len(words1), len(words2))
         return similarity >= 0.7 and len(common) >= min(2, min_words)
     
-    # Gestione cicli scolastici
+    # Gestione cicli scolastici - NUOVA LOGICA (scambi tra cicli permessi)
     def get_cycle_info(classe: int, tipo_scuola: str):
-        """Restituisce (min_classe, max_classe, nome_ciclo)"""
+        """Restituisce (min_classe, max_classe, nome_ciclo)
+        Per superiori: SCAMBI TRA TUTTI I 5 ANNI (nessuna restrizione biennio/triennio)
+        """
         if tipo_scuola == "primo_grado":
             return (1, 3, "media")
         else:
-            if classe <= 2:
-                return (1, 2, "biennio")
-            else:
-                return (3, 5, "triennio")
+            # Superiori: scambi tra tutti i 5 anni
+            return (1, 5, "superiore")
     
     cycle_min, cycle_max, cycle_name = get_cycle_info(child_classe, child_tipo)
     # Per vendibili: lo studente può vendere i libri dell'anno precedente
-    # Anche se è il primo anno del ciclo (es. 3° superiore), può vendere libri del 2° ai nuovi 2°
+    # Anche tra cicli (es. 3° superiore può vendere al 2°)
     classe_precedente = child_classe - 1 if child_classe > 1 else None
     classe_successiva = child_classe + 1 if child_classe < cycle_max else None
     
@@ -3152,346 +3149,186 @@ async def get_child_compatibility(user_id: str, child_id: str):
         }
     
     # ========================================
-    # FUNZIONE HELPER: VERIFICA SE STESSO LIBRO IN CLASSI SUPERIORI
+    # FUNZIONE HELPER: VERIFICA SE VOLUME UNICO È VENDIBILE USATO
     # ========================================
     
-    async def is_same_book_in_higher_classes(libro: dict, codice_scuola: str, disciplina: str, tipo_scuola: str, classe_corrente: int = 1) -> bool:
+    async def is_volume_unico_vendibile_usato(libro: dict, codice_scuola: str, disciplina: str, tipo_scuola: str, classe_corrente: int = 1) -> bool:
         """
-        Verifica se un VOLUME UNICO può essere trovato USATO.
+        NUOVA LOGICA SEMPLIFICATA per verificare se un VOLUME UNICO può essere comprato USATO.
         
-        LOGICA PER SCUOLE MEDIE (primo_grado):
-        - Volumi unici TRIENNALI (1-2-3)
-        - Deve essere LO STESSO libro in 2ª E 3ª
-        - Controllo anno pubblicazione: se <= 2022, ha completato un ciclo
+        SCUOLE MEDIE (primo_grado):
+        - Volume unico comprato in 1ª → si usa fino a 3ª → NON VENDIBILE
+        - ECCEZIONE: Se il libro era adottato l'anno precedente in 3ª ed è riproposto in 1ª
+          → Chi ha finito la 3ª (e va in 1° superiore) PUÒ VENDERLO
         
-        LOGICA PER SCUOLE SUPERIORI (secondo_grado):
-        - Materie a DURATA FISSA 5 ANNI: Scienze motorie, Religione, Ed. civica, Grammatiche
-        - Altre materie: controllo DINAMICO sulla classe_successiva
-          - Se la materia esiste nella classe successiva → il libro continua
-          - Se NON esiste → ciclo terminato (libro usabile solo quest'anno)
-        - BIENNIO (1-2): logica simile alle medie per libri annuali
-        - TRIENNIO (3-4-5): logica simile alle medie per libri annuali
+        SCUOLE SUPERIORI (secondo_grado):
+        - SOLO RELIGIONE rimane come materia fissa
+        - Tutte le altre materie: verifico se il libro è presente nella lista di quella classe
+        - Gli scambi avvengono ANCHE TRA CICLI (biennio ↔ triennio)
+        
+        REGOLE COMUNI:
+        - Se nuova_adozione=True → NON disponibile usato
+        - Gli scambi possono avvenire TRA SCUOLE DIVERSE (verifico se stesso ISBN)
         """
         import re
-        
-        # PRIORITÀ 1: Controllo anno di pubblicazione (se disponibile)
-        anno_pubblicazione = libro.get('anno_pubblicazione')
-        if anno_pubblicazione:
-            # Anno scolastico 2025-2026: libri pubblicati nel 2022 o prima hanno completato almeno un ciclo
-            if anno_pubblicazione <= 2022:
-                # Libro vecchio, ma dobbiamo ancora verificare che sia lo stesso nelle classi superiori
-                pass  # Continua con la verifica del titolo
-            else:
-                # Libro pubblicato 2023 o dopo: primo ciclo in corso, NON disponibile usato
-                return False
         
         # Se il libro ha nuova_adozione=True, NON può essere comprato usato
         if libro.get('nuova_adozione', False):
             return False
         
+        isbn = libro.get('isbn', '')
         titolo = libro.get('titolo', '').upper()
         editore = libro.get('editore', '').upper()[:15]
         
-        # Rimuovi suffissi dal titolo per confronto
-        titolo_base = re.sub(r'\s*-\s*(VOLUME|VOL\.?|CONFEZIONE|EDIZIONE|ED\.).*', '', titolo)
-        titolo_base = re.sub(r'\s*\([^)]*\)', '', titolo_base)
-        titolo_base = titolo_base.strip()[:25]
-        
-        if not titolo_base:
+        # ===========================================
+        # SCUOLE MEDIE (primo_grado) - Volumi unici
+        # ===========================================
+        if tipo_scuola == "primo_grado":
+            # REGOLA: Volume unico in 1ª si usa fino a 3ª → NON vendibile di default
+            # ECCEZIONE: Se era adottato l'anno precedente in 3ª ed ora è in 1ª
+            # → Chi finisce 3ª può venderlo
+            
+            # Cerco se questo libro era in 3ª l'anno scorso (collezione adozioni_storico o stesso anno)
+            # Per ora verifico se è presente in 3ª attualmente E in 1ª
+            # Se sì, chi ha completato la 3ª può venderlo ai nuovi di 1ª
+            
+            presente_in_terza = False
+            presente_in_prima = False
+            
+            # Verifica in 3ª
+            adoz_terza = await db.adozioni.find_one({
+                'codice_scuola': codice_scuola,
+                'classe': 3
+            })
+            if adoz_terza:
+                for l in adoz_terza.get('libri', []):
+                    if l.get('isbn') == isbn or (titolo[:15] in l.get('titolo', '').upper()[:20] and editore == l.get('editore', '').upper()[:15]):
+                        if l.get('is_volume_unico', False):
+                            presente_in_terza = True
+                            break
+            
+            # Verifica in 1ª
+            adoz_prima = await db.adozioni.find_one({
+                'codice_scuola': codice_scuola,
+                'classe': 1
+            })
+            if adoz_prima:
+                for l in adoz_prima.get('libri', []):
+                    if l.get('isbn') == isbn or (titolo[:15] in l.get('titolo', '').upper()[:20] and editore == l.get('editore', '').upper()[:15]):
+                        if l.get('is_volume_unico', False):
+                            presente_in_prima = True
+                            break
+            
+            # ECCEZIONE: Se presente sia in 1ª che in 3ª → chi finisce 3ª può vendere
+            if presente_in_terza and presente_in_prima:
+                return True
+            
+            # Altrimenti NON vendibile (si usa per tutto il ciclo)
             return False
         
         # ===========================================
-        # SCUOLE MEDIE (primo_grado) - Volumi unici TRIENNALI
-        # ===========================================
-        if tipo_scuola == "primo_grado":
-            same_in_class_2 = False
-            same_in_class_3 = False
-            nuova_adozione_in_2 = False
-            nuova_adozione_in_3 = False
-            
-            for classe in [2, 3]:
-                adoz = await db.adozioni.find_one({
-                    'codice_scuola': codice_scuola,
-                    'classe': classe
-                })
-                
-                if not adoz:
-                    continue
-                
-                for libro_sup in adoz.get('libri', []):
-                    # Cerca nella stessa disciplina E deve essere volume unico
-                    if disciplina.upper()[:15] not in libro_sup.get('disciplina', '').upper():
-                        continue
-                    if not libro_sup.get('is_volume_unico', False):
-                        continue
-                    
-                    # Confronta titolo ed editore
-                    titolo_sup = libro_sup.get('titolo', '').upper()
-                    editore_sup = libro_sup.get('editore', '').upper()[:15]
-                    
-                    titolo_sup_base = re.sub(r'\s*-\s*(VOLUME|VOL\.?|CONFEZIONE|EDIZIONE|ED\.).*', '', titolo_sup)
-                    titolo_sup_base = re.sub(r'\s*\([^)]*\)', '', titolo_sup_base)
-                    titolo_sup_base = titolo_sup_base.strip()[:25]
-                    
-                    # Verifica se è LO STESSO libro
-                    if titolo_base[:15] == titolo_sup_base[:15] and editore == editore_sup:
-                        if classe == 2:
-                            same_in_class_2 = True
-                            nuova_adozione_in_2 = libro_sup.get('nuova_adozione', False)
-                        else:
-                            same_in_class_3 = True
-                            nuova_adozione_in_3 = libro_sup.get('nuova_adozione', False)
-                        break
-            
-            # Se il libro in 3ª ha nuova_adozione=True → è al 1° anno → NON disponibile
-            if nuova_adozione_in_3:
-                return False
-            
-            # Se il libro in 2ª ha nuova_adozione=True → è al 2° anno → NON disponibile
-            if nuova_adozione_in_2:
-                return False
-            
-            # Può comprare usato SOLO se è lo stesso libro in ENTRAMBE le classi 2 e 3
-            return same_in_class_2 and same_in_class_3
-        
-        # ===========================================
-        # SCUOLE SUPERIORI (secondo_grado) - Logica NUOVA
+        # SCUOLE SUPERIORI (secondo_grado)
         # ===========================================
         else:
             disciplina_upper = disciplina.upper()
             
-            # MATERIE A DURATA FISSA 5 ANNI
-            # Queste materie usano lo stesso libro per tutti i 5 anni
-            MATERIE_5_ANNI = [
-                'SCIENZE MOTORIE', 'EDUCAZIONE FISICA', 'ED. FISICA',
-                'RELIGIONE', 'IRC', 'RELIGIONE CATTOLICA',
-                'EDUCAZIONE CIVICA', 'ED. CIVICA', 'CITTADINANZA',
-                'GRAMMATICA', 'GRAMMATICHE', 'LINGUA ITALIANA - GRAMMATICA'
-            ]
+            # SOLO RELIGIONE rimane come materia fissa 5 anni
+            MATERIE_FISSE = ['RELIGIONE', 'IRC', 'RELIGIONE CATTOLICA']
+            is_religione = any(mat in disciplina_upper for mat in MATERIE_FISSE)
             
-            is_materia_5_anni = any(mat in disciplina_upper for mat in MATERIE_5_ANNI)
-            
-            if is_materia_5_anni:
-                # Materia a 5 anni: verifica se è lo stesso libro in TUTTE le classi successive
-                # Per essere disponibile usato, deve essere stato adottato per almeno 5 anni
-                classi_da_verificare = [c for c in range(2, 6) if c > classe_corrente]
-                
-                if not classi_da_verificare:
-                    # Siamo in 5ª, non ci sono classi successive
-                    # Verifichiamo se è lo stesso libro nelle classi precedenti (significa che ha completato cicli)
-                    classi_da_verificare = [c for c in range(1, 5) if c < classe_corrente]
-                
-                stesso_libro_ovunque = True
-                nuova_adozione_trovata = False
-                
-                for classe in classi_da_verificare:
+            if is_religione:
+                # Religione: libro fisso per 5 anni
+                # Vendibile solo se chi ha completato i 5 anni lo vende
+                # Verifico se è lo stesso libro in tutte le classi
+                stesso_ovunque = True
+                for classe in range(1, 6):
+                    if classe == classe_corrente:
+                        continue
                     adoz = await db.adozioni.find_one({
                         'codice_scuola': codice_scuola,
                         'classe': classe
                     })
-                    
                     if not adoz:
                         continue
                     
-                    trovato_in_classe = False
-                    for libro_sup in adoz.get('libri', []):
-                        if disciplina_upper[:15] not in libro_sup.get('disciplina', '').upper():
-                            continue
-                        if not libro_sup.get('is_volume_unico', False):
-                            continue
-                        
-                        titolo_sup = libro_sup.get('titolo', '').upper()
-                        editore_sup = libro_sup.get('editore', '').upper()[:15]
-                        
-                        titolo_sup_base = re.sub(r'\s*-\s*(VOLUME|VOL\.?|CONFEZIONE|EDIZIONE|ED\.).*', '', titolo_sup)
-                        titolo_sup_base = re.sub(r'\s*\([^)]*\)', '', titolo_sup_base)
-                        titolo_sup_base = titolo_sup_base.strip()[:25]
-                        
-                        if titolo_base[:15] == titolo_sup_base[:15] and editore == editore_sup:
-                            trovato_in_classe = True
-                            if libro_sup.get('nuova_adozione', False):
-                                nuova_adozione_trovata = True
-                            break
+                    trovato = False
+                    for l in adoz.get('libri', []):
+                        if any(mat in l.get('disciplina', '').upper() for mat in MATERIE_FISSE):
+                            if l.get('isbn') == isbn:
+                                trovato = True
+                                if l.get('nuova_adozione', False):
+                                    return False  # Nuova adozione in qualche classe
+                                break
                     
-                    if not trovato_in_classe:
-                        stesso_libro_ovunque = False
+                    if not trovato:
+                        stesso_ovunque = False
                 
-                # Se c'è nuova_adozione in qualsiasi classe, il ciclo non è completo
-                if nuova_adozione_trovata:
-                    return False
-                
-                return stesso_libro_ovunque
+                return stesso_ovunque
             
             else:
-                # ALTRE MATERIE: Controllo DINAMICO sulla classe_successiva
-                # Determina il ciclo corrente (biennio o triennio)
-                if classe_corrente <= 2:
-                    # BIENNIO (1-2)
-                    classi_ciclo = [1, 2]
-                    classi_da_verificare = [c for c in classi_ciclo if c > classe_corrente]
-                else:
-                    # TRIENNIO (3-4-5)
-                    classi_ciclo = [3, 4, 5]
-                    classi_da_verificare = [c for c in classi_ciclo if c > classe_corrente]
+                # ALTRE MATERIE: Verifico semplicemente se il libro è presente nella lista
+                # Se c'è chi lo ha usato (classe precedente), può venderlo
+                # GLI SCAMBI AVVENGONO ANCHE TRA CICLI (es. 3° vende a 2°)
                 
-                # Verifica se la materia continua nelle classi successive del ciclo
-                # E se è lo stesso libro
-                for classe in classi_da_verificare:
+                # Verifico se esiste in una classe precedente (qualcuno che può venderlo)
+                for classe_prec in range(1, classe_corrente):
                     adoz = await db.adozioni.find_one({
                         'codice_scuola': codice_scuola,
-                        'classe': classe
+                        'classe': classe_prec
                     })
-                    
                     if not adoz:
-                        # Se non c'è adozione per questa classe, la materia potrebbe non continuare
-                        return False
+                        continue
                     
-                    # Cerca se la materia esiste in questa classe
-                    materia_trovata = False
-                    stesso_libro = False
-                    nuova_adozione = False
-                    
-                    for libro_sup in adoz.get('libri', []):
-                        disc_sup = libro_sup.get('disciplina', '').upper()
-                        if disciplina_upper[:15] not in disc_sup:
-                            continue
-                        
-                        materia_trovata = True
-                        
-                        # Verifica se è lo stesso libro (volume unico)
-                        if libro_sup.get('is_volume_unico', False):
-                            titolo_sup = libro_sup.get('titolo', '').upper()
-                            editore_sup = libro_sup.get('editore', '').upper()[:15]
-                            
-                            titolo_sup_base = re.sub(r'\s*-\s*(VOLUME|VOL\.?|CONFEZIONE|EDIZIONE|ED\.).*', '', titolo_sup)
-                            titolo_sup_base = re.sub(r'\s*\([^)]*\)', '', titolo_sup_base)
-                            titolo_sup_base = titolo_sup_base.strip()[:25]
-                            
-                            if titolo_base[:15] == titolo_sup_base[:15] and editore == editore_sup:
-                                stesso_libro = True
-                                nuova_adozione = libro_sup.get('nuova_adozione', False)
-                        break
-                    
-                    # Se la materia non è presente nella classe successiva, il ciclo del libro termina
-                    if not materia_trovata:
-                        # Il libro viene usato solo fino a questa classe
-                        # Ma per essere disponibile usato, deve aver completato almeno un ciclo
-                        # Verifica nelle classi precedenti
-                        break
-                    
-                    # Se è una nuova adozione, non è disponibile usato
-                    if nuova_adozione:
-                        return False
-                    
-                    # Se non è lo stesso libro, l'edizione è cambiata
-                    if not stesso_libro:
-                        return False
+                    for l in adoz.get('libri', []):
+                        if l.get('isbn') == isbn:
+                            if not l.get('nuova_adozione', False):
+                                return True  # Qualcuno in una classe precedente può venderlo
                 
-                # Se siamo arrivati qui, verifichiamo che il libro sia stato adottato abbastanza a lungo
-                # Controlliamo nelle classi precedenti per vedere se il ciclo è stato completato
-                if classe_corrente <= 2:
-                    classi_precedenti = [c for c in [1, 2] if c < classe_corrente]
-                else:
-                    classi_precedenti = [c for c in [3, 4, 5] if c < classe_corrente]
+                # Verifico anche in ALTRE SCUOLE (scambi tra scuole diverse)
+                altre_adozioni = await db.adozioni.find({
+                    'codice_scuola': {'$ne': codice_scuola},
+                    'libri.isbn': isbn
+                }).to_list(50)
                 
-                ciclo_completo = False
-                for classe in classi_precedenti:
-                    adoz = await db.adozioni.find_one({
-                        'codice_scuola': codice_scuola,
-                        'classe': classe
-                    })
-                    if adoz:
-                        for libro_prec in adoz.get('libri', []):
-                            if disciplina_upper[:15] in libro_prec.get('disciplina', '').upper():
-                                if libro_prec.get('is_volume_unico', False):
-                                    titolo_prec = libro_prec.get('titolo', '').upper()
-                                    editore_prec = libro_prec.get('editore', '').upper()[:15]
-                                    titolo_prec_base = re.sub(r'\s*-\s*(VOLUME|VOL\.?|CONFEZIONE|EDIZIONE|ED\.).*', '', titolo_prec)
-                                    titolo_prec_base = re.sub(r'\s*\([^)]*\)', '', titolo_prec_base)
-                                    titolo_prec_base = titolo_prec_base.strip()[:25]
-                                    
-                                    if titolo_base[:15] == titolo_prec_base[:15] and editore == editore_prec:
-                                        if not libro_prec.get('nuova_adozione', False):
-                                            ciclo_completo = True
-                                break
+                for adoz in altre_adozioni:
+                    for l in adoz.get('libri', []):
+                        if l.get('isbn') == isbn and not l.get('nuova_adozione', False):
+                            return True  # Disponibile in un'altra scuola
                 
-                # Per la prima classe del ciclo (1 o 3), se il libro è presente in tutte le classi successive
-                # E non è nuova adozione, potrebbe essere disponibile usato da chi ha completato il ciclo
-                if classe_corrente in [1, 3]:
-                    # Verifica se tutte le classi del ciclo hanno lo stesso libro
-                    if classe_corrente == 1:
-                        classi_verificare = [2]
-                    else:
-                        classi_verificare = [4, 5]
-                    
-                    presente_ovunque = True
-                    for classe in classi_verificare:
-                        adoz = await db.adozioni.find_one({
-                            'codice_scuola': codice_scuola,
-                            'classe': classe
-                        })
-                        if not adoz:
-                            presente_ovunque = False
-                            break
-                        
-                        trovato = False
-                        for libro_sup in adoz.get('libri', []):
-                            if disciplina_upper[:15] in libro_sup.get('disciplina', '').upper():
-                                if libro_sup.get('is_volume_unico', False):
-                                    titolo_sup = libro_sup.get('titolo', '').upper()
-                                    editore_sup = libro_sup.get('editore', '').upper()[:15]
-                                    titolo_sup_base = re.sub(r'\s*-\s*(VOLUME|VOL\.?|CONFEZIONE|EDIZIONE|ED\.).*', '', titolo_sup)
-                                    titolo_sup_base = re.sub(r'\s*\([^)]*\)', '', titolo_sup_base)
-                                    titolo_sup_base = titolo_sup_base.strip()[:25]
-                                    
-                                    if titolo_base[:15] == titolo_sup_base[:15] and editore == editore_sup:
-                                        if not libro_sup.get('nuova_adozione', False):
-                                            trovato = True
-                                break
-                        
-                        if not trovato:
-                            presente_ovunque = False
-                            break
-                    
-                    return presente_ovunque
-                
-                return ciclo_completo
+                return False
     
     # ========================================
     # FUNZIONE HELPER: VERIFICA POTENZIALE USATO (legacy - mantenuta per compatibilità)
     # ========================================
     async def is_potentially_available_used(isbn: str, current_class: int, tipo_scuola: str, titolo: str = "", disciplina: str = "", codice_scuola: str = "") -> bool:
         """
-        Verifica se un libro ANNUALE è potenzialmente disponibile usato.
-        Cerca nelle adozioni di TUTTE le scuole dello stesso tipo (primo/secondo grado)
-        se il libro (o uno della stessa serie) è stato adottato in classi superiori.
+        NUOVA LOGICA: Verifica se un libro ANNUALE è potenzialmente disponibile usato.
+        
+        REGOLE AGGIORNATE:
+        - MEDIE: ciclo unico 1-2-3 (es. 2° vende a 1°, 3° vende a 2°)
+        - SUPERIORI: scambi ANCHE TRA CICLI (es. 3° vende a 2°)
+        - Scambi TRA SCUOLE DIVERSE: se stesso ISBN è in altre scuole → disponibile
         
         Per libri annuali (vol. 1, 2, 3), cerca se la STESSA SERIE è adottata in classi superiori.
-        
-        NOTA: Questa funzione è per libri ANNUALI. Per volumi UNICI usare is_same_book_in_higher_classes.
         """
         if not isbn and not titolo:
             return False
         
-        # Classi superiori a quella corrente (all'interno dello stesso ciclo)
+        # Classi che possono VENDERE a chi sta in current_class
+        # = tutte le classi superiori (senza restrizione biennio/triennio)
         if tipo_scuola == "primo_grado":
             # Medie: ciclo unico 1-2-3
-            classi_superiori = [c for c in [2, 3] if c > current_class]
+            classi_venditrici = [c for c in [2, 3] if c > current_class]
         else:
-            # Superiori: rispetta i cicli biennio (1-2) e triennio (3-4-5)
-            if current_class <= 2:
-                # Biennio: cerca solo in classe 2 (dentro il biennio)
-                classi_superiori = [2] if current_class == 1 else []
-            else:
-                # Triennio: cerca in 4 e 5 (dentro il triennio)
-                classi_superiori = [c for c in [4, 5] if c > current_class]
+            # Superiori: TUTTE le classi superiori (senza restrizione cicli)
+            classi_venditrici = [c for c in [2, 3, 4, 5] if c > current_class]
         
-        if not classi_superiori:
+        if not classi_venditrici:
             return False
         
-        # Prima cerca per ISBN esatto
+        # Prima cerca per ISBN esatto (in TUTTE le scuole - scambi tra scuole diverse)
         count = await db.adozioni.count_documents({
-            "classe": {"$in": classi_superiori},
+            "classe": {"$in": classi_venditrici},
             "libri.isbn": isbn
         })
         
@@ -3499,41 +3336,20 @@ async def get_child_compatibility(user_id: str, child_id: str):
             return True
         
         # Se non trova per ISBN, cerca per SERIE (stesso titolo base + stessa disciplina)
-        # Prima cerca nella STESSA SCUOLA, poi in tutte le scuole
         if titolo and disciplina:
             import re
-            # Rimuovi numeri di volume, parentesi, suffissi, ecc.
             titolo_base = titolo.upper()
-            # Rimuovi parentesi e contenuto
             titolo_base = re.sub(r'\s*\([^)]*\)', '', titolo_base)
-            # Rimuovi numeri di volume
             titolo_base = re.sub(r'\s+(VOL\.?\s*)?[123](\s|$)', ' ', titolo_base)
             titolo_base = re.sub(r'\s+VOLUME\s+[123]', ' ', titolo_base)
             titolo_base = re.sub(r'\s+[123]°?\s+(ANNO|VOL)', ' ', titolo_base)
-            # Rimuovi "ARITMETICA/GEOMETRIA 1/2/3"
             titolo_base = re.sub(r'\s+(ARITMETICA|GEOMETRIA|ALGEBRA)\s+[123]', r' \1', titolo_base)
             titolo_base = titolo_base.strip()
             
             if titolo_base:
-                # PRIMA cerca nella stessa scuola (più probabile)
-                if codice_scuola:
-                    adozioni_stessa_scuola = await db.adozioni.find({
-                        "codice_scuola": codice_scuola,
-                        "classe": {"$in": classi_superiori}
-                    }).to_list(50)
-                    
-                    for adoz in adozioni_stessa_scuola:
-                        for libro in adoz.get('libri', []):
-                            if disciplina.upper() in libro.get('disciplina', '').upper():
-                                titolo_libro = libro.get('titolo', '').upper()
-                                titolo_libro = re.sub(r'\s*\([^)]*\)', '', titolo_libro)
-                                # Verifica se è la stessa serie
-                                if titolo_base[:12] in titolo_libro or titolo_libro[:12] in titolo_base:
-                                    return True
-                
-                # POI cerca in tutte le scuole
+                # Cerca in TUTTE le scuole (scambi tra scuole diverse)
                 adozioni = await db.adozioni.find({
-                    "classe": {"$in": classi_superiori},
+                    "classe": {"$in": classi_venditrici},
                     "libri.disciplina": {"$regex": disciplina.upper()[:10], "$options": "i"}
                 }).to_list(200)
                 
