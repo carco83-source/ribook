@@ -5159,8 +5159,8 @@ async def generate_books_pdf(user_id: str, child_id: str):
     elements = []
     styles = getSampleStyleSheet()
     
-    # Styles - font più piccoli per formato verticale
-    header_style = ParagraphStyle('Header', fontSize=8, leading=10)
+    # Styles - font PIÙ GRANDI per header, normali per celle
+    header_style = ParagraphStyle('Header', fontSize=11, leading=14)
     cell_style = ParagraphStyle('Cell', fontSize=6, leading=8, wordWrap='CJK')
     cell_bold = ParagraphStyle('CellBold', fontSize=6, leading=8, fontName='Helvetica-Bold', wordWrap='CJK')
     
@@ -5169,30 +5169,30 @@ async def generate_books_pdf(user_id: str, child_id: str):
     tipo_scuola_label = "SCUOLA SECONDARIA DI I GRADO" if child_tipo == "primo_grado" else "SCUOLA SECONDARIA DI II GRADO"
     classe_label = f"{child_classe} {child_sezione}"
     
-    # Logo RiBook - usa immagine invece di testo
+    # Logo RiBook - usa immagine invece di testo (LOGO PIÙ GRANDE)
     import os
     logo_path = os.path.join(os.path.dirname(__file__), 'assets', 'ribook-logo.png')
     
-    # Crea l'elemento logo se il file esiste, altrimenti usa testo fallback
+    # Crea l'elemento logo se il file esiste, altrimenti usa testo fallback (PIÙ GRANDE)
     if os.path.exists(logo_path):
-        logo_img = Image(logo_path, width=3*cm, height=1.2*cm)
+        logo_img = Image(logo_path, width=4.5*cm, height=1.8*cm)
     else:
-        logo_img = Paragraph("<b><font size='16'>RiBook</font></b>", ParagraphStyle('Code', fontSize=11, fontName='Helvetica-Bold', alignment=TA_CENTER))
+        logo_img = Paragraph("<b><font size='22'>RiBook</font></b>", ParagraphStyle('Code', fontSize=22, fontName='Helvetica-Bold', alignment=TA_CENTER))
     
     header_data = [[
-        Paragraph(f"<b>{scuola_nome.upper()}</b><br/><font size='7'>{child_codice_scuola}</font><br/>88100 Catanzaro", header_style),
+        Paragraph(f"<b><font size='12'>{scuola_nome.upper()}</font></b><br/><font size='10'>{child_codice_scuola}</font><br/><font size='9'>88100 Catanzaro</font>", header_style),
         logo_img,
-        Paragraph(f"<b>ELENCO DEI LIBRI DI TESTO<br/>ADOTTATI O CONSIGLIATI</b><br/><br/>Tipo Scuola: {tipo_scuola_label}<br/>Classe: {classe_label}<br/>Anno Scolastico 2025-2026", 
-                 ParagraphStyle('RightHeader', fontSize=7, leading=9, alignment=TA_LEFT))
+        Paragraph(f"<b><font size='11'>ELENCO DEI LIBRI DI TESTO<br/>ADOTTATI O CONSIGLIATI</font></b><br/><br/><font size='10'>Tipo Scuola: {tipo_scuola_label}<br/>Classe: {classe_label}<br/><b>Anno Scolastico 2026-2027</b></font>", 
+                 ParagraphStyle('RightHeader', fontSize=10, leading=12, alignment=TA_LEFT))
     ]]
     
-    header_table = Table(header_data, colWidths=[5.5*cm, 3.5*cm, 7*cm])
+    header_table = Table(header_data, colWidths=[5.5*cm, 4.5*cm, 6.5*cm])
     header_table.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('ALIGN', (1, 0), (1, 0), 'CENTER'),
     ]))
     elements.append(header_table)
-    elements.append(Spacer(1, 0.4*cm))
+    elements.append(Spacer(1, 0.5*cm))
     
     # Table header - colonne ridotte per portrait
     table_data = [[
@@ -5319,8 +5319,8 @@ async def generate_books_pdf(user_id: str, child_id: str):
     
     # Footer
     elements.append(Spacer(1, 0.3*cm))
-    footer_style = ParagraphStyle('Footer', fontSize=8)
-    elements.append(Paragraph(f"Data aggiornamento: {datetime.now().strftime('%Y')}                                                                    Generato da RiLiBro", footer_style))
+    footer_style = ParagraphStyle('Footer', fontSize=9)
+    elements.append(Paragraph(f"A.S. 2026/2027 - Aggiornamento: {datetime.now().strftime('%d/%m/%Y')}                                                       Generato da RiLiBro", footer_style))
     
     doc.build(elements)
     buffer.seek(0)
@@ -5543,7 +5543,7 @@ async def generate_books_html(user_id: str, child_id: str):
         <div class="rotate-hint">📱 Ruota il telefono in orizzontale per una visualizzazione migliore</div>
         <div class="header">
             <h1>RiLiBro</h1>
-            <div class="info">Classe {child_classe}{child_sezione} • A.S. 2025/2026</div>
+            <div class="info">Classe {child_classe}{child_sezione} • A.S. 2026/2027</div>
             <div class="scuola">{child_scuola}</div>
             <div class="info">Cod. {child_codice_scuola}</div>
         </div>
