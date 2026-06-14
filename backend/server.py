@@ -3377,6 +3377,54 @@ async def get_child_compatibility(user_id: str, child_id: str):
         return False
     
     # ========================================
+    # FUNZIONE HELPER: VERIFICA SE VOLUME UNICO È IN CLASSI SUPERIORI
+    # ========================================
+    async def is_same_book_in_higher_classes(libro: dict, codice_scuola: str, disciplina: str, tipo_scuola: str, classe_attuale: int) -> bool:
+        """
+        Verifica se un volume unico è adottato anche nelle classi superiori.
+        Questo serve per determinare se il ciclo è "completato" (libro già passato per tutte le classi).
+        
+        Per le MEDIE: un volume unico del 1° anno si usa fino al 3° anno.
+        Il ciclo è completato se siamo al 3° anno o se il libro è stato adottato da almeno 3 anni.
+        
+        Per le SUPERIORI: dipende dal tipo di volume (triennale biennio o triennale triennio).
+        """
+        isbn = libro.get("isbn")
+        if not isbn:
+            return False
+        
+        # Per classe 3 medie, il ciclo è sicuramente completato
+        if tipo_scuola == "primo_grado" and classe_attuale >= 3:
+            return True
+        
+        # Per classe 5 superiori, qualsiasi ciclo è completato
+        if tipo_scuola != "primo_grado" and classe_attuale >= 5:
+            return True
+        
+        # Determina le classi superiori da controllare
+        if tipo_scuola == "primo_grado":
+            classi_superiori = [c for c in [2, 3] if c > classe_attuale]
+        else:
+            classi_superiori = [c for c in [2, 3, 4, 5] if c > classe_attuale]
+        
+        if not classi_superiori:
+            return True  # Nessuna classe superiore = ciclo completato
+        
+        # Verifica se lo stesso ISBN è adottato in classi superiori della stessa scuola
+        for classe_sup in classi_superiori:
+            count = await db.adozioni.count_documents({
+                "codice_scuola": codice_scuola,
+                "anno_corso": str(classe_sup),
+                "isbn": isbn
+            })
+            if count > 0:
+                return False  # Il libro è ancora usato in classi superiori = ciclo NON completato
+        
+        # Se il libro non è più adottato in classi superiori, il ciclo è completato
+        # (o il libro è stato cambiato per le classi successive)
+        return True
+    
+    # ========================================
     # NUOVA LOGICA: USA COLLEZIONE ADOZIONI
     # ========================================
     
