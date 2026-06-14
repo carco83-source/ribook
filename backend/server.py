@@ -4768,6 +4768,7 @@ async def get_child_analysis_v2(user_id: str, child_id: str):
         "editore": l.get("editore"),
         "prezzo_copertina": l.get("prezzo_copertina", 0),
         "volume": l.get("volume", ""),
+        "is_volume_unico": l.get("volume", "").upper().strip() == "U",
         "consigliato": l.get("consigliato", False),
         "da_acquistare": l.get("da_acquistare", True),
         "nuova_adozione": l.get("nuova_adozione", False),

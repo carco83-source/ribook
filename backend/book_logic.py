@@ -237,22 +237,41 @@ async def libro_in_classe(db, isbn: str, codice_scuola: str, classe: int,
     Verifica se un ISBN è presente in una specifica classe/scuola
     
     Args:
-        anno: "2025/2026" per adozioni correnti, "2024/2025" per storico
+        anno: "2025/2026" per anno precedente, "2024/2025" per storico, "2026/2027" per corrente
     
     Returns:
         Il libro se trovato, None altrimenti
     """
-    collection = "adozioni" if anno == "2025/2026" else "adozioni_2024_2025"
+    # CORREZIONE: Mappa anno scolastico alla collezione corretta
+    if anno == "2026/2027":
+        collection = "adozioni"  # Anno corrente
+    elif anno == "2025/2026":
+        collection = "adozioni_2025_2026"  # Anno precedente
+    else:
+        collection = "adozioni_2024_2025"  # Storico
     
-    adozione = await db[collection].find_one({
-        "codice_scuola": codice_scuola,
-        "classe": classe
-    })
+    # La collezione 2025/2026 ha struttura: {codice_scuola, classe: int, libri: [...]}
+    # La collezione 2026/2027 ha struttura: {codice_scuola, anno_corso: str, ...}
     
-    if adozione:
-        for libro in adozione.get('libri', []):
-            if libro.get('isbn') == isbn:
-                return libro
+    if collection == "adozioni":
+        # Nuova struttura: ogni documento è un libro singolo
+        libro = await db[collection].find_one({
+            "codice_scuola": codice_scuola,
+            "anno_corso": str(classe),
+            "isbn": isbn
+        })
+        return libro
+    else:
+        # Vecchia struttura: documento con array di libri
+        adozione = await db[collection].find_one({
+            "codice_scuola": codice_scuola,
+            "classe": classe
+        })
+        
+        if adozione:
+            for libro in adozione.get('libri', []):
+                if libro.get('isbn') == isbn:
+                    return libro
     
     return None
 
