@@ -452,7 +452,9 @@ async def calcola_stato_acquisto(db, libro: dict, classe: int, tipo_scuola: str,
                 return ("USATO", f"{copie} copie disponibili", copie)
             
             # Cerca se esisteva l'anno scorso nella stessa classe
-            libro_anno_scorso = await libro_in_classe(db, isbn, codice_scuola, classe, "2024/2025")
+            # Es: Vol. 1 in 1ª 2026/2027 → cerca in 1ª 2025/2026
+            # Chi era in 1ª l'anno scorso ora è in 2ª e può vendere
+            libro_anno_scorso = await libro_in_classe(db, isbn, codice_scuola, classe, "2025/2026")
             if libro_anno_scorso:
                 classe_succ = classe + 1
                 return ("USATO", f"I {classe_succ}° (ex {classe}°) possono venderlo", 0)
@@ -461,7 +463,7 @@ async def calcola_stato_acquisto(db, libro: dict, classe: int, tipo_scuola: str,
             scuole = await get_scuole_catanzaro(db, tipo_scuola)
             for altra_scuola in scuole:
                 if altra_scuola != codice_scuola:
-                    libro_altra = await libro_in_classe(db, isbn, altra_scuola, classe, "2024/2025")
+                    libro_altra = await libro_in_classe(db, isbn, altra_scuola, classe, "2025/2026")
                     if libro_altra:
                         return ("USATO", "Disponibile da altra scuola", 0)
             
