@@ -3535,49 +3535,71 @@ async def get_child_compatibility(user_id: str, child_id: str):
     # ========================================
     # HELPER: VERIFICA GRAMMATICA/TECNOLOGIA USATO
     # ========================================
-    async def can_buy_used_grammar_tech(libro: dict, codice_scuola: str, tipo_scuola: str) -> bool:
+    async def can_buy_used_from_previous_year(libro: dict, codice_scuola: str, child_classe: int, tipo_scuola: str) -> tuple:
         """
-        Per GRAMMATICA e TECNOLOGIA nelle medie:
-        Si può comprare usato SOLO se il libro era presente nelle 3ª dell'anno precedente.
+        LOGICA CORRETTA per determinare se un libro può essere comprato USATO.
         
-        Questo perché questi libri sono volumi unici usati per tutto il triennio,
-        quindi chi era in 3ª l'anno scorso ora non ne ha più bisogno e può venderlo.
+        Per le SCUOLE MEDIE:
+        - Un libro può essere comprato usato se lo stesso ISBN era presente nelle 3ª dell'anno precedente (2025/2026)
+        - Questo vale per TUTTI i libri triennali (volume unico), non solo Grammatica/Tecnologia
+        - Gli studenti di 3ª dell'anno scorso ora hanno finito le medie e possono vendere i loro libri
+        
+        Per gli ANNUALI:
+        - Confronta con la stessa classe dell'anno precedente
+        - Se il libro era presente, può essere comprato usato
+        
+        Returns: (can_buy_used: bool, motivo: str)
         """
-        if tipo_scuola != "primo_grado":
-            return True  # Per superiori, logica diversa
-        
-        disciplina = libro.get("disciplina", "").upper()
         isbn = libro.get("isbn", "")
+        is_volume_unico = libro.get("is_volume_unico", False) or libro.get("volume", "").upper() == "U"
         
-        # Applica solo a Grammatica e Tecnologia
-        if "GRAMM" not in disciplina and "TECNOL" not in disciplina and "ITALIANO" not in disciplina:
-            return True  # Altri libri seguono la logica normale
+        if not isbn:
+            return False, "ISBN mancante"
         
-        # Verifica se il libro era adottato in 3ª nell'anno precedente (2025/2026)
-        # La collezione 2025/2026 ha struttura diversa: {classe: int, libri: [...]}
-        doc_3a = await db.adozioni_2025_2026.find_one({
-            "codice_scuola": codice_scuola,
-            "classe": 3
-        })
+        if tipo_scuola == "primo_grado":  # Scuola Media
+            # Per VOLUMI UNICI (triennali): cerca nelle 3ª dell'anno precedente
+            if is_volume_unico:
+                # Cerca in TUTTE le 3ª della stessa scuola
+                docs_3a = await db.adozioni_2025_2026.find({
+                    "codice_scuola": codice_scuola,
+                    "classe": 3
+                }).to_list(20)
+                
+                for doc in docs_3a:
+                    for l in doc.get("libri", []):
+                        if l.get("isbn") == isbn:
+                            return True, "Volume unico presente in 3ª 2025/2026 - disponibile usato"
+                
+                # Fallback: cerca in altre scuole medie di Catanzaro
+                docs_3a_altre = await db.adozioni_2025_2026.find({
+                    "codice_scuola": {"$regex": "^CZMM", "$ne": codice_scuola},
+                    "classe": 3
+                }).to_list(100)
+                
+                for doc in docs_3a_altre:
+                    for l in doc.get("libri", []):
+                        if l.get("isbn") == isbn:
+                            return True, "Volume unico presente in altre 3ª 2025/2026 - disponibile usato"
+                
+                return False, "Volume unico NON presente in 3ª 2025/2026 - da comprare nuovo"
+            
+            # Per LIBRI ANNUALI: cerca nella stessa classe dell'anno precedente
+            else:
+                docs_classe = await db.adozioni_2025_2026.find({
+                    "codice_scuola": codice_scuola,
+                    "classe": child_classe
+                }).to_list(20)
+                
+                for doc in docs_classe:
+                    for l in doc.get("libri", []):
+                        if l.get("isbn") == isbn:
+                            return True, f"Libro annuale confermato dalla {child_classe}ª 2025/2026 - disponibile usato"
+                
+                # Non trovato = libro nuovo o cambiato
+                return False, "Libro non presente nell'anno precedente - probabilmente nuova adozione"
         
-        if doc_3a:
-            libri_3a = doc_3a.get("libri", [])
-            for l in libri_3a:
-                if l.get("isbn") == isbn:
-                    return True  # Il libro era in 3ª, può essere comprato usato
-        
-        # Fallback: cerca in TUTTE le scuole medie di Catanzaro
-        docs_3a_tutte = await db.adozioni_2025_2026.find({
-            "codice_scuola": {"$regex": "^CZMM"},  # Solo scuole medie CZ
-            "classe": 3
-        }).to_list(50)
-        
-        for doc in docs_3a_tutte:
-            for l in doc.get("libri", []):
-                if l.get("isbn") == isbn:
-                    return True  # Trovato in qualche 3ª, può essere usato
-        
-        return False  # Non trovato in 3ª, deve essere comprato nuovo
+        # Per SUPERIORI: logica esistente (TODO: implementare se necessario)
+        return True, "Superiori - logica standard"
     
     # Carica libri della MIA classe/sezione (anno corrente 2026/2027)
     all_my_books = await get_books_from_adozioni(child_codice_scuola, child_classe, child_sezione, "2026/2027")
@@ -4064,16 +4086,15 @@ async def get_child_compatibility(user_id: str, child_id: str):
                 })
         
         # REGOLA 2: Volume Unico con nuova_adozione=False
-        # Deve verificare se il ciclo è stato completato (libro adottato da 3+ anni per medie)
+        # NUOVA LOGICA: Verifica se era presente nelle 3ª dell'anno precedente
         elif is_volume_unico:
-            # Per volumi unici, verifica se è LO STESSO libro nelle classi superiori
-            # e se il ciclo è stato completato
-            libro_originale = my_book.get("libri_multipli", [my_book])[0]
-            ciclo_completato = await is_same_book_in_higher_classes(
-                libro_originale, child_codice_scuola, disc, child_tipo, child_classe
+            # Usa la nuova funzione che confronta con l'anno precedente
+            can_buy_used, motivo_usato = await can_buy_used_from_previous_year(
+                my_book, child_codice_scuola, child_classe, child_tipo
             )
             
-            if copie_disponibili > 0:
+            if can_buy_used:
+                # Volume unico disponibile usato (era nelle 3ª 2025/2026)
                 comprare_usato.append({
                     "isbn": isbn,
                     "disciplina": disc,
@@ -4083,60 +4104,35 @@ async def get_child_compatibility(user_id: str, child_id: str):
                     "prezzo_usato": round(my_book["prezzo"] * 0.5, 2),
                     "risparmio": round(my_book["prezzo"] * 0.5, 2),
                     "copie_disponibili": copie_disponibili,
-                    "status": "USATO DISPONIBILE",
-                    "is_volume_unico": True
-                })
-            elif ciclo_completato:
-                # Volume unico con ciclo completato - può essere trovato usato
-                comprare_usato.append({
-                    "isbn": isbn,
-                    "disciplina": disc,
-                    "titolo": my_book["titolo"][:50],
-                    "editore": my_book["editore"],
-                    "prezzo_nuovo": my_book["prezzo"],
-                    "prezzo_usato": round(my_book["prezzo"] * 0.5, 2),
-                    "risparmio": round(my_book["prezzo"] * 0.5, 2),
-                    "copie_disponibili": 0,
-                    "status": "CERCA USATO",
+                    "status": "USATO DISPONIBILE" if copie_disponibili > 0 else "CERCA USATO",
                     "is_volume_unico": True,
-                    "motivo": "Volume unico triennale - ciclo già completato, cerca copie usate"
+                    "motivo": motivo_usato
                 })
             else:
-                # Volume unico ma ciclo NON completato - deve comprare NUOVO
+                # Volume unico NON presente nell'anno precedente - da comprare nuovo
                 comprare_nuovo.append({
                     "isbn": isbn,
                     "disciplina": disc,
                     "titolo": my_book["titolo"],
                     "editore": my_book["editore"],
                     "prezzo": my_book["prezzo"],
-                    "copie_usate_disponibili": 0,
+                    "copie_usate_disponibili": copie_disponibili,
                     "is_nuova_edizione": False,
                     "is_nuova_adozione": False,
                     "is_volume_unico": True,
-                    "motivo": "Volume unico - primo ciclo in corso, da comprare nuovo"
+                    "motivo": motivo_usato
                 })
         
         # REGOLA 3: Libro Annuale con nuova_adozione=False → potenzialmente USATO
-        # ECCEZIONE: Per GRAMMATICA e TECNOLOGIA nelle medie, serve verifica speciale
+        # NUOVA LOGICA: Confronta con l'anno precedente per verificare disponibilità usato
         else:
-            # Check speciale per Grammatica/Tecnologia nelle medie
-            disc_upper = disc.upper()
-            is_grammar_tech_media = (
-                is_scuola_media and 
-                ("GRAMM" in disc_upper or "TECNOL" in disc_upper or "ITALIAN" in disc_upper)
+            # Usa la stessa funzione che confronta con l'anno precedente
+            can_buy_used, motivo_usato = await can_buy_used_from_previous_year(
+                my_book, child_codice_scuola, child_classe, child_tipo
             )
             
-            # Se è Grammatica/Tecnologia nelle medie, verifica se può essere comprato usato
-            can_buy_used = True
-            motivo_no_usato = ""
-            
-            if is_grammar_tech_media:
-                # Verifica se il libro era in 3ª nell'anno precedente
-                can_buy_used = await can_buy_used_grammar_tech(my_book, child_codice_scuola, child_tipo)
-                if not can_buy_used:
-                    motivo_no_usato = "Volume unico Grammatica/Tecnologia - non disponibile usato per 1ª classe"
-            
-            if can_buy_used and copie_disponibili > 0:
+            if can_buy_used:
+                # Libro annuale confermato dall'anno precedente - disponibile usato
                 comprare_usato.append({
                     "isbn": isbn,
                     "disciplina": disc,
@@ -4146,24 +4142,11 @@ async def get_child_compatibility(user_id: str, child_id: str):
                     "prezzo_usato": round(my_book["prezzo"] * 0.5, 2),
                     "risparmio": round(my_book["prezzo"] * 0.5, 2),
                     "copie_disponibili": copie_disponibili,
-                    "status": "USATO DISPONIBILE"
-                })
-            elif can_buy_used:
-                # Nessuna copia in vendita ma potenzialmente disponibile
-                comprare_usato.append({
-                    "isbn": isbn,
-                    "disciplina": disc,
-                    "titolo": my_book["titolo"][:50],
-                    "editore": my_book["editore"],
-                    "prezzo_nuovo": my_book["prezzo"],
-                    "prezzo_usato": round(my_book["prezzo"] * 0.5, 2),
-                    "risparmio": round(my_book["prezzo"] * 0.5, 2),
-                    "copie_disponibili": 0,
-                    "status": "CERCA USATO",
-                    "motivo": "Libro annuale confermato - cerca copie usate"
+                    "status": "USATO DISPONIBILE" if copie_disponibili > 0 else "CERCA USATO",
+                    "motivo": motivo_usato
                 })
             else:
-                # Grammatica/Tecnologia non acquistabile usato per 1ª media
+                # Libro non presente nell'anno precedente - nuova adozione, da comprare nuovo
                 comprare_nuovo.append({
                     "isbn": isbn,
                     "disciplina": disc,
@@ -4172,9 +4155,9 @@ async def get_child_compatibility(user_id: str, child_id: str):
                     "prezzo": my_book["prezzo"],
                     "copie_usate_disponibili": 0,
                     "is_nuova_edizione": False,
-                    "is_nuova_adozione": False,
+                    "is_nuova_adozione": True,
                     "is_volume_unico": False,
-                    "motivo": motivo_no_usato
+                    "motivo": motivo_usato
                 })
     
     # Calcoli finali
