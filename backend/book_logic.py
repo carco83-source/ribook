@@ -639,7 +639,7 @@ async def calcola_stato_acquisto(db, libro: dict, classe: int, tipo_scuola: str,
         
         # ----------------------------------------------------------
         # PRIMO ANNO (1ª): Rispetta da_acquistare e consigliato
-        # da_acquistare=False significa NON COMPRARE (incluso in altro libro o non serve)
+        # da_acquistare=False significa NON COMPRARE (incluso in altro libro o facoltativo)
         # ----------------------------------------------------------
         if classe == 1:
             # PRIMA verifica se il libro va comprato
@@ -648,8 +648,9 @@ async def calcola_stato_acquisto(db, libro: dict, classe: int, tipo_scuola: str,
             deve_comprare = da_acquistare or consigliato_bool
             
             if not deve_comprare:
-                # da_acquistare = NO e consigliato = NO → NON SERVE (incluso in altro o facoltativo)
-                return ("GIA_POSSEDUTO", "Non da acquistare (incluso in altro libro)", 0)
+                # da_acquistare = NO e consigliato = NO → NON RICHIESTO (incluso in altro o facoltativo)
+                # Usiamo "NON_RICHIESTO" per distinguerlo da "GIA_POSSEDUTO"
+                return ("NON_RICHIESTO", "Non da acquistare (incluso o facoltativo)", 0)
             
             # Se deve comprare, cerca usato
             if copie > 0:

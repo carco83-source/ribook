@@ -4842,6 +4842,10 @@ async def get_child_analysis_v2(user_id: str, child_id: str):
         
         if stato == "GIA_POSSEDUTO":
             gia_posseduti.append(libro_info)
+        elif stato == "NON_RICHIESTO":
+            # Libri non richiesti (inclusi in altri o facoltativi) - per 1ª classe
+            libro_info["motivo"] = "Non da acquistare (incluso o facoltativo)"
+            gia_posseduti.append(libro_info)  # Li mettiamo con i già posseduti per semplicità UI
         elif stato == "USATO":
             libro_info["prezzo_usato"] = round(prezzo * 0.5, 2)
             libro_info["risparmio"] = round(prezzo * 0.5, 2)
