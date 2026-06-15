@@ -8495,23 +8495,20 @@ class AdminLogin(BaseModel):
 @api_router.post("/admin/login")
 async def admin_login(data: AdminLogin):
     """Login admin"""
-    print(f"[ADMIN LOGIN] Email: {data.email}, Password: {data.password}")
-    
     user = await db.users.find_one({"email": data.email.lower()})
-    print(f"[ADMIN LOGIN] User found: {user is not None}")
     
     if not user:
         raise HTTPException(status_code=401, detail="Credenziali non valide")
     
-    print(f"[ADMIN LOGIN] is_admin: {user.get('is_admin')}")
-    print(f"[ADMIN LOGIN] stored_password: {user.get('password')}")
-    print(f"[ADMIN LOGIN] password_match: {user.get('password') == data.password}")
-    
     if not user.get("is_admin", False):
         raise HTTPException(status_code=403, detail="Accesso non autorizzato")
     
-    # Verifica password (in produzione usare hashing)
-    if user.get("password") != data.password:
+    # Verifica password con hash
+    import hashlib
+    password_hash = hashlib.sha256(data.password.encode()).hexdigest()
+    stored_hash = user.get("password_hash", "")
+    
+    if password_hash != stored_hash:
         raise HTTPException(status_code=401, detail="Credenziali non valide")
     
     return {
