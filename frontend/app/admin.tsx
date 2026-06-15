@@ -17,6 +17,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Linking from 'expo-linking';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -43,6 +45,7 @@ export default function AdminPortalScreen() {
   const [users, setUsers] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
   const [bookstores, setBookstores] = useState<any[]>([]);
+  const [downloading, setDownloading] = useState<string | null>(null);
   
   useEffect(() => {
     checkAuth();
@@ -528,41 +531,105 @@ export default function AdminPortalScreen() {
               </Text>
               
               <TouchableOpacity 
-                style={styles.downloadButton}
-                onPress={() => {
-                  const url = `${API_URL}/api/downloads/liste-pdf-2026-2027`;
-                  if (Platform.OS === 'web') {
-                    window.open(url, '_blank');
-                  } else {
-                    Linking.openURL(url);
+                style={[styles.downloadButton, downloading === 'pdf' && styles.downloadButtonDisabled]}
+                disabled={downloading === 'pdf'}
+                onPress={async () => {
+                  try {
+                    setDownloading('pdf');
+                    const url = `${API_URL}/api/downloads/liste-pdf-2026-2027`;
+                    
+                    if (Platform.OS === 'web') {
+                      window.open(url, '_blank');
+                      setDownloading(null);
+                    } else {
+                      // Mobile: scarica e condividi
+                      const filename = 'liste_libri_2026_2027.zip';
+                      const fileUri = FileSystem.documentDirectory + filename;
+                      
+                      const downloadResult = await FileSystem.downloadAsync(url, fileUri);
+                      
+                      if (downloadResult.status === 200) {
+                        const canShare = await Sharing.isAvailableAsync();
+                        if (canShare) {
+                          await Sharing.shareAsync(downloadResult.uri, {
+                            mimeType: 'application/zip',
+                            dialogTitle: 'Salva liste PDF'
+                          });
+                        } else {
+                          Alert.alert('Successo', 'File scaricato in: ' + fileUri);
+                        }
+                      } else {
+                        Alert.alert('Errore', 'Download fallito');
+                      }
+                      setDownloading(null);
+                    }
+                  } catch (error) {
+                    console.error('Download error:', error);
+                    Alert.alert('Errore', 'Impossibile scaricare il file');
+                    setDownloading(null);
                   }
                 }}
               >
                 <Ionicons name="document" size={24} color="#fff" />
                 <View style={styles.downloadButtonText}>
-                  <Text style={styles.downloadButtonTitle}>Scarica PDF (tutte le scuole)</Text>
+                  <Text style={styles.downloadButtonTitle}>
+                    {downloading === 'pdf' ? 'Scaricamento...' : 'Scarica PDF (tutte le scuole)'}
+                  </Text>
                   <Text style={styles.downloadButtonSubtitle}>17 file PDF in archivio ZIP • ~765 KB</Text>
                 </View>
-                <Ionicons name="download" size={20} color="#fff" />
+                {downloading === 'pdf' ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Ionicons name="download" size={20} color="#fff" />
+                )}
               </TouchableOpacity>
               
               <TouchableOpacity 
-                style={[styles.downloadButton, styles.downloadButtonSecondary]}
-                onPress={() => {
-                  const url = `${API_URL}/api/downloads/lista-csv-2026-2027`;
-                  if (Platform.OS === 'web') {
-                    window.open(url, '_blank');
-                  } else {
-                    Linking.openURL(url);
+                style={[styles.downloadButton, styles.downloadButtonSecondary, downloading === 'csv2026' && styles.downloadButtonDisabled]}
+                disabled={downloading === 'csv2026'}
+                onPress={async () => {
+                  try {
+                    setDownloading('csv2026');
+                    const url = `${API_URL}/api/downloads/lista-csv-2026-2027`;
+                    
+                    if (Platform.OS === 'web') {
+                      window.open(url, '_blank');
+                      setDownloading(null);
+                    } else {
+                      const filename = 'libri_catanzaro_2026_2027.csv';
+                      const fileUri = FileSystem.documentDirectory + filename;
+                      
+                      const downloadResult = await FileSystem.downloadAsync(url, fileUri);
+                      
+                      if (downloadResult.status === 200) {
+                        const canShare = await Sharing.isAvailableAsync();
+                        if (canShare) {
+                          await Sharing.shareAsync(downloadResult.uri, {
+                            mimeType: 'text/csv',
+                            dialogTitle: 'Salva lista CSV 2026/2027'
+                          });
+                        }
+                      }
+                      setDownloading(null);
+                    }
+                  } catch (error) {
+                    Alert.alert('Errore', 'Impossibile scaricare il file');
+                    setDownloading(null);
                   }
                 }}
               >
                 <Ionicons name="grid" size={24} color="#1a472a" />
                 <View style={styles.downloadButtonText}>
-                  <Text style={[styles.downloadButtonTitle, { color: '#1a472a' }]}>Scarica CSV 2026/2027</Text>
+                  <Text style={[styles.downloadButtonTitle, { color: '#1a472a' }]}>
+                    {downloading === 'csv2026' ? 'Scaricamento...' : 'Scarica CSV 2026/2027'}
+                  </Text>
                   <Text style={[styles.downloadButtonSubtitle, { color: '#666' }]}>6.397 libri • ~1 MB</Text>
                 </View>
-                <Ionicons name="download" size={20} color="#1a472a" />
+                {downloading === 'csv2026' ? (
+                  <ActivityIndicator color="#1a472a" size="small" />
+                ) : (
+                  <Ionicons name="download" size={20} color="#1a472a" />
+                )}
               </TouchableOpacity>
             </View>
             
@@ -573,22 +640,51 @@ export default function AdminPortalScreen() {
               </Text>
               
               <TouchableOpacity 
-                style={[styles.downloadButton, styles.downloadButtonSecondary]}
-                onPress={() => {
-                  const url = `${API_URL}/api/downloads/lista-csv-2025-2026`;
-                  if (Platform.OS === 'web') {
-                    window.open(url, '_blank');
-                  } else {
-                    Linking.openURL(url);
+                style={[styles.downloadButton, styles.downloadButtonSecondary, downloading === 'csv2025' && styles.downloadButtonDisabled]}
+                disabled={downloading === 'csv2025'}
+                onPress={async () => {
+                  try {
+                    setDownloading('csv2025');
+                    const url = `${API_URL}/api/downloads/lista-csv-2025-2026`;
+                    
+                    if (Platform.OS === 'web') {
+                      window.open(url, '_blank');
+                      setDownloading(null);
+                    } else {
+                      const filename = 'libri_catanzaro_2025_2026.csv';
+                      const fileUri = FileSystem.documentDirectory + filename;
+                      
+                      const downloadResult = await FileSystem.downloadAsync(url, fileUri);
+                      
+                      if (downloadResult.status === 200) {
+                        const canShare = await Sharing.isAvailableAsync();
+                        if (canShare) {
+                          await Sharing.shareAsync(downloadResult.uri, {
+                            mimeType: 'text/csv',
+                            dialogTitle: 'Salva lista CSV 2025/2026'
+                          });
+                        }
+                      }
+                      setDownloading(null);
+                    }
+                  } catch (error) {
+                    Alert.alert('Errore', 'Impossibile scaricare il file');
+                    setDownloading(null);
                   }
                 }}
               >
                 <Ionicons name="archive" size={24} color="#1a472a" />
                 <View style={styles.downloadButtonText}>
-                  <Text style={[styles.downloadButtonTitle, { color: '#1a472a' }]}>Scarica CSV 2025/2026</Text>
+                  <Text style={[styles.downloadButtonTitle, { color: '#1a472a' }]}>
+                    {downloading === 'csv2025' ? 'Scaricamento...' : 'Scarica CSV 2025/2026'}
+                  </Text>
                   <Text style={[styles.downloadButtonSubtitle, { color: '#666' }]}>20.838 libri • ~3 MB</Text>
                 </View>
-                <Ionicons name="download" size={20} color="#1a472a" />
+                {downloading === 'csv2025' ? (
+                  <ActivityIndicator color="#1a472a" size="small" />
+                ) : (
+                  <Ionicons name="download" size={20} color="#1a472a" />
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -968,6 +1064,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f5f5',
     borderWidth: 1,
     borderColor: '#e0e0e0',
+  },
+  downloadButtonDisabled: {
+    opacity: 0.7,
   },
   downloadButtonText: {
     flex: 1,
