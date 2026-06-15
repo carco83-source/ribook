@@ -10328,6 +10328,48 @@ async def mark_messages_as_read(conversation_id: str, data: dict):
     return {"marked_read": result.modified_count}
 
 
+# ============================================================
+# ENDPOINT DOWNLOAD LISTE LIBRI
+# ============================================================
+from fastapi.responses import FileResponse
+
+@api_router.get("/downloads/liste-pdf-2026-2027")
+async def download_liste_pdf():
+    """Scarica ZIP con tutti i PDF delle liste 2026/2027"""
+    filepath = "/app/downloads/liste_pdf_2026_2027.zip"
+    if os.path.exists(filepath):
+        return FileResponse(
+            filepath,
+            media_type="application/zip",
+            filename="liste_libri_catanzaro_2026_2027.zip"
+        )
+    raise HTTPException(status_code=404, detail="File non trovato")
+
+@api_router.get("/downloads/lista-csv-2026-2027")
+async def download_csv_2026():
+    """Scarica CSV lista 2026/2027"""
+    filepath = "/app/downloads/libri_catanzaro_2026_2027.csv"
+    if os.path.exists(filepath):
+        return FileResponse(
+            filepath,
+            media_type="text/csv",
+            filename="libri_catanzaro_2026_2027.csv"
+        )
+    raise HTTPException(status_code=404, detail="File non trovato")
+
+@api_router.get("/downloads/lista-csv-2025-2026")
+async def download_csv_2025():
+    """Scarica CSV lista 2025/2026"""
+    filepath = "/app/downloads/libri_catanzaro_2025_2026.csv"
+    if os.path.exists(filepath):
+        return FileResponse(
+            filepath,
+            media_type="text/csv",
+            filename="libri_catanzaro_2025_2026.csv"
+        )
+    raise HTTPException(status_code=404, detail="File non trovato")
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
