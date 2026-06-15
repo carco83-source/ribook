@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Linking from 'expo-linking';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -34,7 +35,7 @@ export default function AdminPortalScreen() {
   
   // Dashboard state
   const [stats, setStats] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'requests' | 'users' | 'orders' | 'bookstores'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'requests' | 'users' | 'orders' | 'bookstores' | 'downloads'>('dashboard');
   const [refreshing, setRefreshing] = useState(false);
   
   // Data lists
@@ -326,6 +327,7 @@ export default function AdminPortalScreen() {
           { key: 'users', icon: 'people', label: 'Utenti' },
           { key: 'orders', icon: 'cart', label: 'Ordini' },
           { key: 'bookstores', icon: 'storefront', label: 'Cartolibrerie' },
+          { key: 'downloads', icon: 'download', label: 'Download' },
         ].map((tab) => (
           <TouchableOpacity
             key={tab.key}
@@ -511,6 +513,84 @@ export default function AdminPortalScreen() {
                 </View>
               </View>
             ))}
+          </View>
+        )}
+
+        {/* Downloads Tab */}
+        {activeTab === 'downloads' && (
+          <View style={styles.listContainer}>
+            <Text style={styles.sectionTitle}>Download Liste Libri</Text>
+            
+            <View style={styles.downloadSection}>
+              <Text style={styles.downloadSectionTitle}>📚 Anno Scolastico 2026/2027</Text>
+              <Text style={styles.downloadDescription}>
+                Liste complete delle adozioni per le 17 scuole di Catanzaro (5 medie + 12 superiori)
+              </Text>
+              
+              <TouchableOpacity 
+                style={styles.downloadButton}
+                onPress={() => {
+                  const url = `${API_URL}/api/downloads/liste-pdf-2026-2027`;
+                  if (Platform.OS === 'web') {
+                    window.open(url, '_blank');
+                  } else {
+                    Linking.openURL(url);
+                  }
+                }}
+              >
+                <Ionicons name="document" size={24} color="#fff" />
+                <View style={styles.downloadButtonText}>
+                  <Text style={styles.downloadButtonTitle}>Scarica PDF (tutte le scuole)</Text>
+                  <Text style={styles.downloadButtonSubtitle}>17 file PDF in archivio ZIP • ~765 KB</Text>
+                </View>
+                <Ionicons name="download" size={20} color="#fff" />
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.downloadButton, styles.downloadButtonSecondary]}
+                onPress={() => {
+                  const url = `${API_URL}/api/downloads/lista-csv-2026-2027`;
+                  if (Platform.OS === 'web') {
+                    window.open(url, '_blank');
+                  } else {
+                    Linking.openURL(url);
+                  }
+                }}
+              >
+                <Ionicons name="grid" size={24} color="#1a472a" />
+                <View style={styles.downloadButtonText}>
+                  <Text style={[styles.downloadButtonTitle, { color: '#1a472a' }]}>Scarica CSV 2026/2027</Text>
+                  <Text style={[styles.downloadButtonSubtitle, { color: '#666' }]}>6.397 libri • ~1 MB</Text>
+                </View>
+                <Ionicons name="download" size={20} color="#1a472a" />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={[styles.downloadSection, { marginTop: 20 }]}>
+              <Text style={styles.downloadSectionTitle}>📖 Anno Scolastico 2025/2026</Text>
+              <Text style={styles.downloadDescription}>
+                Archivio storico delle adozioni per tutta la provincia di Catanzaro
+              </Text>
+              
+              <TouchableOpacity 
+                style={[styles.downloadButton, styles.downloadButtonSecondary]}
+                onPress={() => {
+                  const url = `${API_URL}/api/downloads/lista-csv-2025-2026`;
+                  if (Platform.OS === 'web') {
+                    window.open(url, '_blank');
+                  } else {
+                    Linking.openURL(url);
+                  }
+                }}
+              >
+                <Ionicons name="archive" size={24} color="#1a472a" />
+                <View style={styles.downloadButtonText}>
+                  <Text style={[styles.downloadButtonTitle, { color: '#1a472a' }]}>Scarica CSV 2025/2026</Text>
+                  <Text style={[styles.downloadButtonSubtitle, { color: '#666' }]}>20.838 libri • ~3 MB</Text>
+                </View>
+                <Ionicons name="download" size={20} color="#1a472a" />
+              </TouchableOpacity>
+            </View>
           </View>
         )}
       </ScrollView>
@@ -856,6 +936,50 @@ const styles = StyleSheet.create({
   bookstoreDetail: {
     fontSize: 12,
     color: '#666',
+    marginTop: 2,
+  },
+  downloadSection: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+  },
+  downloadSectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 8,
+  },
+  downloadDescription: {
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 16,
+    lineHeight: 18,
+  },
+  downloadButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1a472a',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    gap: 12,
+  },
+  downloadButtonSecondary: {
+    backgroundColor: '#f5f5f5',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  downloadButtonText: {
+    flex: 1,
+  },
+  downloadButtonTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  downloadButtonSubtitle: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.7)',
     marginTop: 2,
   },
 });
