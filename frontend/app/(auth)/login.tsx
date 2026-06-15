@@ -5,6 +5,7 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
+  Pressable,
   ScrollView,
   Alert,
   ActivityIndicator,
@@ -18,6 +19,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
+
+// Debug: log API_URL
+console.log('[Login] API_URL:', API_URL);
 
 // Breakpoints per responsive design
 const BREAKPOINTS = {
@@ -54,6 +58,10 @@ export default function LoginScreen() {
   };
 
   const handleLogin = async () => {
+    console.log('[Login] handleLogin called');
+    console.log('[Login] email:', email);
+    console.log('[Login] password length:', password?.length);
+    
     if (!email || !password) {
       Alert.alert('Errore', 'Inserisci email e password');
       return;
@@ -61,11 +69,13 @@ export default function LoginScreen() {
 
     setLoading(true);
     try {
+      console.log('[Login] Making API call to:', `${API_URL}/api/auth/login`);
       const response = await axios.post(`${API_URL}/api/auth/login`, {
         email,
         password,
       });
 
+      console.log('[Login] Response:', response.data);
       await AsyncStorage.setItem('user_id', response.data.user_id);
       await AsyncStorage.setItem('username', response.data.username);
       await AsyncStorage.setItem('user_nome', response.data.nome);
@@ -73,7 +83,8 @@ export default function LoginScreen() {
 
       router.replace('/(tabs)');
     } catch (error: any) {
-      console.error('Login error:', error);
+      console.error('[Login] Error:', error);
+      console.error('[Login] Error response:', error.response?.data);
       Alert.alert(
         'Errore',
         error.response?.data?.detail || 'Credenziali non valide'
@@ -147,7 +158,7 @@ export default function LoginScreen() {
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity
+            <Pressable
               style={[styles.loginButton, isDesktop && styles.loginButtonDesktop]}
               onPress={handleLogin}
               disabled={loading}
@@ -159,7 +170,7 @@ export default function LoginScreen() {
                   Accedi
                 </Text>
               )}
-            </TouchableOpacity>
+            </Pressable>
 
             <TouchableOpacity
               style={styles.forgotPassword}

@@ -275,11 +275,15 @@ frontend:
 
   - task: "Login Screen"
     implemented: true
-    working: "NA"
+    working: false
     file: "/app/frontend/app/(auth)/login.tsx"
-    stuck_count: 0
+    stuck_count: 1
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
+    status_history:
+      - working: false
+        agent: "testing"
+        comment: "CRITICAL BUG: Login button click does not trigger handleLogin function. No API request is sent to /api/auth/login. User remains on login page after clicking 'Accedi' button. Console error: 'Cannot use 'import.meta' outside a module' appears twice, preventing JavaScript execution. The React event handlers are not working. Root cause: JavaScript bundle has import.meta statements that are not being transformed properly by Metro bundler. This is blocking the entire login flow. Tested with credentials nica.cartolibreria@gmail.com/Test123!. Navigation to login page works, form fields can be filled, but button click has no effect."
 
   - task: "Radar/Home Tab"
     implemented: true
@@ -1306,6 +1310,51 @@ agent_communication:
       - Query: {"codice_scuola": child_codice_scuola, "anno_corso": str(child_classe), "sezione": regex}
       - Fallback logic working when no books found for specific section
       - PDF format: A4 Portrait with proper margins and table layout
+  - agent: "testing"
+    message: |
+      ## LOGIN FLOW TESTING COMPLETED - CRITICAL BUG FOUND (15/06/2026)
+      
+      ### Test Request:
+      Test login flow at http://localhost:3000 with credentials nica.cartolibreria@gmail.com/Test123!
+      
+      ### Test Results:
+      ✅ Landing page loads correctly
+      ✅ "Hai già un account? Accedi" link works - navigates to login page
+      ✅ Login page renders correctly with "Bentornato!" title
+      ✅ Email and password fields can be filled
+      ❌ **CRITICAL: Login button click does NOT work**
+      
+      ### Root Cause Analysis:
+      1. **JavaScript Error**: Console shows "Cannot use 'import.meta' outside a module" (appears twice)
+      2. **No API Request**: When clicking "Accedi" button, NO request is sent to /api/auth/login
+      3. **No Console Logs**: The handleLogin function's console.log statements never appear
+      4. **Event Handler Not Working**: The React onPress handler is not being triggered
+      5. **User Stuck**: User remains on login page (URL: http://localhost:3000/login)
+      
+      ### Technical Details:
+      - The import.meta error is preventing JavaScript execution
+      - This is a Metro bundler configuration issue with ES modules
+      - The bundled JavaScript contains import.meta statements that aren't being transformed
+      - React Native Web event handlers are not functioning due to this error
+      
+      ### What I Tried:
+      1. ❌ Created babel.config.js with babel-preset-expo - caused "Cannot find module" error
+      2. ❌ Added unstable_transformImportMeta option - didn't resolve the issue
+      3. ❌ Cleared Metro cache - error persists
+      
+      ### Backend Status:
+      ✅ Backend /api/auth/login endpoint is working (confirmed in logs: "POST /api/auth/login HTTP/1.1" 200 OK)
+      
+      ### Impact:
+      🔴 **BLOCKING**: Users cannot log in to the application. This is a critical P0 bug that blocks all authenticated features.
+      
+      ### Recommendation:
+      This requires investigation into:
+      1. Metro bundler configuration (metro.config.js)
+      2. Expo web configuration (app.json web settings)
+      3. Possible dependency using import.meta that needs transformation
+      4. Consider using web search to find Expo + import.meta + React Native Web solutions
+
       
       ### Conclusion: 
       The PDF Generation endpoint is fully functional and working correctly. All three children's book lists are successfully generated as valid PDF documents with proper formatting and content.
