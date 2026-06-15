@@ -6,8 +6,9 @@ import {
   TouchableOpacity, 
   ScrollView,
   useWindowDimensions,
+  Pressable,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, Link } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -120,14 +121,13 @@ export default function WelcomeScreen() {
             </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={() => router.push('/(auth)/login')}
-          >
-            <Text style={styles.secondaryButtonText}>
-              Hai già un account? Accedi
-            </Text>
-          </TouchableOpacity>
+          <Link href="/(auth)/login" asChild>
+            <Pressable style={styles.secondaryButton}>
+              <Text style={styles.secondaryButtonText}>
+                Hai già un account? Accedi
+              </Text>
+            </Pressable>
+          </Link>
         </View>
 
         {/* Footer */}
