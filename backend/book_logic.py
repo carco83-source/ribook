@@ -434,16 +434,30 @@ async def calcola_stato_acquisto(db, libro: dict, classe: int, tipo_scuola: str,
         # Helper: cerca libro nella classe successiva dello stesso anno (2026/2027)
         async def libro_in_classe_corrente(db, titolo_base, codice_scuola, classe_target):
             """Cerca se esiste lo stesso libro (per titolo) nella classe target 2026/2027"""
-            # Estrai il titolo base (rimuovi "VOLUME X" etc)
             import re
-            titolo_clean = re.sub(r'\s*-?\s*(VOLUME|VOL\.?)\s*\d+.*$', '', titolo_base, flags=re.IGNORECASE).strip()
-            titolo_clean = re.sub(r'\s*-?\s*(VOLUME|VOL\.?)\s*U.*$', '', titolo_clean, flags=re.IGNORECASE).strip()
+            
+            # Estrai il titolo base (rimuovi VOLUME, CONFEZIONE, LEVEL, parentesi, etc.)
+            def estrai_titolo_base(titolo):
+                # Rimuovi VOLUME X, VOL X, LEVEL X, CONFEZIONE
+                titolo = re.sub(r'\s*[-+]?\s*(VOLUME|VOL\.?|CONFEZIONE|LEVEL)\s*\d+.*$', '', titolo, flags=re.IGNORECASE)
+                titolo = re.sub(r'\s*[-+]?\s*(VOLUME|VOL\.?)\s*U.*$', '', titolo, flags=re.IGNORECASE)
+                titolo = re.sub(r'\s*\(.*\).*$', '', titolo)  # Rimuovi parentesi
+                titolo = re.sub(r'\s*[-+].*$', '', titolo)  # Rimuovi dopo - o +
+                # Rimuovi "X° ED." dove X è un numero
+                titolo = re.sub(r'\s*\d+°?\s*ED\.?.*$', '', titolo, flags=re.IGNORECASE)
+                return titolo.strip()
+            
+            titolo_clean = estrai_titolo_base(titolo_base)
+            
+            # Se il titolo è troppo corto, usa i primi 15 caratteri dell'originale
+            if len(titolo_clean) < 5:
+                titolo_clean = titolo_base[:15]
             
             # Cerca in adozioni 2026/2027
             libro_trovato = await db.adozioni.find_one({
                 "codice_scuola": codice_scuola,
                 "anno_corso": str(classe_target),
-                "titolo": {"$regex": f"^{re.escape(titolo_clean[:30])}", "$options": "i"}
+                "titolo": {"$regex": f"^{re.escape(titolo_clean)}", "$options": "i"}
             })
             return libro_trovato
         
