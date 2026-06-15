@@ -11,6 +11,10 @@ config.cacheStores = [
   new FileStore({ root: path.join(root, 'cache') }),
 ];
 
+// FIX: Disable package exports to fix "Cannot use import.meta outside a module" error
+// This is needed for zustand and other packages that use ESM with import.meta
+config.resolver.unstable_enablePackageExports = false;
+
 
 // // Exclude unnecessary directories from file watching
 // config.watchFolders = [__dirname];
