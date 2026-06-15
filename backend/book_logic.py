@@ -402,15 +402,33 @@ async def calcola_stato_acquisto(db, libro: dict, classe: int, tipo_scuola: str,
     })
     
     # ============================================================
-    # SCUOLA MEDIA (primo_grado) - LOGICA SEMPLIFICATA
+    # SCUOLA MEDIA (primo_grado) - LOGICA CORRETTA
+    # ============================================================
+    # REGOLA: il campo "volume" determina quando comprare:
+    # - Volume = U → Triennale → compra in 1ª, già posseduto in 2ª/3ª
+    # - Volume = 1 → Annuale → compra in 1ª
+    # - Volume = 2 → Annuale → compra in 2ª
+    # - Volume = 3 → Annuale → compra in 3ª
+    # INDIPENDENTEMENTE da da_acquistare!
     # ============================================================
     if tipo_scuola == "primo_grado":
         
+        # Determina se è volume unico dal campo "volume" (più affidabile di is_volume_unico)
+        volume_field = libro.get('volume', '').upper().strip()
+        is_triennale = volume_field == 'U' or is_volume_unico
+        
+        # Estrai numero volume per libri annuali
+        numero_volume = None
+        if volume_field and volume_field != 'U':
+            try:
+                numero_volume = int(volume_field)
+            except:
+                pass
+        
         # ----------------------------------------------------------
-        # VOLUMI UNICI: si comprano SOLO in 1ª, durano 3 anni
-        # USA ISBN per verificare disponibilità usato
+        # VOLUMI TRIENNALI (U): si comprano SOLO in 1ª, durano 3 anni
         # ----------------------------------------------------------
-        if is_volume_unico:
+        if is_triennale:
             if classe == 1:
                 # 1ª MEDIA: deve comprare il volume unico
                 if nuova_adozione:
@@ -434,40 +452,56 @@ async def calcola_stato_acquisto(db, libro: dict, classe: int, tipo_scuola: str,
                             return ("USATO", "Triennale - disponibile da altra scuola", 0)
                 
                 # Non trovato usato → NUOVO
-                return ("NUOVO", "Volume unico - non disponibile usato", 0)
+                return ("NUOVO", "Volume triennale - non disponibile usato", 0)
             
             else:
-                # 2ª o 3ª MEDIA: volume unico GIÀ POSSEDUTO (comprato in 1ª)
-                return ("GIA_POSSEDUTO", "Volume unico triennale (comprato in 1ª)", 0)
+                # 2ª o 3ª MEDIA: volume triennale GIÀ POSSEDUTO (comprato in 1ª)
+                return ("GIA_POSSEDUTO", "Volume triennale (comprato in 1ª)", 0)
         
         # ----------------------------------------------------------
-        # LIBRI ANNUALI: si comprano ogni anno
+        # LIBRI ANNUALI: Volume 1 in 1ª, Volume 2 in 2ª, Volume 3 in 3ª
+        # INDIPENDENTEMENTE da da_acquistare!
         # ----------------------------------------------------------
         else:
-            # Libro annuale - verifica se può comprare USATO
-            if nuova_adozione:
-                return ("NUOVO", "Nuova adozione - non esiste usato", 0)
+            # Determina in quale classe va comprato questo volume
+            classe_acquisto = numero_volume if numero_volume else classe
             
-            if copie > 0:
-                return ("USATO", f"{copie} copie disponibili", copie)
+            # Se siamo nella classe giusta per questo volume → DA COMPRARE
+            if classe == classe_acquisto or numero_volume is None:
+                # Libro annuale - verifica se può comprare USATO
+                if nuova_adozione:
+                    return ("NUOVO", f"Nuova adozione Vol.{numero_volume or classe}", 0)
+                
+                if copie > 0:
+                    return ("USATO", f"{copie} copie disponibili", copie)
+                
+                # Cerca se esisteva l'anno scorso nella stessa classe
+                # Es: Vol. 2 in 2ª 2026/2027 → cerca in 2ª 2025/2026
+                # Chi era in 2ª l'anno scorso ora è in 3ª e può vendere
+                libro_anno_scorso = await libro_in_classe(db, isbn, codice_scuola, classe, "2025/2026")
+                if libro_anno_scorso:
+                    classe_succ = classe + 1
+                    return ("USATO", f"Ex {classe}ª (ora {classe_succ}ª) possono venderlo", 0)
+                
+                # Cross-scuola
+                scuole = await get_scuole_catanzaro(db, tipo_scuola)
+                for altra_scuola in scuole:
+                    if altra_scuola != codice_scuola:
+                        libro_altra = await libro_in_classe(db, isbn, altra_scuola, classe, "2025/2026")
+                        if libro_altra:
+                            return ("USATO", "Disponibile da altra scuola", 0)
+                
+                return ("NUOVO", f"Vol.{numero_volume or classe} - non disponibile usato", 0)
             
-            # Cerca se esisteva l'anno scorso nella stessa classe
-            # Es: Vol. 1 in 1ª 2026/2027 → cerca in 1ª 2025/2026
-            # Chi era in 1ª l'anno scorso ora è in 2ª e può vendere
-            libro_anno_scorso = await libro_in_classe(db, isbn, codice_scuola, classe, "2025/2026")
-            if libro_anno_scorso:
-                classe_succ = classe + 1
-                return ("USATO", f"I {classe_succ}° (ex {classe}°) possono venderlo", 0)
-            
-            # Cross-scuola
-            scuole = await get_scuole_catanzaro(db, tipo_scuola)
-            for altra_scuola in scuole:
-                if altra_scuola != codice_scuola:
-                    libro_altra = await libro_in_classe(db, isbn, altra_scuola, classe, "2025/2026")
-                    if libro_altra:
-                        return ("USATO", "Disponibile da altra scuola", 0)
-            
-            return ("NUOVO", "Non esistono copie usate", 0)
+            else:
+                # Siamo in una classe diversa da quella del volume
+                # Es: Volume 1 ma siamo in 2ª → già posseduto (comprato in 1ª)
+                # Es: Volume 2 ma siamo in 1ª → non serve ancora
+                if classe > classe_acquisto:
+                    return ("GIA_POSSEDUTO", f"Vol.{numero_volume} (comprato in {classe_acquisto}ª)", 0)
+                else:
+                    # Questo non dovrebbe succedere (es. Vol.2 in 1ª) - il libro non dovrebbe essere nella lista
+                    return ("GIA_POSSEDUTO", f"Vol.{numero_volume} non richiesto in {classe}ª", 0)
     
     # ============================================================
     # SCUOLA SUPERIORE (secondo_grado) - LOGICA SEMPLIFICATA
