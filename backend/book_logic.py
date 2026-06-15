@@ -638,9 +638,20 @@ async def calcola_stato_acquisto(db, libro: dict, classe: int, tipo_scuola: str,
                 return ("GIA_POSSEDUTO", f"Vol.{numero_volume} non richiesto in {classe}ª", 0)
         
         # ----------------------------------------------------------
-        # PRIMO ANNO (solo 1ª): TUTTI i libri vanno comprati
+        # PRIMO ANNO (1ª): Rispetta da_acquistare e consigliato
+        # da_acquistare=False significa NON COMPRARE (incluso in altro libro o non serve)
         # ----------------------------------------------------------
         if classe == 1:
+            # PRIMA verifica se il libro va comprato
+            # Consigliato = SI significa che va comprato (trucco scuole)
+            consigliato_bool = consigliato_raw and consigliato_raw.upper() not in ['NO', 'N', '']
+            deve_comprare = da_acquistare or consigliato_bool
+            
+            if not deve_comprare:
+                # da_acquistare = NO e consigliato = NO → NON SERVE (incluso in altro o facoltativo)
+                return ("GIA_POSSEDUTO", "Non da acquistare (incluso in altro libro)", 0)
+            
+            # Se deve comprare, cerca usato
             if copie > 0:
                 return ("USATO", f"{copie} copie disponibili", copie)
             

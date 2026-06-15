@@ -20,6 +20,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { Picker } from '@react-native-picker/picker';
 import { SCUOLE_PRIMO_GRADO, SCUOLE_SECONDO_GRADO, getClassiByType, SEZIONI } from '../../src/constants/schools';
+import { useProfileStore } from '../../src/store/profileStore';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -135,7 +136,9 @@ export default function RadarScreen() {
   const [isPremium, setIsPremium] = useState(false);
   const [childProfiles, setChildProfiles] = useState<any[]>([]);
   const [childrenCompatibility, setChildrenCompatibility] = useState<{[key: string]: any}>({});
-  const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
+  
+  // Usa Zustand per persistere selectedChildId tra navigazioni
+  const { selectedChildId, setSelectedChildId } = useProfileStore();
   
   // New state for purchasable books
   const [totalePiattaforma, setTotalePiattaforma] = useState(0);
