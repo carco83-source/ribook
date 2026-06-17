@@ -247,16 +247,18 @@ export default function StudentDetailScreen() {
     
     // Libri da comprare usati
     const libriUsati = compatibility.da_acquistare_usati || [];
-    const costoUsati = riepilogo.costo_usati || 0;
+    const costoUsati = parseFloat(String(riepilogo.costo_usati)) || 0;
     
     // Libri da comprare nuovi
     const libriNuovi = compatibility.da_acquistare_nuovi || [];
-    const costoNuovi = riepilogo.costo_nuovi || 0;
+    const costoNuovi = parseFloat(String(riepilogo.costo_nuovi)) || 0;
     
     // Calcola il costo totale se tutti i libri fossero comprati nuovi
     // (libri usati a prezzo pieno + libri nuovi)
-    const costoUsatiSeNuovi = libriUsati.reduce((sum: number, libro: any) => 
-      sum + (libro.prezzo || 0), 0);
+    const costoUsatiSeNuovi = libriUsati.reduce((sum: number, libro: any) => {
+      const prezzo = parseFloat(String(libro.prezzo)) || 0;
+      return sum + prezzo;
+    }, 0);
     const totaleSeTuttiNuovi = costoUsatiSeNuovi + costoNuovi;
     
     console.log('[calculateTotals] Costs:', { costoUsatiSeNuovi, costoNuovi, totaleSeTuttiNuovi });
@@ -267,10 +269,10 @@ export default function StudentDetailScreen() {
     const totaleLibriDaComprare = numLibriUsati + numLibriNuovi;
     
     // Potenziale vendita
-    const potenzVendita = riepilogo.potenziale_vendita || 0;
+    const potenzVendita = parseFloat(String(riepilogo.potenziale_vendita)) || 0;
     
     // Risparmio
-    const risparmio = riepilogo.risparmio_stimato || 0;
+    const risparmio = parseFloat(String(riepilogo.risparmio_stimato)) || 0;
     
     // Spesa netta = costo usati + costo nuovi - ricavo vendita
     const spesaNetta = costoUsati + costoNuovi - potenzVendita;
