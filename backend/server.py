@@ -10346,6 +10346,187 @@ async def download_liste_pdf():
         )
     raise HTTPException(status_code=404, detail="File non trovato")
 
+@api_router.get("/downloads/liste-pdf-2025-2026")
+async def download_liste_pdf_2025():
+    """Scarica ZIP con tutti i PDF delle liste 2025/2026"""
+    filepath = "/app/downloads/liste_pdf_2025_2026.zip"
+    if os.path.exists(filepath):
+        return FileResponse(
+            filepath,
+            media_type="application/zip",
+            filename="liste_libri_catanzaro_2025_2026.zip"
+        )
+    raise HTTPException(status_code=404, detail="File non trovato. Genera prima i PDF.")
+
+@api_router.post("/admin/genera-pdf-2025-2026")
+async def genera_pdf_2025_2026():
+    """Genera ZIP con tutti i PDF delle liste 2025/2026"""
+    import zipfile
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image as RLImage
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import mm, cm
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT
+    from io import BytesIO
+    
+    try:
+        # Mappa codici scuola -> nomi
+        scuole_map = {
+            "CZMM00300E": "IC_Don_Milani",
+            "CZMM86001P": "IC_Casalinuovo",
+            "CZMM85201Q": "IC_Mater_Domini",
+            "CZMM86701D": "IC_Patari_Rodari",
+            "CZMM85801P": "IC_Catanzaro_Est",
+            "CZMM856013": "IC_Catanzaro_Nord_Est",
+            "CZMM83903B": "IC_Pascoli_Aldisio",
+            "CZ1MBR5002": "Convitto_Nazionale_Galluppi",
+            "CZPS00101C": "Liceo_Scientifico_Fermi",
+            "CZPM00101D": "Liceo_Classico_Galluppi",
+            "CZPM02201E": "Liceo_Scienze_Umane_De_Nobili",
+            "CZPC09000X": "Liceo_Classico_Cicala",
+            "CZSL02201A": "Liceo_Artistico_Catanzaro",
+            "CZTF010008": "ITIS_Scalfaro",
+            "CZTE021011": "ITG_Ferraris",
+            "CZTD024011": "ITC_Ferraris",
+            "CZTA021035": "ITA_Catanzaro",
+            "CZPS02201D": "Liceo_Siciliani",
+            "CZRC02401N": "Ipssar_Catanzaro",
+            "CZRI02401A": "IPSIA_Catanzaro",
+            "CZTL02401B": "ITI_Catanzaro",
+        }
+        
+        # Directory output
+        os.makedirs("/app/downloads", exist_ok=True)
+        zip_path = "/app/downloads/liste_pdf_2025_2026.zip"
+        
+        # Trova tutte le scuole uniche nel dataset 2025/2026
+        codici_scuola = await db.adozioni_2025_2026.distinct("codice_scuola")
+        
+        pdf_files = []
+        
+        for codice in codici_scuola:
+            # Salta scuole con pochi dati
+            count = await db.adozioni_2025_2026.count_documents({"codice_scuola": codice})
+            if count < 3:
+                continue
+            
+            nome_file = scuole_map.get(codice, codice)
+            
+            # Raccogli tutti i libri di questa scuola
+            libri_scuola = []
+            async for doc in db.adozioni_2025_2026.find({"codice_scuola": codice}):
+                classe = doc.get('classe', '')
+                sezione = doc.get('sezione', '')
+                for libro in doc.get('libri', []):
+                    libro['classe'] = classe
+                    libro['sezione'] = sezione
+                    libri_scuola.append(libro)
+            
+            if not libri_scuola:
+                continue
+            
+            # Rimuovi duplicati per ISBN
+            libri_unici = {}
+            for libro in libri_scuola:
+                isbn = libro.get('isbn', '')
+                if isbn and isbn not in libri_unici:
+                    libri_unici[isbn] = libro
+            
+            libri_list = list(libri_unici.values())
+            
+            # Genera PDF
+            buffer = BytesIO()
+            doc = SimpleDocTemplate(
+                buffer,
+                pagesize=landscape(A4),
+                rightMargin=1*cm,
+                leftMargin=1*cm,
+                topMargin=1*cm,
+                bottomMargin=1*cm
+            )
+            
+            styles = getSampleStyleSheet()
+            title_style = ParagraphStyle(
+                'CustomTitle',
+                parent=styles['Heading1'],
+                fontSize=14,
+                alignment=TA_CENTER,
+                spaceAfter=10
+            )
+            
+            elements = []
+            
+            # Titolo
+            elements.append(Paragraph(f"Lista Libri 2025/2026 - {nome_file.replace('_', ' ')}", title_style))
+            elements.append(Spacer(1, 10))
+            
+            # Tabella
+            headers = ["ISBN", "Titolo", "Autori", "Editore", "Disciplina", "Prezzo", "Cl.", "Vol."]
+            data = [headers]
+            
+            for libro in sorted(libri_list, key=lambda x: (x.get('disciplina', ''), x.get('titolo', ''))):
+                titolo = libro.get('titolo', '')[:45]
+                autori = libro.get('autori', '')[:25]
+                editore = libro.get('editore', '')[:20]
+                prezzo = libro.get('prezzo_copertina', 0)
+                prezzo_str = f"€{prezzo:.2f}" if prezzo else "-"
+                
+                data.append([
+                    libro.get('isbn', ''),
+                    titolo,
+                    autori,
+                    editore,
+                    libro.get('disciplina', '')[:20],
+                    prezzo_str,
+                    str(libro.get('classe', '')),
+                    libro.get('volume', '')
+                ])
+            
+            col_widths = [85, 180, 100, 80, 100, 45, 25, 25]
+            table = Table(data, colWidths=col_widths, repeatRows=1)
+            table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1B5E20')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 8),
+                ('FONTSIZE', (0, 1), (-1, -1), 7),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('ALIGN', (5, 0), (7, -1), 'CENTER'),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F5F5F5')]),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 3),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+                ('TOPPADDING', (0, 0), (-1, -1), 2),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+            ]))
+            
+            elements.append(table)
+            elements.append(Spacer(1, 10))
+            elements.append(Paragraph(f"Totale libri: {len(libri_list)}", styles['Normal']))
+            
+            doc.build(elements)
+            
+            pdf_files.append({
+                "nome": f"{nome_file}_2025_2026.pdf",
+                "data": buffer.getvalue()
+            })
+        
+        # Crea ZIP
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for pdf in pdf_files:
+                zipf.writestr(pdf["nome"], pdf["data"])
+        
+        return {
+            "success": True,
+            "message": f"Generati {len(pdf_files)} PDF",
+            "file_path": zip_path
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @api_router.get("/downloads/lista-csv-2026-2027")
 async def download_csv_2026():
     """Scarica CSV lista 2026/2027"""
@@ -10367,6 +10548,30 @@ async def download_csv_2025():
             filepath,
             media_type="text/csv",
             filename="libri_catanzaro_2025_2026.csv"
+        )
+    raise HTTPException(status_code=404, detail="File non trovato")
+
+@api_router.get("/downloads/scalfaro-1a-2025-2026")
+async def download_scalfaro_1a():
+    """Scarica PDF Scalfaro 1A 2025/2026"""
+    filepath = "/app/downloads/Scalfaro_1A_2025_2026.pdf"
+    if os.path.exists(filepath):
+        return FileResponse(
+            filepath,
+            media_type="application/pdf",
+            filename="Scalfaro_1A_2025_2026.pdf"
+        )
+    raise HTTPException(status_code=404, detail="File non trovato")
+
+@api_router.get("/downloads/scalfaro-2a-2025-2026")
+async def download_scalfaro_2a():
+    """Scarica PDF Scalfaro 2A 2025/2026"""
+    filepath = "/app/downloads/Scalfaro_2A_2025_2026.pdf"
+    if os.path.exists(filepath):
+        return FileResponse(
+            filepath,
+            media_type="application/pdf",
+            filename="Scalfaro_2A_2025_2026.pdf"
         )
     raise HTTPException(status_code=404, detail="File non trovato")
 
