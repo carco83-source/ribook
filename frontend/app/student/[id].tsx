@@ -229,47 +229,64 @@ export default function StudentDetailScreen() {
     }
   };
 
-  // Calcolo corretto dei totali (come in profile.tsx)
-  const calculateTotals = () => {
-    if (!compatibility) return null;
+  // Calcolo corretto dei totali - NUOVA LOGICA v2 con useMemo
+  const totals = React.useMemo(() => {
+    if (!compatibility) {
+      console.log('[calculateTotals] No compatibility data');
+      return null;
+    }
     
-    // Libri che possono essere comprati usati (ma calcoliamo il prezzo nuovo)
-    const libriUsati = compatibility.comprare?.libri_usati || [];
+    // Nuova struttura v2
+    const riepilogo = compatibility.riepilogo;
+    if (!riepilogo) {
+      console.log('[calculateTotals] No riepilogo in compatibility');
+      return null;
+    }
+    
+    console.log('[calculateTotals] Riepilogo:', JSON.stringify(riepilogo));
+    
+    // Libri da comprare usati
+    const libriUsati = compatibility.da_acquistare_usati || [];
+    const costoUsati = riepilogo.costo_usati || 0;
+    
+    // Libri da comprare nuovi
+    const libriNuovi = compatibility.da_acquistare_nuovi || [];
+    const costoNuovi = riepilogo.costo_nuovi || 0;
+    
+    // Calcola il costo totale se tutti i libri fossero comprati nuovi
+    // (libri usati a prezzo pieno + libri nuovi)
     const costoUsatiSeNuovi = libriUsati.reduce((sum: number, libro: any) => 
-      sum + (libro.prezzo_copertina || libro.prezzo_nuovo || 0), 0);
-    
-    // Libri che devono essere comprati nuovi
-    const libriNuovi = compatibility.nuovi?.libri || [];
-    const costoNuovi = libriNuovi.reduce((sum: number, libro: any) => 
-      sum + (libro.prezzo_copertina || libro.prezzo || 0), 0);
-    
-    // TOTALE SE TUTTI NUOVI = somma prezzi copertina
+      sum + (libro.prezzo || 0), 0);
     const totaleSeTuttiNuovi = costoUsatiSeNuovi + costoNuovi;
     
+    console.log('[calculateTotals] Costs:', { costoUsatiSeNuovi, costoNuovi, totaleSeTuttiNuovi });
+    
     // Numero totale libri da acquistare
-    const numLibriUsati = compatibility.comprare?.totale_usati || libriUsati.length || 0;
-    const numLibriNuovi = compatibility.nuovi?.totale || libriNuovi.length || 0;
+    const numLibriUsati = riepilogo.totale_da_comprare_usati || 0;
+    const numLibriNuovi = riepilogo.totale_da_comprare_nuovi || 0;
     const totaleLibriDaComprare = numLibriUsati + numLibriNuovi;
     
-    // SPESA STIMATA: con libri usati (risparmio usando usati)
-    // Costo usati al prezzo usato (50% del nuovo)
-    const costoUsatiReale = libriUsati.reduce((sum: number, libro: any) => 
-      sum + (libro.prezzo_usato || (libro.prezzo_copertina || 0) * 0.5), 0);
-    const costoNuoviReale = costoNuovi; // I nuovi si pagano a prezzo pieno
-    const ricavoParziale = (compatibility.vendere?.totale_vendibili || 0) * 8; // €8 ricavo per libro venduto
-    const spesaNetta = costoUsatiReale + costoNuoviReale - ricavoParziale;
+    // Potenziale vendita
+    const potenzVendita = riepilogo.potenziale_vendita || 0;
+    
+    // Risparmio
+    const risparmio = riepilogo.risparmio_stimato || 0;
+    
+    // Spesa netta = costo usati + costo nuovi - ricavo vendita
+    const spesaNetta = costoUsati + costoNuovi - potenzVendita;
     
     return {
       totaleSeTuttiNuovi,
       totaleLibriDaComprare,
-      costoUsatiReale,
-      costoNuoviReale,
-      ricavoParziale,
+      costoUsatiReale: costoUsati,
+      costoNuoviReale: costoNuovi,
+      ricavoParziale: potenzVendita,
+      risparmioStimato: risparmio,
       spesaNetta,
       numLibriUsati,
       numLibriNuovi,
     };
-  };
+  }, [compatibility]);
 
   if (loading) {
     return (
@@ -292,7 +309,7 @@ export default function StudentDetailScreen() {
   }
 
   const isMedia = child.tipo_scuola === 'primo_grado';
-  const totals = calculateTotals();
+  // Ora totals viene calcolato con useMemo sopra
 
   return (
     <View style={styles.container}>
@@ -535,15 +552,52 @@ export default function StudentDetailScreen() {
           </View>
         </View>
 
-        {/* 4 Categorie Libri - Cliccabili */}
+        {/* 4 Categorie Libri - NUOVA LOGICA v2 */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Ionicons name="library" size={22} color="#1a472a" />
             <Text style={styles.sectionTitle}>Situazione Libri</Text>
           </View>
           
+          {/* Info Classi */}
+          {compatibility?.classe_2025_2026 && (
+            <View style={styles.classiInfoBox}>
+              <Text style={styles.classiInfoText}>
+                📅 2025/2026: {compatibility.classe_2025_2026}ª {child.sezione} → 2026/2027: {compatibility.classe_2026_2027}ª {child.sezione}
+              </Text>
+            </View>
+          )}
+          {compatibility?.is_primo_anno && (
+            <View style={[styles.classiInfoBox, { backgroundColor: '#e3f2fd' }]}>
+              <Text style={styles.classiInfoText}>
+                🎓 Primo anno - Non hai libri dell'anno precedente
+              </Text>
+            </View>
+          )}
+          
           <View style={styles.categoryGrid}>
-            {/* 1. VENDIBILI - Va al Radar sezione vendibili */}
+            {/* 1. ANCORA IN USO - Libri che devi conservare */}
+            <TouchableOpacity 
+              style={[styles.categoryCard, { borderLeftColor: '#9C27B0' }]}
+              onPress={() => {
+                router.push(`/?childId=${id}&t=${Date.now()}`);
+              }}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.categoryIcon, { backgroundColor: '#f3e5f5' }]}>
+                <Ionicons name="bookmark" size={28} color="#9C27B0" />
+              </View>
+              <View style={styles.categoryInfo}>
+                <Text style={styles.categoryNumber}>{compatibility?.riepilogo?.totale_ancora_in_uso || 0}</Text>
+                <Text style={styles.categoryLabel}>Ancora in uso</Text>
+                <Text style={styles.categoryHint}>
+                  Libri da conservare
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#9C27B0" />
+            </TouchableOpacity>
+
+            {/* 2. VENDIBILI USATI - Libri che puoi vendere */}
             <TouchableOpacity 
               style={[styles.categoryCard, { borderLeftColor: '#2196F3' }]}
               onPress={() => {
@@ -555,16 +609,16 @@ export default function StudentDetailScreen() {
                 <Ionicons name="arrow-up-circle" size={28} color="#2196F3" />
               </View>
               <View style={styles.categoryInfo}>
-                <Text style={styles.categoryNumber}>{compatibility?.vendere?.totale_vendibili || 0}</Text>
-                <Text style={styles.categoryLabel}>Vendibili</Text>
+                <Text style={styles.categoryNumber}>{compatibility?.riepilogo?.totale_vendibili || 0}</Text>
+                <Text style={styles.categoryLabel}>Vendibili usati</Text>
                 <Text style={styles.categoryHint}>
-                  Libri che puoi vendere
+                  {compatibility?.riepilogo?.potenziale_vendita ? `Ricavo: €${compatibility.riepilogo.potenziale_vendita.toFixed(0)}` : 'Libri che puoi vendere'}
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color="#2196F3" />
             </TouchableOpacity>
 
-            {/* 2. ACQUISTABILI USATI */}
+            {/* 3. DA ACQUISTARE USATI */}
             <TouchableOpacity 
               style={[styles.categoryCard, { borderLeftColor: '#4CAF50' }]}
               onPress={() => {
@@ -576,16 +630,16 @@ export default function StudentDetailScreen() {
                 <Ionicons name="cart" size={28} color="#4CAF50" />
               </View>
               <View style={styles.categoryInfo}>
-                <Text style={styles.categoryNumber}>{compatibility?.comprare?.totale_usati || 0}</Text>
-                <Text style={styles.categoryLabel}>Acquistabili usati</Text>
+                <Text style={styles.categoryNumber}>{compatibility?.riepilogo?.totale_da_comprare_usati || 0}</Text>
+                <Text style={styles.categoryLabel}>Da comprare usati</Text>
                 <Text style={styles.categoryHint}>
-                  Libri che puoi comprare usati
+                  {compatibility?.riepilogo?.risparmio_stimato ? `Risparmio: €${compatibility.riepilogo.risparmio_stimato.toFixed(0)}` : 'Disponibili usati'}
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color="#4CAF50" />
             </TouchableOpacity>
 
-            {/* 3. NUOVE ADOZIONI */}
+            {/* 4. DA ACQUISTARE NUOVI */}
             <TouchableOpacity 
               style={[styles.categoryCard, { borderLeftColor: '#FF9800' }]}
               onPress={() => {
@@ -597,34 +651,13 @@ export default function StudentDetailScreen() {
                 <Ionicons name="sparkles" size={28} color="#FF9800" />
               </View>
               <View style={styles.categoryInfo}>
-                <Text style={styles.categoryNumber}>{compatibility?.nuove_adozioni?.totale || totals?.numLibriNuovi || 0}</Text>
-                <Text style={styles.categoryLabel}>Nuove adozioni</Text>
+                <Text style={styles.categoryNumber}>{compatibility?.riepilogo?.totale_da_comprare_nuovi || 0}</Text>
+                <Text style={styles.categoryLabel}>Da comprare nuovi</Text>
                 <Text style={styles.categoryHint}>
-                  Libri nuovi da acquistare
+                  {compatibility?.riepilogo?.costo_nuovi ? `Costo: €${compatibility.riepilogo.costo_nuovi.toFixed(0)}` : 'Non disponibili usati'}
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color="#FF9800" />
-            </TouchableOpacity>
-
-            {/* 4. TRIENNALI GIÀ IN USO */}
-            <TouchableOpacity 
-              style={[styles.categoryCard, { borderLeftColor: '#9C27B0' }]}
-              onPress={() => {
-                router.push(`/?childId=${id}&t=${Date.now()}`);
-              }}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.categoryIcon, { backgroundColor: '#f3e5f5' }]}>
-                <Ionicons name="checkmark-done-circle" size={28} color="#9C27B0" />
-              </View>
-              <View style={styles.categoryInfo}>
-                <Text style={styles.categoryNumber}>{compatibility?.libri_gia_posseduti?.length || 0}</Text>
-                <Text style={styles.categoryLabel}>Già in possesso</Text>
-                <Text style={styles.categoryHint}>
-                  Triennali o libri che hai già
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color="#9C27B0" />
             </TouchableOpacity>
           </View>
         </View>
@@ -946,6 +979,17 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#999',
     marginTop: 4,
+  },
+  classiInfoBox: {
+    backgroundColor: '#f5f5f5',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  classiInfoText: {
+    fontSize: 13,
+    color: '#666',
+    textAlign: 'center',
   },
   downloadButton: {
     flexDirection: 'row',

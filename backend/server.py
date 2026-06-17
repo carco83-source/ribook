@@ -29,6 +29,12 @@ from book_logic import (
     SCUOLE_SUPERIORI_CATANZARO
 )
 
+# NEW: Book logic v2 - simplified 4 categories
+from book_logic_v2 import (
+    classifica_libri_studente,
+    calcola_classe_precedente
+)
+
 # PDF generation
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -4696,18 +4702,13 @@ def calcola_tetto_spesa(tipo_scuola: str, classe: int, costo_totale_libri: float
 @api_router.get("/profiles/{user_id}/children/{child_id}/analysis")
 async def get_child_analysis_v2(user_id: str, child_id: str):
     """
-    NUOVO ENDPOINT: Analisi libri usando book_logic.py
+    ENDPOINT ANALISI LIBRI v2 - 4 CATEGORIE SEMPLICI
     
-    Calcola:
-    - Libri DA COMPRARE (NUOVO, USATO, GIÀ POSSEDUTO)
-    - Libri VENDIBILI
-    - Libri NON VENDIBILI (ancora in uso)
-    
-    Usa la nuova logica centralizzata che considera:
-    - Cicli Biennio/Triennio
-    - Cross-school search nelle 21 scuole di Catanzaro
-    - consigliato_raw='AP' 
-    - Volumi unici vs annuali
+    Categorie:
+    1. ANCORA_IN_USO - Libri in entrambi gli anni (non vendibili)
+    2. VENDIBILI_USATI - Libri solo nel 2025/2026 (possono essere venduti)
+    3. DA_ACQUISTARE_USATI - Libri 2026/2027 disponibili usati da altri
+    4. DA_ACQUISTARE_NUOVI - Libri 2026/2027 non disponibili usati
     """
     # Trova utente e profilo figlio
     user = await db.users.find_one({"id": user_id})
@@ -4721,386 +4722,61 @@ async def get_child_analysis_v2(user_id: str, child_id: str):
         raise HTTPException(status_code=404, detail="Profilo figlio non trovato")
     
     # Dati profilo
-    child_classe = int(child_profile.get("classe", 1))
+    child_classe_2026_2027 = int(child_profile.get("classe", 1))
     child_tipo = child_profile.get("tipo_scuola", "primo_grado")
     child_codice_scuola = child_profile.get("codice_scuola", "")
     child_sezione = child_profile.get("sezione", "A").upper()
-    child_nome = child_profile.get("nome_figlio", "Figlio")
+    child_nome = child_profile.get("nome") or child_profile.get("nome_figlio", "Figlio")
     child_scuola = child_profile.get("scuola", "")
     
     if not child_codice_scuola:
         return {
             "error": "Codice scuola non configurato",
             "child_name": child_nome,
-            "child_classe": child_classe
+            "child_classe": child_classe_2026_2027
         }
     
-    # Usa book_logic.py per ottenere info ciclo
-    ciclo_info = get_ciclo_info(child_tipo, child_classe)
+    # Calcola classe 2025/2026 (None se primo anno del ciclo)
+    child_classe_2025_2026 = calcola_classe_precedente(child_classe_2026_2027, child_tipo)
     
-    # ================================================
-    # 1. CARICA LIBRI DELLA CLASSE CORRENTE (2026/2027)
-    # ================================================
-    # NUOVA STRUTTURA: ogni documento è un singolo libro
-    libri_correnti = await db.adozioni.find({
-        "codice_scuola": child_codice_scuola,
-        "anno_corso": str(child_classe),
-        "sezione": child_sezione
-    }).to_list(None)
+    # Usa la nuova logica v2 per classificare i libri
+    classificazione = await classifica_libri_studente(
+        db,
+        codice_scuola=child_codice_scuola,
+        classe_2025_2026=child_classe_2025_2026,
+        classe_2026_2027=child_classe_2026_2027,
+        sezione=child_sezione
+    )
     
-    if not libri_correnti:
-        # Fallback: cerca qualsiasi sezione
-        libri_fallback = await db.adozioni.find({
-            "codice_scuola": child_codice_scuola,
-            "anno_corso": str(child_classe)
-        }).to_list(None)
-        
-        if libri_fallback:
-            # Usa la prima sezione trovata
-            prima_sezione = libri_fallback[0].get("sezione")
-            libri_correnti = [l for l in libri_fallback if l.get("sezione") == prima_sezione]
-    
-    # Trasforma nel formato atteso
-    libri_correnti = [{
-        "isbn": l.get("isbn"),
-        "titolo": l.get("titolo"),
-        "disciplina": l.get("disciplina"),
-        "editore": l.get("editore"),
-        "autori": l.get("autori", ""),
-        "prezzo_copertina": l.get("prezzo") or l.get("prezzo_copertina", 0),
-        "volume": l.get("volume", ""),
-        "is_volume_unico": l.get("volume", "").upper().strip() == "U",
-        "consigliato": l.get("consigliato", False),
-        "consigliato_raw": "SI" if l.get("consigliato") else "NO",
-        "da_acquistare": l.get("da_acquistare", True),
-        "nuova_adozione": l.get("nuova_adozione", False),
-    } for l in libri_correnti]
-    
-    # ================================================
-    # 2. CLASSIFICA OGNI LIBRO (DA COMPRARE)
-    # ================================================
-    
-    # Helper per identificare libri di strumento musicale
-    def is_libro_strumento_musicale(libro: dict) -> bool:
-        """Identifica se un libro è di STRUMENTO musicale (da escludere dal calcolo)."""
-        titolo = libro.get("titolo", "").upper()
-        disciplina = libro.get("disciplina", "").upper()
-        
-        if "MUSIC" not in disciplina:
-            return False
-        
-        strumenti_keywords = [
-            "CHITARRA", "PIANOFORTE", "PIANO", "VIOLINO", "VIOLA", "VIOLONCELLO",
-            "FLAUTO", "CLARINETTO", "SAXOFONO", "SASSOFONO", "TROMBA", "TROMBONE",
-            "PERCUSSIONI", "BATTERIA", "TASTIERA", "FISARMONICA", "OBOE", "FAGOTTO",
-            "METODO", "TECNICA FONDAMENTALE", "ANTOLOGIA PIANISTICA", "LEZIONI DI",
-            "SCUOLA DEL", "SCUOLA DI", "METODO PER", "PRIME LEZIONI"
-        ]
-        
-        return any(keyword in titolo for keyword in strumenti_keywords)
-    
-    da_comprare_nuovi = []
-    da_comprare_usati = []
-    gia_posseduti = []
-    libri_strumento_esclusi = []  # Per tenere traccia dei libri di strumento esclusi
-    
-    for libro in libri_correnti:
-        # FILTRO: Escludi libri di strumento musicale dal calcolo
-        if is_libro_strumento_musicale(libro):
-            libri_strumento_esclusi.append({
-                "isbn": libro.get("isbn", ""),
-                "titolo": libro.get("titolo", "")[:60],
-                "disciplina": libro.get("disciplina", ""),
-                "prezzo_copertina": libro.get("prezzo") or libro.get("prezzo_copertina", 0),
-                "motivo_esclusione": "Libro di strumento musicale"
-            })
-            continue  # Salta questo libro
-        
-        stato, motivo, copie = await calcola_stato_acquisto(
-            db, libro, child_classe, child_tipo, child_codice_scuola, child_sezione
-        )
-        
-        isbn = libro.get("isbn", "")
-        titolo = libro.get("titolo", "")[:60]
-        disciplina = libro.get("disciplina", "")
-        prezzo = libro.get("prezzo_copertina", 0)
-        consigliato_raw = libro.get("consigliato_raw", "NO")
-        
-        libro_info = {
-            "isbn": isbn,
-            "titolo": titolo,
-            "disciplina": disciplina,
-            "editore": libro.get("editore", ""),
-            "autori": libro.get("autori", ""),
-            "prezzo_copertina": prezzo,
-            "is_volume_unico": libro.get("is_volume_unico", False),
-            "nuova_adozione": libro.get("nuova_adozione", False),
-            "da_acquistare": libro.get("da_acquistare", True),
-            "consigliato_raw": consigliato_raw,
-            "stato": stato,
-            "motivo": motivo,
-            "copie_disponibili": copie
-        }
-        
-        if stato == "GIA_POSSEDUTO":
-            gia_posseduti.append(libro_info)
-        elif stato == "NON_RICHIESTO":
-            # Libri non richiesti (inclusi in altri o facoltativi) - per 1ª classe
-            libro_info["motivo"] = "Non da acquistare (incluso o facoltativo)"
-            gia_posseduti.append(libro_info)  # Li mettiamo con i già posseduti per semplicità UI
-        elif stato == "USATO":
-            libro_info["prezzo_usato"] = round(prezzo * 0.5, 2)
-            libro_info["risparmio"] = round(prezzo * 0.5, 2)
-            da_comprare_usati.append(libro_info)
-        else:  # NUOVO
-            da_comprare_nuovi.append(libro_info)
-    
-    # ================================================
-    # 3. CALCOLA LIBRI VENDIBILI
-    # ================================================
-    vendibili = []
-    non_vendibili = []
-    classe_prec = child_classe - 1 if child_classe > 1 else None
-    
-    # ================================================
-    # LOGICA SCUOLE MEDIE (primo_grado):
-    # ================================================
-    # USA SOLO DATI 2025/2026!
-    # 
-    # VOLUMI UNICI: comprati in 1ª, durano 3 anni, NON vendibili finché nel ciclo
-    # LIBRI ANNUALI: Vol.1→1ª, Vol.2→2ª, Vol.3→3ª
-    #   - Se hai il Vol.3 nella tua lista (3ª), puoi vendere il Vol.2
-    #   - Verifica: cerca nella lista della 2ª un libro con stesso editore/disciplina
-    # ================================================
-    
-    if child_tipo == "primo_grado":
-        # Per le 1ª medie: non hanno niente da vendere (primo anno)
-        if child_classe == 1:
-            pass  # vendibili rimane vuoto
-        else:
-            # Per 2ª e 3ª: possono vendere i libri ANNUALI del volume precedente
-            # Partiamo dai libri che LO STUDENTE HA (lista classe attuale)
-            # e cerchiamo il volume precedente nella lista della classe precedente
-            
-            # Carica la lista della classe precedente per trovare i volumi precedenti
-            adozione_prec = await db.adozioni.find_one({
-                "codice_scuola": child_codice_scuola,
-                "classe": classe_prec
-            })
-            
-            libri_classe_prec = adozione_prec.get("libri", []) if adozione_prec else []
-            
-            # Per ogni libro ANNUALE che lo studente HA (nella sua classe attuale)
-            for libro_att in libri_correnti:
-                is_unico = libro_att.get("is_volume_unico", False)
-                
-                # Salta i volumi unici (non vendibili)
-                if is_unico:
-                    continue
-                
-                editore_att = libro_att.get("editore", "")
-                disciplina_att = libro_att.get("disciplina", "")
-                
-                # Cerca il volume precedente nella lista della classe precedente
-                for libro_prec in libri_classe_prec:
-                    editore_prec = libro_prec.get("editore", "")
-                    disciplina_prec = libro_prec.get("disciplina", "")
-                    is_unico_prec = libro_prec.get("is_volume_unico", False)
-                    
-                    # Stesso editore + stessa disciplina + NON unico = volume precedente
-                    if editore_att == editore_prec and disciplina_att == disciplina_prec and not is_unico_prec:
-                        isbn_prec = libro_prec.get("isbn", "")
-                        titolo_prec = libro_prec.get("titolo", "")
-                        prezzo = libro_prec.get("prezzo_copertina", 0)
-                        
-                        # Questo libro è VENDIBILE
-                        vendibili.append({
-                            "isbn": isbn_prec,
-                            "titolo": titolo_prec,
-                            "disciplina": disciplina_prec,
-                            "editore": editore_prec,
-                            "prezzo_copertina": prezzo,
-                            "prezzo_consigliato": round(prezzo * 0.5, 2),
-                            "is_volume_unico": False,
-                            "status": "VENDIBILE",
-                            "motivo": f"Hai il vol. successivo - vendibile a {classe_prec}ª"
-                        })
-                        break
-            
-            # I volumi UNICI della classe precedente vanno in NON VENDIBILI
-            for libro_prec in libri_classe_prec:
-                if libro_prec.get("is_volume_unico", False):
-                    # Verifica se lo studente ha davvero questo libro
-                    # (deve essere lo stesso libro nella sua lista attuale)
-                    isbn_prec = libro_prec.get("isbn", "")
-                    ha_libro = any(l.get("isbn") == isbn_prec for l in libri_correnti)
-                    
-                    if ha_libro:
-                        non_vendibili.append({
-                            "isbn": isbn_prec,
-                            "titolo": libro_prec.get("titolo", ""),
-                            "disciplina": libro_prec.get("disciplina", ""),
-                            "editore": libro_prec.get("editore", ""),
-                            "is_volume_unico": True,
-                            "status": "NON VENDIBILE",
-                            "motivo": "Volume unico - serve fino a 3ª"
-                        })
-    
-    # ================================================
-    # LOGICA SCUOLE SUPERIORI (secondo_grado):
-    # ================================================
-    else:
-        # Per superiori: usa la logica esistente con libri storici
-        if classe_prec:
-            adozione_prec = await db.adozioni_2024_2025.find_one({
-                "codice_scuola": child_codice_scuola,
-                "classe": classe_prec
-            })
-            
-            libri_storici = adozione_prec.get("libri", []) if adozione_prec else []
-            
-            # FILTRO: Rimuovi libri QUINQUENNALI (Religione, Scienze Motorie) dai dati 2024/2025
-            # perché questi dati sono spesso inaffidabili. Per questi libri, verifichiamo
-            # se lo studente li ha davvero confrontando con la lista attuale (2025/2026)
-            libri_storici_filtrati = []
-            for libro in libri_storici:
-                disciplina = libro.get('disciplina', '').upper()
-                is_quinquennale = any(m in disciplina for m in ['RELIGIONE', 'SCIENZE MOTORIE', 'EDUCAZIONE FISICA'])
-                
-                if is_quinquennale:
-                    # Per libri quinquennali: verifica se lo STESSO ISBN è nella lista attuale
-                    # Se non c'è, significa che il libro è cambiato e lo studente non l'ha mai avuto
-                    isbn = libro.get('isbn', '')
-                    ha_libro_attuale = any(l.get('isbn') == isbn for l in libri_correnti)
-                    if ha_libro_attuale:
-                        # Lo studente ha questo libro quinquennale, ma NON è vendibile (serve ancora)
-                        non_vendibili.append({
-                            "isbn": isbn,
-                            "titolo": libro.get("titolo", ""),
-                            "disciplina": disciplina,
-                            "is_volume_unico": True,
-                            "status": "NON VENDIBILE",
-                            "motivo": "Quinquennale - serve fino a 5ª"
-                        })
-                    # Se non ha lo stesso ISBN, ignora (dati 2024/2025 errati)
-                else:
-                    libri_storici_filtrati.append(libro)
-            
-            if libri_storici_filtrati:
-                vendibili_calc, non_vendibili_calc = await calcola_vendibili(
-                    db, libri_storici_filtrati, child_classe, child_tipo, child_codice_scuola, child_sezione
-                )
-                vendibili.extend(vendibili_calc)
-                non_vendibili.extend(non_vendibili_calc)
-    
-    # ================================================
-    # 4. RIMOZIONE DUPLICATI TRA GIÀ POSSEDUTI E NON VENDIBILI
-    # ================================================
-    # I libri già posseduti non devono apparire anche in non_vendibili
-    isbn_gia_posseduti = set(l.get("isbn") for l in gia_posseduti if l.get("isbn"))
-    non_vendibili_filtrati = [l for l in non_vendibili if l.get("isbn") not in isbn_gia_posseduti]
-    
-    # ================================================
-    # 5. CALCOLI FINALI
-    # ================================================
-    costo_nuovi = sum(l.get("prezzo_copertina", 0) for l in da_comprare_nuovi)
-    costo_usati = sum(l.get("prezzo_usato", 0) for l in da_comprare_usati)
-    risparmio_usati = sum(l.get("risparmio", 0) for l in da_comprare_usati)
-    
-    # Potenziale guadagno dalla vendita
-    potenziale_vendita = sum(v.get("prezzo_copertina", 0) * 0.5 for v in vendibili)
-    
-    # TOTALE TESTI NUOVI per tetto ministeriale 
-    # = prezzo copertina di TUTTI i libri da comprare (sia quelli usati che nuovi)
-    totale_testi_nuovi_per_tetto = costo_nuovi + sum(l.get("prezzo_copertina", l.get("prezzo", 0)) for l in da_comprare_usati)
-    
-    # Calcola classe origine per libri usati (classe successiva che può vendere)
-    classe_origine = child_classe + 1 if child_classe < ciclo_info.get("classe_max", 3) else None
-    
+    # Prepara risposta nel formato atteso dal frontend
     return {
         "child_id": child_id,
         "child_name": child_nome,
-        "child_classe": child_classe,
-        "child_scuola": child_scuola,  # Alias per compatibilità
-        "scuola": child_scuola,
         "codice_scuola": child_codice_scuola,
+        "scuola": child_scuola,
+        "classe_2025_2026": child_classe_2025_2026,
+        "classe_2026_2027": child_classe_2026_2027,
         "sezione": child_sezione,
         "tipo_scuola": child_tipo,
-        "ciclo": ciclo_info.get("ciclo", ""),
+        "is_primo_anno": child_classe_2025_2026 is None,
         
-        # COMPRARE - struttura compatibile con frontend
-        "comprare": {
-            "classe_origine": classe_origine,
-            "totale_usati": len(da_comprare_usati),
-            "risparmio_totale": round(risparmio_usati, 2),
-            "libri_usati": da_comprare_usati,  # Alias per frontend
-            # Nuova struttura dettagliata
-            "nuovi": {
-                "totale": len(da_comprare_nuovi),
-                "costo": round(costo_nuovi, 2),
-                "libri": da_comprare_nuovi
-            },
-            "usati": {
-                "totale": len(da_comprare_usati),
-                "costo": round(costo_usati, 2),
-                "risparmio": round(risparmio_usati, 2),
-                "libri": da_comprare_usati
-            },
-            "gia_posseduti": {
-                "totale": len(gia_posseduti),
-                "libri": gia_posseduti
-            }
-        },
+        # 4 CATEGORIE PRINCIPALI
+        "ancora_in_uso": classificazione["ancora_in_uso"],
+        "vendibili_usati": classificazione["vendibili_usati"],
+        "da_acquistare_usati": classificazione["da_acquistare_usati"],
+        "da_acquistare_nuovi": classificazione["da_acquistare_nuovi"],
         
-        # NUOVI - per compatibilità con frontend
-        "nuovi": {
-            "totale": len(da_comprare_nuovi),
-            "costo_totale": round(costo_nuovi, 2),
-            "libri": da_comprare_nuovi
-        },
+        # RIEPILOGO
+        "riepilogo": classificazione["riepilogo"],
         
-        # VENDERE - struttura compatibile con frontend
-        "vendere": {
-            "classe_destinazione": classe_prec,
-            "totale_vendibili": len(vendibili),
-            "totale_non_vendibili": len(non_vendibili_filtrati),
-            "libri": vendibili,
-            "libri_vendibili": vendibili,  # Alias per frontend
-            "libri_non_vendibili": non_vendibili_filtrati,  # Alias per frontend (senza duplicati)
-            "potenziale_guadagno": round(potenziale_vendita, 2),
-            "non_vendibili": {
-                "totale": len(non_vendibili_filtrati),
-                "libri": non_vendibili_filtrati
-            }
-        },
-        
-        # GIÀ POSSEDUTI - per compatibilità
-        "libri_gia_posseduti": gia_posseduti,
-        
-        # Libri di strumento musicale (esclusi dal calcolo)
-        "libri_strumento_esclusi": libri_strumento_esclusi,
-        
-        # TETTO DI SPESA MINISTERIALE
-        # Il tetto si applica al TOTALE TESTI NUOVI (prezzo copertina di tutti i libri da comprare)
-        "tetto_spesa": calcola_tetto_spesa(child_tipo, child_classe, totale_testi_nuovi_per_tetto),
-        
-        "summary": {
-            "totale_libri": len(libri_correnti) - len(libri_strumento_esclusi),  # Escludi strumenti
-            "totale_libri_originale": len(libri_correnti),  # Totale originale per riferimento
-            "libri_strumento_esclusi": len(libri_strumento_esclusi),
-            "da_comprare_nuovi": len(da_comprare_nuovi),
-            "da_comprare_usati": len(da_comprare_usati),
-            "gia_posseduti": len(gia_posseduti),
-            "vendibili": len(vendibili),
-            "non_vendibili": len(non_vendibili_filtrati),
-            "costo_totale_nuovi": round(costo_nuovi, 2),
-            "costo_totale_usati": round(costo_usati, 2),
-            "risparmio_stimato": round(risparmio_usati, 2),
-            "potenziale_vendita": round(potenziale_vendita, 2)
-        }
+        # TOTALI PER RETRO-COMPATIBILITÀ
+        "totale_libri": (
+            classificazione["riepilogo"]["totale_ancora_in_uso"] +
+            classificazione["riepilogo"]["totale_vendibili"] +
+            classificazione["riepilogo"]["totale_da_comprare_usati"] +
+            classificazione["riepilogo"]["totale_da_comprare_nuovi"]
+        ),
     }
-
-
 @api_router.get("/profiles/{user_id}/children/{child_id}/books-pdf")
 async def generate_books_pdf(user_id: str, child_id: str):
     """
