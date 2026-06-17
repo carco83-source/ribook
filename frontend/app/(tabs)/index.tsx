@@ -516,22 +516,24 @@ export default function RadarScreen() {
         return (
           <View style={styles.classCompatSection}>
 
-            {/* Libri Vendibili */}
-            {compatibility.vendere?.libri_vendibili && compatibility.vendere.libri_vendibili.length > 0 && (
+            {/* NUOVA LOGICA v2 - 4 CATEGORIE */}
+            
+            {/* 1. LIBRI VENDIBILI USATI */}
+            {compatibility.vendibili_usati && compatibility.vendibili_usati.length > 0 && (
               <View style={styles.classCard}>
                 <View style={styles.sectionTitleRow}>
                   <Text style={styles.sectionTitleBlue}>
-                    LIBRI VENDIBILI ({compatibility.vendere.libri_vendibili.length})
+                    LIBRI VENDIBILI ({compatibility.vendibili_usati.length})
                   </Text>
                   <TouchableOpacity onPress={() => setShowVendibiliInfo(true)}>
                     <Ionicons name="information-circle-outline" size={22} color="#2196F3" />
                   </TouchableOpacity>
                 </View>
                 <View style={styles.booksGrid}>
-                  {compatibility.vendere.libri_vendibili.map((book: any, idx: number) => {
+                  {compatibility.vendibili_usati.map((book: any, idx: number) => {
                     const coverUrl = book.isbn ? `https://www.ibs.it/images/${book.isbn}_0_0_0_536_0.jpg` : null;
-                    const prezzoNuovo = book.prezzo_copertina || book.prezzo_ministeriale || 0;
-                    const prezzoUsato = book.prezzo_consigliato || (prezzoNuovo * 0.6);
+                    const prezzoNuovo = Number(book.prezzo) || Number(book.prezzo_copertina) || 0;
+                    const prezzoUsato = Number(book.prezzo_vendita_consigliato) || (prezzoNuovo * 0.5);
                     return (
                       <TouchableOpacity 
                         key={idx} 
@@ -552,7 +554,6 @@ export default function RadarScreen() {
                               resizeMode="contain"
                             />
                           )}
-                          {/* Badge VENDIBILE sotto la copertina */}
                           <View style={styles.badgeUnderCover}>
                             <Text style={styles.badgeUnderCoverTextBlue}>VENDIBILE</Text>
                           </View>
@@ -575,246 +576,157 @@ export default function RadarScreen() {
               </View>
             )}
 
-            {/* Libri Usati Disponibili - CON NUMERO COPIE E LINK */}
-            {(() => {
-              // Combina libri_usati + libri da "nuovi" che hanno copie usate disponibili
-              const libriUsatiBase = compatibility.comprare?.libri_usati || [];
-              const libriNuoviConUsati = (compatibility.nuovi?.libri || []).filter(
-                (book: any) => book.copie_usate_disponibili > 0 && !book.is_nuova_edizione
-              );
-              const tuttiLibriUsati = [...libriUsatiBase, ...libriNuoviConUsati];
-              
-              if (tuttiLibriUsati.length === 0) return null;
-              
-              return (
-                <View style={styles.classCard}>
-                  <Text style={styles.sectionTitleGreen}>
-                    LIBRI USATI ACQUISTABILI PER {child?.nome_figlio?.toUpperCase()}
-                  </Text>
-                  <View style={styles.booksGrid}>
-                    {tuttiLibriUsati.map((book: any, idx: number) => {
-                      const copie = book.copie_disponibili || book.copie_usate_disponibili || 0;
-                      const coverUrl = book.isbn ? `https://www.ibs.it/images/${book.isbn}_0_0_0_536_0.jpg` : null;
-                      const prezzoNuovo = book.prezzo_copertina || book.prezzo_ministeriale || 0;
-                      const prezzoUsato = copie > 0 ? (book.prezzo_minimo_usato || book.prezzo_usato_minimo || (prezzoNuovo * 0.6)) : 0;
-                      return (
-                        <TouchableOpacity 
-                          key={idx} 
-                          style={[
-                            styles.sampleBookItem,
-                            copie > 0 && styles.sampleBookItemClickable
-                          ]}
-                          onPress={() => {
-                            if (copie > 0 && book.isbn) {
-                              router.push(`/book-sellers/${book.isbn}`);
-                            }
-                          }}
-                          disabled={copie === 0}
-                        >
-                          <View style={styles.bookCoverContainer}>
-                            {coverUrl ? (
-                              <Image 
-                                source={{ uri: coverUrl }} 
-                                style={styles.bookCoverImage}
-                                resizeMode="contain"
-                              />
-                            ) : (
-                              <Image 
-                                source={require('../../assets/images/ribook-logo.png')} 
-                                style={styles.bookCoverImage}
-                                resizeMode="contain"
-                              />
-                            )}
-                            {/* Badge copie sotto la copertina */}
-                            <View style={[styles.badgeUnderCover, copie > 0 ? styles.badgeUnderCoverGreen : styles.badgeUnderCoverGray]}>
-                              <Text style={[styles.badgeUnderCoverText, copie > 0 && styles.badgeUnderCoverTextGreen]}>
-                                {copie} {copie === 1 ? 'copia' : 'copie'}
-                              </Text>
-                            </View>
-                          </View>
-                          <View style={styles.bookDetailsContainer}>
-                            <Text style={styles.sampleBookSubject}>{book.disciplina}</Text>
-                            <Text style={styles.sampleBookTitle}>{book.titolo}</Text>
-                            {book.autori && <Text style={styles.sampleBookAuthor}>{book.autori}</Text>}
-                            {book.editore && <Text style={styles.sampleBookEdition}>{book.editore}</Text>}
-                            {book.isbn && <Text style={styles.isbnText}>ISBN: {book.isbn}</Text>}
-                            <View style={styles.priceContainerCompact}>
-                              <Text style={styles.priceNewLabel}>Nuovo: <Text style={styles.priceNewValue}>€{prezzoNuovo.toFixed(2)}</Text></Text>
-                              <Text style={styles.priceUsedLabel}>Usato da: <Text style={styles.priceUsedValue}>€{prezzoUsato.toFixed(2)}</Text></Text>
-                            </View>
-                          </View>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                  {/* Pulsante Cerca altri libri */}
-                  <TouchableOpacity
-                    style={[styles.viewSellersButton, { backgroundColor: '#4CAF50', marginTop: 12 }]}
-                    onPress={() => router.push('/(tabs)/search')}
-                  >
-                    <Ionicons name="search" size={18} color="#fff" />
-                    <Text style={styles.viewSellersButtonText}>Cerca altri libri</Text>
-                    <Ionicons name="arrow-forward" size={14} color="#fff" />
-                  </TouchableOpacity>
-                </View>
-              );
-            })()}
-
-            {/* SEZIONE UNIFICATA: LIBRI NON VENDIBILI GIÀ IN TUO POSSESSO - ANCORA IN USO */}
-            {(() => {
-              // Combina libri non vendibili + libri già posseduti, rimuovendo duplicati per ISBN
-              const libriNonVendibili = compatibility.vendere?.libri_non_vendibili || [];
-              const libriGiaPosseduti = compatibility.libri_gia_posseduti || [];
-              
-              // Rimuovi duplicati usando ISBN come chiave
-              const isbnVisti = new Set();
-              const tuttiLibriInUso: any[] = [];
-              
-              // Prima aggiungi i già posseduti (priorità)
-              for (const libro of libriGiaPosseduti) {
-                const isbn = libro.isbn || libro.titolo;
-                if (!isbnVisti.has(isbn)) {
-                  isbnVisti.add(isbn);
-                  tuttiLibriInUso.push(libro);
-                }
-              }
-              
-              // Poi aggiungi i non vendibili (solo se non già presenti)
-              for (const libro of libriNonVendibili) {
-                const isbn = libro.isbn || libro.titolo;
-                if (!isbnVisti.has(isbn)) {
-                  isbnVisti.add(isbn);
-                  tuttiLibriInUso.push(libro);
-                }
-              }
-              
-              if (tuttiLibriInUso.length === 0) return null;
-              
-              return (
-                <View style={[styles.classCard, { borderLeftColor: '#9C27B0', borderLeftWidth: 3 }]}>
-                  <Text style={[styles.sectionTitlePurple, { marginBottom: 8 }]}>
-                    LIBRI NON VENDIBILI GIÀ IN TUO POSSESSO - ANCORA IN USO ({tuttiLibriInUso.length})
-                  </Text>
-                  <View style={styles.booksGrid}>
-                    {tuttiLibriInUso.map((book: any, idx: number) => {
-                      const coverUrl = book.isbn ? `https://www.ibs.it/images/${book.isbn}_0_0_0_536_0.jpg` : null;
-                      const prezzoNuovo = book.prezzo_copertina || book.prezzo_ministeriale || 0;
-                      const copie = book.copie_disponibili || book.copie_usate_disponibili || 0;
-                      const prezzoUsato = copie > 0 ? (book.prezzo_minimo_usato || book.prezzo_usato_minimo || (prezzoNuovo * 0.6)) : 0;
-                      const isClickable = copie > 0 && book.isbn;
-                      
-                      const CardComponent = isClickable ? TouchableOpacity : View;
-                      
-                      return (
-                        <CardComponent 
-                          key={idx} 
-                          style={[
-                            styles.sampleBookItem,
-                            isClickable && styles.sampleBookItemClickable
-                          ]}
-                          {...(isClickable ? {
-                            onPress: () => router.push(`/book-sellers/${book.isbn}`)
-                          } : {})}
-                        >
-                          <View style={styles.bookCoverContainer}>
-                            {coverUrl ? (
-                              <Image 
-                                source={{ uri: coverUrl }} 
-                                style={styles.bookCoverImage}
-                                resizeMode="contain"
-                              />
-                            ) : (
-                              <Image 
-                                source={require('../../assets/images/ribook-logo.png')} 
-                                style={styles.bookCoverImage}
-                                resizeMode="contain"
-                              />
-                            )}
-                            {/* Badge sotto la copertina */}
-                            <View style={[styles.badgeUnderCover, copie > 0 ? styles.badgeUnderCoverGreen : styles.badgeUnderCoverPurple]}>
-                              <Text style={[styles.badgeUnderCoverText, copie > 0 ? styles.badgeUnderCoverTextGreen : styles.badgeUnderCoverTextPurple]}>
-                                {copie > 0 ? `${copie} ${copie === 1 ? 'copia' : 'copie'}` : 'IN USO'}
-                              </Text>
-                            </View>
-                          </View>
-                          <View style={styles.bookDetailsContainer}>
-                            <Text style={styles.sampleBookSubject}>{book.disciplina}</Text>
-                            <Text style={styles.sampleBookTitle}>{book.titolo || book.titolo_vecchio}</Text>
-                            {book.autori && <Text style={styles.sampleBookAuthor}>{book.autori}</Text>}
-                            {book.editore && <Text style={styles.sampleBookEdition}>{book.editore}</Text>}
-                            {book.isbn && <Text style={styles.isbnText}>ISBN: {book.isbn}</Text>}
-                            <View style={styles.priceContainerCompact}>
-                              <Text style={styles.priceNewLabel}>Nuovo: <Text style={styles.priceNewValue}>€{prezzoNuovo.toFixed(2)}</Text></Text>
-                              {copie > 0 && (
-                                <Text style={styles.priceUsedLabel}>Usato da: <Text style={styles.priceUsedValue}>€{prezzoUsato.toFixed(2)}</Text></Text>
-                              )}
-                            </View>
-                          </View>
-                        </CardComponent>
-                      );
-                    })}
-                  </View>
-                </View>
-              );
-            })()}
-
-            {/* Libri NUOVI da acquistare (non trovabili usati) */}
-            {(() => {
-              const libriNuovi = compatibility.nuovi?.libri || [];
-              
-              if (libriNuovi.length === 0) return null;
-              
-              return (
-                <View style={[styles.classCard, { borderLeftColor: '#F44336', borderLeftWidth: 3 }]}>
-                  <Text style={styles.sectionTitleRed}>
-                    LIBRI NUOVI DA ACQUISTARE ({libriNuovi.length})
-                  </Text>
-                  <Text style={{ fontSize: 11, color: '#D32F2F', marginBottom: 12, fontStyle: 'italic' }}>
-                    Non disponibili usati - da comprare nuovi
-                  </Text>
-                  <View style={styles.booksGrid}>
-                    {libriNuovi.map((book: any, idx: number) => {
-                      const coverUrl = book.isbn ? `https://www.ibs.it/images/${book.isbn}_0_0_0_536_0.jpg` : null;
-                      const prezzoNuovo = book.prezzo_copertina || book.prezzo_ministeriale || 0;
-                      return (
-                        <View key={idx} style={styles.sampleBookItem}>
-                          <View style={styles.bookCoverContainer}>
-                            {coverUrl ? (
-                              <Image 
-                                source={{ uri: coverUrl }} 
-                                style={styles.bookCoverImage}
-                                resizeMode="contain"
-                              />
-                            ) : (
-                              <Image 
-                                source={require('../../assets/images/ribook-logo.png')} 
-                                style={styles.bookCoverImage}
-                                resizeMode="contain"
-                              />
-                            )}
-                            {/* Badge sotto la copertina */}
-                            <View style={[styles.badgeUnderCover, styles.badgeUnderCoverRed]}>
-                              <Text style={styles.badgeUnderCoverTextRed}>SOLO NUOVO</Text>
-                            </View>
-                          </View>
-                          <View style={styles.bookDetailsContainer}>
-                            <Text style={styles.sampleBookSubject}>{book.disciplina}</Text>
-                            <Text style={styles.sampleBookTitle}>{book.titolo}</Text>
-                            {book.autori && <Text style={styles.sampleBookAuthor}>{book.autori}</Text>}
-                            {book.editore && <Text style={styles.sampleBookEdition}>{book.editore}</Text>}
-                            {book.isbn && <Text style={styles.isbnText}>ISBN: {book.isbn}</Text>}
-                            <View style={styles.priceContainerCompact}>
-                              <Text style={styles.priceNewLabel}>Nuovo: <Text style={styles.priceNewValue}>€{prezzoNuovo.toFixed(2)}</Text></Text>
-                              <Text style={styles.nuovaEdizioneNote}>{book.motivo || 'Da acquistare nuovo'}</Text>
-                            </View>
+            {/* 2. LIBRI DA ACQUISTARE USATI */}
+            {compatibility.da_acquistare_usati && compatibility.da_acquistare_usati.length > 0 && (
+              <View style={styles.classCard}>
+                <Text style={styles.sectionTitleGreen}>
+                  DA COMPRARE USATI ({compatibility.da_acquistare_usati.length})
+                </Text>
+                <View style={styles.booksGrid}>
+                  {compatibility.da_acquistare_usati.map((book: any, idx: number) => {
+                    const coverUrl = book.isbn ? `https://www.ibs.it/images/${book.isbn}_0_0_0_536_0.jpg` : null;
+                    const prezzoNuovo = Number(book.prezzo) || 0;
+                    const prezzoUsato = Number(book.prezzo_usato) || (prezzoNuovo * 0.5);
+                    const risparmio = Number(book.risparmio) || (prezzoNuovo - prezzoUsato);
+                    return (
+                      <TouchableOpacity 
+                        key={idx} 
+                        style={[styles.sampleBookItem, styles.sampleBookItemClickable]}
+                        onPress={() => router.push(`/book-sellers/${book.isbn}`)}
+                      >
+                        <View style={styles.bookCoverContainer}>
+                          {coverUrl ? (
+                            <Image 
+                              source={{ uri: coverUrl }} 
+                              style={styles.bookCoverImage}
+                              resizeMode="contain"
+                            />
+                          ) : (
+                            <Image 
+                              source={require('../../assets/images/ribook-logo.png')} 
+                              style={styles.bookCoverImage}
+                              resizeMode="contain"
+                            />
+                          )}
+                          <View style={[styles.badgeUnderCover, { backgroundColor: '#e8f5e9' }]}>
+                            <Text style={[styles.badgeUnderCoverTextBlue, { color: '#4CAF50' }]}>USATO DISPONIBILE</Text>
                           </View>
                         </View>
-                      );
-                    })}
-                  </View>
+                        <View style={styles.bookDetailsContainer}>
+                          <Text style={styles.sampleBookSubject}>{book.disciplina}</Text>
+                          <Text style={styles.sampleBookTitle}>{book.titolo}</Text>
+                          {book.autori && <Text style={styles.sampleBookAuthor}>{book.autori}</Text>}
+                          {book.editore && <Text style={styles.sampleBookEdition}>{book.editore}</Text>}
+                          {book.isbn && <Text style={styles.isbnText}>ISBN: {book.isbn}</Text>}
+                          <View style={styles.priceContainerCompact}>
+                            <Text style={styles.priceNewLabel}>Nuovo: <Text style={[styles.priceNewValue, { textDecorationLine: 'line-through' }]}>€{prezzoNuovo.toFixed(2)}</Text></Text>
+                            <Text style={styles.priceUsedLabel}>Usato: <Text style={styles.priceUsedValue}>€{prezzoUsato.toFixed(2)}</Text></Text>
+                            <Text style={{ color: '#4CAF50', fontSize: 11 }}>Risparmi €{risparmio.toFixed(2)}</Text>
+                          </View>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
-              );
-            })()}
+              </View>
+            )}
+
+            {/* 3. LIBRI DA ACQUISTARE NUOVI */}
+            {compatibility.da_acquistare_nuovi && compatibility.da_acquistare_nuovi.length > 0 && (
+              <View style={styles.classCard}>
+                <Text style={styles.sectionTitleOrange}>
+                  DA COMPRARE NUOVI ({compatibility.da_acquistare_nuovi.length})
+                </Text>
+                <View style={styles.booksGrid}>
+                  {compatibility.da_acquistare_nuovi.map((book: any, idx: number) => {
+                    const coverUrl = book.isbn ? `https://www.ibs.it/images/${book.isbn}_0_0_0_536_0.jpg` : null;
+                    const prezzo = Number(book.prezzo) || 0;
+                    return (
+                      <View key={idx} style={styles.sampleBookItem}>
+                        <View style={styles.bookCoverContainer}>
+                          {coverUrl ? (
+                            <Image 
+                              source={{ uri: coverUrl }} 
+                              style={styles.bookCoverImage}
+                              resizeMode="contain"
+                            />
+                          ) : (
+                            <Image 
+                              source={require('../../assets/images/ribook-logo.png')} 
+                              style={styles.bookCoverImage}
+                              resizeMode="contain"
+                            />
+                          )}
+                          <View style={[styles.badgeUnderCover, { backgroundColor: '#fff3e0' }]}>
+                            <Text style={[styles.badgeUnderCoverTextBlue, { color: '#FF9800' }]}>NUOVO</Text>
+                          </View>
+                        </View>
+                        <View style={styles.bookDetailsContainer}>
+                          <Text style={styles.sampleBookSubject}>{book.disciplina}</Text>
+                          <Text style={styles.sampleBookTitle}>{book.titolo}</Text>
+                          {book.autori && <Text style={styles.sampleBookAuthor}>{book.autori}</Text>}
+                          {book.editore && <Text style={styles.sampleBookEdition}>{book.editore}</Text>}
+                          {book.isbn && <Text style={styles.isbnText}>ISBN: {book.isbn}</Text>}
+                          <View style={styles.priceContainerCompact}>
+                            <Text style={styles.priceNewLabel}>Prezzo: <Text style={styles.priceNewValue}>€{prezzo.toFixed(2)}</Text></Text>
+                            <Text style={{ color: '#999', fontSize: 10 }}>{book.motivo}</Text>
+                          </View>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
+
+            {/* 4. LIBRI ANCORA IN USO (non vendibili) */}
+            {compatibility.ancora_in_uso && compatibility.ancora_in_uso.length > 0 && (
+              <View style={styles.classCard}>
+                <Text style={styles.sectionTitlePurple}>
+                  ANCORA IN USO ({compatibility.ancora_in_uso.length})
+                </Text>
+                <Text style={{ color: '#666', fontSize: 12, marginBottom: 8 }}>
+                  Questi libri ti servono ancora - non metterli in vendita
+                </Text>
+                <View style={styles.booksGrid}>
+                  {compatibility.ancora_in_uso.slice(0, 4).map((book: any, idx: number) => {
+                    const coverUrl = book.isbn ? `https://www.ibs.it/images/${book.isbn}_0_0_0_536_0.jpg` : null;
+                    return (
+                      <View key={idx} style={[styles.sampleBookItem, { opacity: 0.7 }]}>
+                        <View style={styles.bookCoverContainer}>
+                          {coverUrl ? (
+                            <Image 
+                              source={{ uri: coverUrl }} 
+                              style={styles.bookCoverImage}
+                              resizeMode="contain"
+                            />
+                          ) : (
+                            <Image 
+                              source={require('../../assets/images/ribook-logo.png')} 
+                              style={styles.bookCoverImage}
+                              resizeMode="contain"
+                            />
+                          )}
+                          <View style={[styles.badgeUnderCover, { backgroundColor: '#f3e5f5' }]}>
+                            <Text style={[styles.badgeUnderCoverTextBlue, { color: '#9C27B0' }]}>IN USO</Text>
+                          </View>
+                        </View>
+                        <View style={styles.bookDetailsContainer}>
+                          <Text style={styles.sampleBookSubject}>{book.disciplina}</Text>
+                          <Text style={styles.sampleBookTitle}>{book.titolo}</Text>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+                {compatibility.ancora_in_uso.length > 4 && (
+                  <Text style={{ color: '#9C27B0', fontSize: 12, textAlign: 'center', marginTop: 8 }}>
+                    ... e altri {compatibility.ancora_in_uso.length - 4} libri
+                  </Text>
+                )}
+              </View>
+            )}
+
           </View>
         );
       })()}

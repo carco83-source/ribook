@@ -270,7 +270,12 @@ async def classifica_libri_studente(
     isbn_vendibili = isbn_2025 - isbn_2026
     for isbn in isbn_vendibili:
         libro = mappa_2025[isbn]
-        prezzo_vendita = round(libro.get("prezzo", 0) * 0.5, 2)
+        prezzo_raw = libro.get("prezzo", 0)
+        try:
+            prezzo = float(prezzo_raw) if prezzo_raw else 0
+        except (ValueError, TypeError):
+            prezzo = 0
+        prezzo_vendita = round(prezzo * 0.5, 2)
         result["vendibili_usati"].append({
             **libro,
             "categoria": "VENDIBILE_USATO",
@@ -290,7 +295,12 @@ async def classifica_libri_studente(
     
     for isbn in isbn_da_acquistare:
         libro = mappa_2026[isbn]
-        prezzo = libro.get("prezzo", 0)
+        prezzo_raw = libro.get("prezzo", 0)
+        # Assicura che il prezzo sia un numero
+        try:
+            prezzo = float(prezzo_raw) if prezzo_raw else 0
+        except (ValueError, TypeError):
+            prezzo = 0
         
         # Controlla se è nuova adozione (nessuno può averlo usato)
         if libro.get("nuova_adozione", False):
