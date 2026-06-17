@@ -5,7 +5,6 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  Pressable,
   ScrollView,
   Alert,
   ActivityIndicator,
@@ -158,10 +157,14 @@ export default function LoginScreen() {
               </TouchableOpacity>
             </View>
 
-            <Pressable
+            <TouchableOpacity
               style={[styles.loginButton, isDesktop && styles.loginButtonDesktop]}
               onPress={handleLogin}
               disabled={loading}
+              activeOpacity={0.8}
+              testID="login-button"
+              accessibilityRole="button"
+              accessibilityLabel="Accedi"
             >
               {loading ? (
                 <ActivityIndicator color="#fff" />
@@ -170,7 +173,7 @@ export default function LoginScreen() {
                   Accedi
                 </Text>
               )}
-            </Pressable>
+            </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.forgotPassword}
