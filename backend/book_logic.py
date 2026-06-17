@@ -649,17 +649,33 @@ async def calcola_stato_acquisto(db, libro: dict, classe: int, tipo_scuola: str,
             
             if not deve_comprare:
                 # da_acquistare = NO e consigliato = NO → NON RICHIESTO (incluso in altro o facoltativo)
-                # Usiamo "NON_RICHIESTO" per distinguerlo da "GIA_POSSEDUTO"
+                # Per 1ª NON può essere "GIA_POSSEDUTO" perché è il primo anno!
                 return ("NON_RICHIESTO", "Non da acquistare (incluso o facoltativo)", 0)
             
             # Se deve comprare, cerca usato
             if copie > 0:
                 return ("USATO", f"{copie} copie disponibili", copie)
             
-            # Cerca ex 2ª che possono vendere (per volumi unici del biennio)
-            libro_ex_2 = await libro_in_classe(db, isbn, codice_scuola, 2, "2025/2026")
-            if libro_ex_2:
-                return ("USATO", "Ex 2ª possono venderlo", 0)
+            # Per libri UNICI: cerca se in 2ª dello scorso anno c'era lo stesso libro
+            # Se c'era, gli ex 2ª possono venderlo
+            if is_unico:
+                # Cerca nel 2025/2026 se il libro era in 2ª
+                libro_ex_2 = await libro_in_classe(db, isbn, codice_scuola, 2, "2025/2026")
+                if libro_ex_2:
+                    # Ma verifica se serve ANCHE in 2ª quest'anno
+                    libro_in_2_attuale = await db.adozioni.find_one({
+                        "codice_scuola": codice_scuola,
+                        "anno_corso": "2",
+                        "isbn": isbn
+                    })
+                    if not libro_in_2_attuale:
+                        # NON serve in 2ª → gli ex 2ª possono venderlo!
+                        return ("USATO", "Ex 2ª possono venderlo", 0)
+            
+            # Per libri NON unici: cerca se in 1ª dello scorso anno c'era
+            libro_ex_1 = await libro_in_classe(db, isbn, codice_scuola, 1, "2025/2026")
+            if libro_ex_1:
+                return ("USATO", "Ex 1ª possono venderlo", 0)
             
             # Nuova adozione check
             if nuova_adozione:

@@ -2513,7 +2513,7 @@ async def get_purchasable_books_for_user(user_id: str):
                         "titolo": libro.get("titolo", ""),
                         "disciplina": libro.get("disciplina", ""),
                         "editore": libro.get("editore", ""),
-                        "prezzo_copertina": libro.get("prezzo_copertina", 0),
+                        "prezzo_copertina": libro.get("prezzo") or libro.get("prezzo_copertina", 0),
                         "autori": libro.get("autori", ""),
                         "is_volume_unico": libro.get("is_volume_unico", False)
                     }
@@ -3467,7 +3467,7 @@ async def get_child_compatibility(user_id: str, child_id: str):
                 "autori": libro.get("autori"),
                 "editore": libro.get("editore"),
                 "disciplina": libro.get("disciplina"),
-                "prezzo_copertina": libro.get("prezzo_copertina", 0),
+                "prezzo_copertina": libro.get("prezzo") or libro.get("prezzo_copertina", 0),
                 "volume": libro.get("volume", ""),
                 "is_volume_unico": libro.get("volume", "").upper() == "U",
                 "da_acquistare": libro.get("da_acquistare", True),
@@ -3493,7 +3493,7 @@ async def get_child_compatibility(user_id: str, child_id: str):
                     "autori": libro.get("autori"),
                     "editore": libro.get("editore"),
                     "disciplina": libro.get("disciplina"),
-                    "prezzo_copertina": libro.get("prezzo_copertina", 0),
+                    "prezzo_copertina": libro.get("prezzo") or libro.get("prezzo_copertina", 0),
                     "volume": libro.get("volume", ""),
                     "is_volume_unico": libro.get("volume", "").upper() == "U",
                     "da_acquistare": libro.get("da_acquistare", True),
@@ -4766,10 +4766,12 @@ async def get_child_analysis_v2(user_id: str, child_id: str):
         "titolo": l.get("titolo"),
         "disciplina": l.get("disciplina"),
         "editore": l.get("editore"),
-        "prezzo_copertina": l.get("prezzo_copertina", 0),
+        "autori": l.get("autori", ""),
+        "prezzo_copertina": l.get("prezzo") or l.get("prezzo_copertina", 0),
         "volume": l.get("volume", ""),
         "is_volume_unico": l.get("volume", "").upper().strip() == "U",
         "consigliato": l.get("consigliato", False),
+        "consigliato_raw": "SI" if l.get("consigliato") else "NO",
         "da_acquistare": l.get("da_acquistare", True),
         "nuova_adozione": l.get("nuova_adozione", False),
     } for l in libri_correnti]
@@ -4809,7 +4811,7 @@ async def get_child_analysis_v2(user_id: str, child_id: str):
                 "isbn": libro.get("isbn", ""),
                 "titolo": libro.get("titolo", "")[:60],
                 "disciplina": libro.get("disciplina", ""),
-                "prezzo_copertina": libro.get("prezzo_copertina", 0),
+                "prezzo_copertina": libro.get("prezzo") or libro.get("prezzo_copertina", 0),
                 "motivo_esclusione": "Libro di strumento musicale"
             })
             continue  # Salta questo libro
@@ -5709,7 +5711,7 @@ async def get_books_to_sell(user_id: str, child_id: str):
                 "autori": libro.get("autori"),
                 "editore": libro.get("editore"),
                 "disciplina": libro.get("disciplina"),
-                "prezzo_copertina": libro.get("prezzo_copertina", 0),
+                "prezzo_copertina": libro.get("prezzo") or libro.get("prezzo_copertina", 0),
                 "volume": libro.get("volume", ""),
                 "is_volume_unico": libro.get("volume", "").upper() == "U",
                 "da_acquistare": libro.get("da_acquistare", True),
@@ -5735,7 +5737,7 @@ async def get_books_to_sell(user_id: str, child_id: str):
                     "autori": libro.get("autori"),
                     "editore": libro.get("editore"),
                     "disciplina": libro.get("disciplina"),
-                    "prezzo_copertina": libro.get("prezzo_copertina", 0),
+                    "prezzo_copertina": libro.get("prezzo") or libro.get("prezzo_copertina", 0),
                     "volume": libro.get("volume", ""),
                     "is_volume_unico": libro.get("volume", "").upper() == "U",
                     "da_acquistare": libro.get("da_acquistare", True),
