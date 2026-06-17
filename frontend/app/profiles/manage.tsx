@@ -10,13 +10,14 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
+  Switch,
 } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { Picker } from '@react-native-picker/picker';
-import { SCUOLE_PRIMO_GRADO, SCUOLE_SECONDO_GRADO, getClassiByType, SEZIONI } from '../../src/constants/schools';
+import { SCUOLE_PRIMO_GRADO, SCUOLE_SECONDO_GRADO, getClassiByType } from '../../src/constants/schools';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -27,6 +28,8 @@ interface Profile {
   classe: string;
   sezione: string;
   tipo_scuola: string;
+  classe_2025_2026?: number | null;
+  fine_ciclo?: boolean;
 }
 
 export default function ManageProfilesScreen() {
@@ -48,9 +51,15 @@ export default function ManageProfilesScreen() {
     tipo_scuola: 'primo_grado',
     scuola: '',
     codice_scuola: '',
-    classe: '',
+    classe: '',  // Classe 2026/2027
     sezione: '',
+    // Nuovi campi V2
+    classe_2025_2026: '',  // Classe anno precedente (vuoto = nuovo studente 1° anno)
+    fine_ciclo: false,  // Toggle fine ciclo
   });
+
+  // Determina se lo studente è un nuovo studente (1° anno)
+  const isNuovoStudente = newProfile.classe === '1';
 
   useEffect(() => {
     loadProfiles();
@@ -77,31 +86,41 @@ export default function ManageProfilesScreen() {
   };
 
   const handleAddProfile = async () => {
+    // Validazione base
     if (!newProfile.nome_figlio || !newProfile.scuola || !newProfile.classe || !newProfile.sezione) {
       if (Platform.OS === 'web') {
-        window.alert('Compila tutti i campi');
+        window.alert('Compila tutti i campi obbligatori');
       } else {
-        Alert.alert('Errore', 'Compila tutti i campi');
+        Alert.alert('Errore', 'Compila tutti i campi obbligatori');
+      }
+      return;
+    }
+
+    // Se NON è primo anno e NON ha fine_ciclo attivo, deve selezionare classe 2025/2026
+    if (!isNuovoStudente && !newProfile.fine_ciclo && !newProfile.classe_2025_2026) {
+      if (Platform.OS === 'web') {
+        window.alert('Seleziona la classe frequentata nel 2025/2026');
+      } else {
+        Alert.alert('Errore', 'Seleziona la classe frequentata nel 2025/2026');
       }
       return;
     }
 
     try {
-      await axios.post(`${API_URL}/api/users/${userId}/profiles`, newProfile);
+      const payload = {
+        ...newProfile,
+        // Se è nuovo studente (1° anno), classe_2025_2026 è null
+        classe_2025_2026: isNuovoStudente ? null : (newProfile.classe_2025_2026 || null),
+      };
+
+      await axios.post(`${API_URL}/api/users/${userId}/profiles`, payload);
       if (Platform.OS === 'web') {
         window.alert('Profilo aggiunto con successo!');
       } else {
         Alert.alert('Fatto!', 'Profilo aggiunto con successo');
       }
       setModalVisible(false);
-      setNewProfile({
-        nome_figlio: '',
-        tipo_scuola: 'primo_grado',
-        scuola: '',
-        codice_scuola: '',
-        classe: '',
-        sezione: '',
-      });
+      resetForm();
       loadProfiles();
     } catch (error: any) {
       const message = error.response?.data?.detail || 'Errore durante l\'aggiunta';
@@ -111,6 +130,21 @@ export default function ManageProfilesScreen() {
         Alert.alert('Errore', message);
       }
     }
+  };
+
+  const resetForm = () => {
+    setNewProfile({
+      nome_figlio: '',
+      tipo_scuola: 'primo_grado',
+      scuola: '',
+      codice_scuola: '',
+      classe: '',
+      sezione: '',
+      classe_2025_2026: '',
+      fine_ciclo: false,
+    });
+    setAvailableSections([]);
+    setSectionsByClass({});
   };
 
   const handleActivateProfile = async (profileId: string) => {
@@ -204,6 +238,31 @@ export default function ManageProfilesScreen() {
     return getClassiByType(newProfile.tipo_scuola as 'primo_grado' | 'secondo_grado');
   };
 
+  // Genera le classi disponibili per l'anno 2025/2026
+  // Basandosi sulla classe 2026/2027, la classe precedente è classe - 1
+  // Per studenti di 2°, 3°, 4°, 5° la classe precedente va da 1 a 4
+  const getClassi2025_2026 = () => {
+    const classeCorrente = parseInt(newProfile.classe);
+    if (isNaN(classeCorrente) || classeCorrente <= 1) return [];
+    
+    // Per la classe 2025/2026, lo studente era nella classe precedente
+    // Es: Se ora è in 2°, l'anno scorso era in 1°
+    // Mostriamo solo la classe precedente logica
+    const classePrecedente = classeCorrente - 1;
+    return [classePrecedente.toString()];
+  };
+
+  // Ottieni le informazioni sulla situazione dello studente
+  const getSituazioneLabel = () => {
+    if (isNuovoStudente) {
+      return { text: 'Nuovo studente (1° anno)', color: '#2196F3', icon: 'school-outline' as const };
+    }
+    if (newProfile.fine_ciclo) {
+      return { text: 'Fine ciclo - Solo vendita libri', color: '#4CAF50', icon: 'checkmark-circle-outline' as const };
+    }
+    return { text: 'Studente frequentante', color: '#FF9800', icon: 'book-outline' as const };
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -266,6 +325,17 @@ export default function ManageProfilesScreen() {
                 <Text style={styles.profileClass}>
                   Classe {profile.classe}{profile.sezione} • {profile.tipo_scuola === 'primo_grado' ? 'Media' : 'Superiore'}
                 </Text>
+                {/* Mostra info anno precedente */}
+                {profile.classe_2025_2026 != null && (
+                  <Text style={styles.profilePrevClass}>
+                    2025/2026: Classe {profile.classe_2025_2026}
+                  </Text>
+                )}
+                {profile.fine_ciclo && (
+                  <View style={styles.fineCicloBadge}>
+                    <Text style={styles.fineCicloText}>Fine ciclo</Text>
+                  </View>
+                )}
               </View>
               {activeProfileId === profile.id && (
                 <View style={styles.activeBadge}>
@@ -318,14 +388,14 @@ export default function ManageProfilesScreen() {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Nuovo profilo</Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
+              <TouchableOpacity onPress={() => { setModalVisible(false); resetForm(); }}>
                 <Ionicons name="close" size={24} color="#666" />
               </TouchableOpacity>
             </View>
 
-            <ScrollView>
+            <ScrollView showsVerticalScrollIndicator={false}>
               {/* Nome figlio */}
-              <Text style={styles.inputLabel}>Nome del figlio</Text>
+              <Text style={styles.inputLabel}>Nome del figlio *</Text>
               <TextInput
                 style={styles.input}
                 placeholder="Es. Marco"
@@ -333,12 +403,26 @@ export default function ManageProfilesScreen() {
                 onChangeText={(text) => setNewProfile({ ...newProfile, nome_figlio: text })}
               />
 
+              {/* Sezione: Anno Scolastico 2026/2027 */}
+              <View style={styles.sectionHeader}>
+                <Ionicons name="calendar" size={20} color="#1a472a" />
+                <Text style={styles.sectionHeaderText}>Anno Scolastico 2026/2027</Text>
+              </View>
+
               {/* Tipo scuola */}
-              <Text style={styles.inputLabel}>Tipo scuola</Text>
+              <Text style={styles.inputLabel}>Tipo scuola *</Text>
               <View style={styles.pickerContainer}>
                 <Picker
                   selectedValue={newProfile.tipo_scuola}
-                  onValueChange={(value) => setNewProfile({ ...newProfile, tipo_scuola: value, scuola: '' })}
+                  onValueChange={(value) => setNewProfile({ 
+                    ...newProfile, 
+                    tipo_scuola: value, 
+                    scuola: '', 
+                    codice_scuola: '',
+                    classe: '',
+                    sezione: '',
+                    classe_2025_2026: ''
+                  })}
                 >
                   <Picker.Item label="Scuola Media" value="primo_grado" />
                   <Picker.Item label="Scuola Superiore" value="secondo_grado" />
@@ -346,7 +430,7 @@ export default function ManageProfilesScreen() {
               </View>
 
               {/* Scuola */}
-              <Text style={styles.inputLabel}>Scuola</Text>
+              <Text style={styles.inputLabel}>Scuola 2026/2027 *</Text>
               <View style={styles.pickerContainer}>
                 <Picker
                   selectedValue={newProfile.scuola}
@@ -358,7 +442,8 @@ export default function ManageProfilesScreen() {
                       scuola: value,
                       codice_scuola: codice,
                       classe: '',
-                      sezione: ''
+                      sezione: '',
+                      classe_2025_2026: ''
                     });
                     
                     // Carica sezioni dinamicamente
@@ -387,13 +472,19 @@ export default function ManageProfilesScreen() {
                 </Picker>
               </View>
 
-              {/* Classe */}
-              <Text style={styles.inputLabel}>Classe</Text>
+              {/* Classe 2026/2027 */}
+              <Text style={styles.inputLabel}>Classe 2026/2027 *</Text>
               <View style={styles.pickerContainer}>
                 <Picker
                   selectedValue={newProfile.classe}
                   onValueChange={(value) => {
-                    setNewProfile({ ...newProfile, classe: value, sezione: '' });
+                    setNewProfile({ 
+                      ...newProfile, 
+                      classe: value, 
+                      sezione: '',
+                      // Reset classe_2025_2026 quando cambia la classe
+                      classe_2025_2026: ''
+                    });
                     // Aggiorna sezioni disponibili per questa classe
                     const sezioniPerClasse = sectionsByClass[value] || [];
                     setAvailableSections(sezioniPerClasse);
@@ -407,9 +498,9 @@ export default function ManageProfilesScreen() {
                 </Picker>
               </View>
 
-              {/* Sezione - Dinamico */}
+              {/* Sezione */}
               <Text style={styles.inputLabel}>
-                Sezione {loadingSections && '(caricamento...)'}
+                Sezione * {loadingSections && '(caricamento...)'}
               </Text>
               <View style={styles.pickerContainer}>
                 <Picker
@@ -433,9 +524,101 @@ export default function ManageProfilesScreen() {
                 </Picker>
               </View>
 
+              {/* Mostra sezione anno precedente SOLO se la classe è selezionata */}
+              {newProfile.classe && (
+                <>
+                  {/* Sezione: Anno Scolastico 2025/2026 */}
+                  <View style={[styles.sectionHeader, { marginTop: 24, backgroundColor: '#e8f5e9' }]}>
+                    <Ionicons name="time" size={20} color="#2E7D32" />
+                    <Text style={[styles.sectionHeaderText, { color: '#2E7D32' }]}>Anno Precedente 2025/2026</Text>
+                  </View>
+
+                  {/* Info box situazione */}
+                  {(() => {
+                    const situazione = getSituazioneLabel();
+                    return (
+                      <View style={[styles.situazioneBox, { borderLeftColor: situazione.color }]}>
+                        <Ionicons name={situazione.icon} size={24} color={situazione.color} />
+                        <Text style={[styles.situazioneText, { color: situazione.color }]}>
+                          {situazione.text}
+                        </Text>
+                      </View>
+                    );
+                  })()}
+
+                  {/* Se è 1° anno: nuovo studente - campo disabilitato */}
+                  {isNuovoStudente ? (
+                    <View style={styles.nuovoStudenteInfo}>
+                      <Ionicons name="information-circle" size={20} color="#1976D2" />
+                      <Text style={styles.nuovoStudenteText}>
+                        Studente al primo anno: non serve indicare la classe dell&apos;anno precedente.
+                        {'\n'}Vedrà solo i libri da acquistare (usati o nuovi).
+                      </Text>
+                    </View>
+                  ) : (
+                    <>
+                      {/* Toggle Fine Ciclo */}
+                      <View style={styles.toggleRow}>
+                        <View style={styles.toggleInfo}>
+                          <Text style={styles.toggleLabel}>Fine ciclo (diplomato)</Text>
+                          <Text style={styles.toggleDescription}>
+                            Attiva se lo studente ha terminato il ciclo scolastico e vuole solo vendere libri
+                          </Text>
+                        </View>
+                        <Switch
+                          value={newProfile.fine_ciclo}
+                          onValueChange={(value) => setNewProfile({ 
+                            ...newProfile, 
+                            fine_ciclo: value,
+                            // Se attiva fine_ciclo, reset classe_2025_2026
+                            classe_2025_2026: value ? '' : newProfile.classe_2025_2026
+                          })}
+                          trackColor={{ false: '#ddd', true: '#81C784' }}
+                          thumbColor={newProfile.fine_ciclo ? '#4CAF50' : '#f4f3f4'}
+                        />
+                      </View>
+
+                      {/* Classe 2025/2026 - Solo se NON fine_ciclo */}
+                      {!newProfile.fine_ciclo && (
+                        <>
+                          <Text style={styles.inputLabel}>Classe frequentata nel 2025/2026 *</Text>
+                          <View style={styles.pickerContainer}>
+                            <Picker
+                              selectedValue={newProfile.classe_2025_2026}
+                              onValueChange={(value) => setNewProfile({ ...newProfile, classe_2025_2026: value })}
+                            >
+                              <Picker.Item label="Seleziona classe..." value="" />
+                              {getClassi2025_2026().map((c) => (
+                                <Picker.Item key={c} label={`${c}°`} value={c} />
+                              ))}
+                            </Picker>
+                          </View>
+                          <Text style={styles.helperText}>
+                            Se lo studente è in {newProfile.classe}° nel 2026/2027, l'anno scorso era in {parseInt(newProfile.classe) - 1}°
+                          </Text>
+                        </>
+                      )}
+
+                      {/* Info fine ciclo */}
+                      {newProfile.fine_ciclo && (
+                        <View style={[styles.nuovoStudenteInfo, { backgroundColor: '#e8f5e9', borderLeftColor: '#4CAF50' }]}>
+                          <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+                          <Text style={[styles.nuovoStudenteText, { color: '#2E7D32' }]}>
+                            Studente a fine ciclo: vedrà SOLO la categoria &quot;Libri vendibili&quot;.
+                            {'\n'}Tutti i libri dell&apos;ultimo anno saranno disponibili per la vendita.
+                          </Text>
+                        </View>
+                      )}
+                    </>
+                  )}
+                </>
+              )}
+
               <TouchableOpacity style={styles.saveButton} onPress={handleAddProfile}>
                 <Text style={styles.saveButtonText}>Salva profilo</Text>
               </TouchableOpacity>
+              
+              <View style={{ height: 40 }} />
             </ScrollView>
           </View>
         </View>
@@ -524,6 +707,25 @@ const styles = StyleSheet.create({
     color: '#999',
     marginTop: 2,
   },
+  profilePrevClass: {
+    fontSize: 11,
+    color: '#FF9800',
+    marginTop: 2,
+    fontStyle: 'italic',
+  },
+  fineCicloBadge: {
+    backgroundColor: '#e8f5e9',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    alignSelf: 'flex-start',
+    marginTop: 4,
+  },
+  fineCicloText: {
+    fontSize: 10,
+    color: '#4CAF50',
+    fontWeight: 'bold',
+  },
   activeBadge: {
     backgroundColor: '#4CAF50',
     paddingHorizontal: 8,
@@ -585,7 +787,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,
-    maxHeight: '80%',
+    maxHeight: '90%',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -616,6 +818,90 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 16,
     overflow: 'hidden',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#f5f5f5',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  sectionHeaderText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1a472a',
+  },
+  situazioneBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  situazioneText: {
+    fontSize: 15,
+    fontWeight: '600',
+    flex: 1,
+  },
+  nuovoStudenteInfo: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    backgroundColor: '#e3f2fd',
+    padding: 16,
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#1976D2',
+    marginBottom: 16,
+  },
+  nuovoStudenteText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#1565C0',
+    lineHeight: 20,
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  toggleInfo: {
+    flex: 1,
+    marginRight: 16,
+  },
+  toggleLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#333',
+  },
+  toggleDescription: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
+    lineHeight: 16,
+  },
+  helperText: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: -12,
+    marginBottom: 16,
+    fontStyle: 'italic',
   },
   saveButton: {
     backgroundColor: '#1a472a',

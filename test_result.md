@@ -277,13 +277,16 @@ frontend:
     implemented: true
     working: false
     file: "/app/frontend/app/(auth)/login.tsx"
-    stuck_count: 1
+    stuck_count: 2
     priority: "high"
     needs_retesting: false
     status_history:
       - working: false
         agent: "testing"
         comment: "CRITICAL BUG: Login button click does not trigger handleLogin function. No API request is sent to /api/auth/login. User remains on login page after clicking 'Accedi' button. Console error: 'Cannot use 'import.meta' outside a module' appears twice, preventing JavaScript execution. The React event handlers are not working. Root cause: JavaScript bundle has import.meta statements that are not being transformed properly by Metro bundler. This is blocking the entire login flow. Tested with credentials nica.cartolibreria@gmail.com/Test123!. Navigation to login page works, form fields can be filled, but button click has no effect."
+      - working: false
+        agent: "testing"
+        comment: "CRITICAL BUG CONFIRMED (2026-06-17): Login functionality is completely broken. Tested with credentials nica.cartolibreria@gmail.com/Test123!. Multiple click methods attempted (text selector with force, role selector, Enter key press) - all failed. Button click does not trigger handleLogin function. No console log '[Login] handleLogin called' appears. No API request sent to /api/auth/login. User remains on http://localhost:3000/login after clicking 'Accedi'. Console logs show no 'import.meta' errors this time, but React event handlers still not working. This blocks ALL authenticated features including profile management testing. IMPACT: Cannot test profile management form, cannot test any authenticated flows. RECOMMENDATION: Main agent must fix login before any further testing can proceed."
 
   - task: "Radar/Home Tab"
     implemented: true
@@ -981,8 +984,10 @@ metadata:
   run_ui: false
 
 test_plan:
-  current_focus: []
-  stuck_tasks: []
+  current_focus:
+    - "Login Screen"
+  stuck_tasks:
+    - "Login Screen"
   test_all: false
   test_priority: "high_first"
 
@@ -1358,3 +1363,72 @@ agent_communication:
       
       ### Conclusion: 
       The PDF Generation endpoint is fully functional and working correctly. All three children's book lists are successfully generated as valid PDF documents with proper formatting and content.
+
+  - agent: "testing"
+    message: |
+      ## PROFILE MANAGEMENT FORM TESTING BLOCKED BY LOGIN ISSUE (2026-06-17)
+      
+      ### Test Request:
+      User requested testing of the child profiles management form (/profiles/manage) with focus on:
+      1. Login flow with nica.cartolibreria@gmail.com / Test123!
+      2. Navigation to Profile tab → "Gestisci profili figli"
+      3. Testing "Aggiungi profilo figlio" modal
+      4. Testing conditional logic for "Classe 2025/2026" field (should only appear for 2nd year+)
+      5. Testing "Fine ciclo" toggle functionality
+      
+      ### Test Results:
+      ❌ **CANNOT PROCEED** - Login functionality is completely broken
+      
+      ### Detailed Findings:
+      1. ✅ Login page loads correctly (http://localhost:3000/(auth)/login)
+      2. ✅ Form fields are visible and can be filled
+      3. ✅ Credentials filled: nica.cartolibreria@gmail.com / Test123!
+      4. ❌ Login button click does NOT trigger handleLogin function
+      5. ❌ No console log "[Login] handleLogin called" appears
+      6. ❌ No API request sent to /api/auth/login
+      7. ❌ User remains on http://localhost:3000/login after clicking "Accedi"
+      8. ❌ Multiple click methods attempted - all failed:
+         - Text selector with force=True
+         - Role selector
+         - Enter key press
+      
+      ### Console Analysis:
+      - No "import.meta" errors this time (different from previous test)
+      - API_URL correctly set: https://language-check-10.preview.emergentagent.com
+      - React app is running
+      - But React event handlers are not working
+      
+      ### Impact:
+      🔴 **CRITICAL BLOCKER**: Cannot test ANY authenticated features including:
+      - Profile management form
+      - Child profiles management
+      - Any feature requiring login
+      
+      ### Code Review:
+      Reviewed /app/frontend/app/profiles/manage.tsx - The form implementation looks correct:
+      - Line 62: isNuovoStudente logic (classe === '1')
+      - Lines 528-615: Conditional rendering for "Anno Precedente 2025/2026"
+      - Lines 550-558: "Nuovo studente" message for 1st year
+      - Lines 560-579: "Fine ciclo" toggle for non-first-year
+      - Lines 582-600: "Classe 2025/2026" picker (hidden when fine_ciclo=true)
+      
+      The form logic appears sound, but CANNOT BE TESTED due to login blocker.
+      
+      ### Recommendation:
+      🚨 **HIGH PRIORITY**: Main agent MUST fix login functionality before any further testing.
+      
+      Suggested approaches:
+      1. Check if Pressable component is properly handling onPress events
+      2. Verify axios is properly imported and configured
+      3. Check if there are any JavaScript errors preventing event handlers
+      4. Consider using web search for "Expo React Native Web button click not working"
+      5. Test with a simple console.log in handleLogin to verify function is defined
+      6. Check if there's a form submission preventDefault issue
+      
+      ### Next Steps:
+      Once login is fixed, I can immediately proceed with comprehensive testing of:
+      - Profile management form UI
+      - Conditional logic for "Classe 2025/2026" field
+      - "Fine ciclo" toggle functionality
+      - Form validation
+      - Modal open/close behavior

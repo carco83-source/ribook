@@ -727,6 +727,9 @@ class AddChildProfileRequest(BaseModel):
     classe: str
     sezione: str
     tipo_scuola: str
+    # Nuovi campi per logica V2
+    classe_2025_2026: Optional[str] = None  # Classe frequentata l'anno precedente (None se nuovo studente)
+    fine_ciclo: Optional[bool] = False  # True se lo studente ha terminato il ciclo scolastico
 
 @api_router.post("/users/{user_id}/profiles")
 async def add_child_profile(user_id: str, profile_data: AddChildProfileRequest):
@@ -763,14 +766,25 @@ async def add_child_profile(user_id: str, profile_data: AddChildProfileRequest):
                 sezione_upper = sorted([s.get("sezione") for s in sezioni_disp])[0]
                 print(f"Sezione {profile_data.sezione} non trovata, uso fallback: {sezione_upper}")
     
+    # Gestione classe 2025/2026 - converte in intero se presente
+    classe_2025_2026_int = None
+    if profile_data.classe_2025_2026:
+        try:
+            classe_2025_2026_int = int(profile_data.classe_2025_2026)
+        except (ValueError, TypeError):
+            classe_2025_2026_int = None
+    
     new_profile = {
         "id": str(uuid.uuid4()),
         "nome_figlio": profile_data.nome_figlio,
         "scuola": profile_data.scuola,
         "codice_scuola": profile_data.codice_scuola or "",
-        "classe": classe_int,  # Salvato come intero
+        "classe": classe_int,  # Classe 2026/2027 - salvato come intero
         "sezione": sezione_upper,  # Sezione validata e maiuscola
-        "tipo_scuola": profile_data.tipo_scuola
+        "tipo_scuola": profile_data.tipo_scuola,
+        # Nuovi campi per logica V2
+        "classe_2025_2026": classe_2025_2026_int,  # Classe anno precedente (None se nuovo studente 1° anno)
+        "fine_ciclo": profile_data.fine_ciclo or False  # True se diplomato/fine ciclo
     }
     
     profili = user.get("profili_figli", [])
@@ -4728,6 +4742,7 @@ async def get_child_analysis_v2(user_id: str, child_id: str):
     child_sezione = child_profile.get("sezione", "A").upper()
     child_nome = child_profile.get("nome") or child_profile.get("nome_figlio", "Figlio")
     child_scuola = child_profile.get("scuola", "")
+    child_fine_ciclo = child_profile.get("fine_ciclo", False)
     
     if not child_codice_scuola:
         return {
@@ -4736,15 +4751,37 @@ async def get_child_analysis_v2(user_id: str, child_id: str):
             "child_classe": child_classe_2026_2027
         }
     
-    # Calcola classe 2025/2026 (None se primo anno del ciclo)
-    child_classe_2025_2026 = calcola_classe_precedente(child_classe_2026_2027, child_tipo)
+    # LOGICA CLASSE 2025/2026:
+    # 1. Se il profilo ha esplicitamente classe_2025_2026 salvata -> usala
+    # 2. Se è fine_ciclo -> calcola come classe_attuale (diplomato, vende tutto)
+    # 3. Altrimenti -> calcola automaticamente (classe_attuale - 1, None se primo anno)
+    
+    saved_classe_2025_2026 = child_profile.get("classe_2025_2026")
+    
+    if saved_classe_2025_2026 is not None:
+        # Caso 1: Classe esplicitamente salvata dal form
+        child_classe_2025_2026 = int(saved_classe_2025_2026)
+    elif child_fine_ciclo:
+        # Caso 2: Fine ciclo -> la classe 2025/2026 è l'ultima frequentata
+        # Lo studente ha finito il ciclo, quindi vendiamo i libri dell'ultimo anno
+        # Per media: classe 3, per superiore: classe 5
+        if child_tipo == "primo_grado":
+            child_classe_2025_2026 = 3  # 3° media
+        else:
+            child_classe_2025_2026 = 5  # 5° superiore
+    else:
+        # Caso 3: Calcolo automatico (retrocompatibilità)
+        child_classe_2025_2026 = calcola_classe_precedente(child_classe_2026_2027, child_tipo)
+    
+    # Se è fine ciclo, lo studente NON ha una classe 2026/2027 (è uscito)
+    effective_classe_2026_2027 = None if child_fine_ciclo else child_classe_2026_2027
     
     # Usa la nuova logica v2 per classificare i libri
     classificazione = await classifica_libri_studente(
         db,
         codice_scuola=child_codice_scuola,
         classe_2025_2026=child_classe_2025_2026,
-        classe_2026_2027=child_classe_2026_2027,
+        classe_2026_2027=effective_classe_2026_2027,  # None se fine ciclo
         sezione=child_sezione
     )
     
@@ -4759,6 +4796,7 @@ async def get_child_analysis_v2(user_id: str, child_id: str):
         "sezione": child_sezione,
         "tipo_scuola": child_tipo,
         "is_primo_anno": child_classe_2025_2026 is None,
+        "is_fine_ciclo": child_fine_ciclo,
         
         # 4 CATEGORIE PRINCIPALI
         "ancora_in_uso": classificazione["ancora_in_uso"],
