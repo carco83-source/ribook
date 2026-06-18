@@ -681,38 +681,41 @@ export default function StudentDetailScreen() {
         </View>
 
         {/* Pulsante Scarica Lista */}
-        {Platform.OS === 'web' && userId && child ? (
-          <TouchableOpacity
-            style={styles.downloadButton}
-            onPress={() => {
-              const pdfUrl = `${API_URL}/api/profiles/${userId}/children/${child.id}/books-pdf`;
-              // Usa un elemento anchor nativo per il download
-              const anchor = document.createElement('a');
-              anchor.href = pdfUrl;
-              anchor.target = '_blank';
-              anchor.rel = 'noopener noreferrer';
-              anchor.click();
-            }}
-          >
-            <Ionicons name="document-text" size={22} color="#fff" />
-            <Text style={styles.downloadButtonText}>Scarica Lista Libri</Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            style={[styles.downloadButton, downloadingPdf && styles.downloadButtonDisabled]}
-            onPress={downloadPdf}
-            disabled={downloadingPdf}
-          >
-            {downloadingPdf ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <>
-                <Ionicons name="document-text" size={22} color="#fff" />
-                <Text style={styles.downloadButtonText}>Scarica Lista Libri</Text>
-              </>
-            )}
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity
+          style={[styles.downloadButton, downloadingPdf && styles.downloadButtonDisabled]}
+          onPress={async () => {
+            if (!userId || !child) {
+              Alert.alert('Errore', 'Dati non disponibili');
+              return;
+            }
+            const pdfUrl = `${API_URL}/api/profiles/${userId}/children/${child.id}/books-pdf`;
+            console.log('Opening PDF URL:', pdfUrl);
+            
+            try {
+              if (Platform.OS === 'web') {
+                // Su web, naviga direttamente all'URL
+                window.location.href = pdfUrl;
+              } else {
+                // Su mobile, usa WebBrowser
+                await WebBrowser.openBrowserAsync(pdfUrl);
+              }
+            } catch (error) {
+              console.error('Error opening PDF:', error);
+              // Fallback con Linking
+              await Linking.openURL(pdfUrl);
+            }
+          }}
+          disabled={downloadingPdf}
+        >
+          {downloadingPdf ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <>
+              <Ionicons name="document-text" size={22} color="#fff" />
+              <Text style={styles.downloadButtonText}>Scarica Lista Libri</Text>
+            </>
+          )}
+        </TouchableOpacity>
 
         {/* Pulsante Chiudi in basso */}
         <TouchableOpacity
