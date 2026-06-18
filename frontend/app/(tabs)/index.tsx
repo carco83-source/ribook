@@ -515,7 +515,7 @@ export default function RadarScreen() {
           >
             <Ionicons name="school-outline" size={20} color="#1a472a" />
             <Text style={styles.detailsBarText}>
-              <Text style={styles.detailsBarName}>{selectedChild?.nome_figlio}</Text> - Dettagli scuola e spesa
+              <Text style={styles.detailsBarName}>{selectedChild?.nome_figlio}</Text> - Lista dei libri
             </Text>
             <Ionicons name="chevron-forward" size={20} color="#1a472a" />
           </TouchableOpacity>
@@ -1419,9 +1419,9 @@ const styles = StyleSheet.create({
   sampleBookItem: {
     width: '100%',
     backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 10,
-    marginBottom: 10,
+    borderRadius: 8,
+    padding: 8,
+    marginBottom: 8,
     borderWidth: 1,
     borderColor: '#e0e0e0',
     flexDirection: 'row',
@@ -1439,14 +1439,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginBottom: 8,
   },
-  // Copertina piccola con prezzi sotto
+  // Copertina più grande
   bookCoverSection: {
     alignItems: 'center',
-    marginRight: 10,
+    marginRight: 12,
   },
   bookCoverImage: {
-    width: 55,
-    height: 75,
+    width: 70,
+    height: 95,
     borderRadius: 4,
     backgroundColor: '#f5f5f5',
   },
@@ -1456,106 +1456,107 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   priceTagNew: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#666',
   },
   priceTagUsed: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: 'bold',
     color: '#4CAF50',
   },
   priceTagSell: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: 'bold',
     color: '#2196F3',
   },
   vendorsCount: {
-    fontSize: 10,
+    fontSize: 11,
     color: '#FF9800',
     marginTop: 2,
   },
-  // Sezione destra: materia + dettagli libro
+  // Sezione destra: materia + dettagli libro - compatta
   bookInfoSection: {
     flex: 1,
+    justifyContent: 'space-between',
   },
-  // Materia in alto grande
+  // Materia in alto - più visibile
   bookSubjectBig: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: 'bold',
     color: '#1a472a',
     textTransform: 'uppercase',
-    marginBottom: 4,
+    marginBottom: 2,
   },
-  // Badge categoria
+  // Badge categoria - più compatto
   bookCategoryBadge: {
     alignSelf: 'flex-start',
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 4,
-    marginBottom: 6,
+    borderRadius: 3,
+    marginBottom: 4,
   },
   bookCategoryText: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: 'bold',
   },
-  // Dettagli libro compatti
+  // Dettagli libro compatti - senza margini inutili
   bookDetailsCompact: {
-    marginTop: 2,
+    marginTop: 0,
   },
   bookTitleCompact: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
     color: '#333',
-    lineHeight: 16,
-    marginBottom: 2,
+    lineHeight: 17,
+    marginBottom: 1,
   },
   bookMetaRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 4,
-    marginTop: 2,
+    marginTop: 1,
   },
   bookMetaText: {
-    fontSize: 10,
-    color: '#666',
+    fontSize: 11,
+    color: '#555',
   },
   bookMetaLabel: {
-    fontSize: 10,
-    color: '#999',
+    fontSize: 11,
+    color: '#777',
   },
   bookIsbnText: {
-    fontSize: 9,
-    color: '#999',
-    marginTop: 2,
+    fontSize: 10,
+    color: '#888',
+    marginTop: 1,
   },
-  // Stili per riga prezzi compatta
+  // Stili per riga prezzi compatta - inline con il contenuto
   priceRowCompact: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
-    gap: 8,
-    marginTop: 6,
-    paddingTop: 6,
+    gap: 6,
+    marginTop: 4,
+    paddingTop: 4,
     borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
+    borderTopColor: '#eee',
   },
   priceStrikethrough: {
-    fontSize: 12,
+    fontSize: 13,
     color: '#999',
     textDecorationLine: 'line-through',
   },
   priceUsedBig: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '700',
     color: '#4CAF50',
   },
   priceSaving: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#4CAF50',
     fontWeight: '600',
   },
   priceNewBig: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '700',
     color: '#FF9800',
   },
