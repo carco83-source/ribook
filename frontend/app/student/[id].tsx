@@ -684,11 +684,28 @@ export default function StudentDetailScreen() {
         <TouchableOpacity
           style={[styles.downloadButton, downloadingPdf && styles.downloadButtonDisabled]}
           onPress={async () => {
-            if (!userId || !child) {
-              Alert.alert('Errore', 'Dati non disponibili');
+            // Leggi userId direttamente da AsyncStorage per sicurezza
+            const currentUserId = await AsyncStorage.getItem('user_id');
+            
+            if (!currentUserId) {
+              if (Platform.OS === 'web') {
+                window.alert('Sessione scaduta. Effettua nuovamente il login.');
+              } else {
+                Alert.alert('Errore', 'Sessione scaduta. Effettua nuovamente il login.');
+              }
               return;
             }
-            const pdfUrl = `${API_URL}/api/profiles/${userId}/children/${child.id}/books-pdf`;
+            
+            if (!child) {
+              if (Platform.OS === 'web') {
+                window.alert('Dati studente non disponibili');
+              } else {
+                Alert.alert('Errore', 'Dati studente non disponibili');
+              }
+              return;
+            }
+            
+            const pdfUrl = `${API_URL}/api/profiles/${currentUserId}/children/${child.id}/books-pdf`;
             console.log('Opening PDF URL:', pdfUrl);
             
             try {
