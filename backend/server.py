@@ -5108,7 +5108,22 @@ async def generate_books_pdf(user_id: str, child_id: str):
     buffer.seek(0)
     
     filename = f"lista_libri_{child_nome}_{child_classe}{child_sezione}.pdf"
-    return StreamingResponse(buffer, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename={filename}"})
+    
+    # Headers per forzare il download
+    headers = {
+        "Content-Disposition": f'attachment; filename="{filename}"',
+        "Content-Type": "application/pdf",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "Access-Control-Expose-Headers": "Content-Disposition"
+    }
+    
+    return StreamingResponse(
+        buffer, 
+        media_type="application/pdf", 
+        headers=headers
+    )
 
 
 @api_router.get("/profiles/{user_id}/children/{child_id}/books-html")

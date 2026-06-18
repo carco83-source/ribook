@@ -173,8 +173,25 @@ export default function StudentDetailScreen() {
       console.log('PDF URL:', pdfUrl);
       
       if (Platform.OS === 'web') {
-        // On web, open PDF in new tab
-        window.open(pdfUrl, '_blank');
+        // On web, force download using fetch + blob
+        try {
+          const response = await fetch(pdfUrl);
+          if (!response.ok) throw new Error('Download failed');
+          
+          const blob = await response.blob();
+          const url = window.URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = filename;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(url);
+        } catch (fetchError) {
+          // Fallback: open in new tab
+          console.log('Fetch failed, opening in new tab:', fetchError);
+          window.open(pdfUrl, '_blank');
+        }
       } else {
         // Su iOS e Android: scarica il file e poi condividi
         const fileUri = FileSystem.cacheDirectory + filename;
