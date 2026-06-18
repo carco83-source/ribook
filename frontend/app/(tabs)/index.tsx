@@ -67,6 +67,18 @@ const getClasseLabel = (classe: number | string): string => {
   return nomiClassi[classeNum] || `${classeNum}ª`;
 };
 
+// Strumenti musicali da nascondere nella Home (ma restano vendibili)
+const STRUMENTI_MUSICALI = ['chitarra', 'flauto', 'violino', 'pianoforte'];
+
+// Filtra libri di strumenti musicali dalla visualizzazione
+const filterOutStrumentiMusicali = (books: any[]): any[] => {
+  if (!books || !Array.isArray(books)) return [];
+  return books.filter(book => {
+    const disciplina = (book.disciplina || '').toLowerCase();
+    return !STRUMENTI_MUSICALI.some(strumento => disciplina.includes(strumento));
+  });
+};
+
 interface CartData {
   total_confirmed: number;
   total_pending: number;
@@ -519,18 +531,20 @@ export default function RadarScreen() {
             {/* NUOVA LOGICA v2 - 4 CATEGORIE */}
             
             {/* 1. LIBRI VENDIBILI USATI */}
-            {compatibility.vendibili_usati && compatibility.vendibili_usati.length > 0 && (
+            {(() => {
+              const vendibiliFiltered = filterOutStrumentiMusicali(compatibility.vendibili_usati || []);
+              return vendibiliFiltered.length > 0 && (
               <View style={styles.classCard}>
                 <View style={styles.sectionTitleRow}>
                   <Text style={styles.sectionTitleBlue}>
-                    LIBRI VENDIBILI ({compatibility.vendibili_usati.length})
+                    LIBRI VENDIBILI ({vendibiliFiltered.length})
                   </Text>
                   <TouchableOpacity onPress={() => setShowVendibiliInfo(true)}>
                     <Ionicons name="information-circle-outline" size={22} color="#2196F3" />
                   </TouchableOpacity>
                 </View>
                 <View style={styles.booksGrid}>
-                  {compatibility.vendibili_usati.map((book: any, idx: number) => {
+                  {vendibiliFiltered.map((book: any, idx: number) => {
                     const coverUrl = book.isbn ? `https://www.ibs.it/images/${book.isbn}_0_0_0_536_0.jpg` : null;
                     const prezzoNuovo = Number(book.prezzo) || Number(book.prezzo_copertina) || 0;
                     const prezzoUsato = Number(book.prezzo_vendita_consigliato) || (prezzoNuovo * 0.5);
@@ -570,16 +584,19 @@ export default function RadarScreen() {
                   })}
                 </View>
               </View>
-            )}
+            );
+            })()}
 
             {/* 2. LIBRI DA ACQUISTARE USATI */}
-            {compatibility.da_acquistare_usati && compatibility.da_acquistare_usati.length > 0 && (
+            {(() => {
+              const usatiFiltered = filterOutStrumentiMusicali(compatibility.da_acquistare_usati || []);
+              return usatiFiltered.length > 0 && (
               <View style={styles.classCard}>
                 <Text style={styles.sectionTitleGreen}>
-                  DA COMPRARE USATI ({compatibility.da_acquistare_usati.length})
+                  DA COMPRARE USATI ({usatiFiltered.length})
                 </Text>
                 <View style={styles.booksGrid}>
-                  {compatibility.da_acquistare_usati.map((book: any, idx: number) => {
+                  {usatiFiltered.map((book: any, idx: number) => {
                     const coverUrl = book.isbn ? `https://www.ibs.it/images/${book.isbn}_0_0_0_536_0.jpg` : null;
                     const prezzoNuovo = Number(book.prezzo) || 0;
                     const prezzoUsato = Number(book.prezzo_usato) || (prezzoNuovo * 0.5);
@@ -621,16 +638,19 @@ export default function RadarScreen() {
                   })}
                 </View>
               </View>
-            )}
+            );
+            })()}
 
             {/* 3. LIBRI DA ACQUISTARE NUOVI */}
-            {compatibility.da_acquistare_nuovi && compatibility.da_acquistare_nuovi.length > 0 && (
+            {(() => {
+              const nuoviFiltered = filterOutStrumentiMusicali(compatibility.da_acquistare_nuovi || []);
+              return nuoviFiltered.length > 0 && (
               <View style={styles.classCard}>
                 <Text style={styles.sectionTitleOrange}>
-                  DA COMPRARE NUOVI ({compatibility.da_acquistare_nuovi.length})
+                  DA COMPRARE NUOVI ({nuoviFiltered.length})
                 </Text>
                 <View style={styles.booksGrid}>
-                  {compatibility.da_acquistare_nuovi.map((book: any, idx: number) => {
+                  {nuoviFiltered.map((book: any, idx: number) => {
                     const coverUrl = book.isbn ? `https://www.ibs.it/images/${book.isbn}_0_0_0_536_0.jpg` : null;
                     const prezzo = Number(book.prezzo) || 0;
                     return (
@@ -665,19 +685,22 @@ export default function RadarScreen() {
                   })}
                 </View>
               </View>
-            )}
+            );
+            })()}
 
             {/* 4. LIBRI ANCORA IN USO (non vendibili) */}
-            {compatibility.ancora_in_uso && compatibility.ancora_in_uso.length > 0 && (
+            {(() => {
+              const inUsoFiltered = filterOutStrumentiMusicali(compatibility.ancora_in_uso || []);
+              return inUsoFiltered.length > 0 && (
               <View style={styles.classCard}>
                 <Text style={styles.sectionTitlePurple}>
-                  ANCORA IN USO ({compatibility.ancora_in_uso.length})
+                  ANCORA IN USO ({inUsoFiltered.length})
                 </Text>
                 <Text style={{ color: '#666', fontSize: 12, marginBottom: 8 }}>
                   Questi libri ti servono ancora - non metterli in vendita
                 </Text>
                 <View style={styles.booksGrid}>
-                  {compatibility.ancora_in_uso.map((book: any, idx: number) => {
+                  {inUsoFiltered.map((book: any, idx: number) => {
                     const coverUrl = book.isbn ? `https://www.ibs.it/images/${book.isbn}_0_0_0_536_0.jpg` : null;
                     return (
                       <View key={idx} style={[styles.sampleBookItem, { opacity: 0.7 }]}>
@@ -707,7 +730,8 @@ export default function RadarScreen() {
                   })}
                 </View>
               </View>
-            )}
+            );
+            })()}
 
           </View>
         );
