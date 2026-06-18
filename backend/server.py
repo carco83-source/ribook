@@ -4815,6 +4815,101 @@ async def get_child_analysis_v2(user_id: str, child_id: str):
             classificazione["riepilogo"]["totale_da_comprare_nuovi"]
         ),
     }
+
+@api_router.get("/profiles/{user_id}/children/{child_id}/lista-ufficiale")
+async def get_lista_ufficiale(user_id: str, child_id: str):
+    """
+    Restituisce la LISTA UFFICIALE dei libri dal database MIUR.
+    Questa è separata dalla logica di scambio - mostra solo i dati oggettivi.
+    Include: da_acquistare, nuova_adozione, consigliato come da database.
+    """
+    # Get user and child profile
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+    
+    profili_figli = user.get("profili_figli", [])
+    child_profile = next((p for p in profili_figli if p.get("id") == child_id), None)
+    
+    if not child_profile:
+        raise HTTPException(status_code=404, detail="Profilo figlio non trovato")
+    
+    child_nome = child_profile.get("nome_figlio", "Figlio")
+    child_scuola = child_profile.get("scuola", "")
+    child_classe = int(child_profile.get("classe", 1))
+    child_sezione = child_profile.get("sezione", "A")
+    child_codice_scuola = child_profile.get("codice_scuola", "")
+    child_tipo = child_profile.get("tipo_scuola", "primo_grado")
+    
+    if not child_codice_scuola:
+        raise HTTPException(status_code=400, detail="Codice scuola non configurato")
+    
+    # Query per la classe/sezione
+    adozioni_query = {
+        "codice_scuola": child_codice_scuola,
+        "anno_corso": str(child_classe),
+        "sezione": {"$regex": f"^{child_sezione}$", "$options": "i"}
+    }
+    
+    books = await db.adozioni.find(adozioni_query).to_list(length=100)
+    
+    # Fallback se nessun libro trovato
+    if not books:
+        fallback_query = {
+            "codice_scuola": child_codice_scuola,
+            "anno_corso": str(child_classe)
+        }
+        all_books = await db.adozioni.find(fallback_query).to_list(length=200)
+        if all_books:
+            prima_sezione = all_books[0].get("sezione")
+            books = [b for b in all_books if b.get("sezione") == prima_sezione]
+    
+    # Prepara la lista con dati oggettivi dal database
+    lista_ufficiale = []
+    totale_da_acquistare = 0
+    
+    for book in sorted(books, key=lambda x: x.get('disciplina', '')):
+        prezzo_raw = book.get('prezzo') or book.get('prezzo_copertina') or 0
+        try:
+            prezzo = float(prezzo_raw) if prezzo_raw else 0
+        except (ValueError, TypeError):
+            prezzo = 0
+        
+        libro = {
+            "disciplina": book.get('disciplina', ''),
+            "isbn": book.get('isbn', ''),
+            "autori": book.get('autori', ''),
+            "titolo": book.get('titolo', ''),
+            "sottotitolo": book.get('sottotitolo', ''),
+            "volume": book.get('volume', ''),
+            "editore": book.get('editore', ''),
+            "prezzo": prezzo,
+            # DATI OGGETTIVI DAL DATABASE MIUR
+            "nuova_adozione": book.get('nuova_adozione', False) == True,
+            "da_acquistare": book.get('da_acquistare', False) == True,
+            "consigliato": book.get('consigliato', False) == True,
+        }
+        lista_ufficiale.append(libro)
+        
+        # Calcola totale solo per libri da acquistare
+        if libro["da_acquistare"] and prezzo:
+            totale_da_acquistare += prezzo
+    
+    return {
+        "child_id": child_id,
+        "child_name": child_nome,
+        "scuola": child_scuola,
+        "codice_scuola": child_codice_scuola,
+        "classe": child_classe,
+        "sezione": child_sezione,
+        "tipo_scuola": child_tipo,
+        "anno_scolastico": "2026/2027",
+        "libri": lista_ufficiale,
+        "totale_libri": len(lista_ufficiale),
+        "totale_da_acquistare": round(totale_da_acquistare, 2),
+        "nota": "Lista ufficiale MIUR - dati oggettivi senza logica di scambio"
+    }
+
 @api_router.get("/profiles/{user_id}/children/{child_id}/books-pdf")
 async def generate_books_pdf(user_id: str, child_id: str):
     """
@@ -4941,55 +5036,22 @@ async def generate_books_pdf(user_id: str, child_id: str):
         autori = book.get('autori', '') or '-'
         titolo = book.get('titolo', '')
         editore = book.get('editore', '') or '-'
-        prezzo = book.get('prezzo_copertina') or book.get('prezzo_ministeriale') or 0
         
-        anni = book.get('anni_corso', [])
-        vol = "U" if book.get('is_volume_unico') else str(child_classe)
-        nuova_adoz = "Si" if book.get('nuova_adozione') else "No"
+        # Prezzo - usa il campo 'prezzo' dal database
+        prezzo_raw = book.get('prezzo') or book.get('prezzo_copertina') or book.get('prezzo_ministeriale') or 0
+        try:
+            prezzo = float(prezzo_raw) if prezzo_raw else 0
+        except (ValueError, TypeError):
+            prezzo = 0
         
-        # Logica "Da Acquistare" - USA IL CAMPO DAL DATABASE (come nel PDF MIUR)
-        # Il campo da_acquistare nel DB indica se il libro va acquistato quest'anno
-        da_acq_db = book.get('da_acquistare')
-        is_volume_unico = book.get('is_volume_unico', False)
-        cons_db = book.get('consigliato')
+        # Volume - usa il campo dal database
+        vol = book.get('volume', '') or str(child_classe)
         
-        # Se il libro è CONSIGLIATO (Ap), il da_acquistare resta "No" perché non è obbligatorio
-        # La regola della prima classe si applica SOLO ai libri NON consigliati
-        if cons_db == True:
-            # Libro consigliato: da_acquistare = No (non obbligatorio)
-            da_acq = "No"
-        elif child_classe == 1 and is_volume_unico:
-            # REGOLA SPECIALE: Per la PRIMA classe (1° anno del ciclo), 
-            # TUTTI i volumi unici NON consigliati devono essere acquistati
-            da_acq = "Si"
-        elif da_acq_db is not None:
-            # Usa il valore dal database (fonte: MIUR)
-            da_acq = "Si" if da_acq_db == True else "No"
-        else:
-            # Fallback per vecchi dati senza il campo
-            if is_volume_unico:
-                # MEDIE (primo_grado): volumi unici sono TRIENNALI (1-2-3)
-                # Solo chi fa la 1ª deve comprarli
-                if child_tipo == "primo_grado":
-                    da_acq = "Si" if child_classe == 1 else "No"
-                else:
-                    # SUPERIORI: dipende dal ciclo (biennio 1-2, triennio 3-4-5)
-                    if child_classe <= 2:
-                        # Biennio: comprare solo in 1ª
-                        da_acq = "Si" if child_classe == 1 else "No"
-                    else:
-                        # Triennio: comprare solo in 3ª
-                        da_acq = "Si" if child_classe == 3 else "No"
-            else:
-                # Libro annuale: sempre da acquistare
-                da_acq = "Si"
-        
-        # Logica "Consigliato" - USA IL CAMPO DAL DATABASE (come nel PDF MIUR)
-        cons_db = book.get('consigliato')
-        if cons_db == True:
-            consigliato = "Ap"
-        else:
-            consigliato = "No"
+        # DATI OGGETTIVI DAL DATABASE - NESSUNA LOGICA AGGIUNTIVA
+        # Questi campi vengono mostrati esattamente come sono nel database MIUR
+        nuova_adoz = "Si" if book.get('nuova_adozione') == True else "No"
+        da_acq = "Si" if book.get('da_acquistare') == True else "No"
+        consigliato = "Ap" if book.get('consigliato') == True else "No"
         
         table_data.append([
             Paragraph(disciplina, cell_style),
@@ -5004,8 +5066,8 @@ async def generate_books_pdf(user_id: str, child_id: str):
             Paragraph(consigliato, cell_style),
         ])
         
-        # Somma al totale se da acquistare
-        if da_acq == "Si" and prezzo:
+        # Somma al totale se da acquistare (secondo il database MIUR)
+        if book.get('da_acquistare') == True and prezzo:
             total_price += prezzo
     
     # Aggiungi riga TOTALE
