@@ -301,8 +301,20 @@ async def classifica_libri_studente(
     # ISBN in 2025/2026 MA NON in 2026/2027
     # ECCEZIONE: I libri con Volume "U" (Unico) NON sono vendibili
     #            perché coprono l'intero ciclo scolastico (es. 1-2-3 media)
+    # VERIFICA: Controlla se il libro è richiesto da QUALCHE scuola
+    #           Se nessuno lo richiede, non ha senso venderlo
     # =====================================================
     isbn_vendibili = isbn_2025 - isbn_2026
+    
+    # Verifica quali ISBN sono richiesti da almeno una scuola nel 2026/2027
+    isbn_con_domanda = set()
+    if isbn_vendibili:
+        # Query per trovare quali ISBN sono richiesti
+        isbn_list = list(isbn_vendibili)
+        cursor = db.adozioni.find({"isbn": {"$in": isbn_list}}, {"isbn": 1})
+        async for doc in cursor:
+            isbn_con_domanda.add(doc.get("isbn"))
+    
     for isbn in isbn_vendibili:
         libro = mappa_2025[isbn]
         volume = str(libro.get("volume", "")).upper().strip()
@@ -327,17 +339,34 @@ async def classifica_libri_studente(
         except (ValueError, TypeError):
             prezzo = 0
         prezzo_vendita = round(prezzo * 0.5, 2)
-        result["vendibili_usati"].append({
-            **libro,
-            "categoria": "VENDIBILE_USATO",
-            "prezzo_vendita_consigliato": prezzo_vendita,
-            "motivo": "Non più necessario",
-            "is_strumento_musicale": is_strumento,
-            "escluso_dal_calcolo": is_strumento
-        })
-        # Aggiungi al potenziale vendita SOLO se NON è strumento musicale
-        if not is_strumento:
-            result["riepilogo"]["potenziale_vendita"] += prezzo_vendita
+        
+        # Verifica se c'è domanda per questo libro
+        ha_domanda = isbn in isbn_con_domanda
+        
+        if ha_domanda:
+            # Libro vendibile con domanda
+            result["vendibili_usati"].append({
+                **libro,
+                "categoria": "VENDIBILE_USATO",
+                "prezzo_vendita_consigliato": prezzo_vendita,
+                "motivo": "Non più necessario",
+                "ha_domanda": True,
+                "is_strumento_musicale": is_strumento,
+                "escluso_dal_calcolo": is_strumento
+            })
+            # Aggiungi al potenziale vendita SOLO se NON è strumento musicale
+            if not is_strumento:
+                result["riepilogo"]["potenziale_vendita"] += prezzo_vendita
+        else:
+            # Libro non vendibile - nessuna scuola lo richiede
+            result["ancora_in_uso"].append({
+                **libro,
+                "categoria": "NON_VENDIBILE",
+                "motivo": "Nessuna scuola lo richiede nel 2026/2027",
+                "ha_domanda": False,
+                "is_strumento_musicale": is_strumento,
+                "escluso_dal_calcolo": True  # Non contare nel potenziale vendita
+            })
     
     # =====================================================
     # CATEGORIE 3 e 4: DA ACQUISTARE
