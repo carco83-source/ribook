@@ -75,7 +75,12 @@ const filterOutStrumentiMusicali = (books: any[]): any[] => {
   if (!books || !Array.isArray(books)) return [];
   return books.filter(book => {
     const disciplina = (book.disciplina || '').toLowerCase();
-    return !STRUMENTI_MUSICALI.some(strumento => disciplina.includes(strumento));
+    const titolo = (book.titolo || '').toLowerCase();
+    // Nascondi se disciplina O titolo contiene uno strumento musicale
+    const isStrumentoMusicale = STRUMENTI_MUSICALI.some(strumento => 
+      disciplina.includes(strumento) || titolo.includes(strumento)
+    );
+    return !isStrumentoMusicale;
   });
 };
 
