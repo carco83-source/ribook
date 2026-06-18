@@ -540,33 +540,29 @@ export default function RadarScreen() {
                         style={[styles.sampleBookItem, styles.sampleBookItemClickable]}
                         onPress={() => router.push(`/sell-form?isbn=${book.isbn}&titolo=${encodeURIComponent(book.titolo || '')}&prezzo=${prezzoNuovo}`)}
                       >
-                        <View style={styles.bookCoverContainer}>
+                        {/* Copertina a sinistra */}
+                        <View style={styles.bookCoverSection}>
                           {coverUrl ? (
-                            <Image 
-                              source={{ uri: coverUrl }} 
-                              style={styles.bookCoverImage}
-                              resizeMode="contain"
-                            />
+                            <Image source={{ uri: coverUrl }} style={styles.bookCoverImage} resizeMode="contain" />
                           ) : (
-                            <Image 
-                              source={require('../../assets/images/ribook-logo.png')} 
-                              style={styles.bookCoverImage}
-                              resizeMode="contain"
-                            />
+                            <Image source={require('../../assets/images/ribook-logo.png')} style={styles.bookCoverImage} resizeMode="contain" />
                           )}
-                          <View style={styles.badgeUnderCover}>
-                            <Text style={styles.badgeUnderCoverTextBlue}>VENDIBILE</Text>
-                          </View>
                         </View>
-                        <View style={styles.bookDetailsContainer}>
-                          <Text style={styles.sampleBookSubject}>{book.disciplina}</Text>
-                          <Text style={styles.sampleBookTitle}>{book.titolo}</Text>
-                          {book.autori && <Text style={styles.sampleBookAuthor}>{book.autori}</Text>}
-                          {book.editore && <Text style={styles.sampleBookEdition}>{book.editore}</Text>}
-                          {book.isbn && <Text style={styles.isbnText}>ISBN: {book.isbn}</Text>}
-                          <View style={styles.priceContainerCompact}>
-                            <Text style={styles.priceNewLabel}>Nuovo: <Text style={styles.priceNewValue}>€{prezzoNuovo.toFixed(2)}</Text></Text>
-                            <Text style={styles.priceUsedLabel}>Vendi a: <Text style={styles.priceUsedValue}>€{prezzoUsato.toFixed(2)}</Text></Text>
+                        {/* Info a destra */}
+                        <View style={styles.bookInfoSection}>
+                          <Text style={styles.bookSubjectBig}>{book.disciplina}</Text>
+                          <View style={[styles.bookCategoryBadge, { backgroundColor: '#e3f2fd' }]}>
+                            <Text style={[styles.bookCategoryText, { color: '#2196F3' }]}>VENDIBILE</Text>
+                          </View>
+                          <View style={styles.bookDetailsCompact}>
+                            <Text style={styles.bookTitleCompact} numberOfLines={2}>{book.titolo}</Text>
+                            {book.autori && <Text style={styles.bookMetaText}>{book.autori}</Text>}
+                            {book.editore && <Text style={styles.bookMetaLabel}>{book.editore}</Text>}
+                            <Text style={styles.bookIsbnText}>ISBN: {book.isbn}</Text>
+                          </View>
+                          <View style={styles.priceRowCompact}>
+                            <Text style={styles.priceNewBig}>€{prezzoNuovo.toFixed(2)}</Text>
+                            <Text style={styles.priceTagSell}>Vendi €{prezzoUsato.toFixed(2)}</Text>
                           </View>
                         </View>
                       </TouchableOpacity>
@@ -594,34 +590,30 @@ export default function RadarScreen() {
                         style={[styles.sampleBookItem, styles.sampleBookItemClickable]}
                         onPress={() => router.push(`/book-sellers/${book.isbn}`)}
                       >
-                        <View style={styles.bookCoverContainer}>
+                        {/* Copertina a sinistra */}
+                        <View style={styles.bookCoverSection}>
                           {coverUrl ? (
-                            <Image 
-                              source={{ uri: coverUrl }} 
-                              style={styles.bookCoverImage}
-                              resizeMode="contain"
-                            />
+                            <Image source={{ uri: coverUrl }} style={styles.bookCoverImage} resizeMode="contain" />
                           ) : (
-                            <Image 
-                              source={require('../../assets/images/ribook-logo.png')} 
-                              style={styles.bookCoverImage}
-                              resizeMode="contain"
-                            />
+                            <Image source={require('../../assets/images/ribook-logo.png')} style={styles.bookCoverImage} resizeMode="contain" />
                           )}
-                          <View style={[styles.badgeUnderCover, { backgroundColor: '#e8f5e9' }]}>
-                            <Text style={[styles.badgeUnderCoverTextBlue, { color: '#4CAF50' }]}>USATO DISPONIBILE</Text>
-                          </View>
                         </View>
-                        <View style={styles.bookDetailsContainer}>
-                          <Text style={styles.sampleBookSubject}>{book.disciplina}</Text>
-                          <Text style={styles.sampleBookTitle}>{book.titolo}</Text>
-                          {book.autori && <Text style={styles.sampleBookAuthor}>{book.autori}</Text>}
-                          {book.editore && <Text style={styles.sampleBookEdition}>{book.editore}</Text>}
-                          {book.isbn && <Text style={styles.isbnText}>ISBN: {book.isbn}</Text>}
-                          <View style={styles.priceContainerCompact}>
-                            <Text style={styles.priceNewLabel}>Nuovo: <Text style={[styles.priceNewValue, { textDecorationLine: 'line-through' }]}>€{prezzoNuovo.toFixed(2)}</Text></Text>
-                            <Text style={styles.priceUsedLabel}>Usato: <Text style={styles.priceUsedValue}>€{prezzoUsato.toFixed(2)}</Text></Text>
-                            <Text style={{ color: '#4CAF50', fontSize: 11 }}>Risparmi €{risparmio.toFixed(2)}</Text>
+                        {/* Info a destra */}
+                        <View style={styles.bookInfoSection}>
+                          <Text style={styles.bookSubjectBig}>{book.disciplina}</Text>
+                          <View style={[styles.bookCategoryBadge, { backgroundColor: '#e8f5e9' }]}>
+                            <Text style={[styles.bookCategoryText, { color: '#4CAF50' }]}>USATO DISPONIBILE</Text>
+                          </View>
+                          <View style={styles.bookDetailsCompact}>
+                            <Text style={styles.bookTitleCompact} numberOfLines={2}>{book.titolo}</Text>
+                            {book.autori && <Text style={styles.bookMetaText}>{book.autori}</Text>}
+                            {book.editore && <Text style={styles.bookMetaLabel}>{book.editore}</Text>}
+                            <Text style={styles.bookIsbnText}>ISBN: {book.isbn}</Text>
+                          </View>
+                          <View style={styles.priceRowCompact}>
+                            <Text style={styles.priceStrikethrough}>€{prezzoNuovo.toFixed(2)}</Text>
+                            <Text style={styles.priceUsedBig}>€{prezzoUsato.toFixed(2)}</Text>
+                            <Text style={styles.priceSaving}>-€{risparmio.toFixed(2)}</Text>
                           </View>
                         </View>
                       </TouchableOpacity>
@@ -643,33 +635,29 @@ export default function RadarScreen() {
                     const prezzo = Number(book.prezzo) || 0;
                     return (
                       <View key={idx} style={styles.sampleBookItem}>
-                        <View style={styles.bookCoverContainer}>
+                        {/* Copertina a sinistra */}
+                        <View style={styles.bookCoverSection}>
                           {coverUrl ? (
-                            <Image 
-                              source={{ uri: coverUrl }} 
-                              style={styles.bookCoverImage}
-                              resizeMode="contain"
-                            />
+                            <Image source={{ uri: coverUrl }} style={styles.bookCoverImage} resizeMode="contain" />
                           ) : (
-                            <Image 
-                              source={require('../../assets/images/ribook-logo.png')} 
-                              style={styles.bookCoverImage}
-                              resizeMode="contain"
-                            />
+                            <Image source={require('../../assets/images/ribook-logo.png')} style={styles.bookCoverImage} resizeMode="contain" />
                           )}
-                          <View style={[styles.badgeUnderCover, { backgroundColor: '#fff3e0' }]}>
-                            <Text style={[styles.badgeUnderCoverTextBlue, { color: '#FF9800' }]}>NUOVO</Text>
-                          </View>
                         </View>
-                        <View style={styles.bookDetailsContainer}>
-                          <Text style={styles.sampleBookSubject}>{book.disciplina}</Text>
-                          <Text style={styles.sampleBookTitle}>{book.titolo}</Text>
-                          {book.autori && <Text style={styles.sampleBookAuthor}>{book.autori}</Text>}
-                          {book.editore && <Text style={styles.sampleBookEdition}>{book.editore}</Text>}
-                          {book.isbn && <Text style={styles.isbnText}>ISBN: {book.isbn}</Text>}
-                          <View style={styles.priceContainerCompact}>
-                            <Text style={styles.priceNewLabel}>Prezzo: <Text style={styles.priceNewValue}>€{prezzo.toFixed(2)}</Text></Text>
-                            <Text style={{ color: '#999', fontSize: 10 }}>{book.motivo}</Text>
+                        {/* Info a destra */}
+                        <View style={styles.bookInfoSection}>
+                          <Text style={styles.bookSubjectBig}>{book.disciplina}</Text>
+                          <View style={[styles.bookCategoryBadge, { backgroundColor: '#fff3e0' }]}>
+                            <Text style={[styles.bookCategoryText, { color: '#FF9800' }]}>DA COMPRARE NUOVO</Text>
+                          </View>
+                          <View style={styles.bookDetailsCompact}>
+                            <Text style={styles.bookTitleCompact} numberOfLines={2}>{book.titolo}</Text>
+                            {book.autori && <Text style={styles.bookMetaText}>{book.autori}</Text>}
+                            {book.editore && <Text style={styles.bookMetaLabel}>{book.editore}</Text>}
+                            <Text style={styles.bookIsbnText}>ISBN: {book.isbn}</Text>
+                          </View>
+                          <View style={styles.priceRowCompact}>
+                            <Text style={styles.priceNewBig}>€{prezzo.toFixed(2)}</Text>
+                            <Text style={styles.bookMetaLabel}>{book.motivo}</Text>
                           </View>
                         </View>
                       </View>
@@ -693,27 +681,26 @@ export default function RadarScreen() {
                     const coverUrl = book.isbn ? `https://www.ibs.it/images/${book.isbn}_0_0_0_536_0.jpg` : null;
                     return (
                       <View key={idx} style={[styles.sampleBookItem, { opacity: 0.7 }]}>
-                        <View style={styles.bookCoverContainer}>
+                        {/* Copertina a sinistra */}
+                        <View style={styles.bookCoverSection}>
                           {coverUrl ? (
-                            <Image 
-                              source={{ uri: coverUrl }} 
-                              style={styles.bookCoverImage}
-                              resizeMode="contain"
-                            />
+                            <Image source={{ uri: coverUrl }} style={styles.bookCoverImage} resizeMode="contain" />
                           ) : (
-                            <Image 
-                              source={require('../../assets/images/ribook-logo.png')} 
-                              style={styles.bookCoverImage}
-                              resizeMode="contain"
-                            />
+                            <Image source={require('../../assets/images/ribook-logo.png')} style={styles.bookCoverImage} resizeMode="contain" />
                           )}
-                          <View style={[styles.badgeUnderCover, { backgroundColor: '#f3e5f5' }]}>
-                            <Text style={[styles.badgeUnderCoverTextBlue, { color: '#9C27B0' }]}>IN USO</Text>
-                          </View>
                         </View>
-                        <View style={styles.bookDetailsContainer}>
-                          <Text style={styles.sampleBookSubject}>{book.disciplina}</Text>
-                          <Text style={styles.sampleBookTitle}>{book.titolo}</Text>
+                        {/* Info a destra */}
+                        <View style={styles.bookInfoSection}>
+                          <Text style={styles.bookSubjectBig}>{book.disciplina}</Text>
+                          <View style={[styles.bookCategoryBadge, { backgroundColor: '#f3e5f5' }]}>
+                            <Text style={[styles.bookCategoryText, { color: '#9C27B0' }]}>ANCORA IN USO</Text>
+                          </View>
+                          <View style={styles.bookDetailsCompact}>
+                            <Text style={styles.bookTitleCompact} numberOfLines={2}>{book.titolo}</Text>
+                            {book.autori && <Text style={styles.bookMetaText}>{book.autori}</Text>}
+                            {book.editore && <Text style={styles.bookMetaLabel}>{book.editore}</Text>}
+                            {book.isbn && <Text style={styles.bookIsbnText}>ISBN: {book.isbn}</Text>}
+                          </View>
                         </View>
                       </View>
                     );
@@ -1346,9 +1333,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   booksGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
+    flexDirection: 'column',
   },
   sampleBooksTitle: {
     fontSize: 14,
@@ -1357,15 +1342,15 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   sectionTitleGreen: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#1a472a',
-    marginBottom: 12,
+    marginBottom: 8,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   sectionTitleOrange: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#FF9800',
     marginBottom: 8,
@@ -1373,7 +1358,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   sectionTitlePurple: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#9C27B0',
     marginBottom: 8,
@@ -1381,7 +1366,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   sectionTitleBlue: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#2196F3',
     textTransform: 'uppercase',
@@ -1394,19 +1379,20 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   sectionTitleRed: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#f44336',
     marginBottom: 8,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
+  // Nuova struttura card libro compatta per mobile
   sampleBookItem: {
     width: '100%',
     backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: '#e0e0e0',
     flexDirection: 'row',
@@ -1419,11 +1405,134 @@ const styles = StyleSheet.create({
     backgroundColor: '#e8f5e9',
     borderColor: '#4CAF50',
   },
+  // Riga superiore: copertina + materia + prezzi
+  bookTopRow: {
+    flexDirection: 'row',
+    marginBottom: 8,
+  },
+  // Copertina piccola con prezzi sotto
+  bookCoverSection: {
+    alignItems: 'center',
+    marginRight: 10,
+  },
   bookCoverImage: {
-    width: 80,
-    height: 110,
-    borderRadius: 6,
+    width: 55,
+    height: 75,
+    borderRadius: 4,
     backgroundColor: '#f5f5f5',
+  },
+  // Container prezzi sotto copertina
+  priceUnderCover: {
+    marginTop: 6,
+    alignItems: 'center',
+  },
+  priceTagNew: {
+    fontSize: 11,
+    color: '#666',
+  },
+  priceTagUsed: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#4CAF50',
+  },
+  priceTagSell: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#2196F3',
+  },
+  vendorsCount: {
+    fontSize: 10,
+    color: '#FF9800',
+    marginTop: 2,
+  },
+  // Sezione destra: materia + dettagli libro
+  bookInfoSection: {
+    flex: 1,
+  },
+  // Materia in alto grande
+  bookSubjectBig: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#1a472a',
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  // Badge categoria
+  bookCategoryBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginBottom: 6,
+  },
+  bookCategoryText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  // Dettagli libro compatti
+  bookDetailsCompact: {
+    marginTop: 2,
+  },
+  bookTitleCompact: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#333',
+    lineHeight: 16,
+    marginBottom: 2,
+  },
+  bookMetaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    marginTop: 2,
+  },
+  bookMetaText: {
+    fontSize: 10,
+    color: '#666',
+  },
+  bookMetaLabel: {
+    fontSize: 10,
+    color: '#999',
+  },
+  bookIsbnText: {
+    fontSize: 9,
+    color: '#999',
+    marginTop: 2,
+  },
+  // Stili per riga prezzi compatta
+  priceRowCompact: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 6,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+  },
+  priceStrikethrough: {
+    fontSize: 12,
+    color: '#999',
+    textDecorationLine: 'line-through',
+  },
+  priceUsedBig: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#4CAF50',
+  },
+  priceSaving: {
+    fontSize: 11,
+    color: '#4CAF50',
+    fontWeight: '600',
+  },
+  priceNewBig: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FF9800',
+  },
+  // Vecchi stili mantenuti per compatibilità
+  bookCoverContainer: {
+    alignItems: 'center',
   },
   bookDetailsContainer: {
     flex: 1,
@@ -1434,18 +1543,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   sampleBookSubject: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
-    color: '#000',
+    color: '#1a472a',
     marginBottom: 4,
     textTransform: 'uppercase',
   },
   sampleBookTitle: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
     color: '#333',
     marginBottom: 2,
-    lineHeight: 18,
+    lineHeight: 16,
   },
   sampleBookAuthor: {
     fontSize: 12,

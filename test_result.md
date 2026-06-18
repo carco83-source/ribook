@@ -290,11 +290,15 @@ frontend:
 
   - task: "Radar/Home Tab"
     implemented: true
-    working: "NA"
+    working: true
     file: "/app/frontend/app/(tabs)/index.tsx"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "Book Card UI Layout tested successfully (2026-06-18). ✅ Layout verification complete: Cover image positioned on LEFT, Subject/Materia at TOP RIGHT, Title/Author/Editor/ISBN below subject, Price at BOTTOM RIGHT. ✅ Technical verification: Found 22 book cards using flexDirection: 'row' layout. ✅ Visual verification via screenshots: LIBRI VENDIBILI section shows books with correct layout (LINGUA INGLESE, MATEMATICA cards visible with covers on left, subject headings at top right, category badges (VENDIBILE), book details in middle, prices at bottom). ✅ All required elements present: ISBN labels, price symbols (€), category badges (VENDIBILE, USATO DISPONIBILE), DA COMPRARE USATI section. The new book card design is working perfectly on mobile (390x844 viewport)."
 
   - task: "Search Books Tab"
     implemented: true
@@ -984,8 +988,7 @@ metadata:
   run_ui: false
 
 test_plan:
-  current_focus:
-    - "Login Screen"
+  current_focus: []
   stuck_tasks:
     - "Login Screen"
   test_all: false
@@ -994,6 +997,40 @@ test_plan:
 agent_communication:
   - agent: "main"
     message: "MVP created for ScambiaLibri app. Backend has all core endpoints implemented. Please test the matching system and transactions flow."
+  - agent: "testing"
+    message: |
+      ## BOOK CARD UI LAYOUT TESTING COMPLETED ✅ (2026-06-18)
+      
+      ### Test Results: 100% SUCCESS
+      
+      #### What Was Tested:
+      - New book card UI layout on RiBook home page (Radar/Home Tab)
+      - Mobile viewport: 390x844 (iPhone 12/13/14)
+      - Test user: carco83@gmail.com (login successful)
+      
+      #### Layout Verification Results:
+      ✅ **Cover Image on LEFT**: Book cover images correctly positioned on the left side of each card
+      ✅ **Subject/Materia at TOP RIGHT**: Subject headings (LINGUA INGLESE, MATEMATICA, ITALIANO) displayed at top of right section
+      ✅ **Category Badge Below Subject**: Color-coded badges (VENDIBILE in blue, USATO DISPONIBILE in green) positioned correctly
+      ✅ **Title/Author/Editor/ISBN Below Subject**: Book details properly arranged in middle section (e.g., "ACT SMART 1", "AA VV", "PEARSON LONGMAN", "ISBN: 9788883390810")
+      ✅ **Price at BOTTOM RIGHT**: Price information correctly positioned at bottom (e.g., "€24.30 Vendi €12.15")
+      
+      #### Technical Verification:
+      - Found 22 book cards using `flexDirection: 'row'` layout
+      - All cards contain images, text content, ISBN labels, and price symbols
+      - Sections verified: LIBRI VENDIBILI (2), DA COMPRARE USATI (6)
+      
+      #### Screenshots Captured:
+      - Login page and form filled
+      - Home page after login with child profiles visible
+      - Multiple book card sections at different scroll positions
+      - All screenshots confirm correct layout implementation
+      
+      ### Known Issue - Separate from Book Card UI:
+      ⚠️ **Login Issue for nica.cartolibreria@gmail.com**: This user exists in database but has NO PASSWORD set (likely created through bookstore registration flow). This is a separate authentication issue not related to the book card UI layout. Used alternative test credentials (carco83@gmail.com) successfully.
+      
+      ### Conclusion:
+      The new book card UI layout is working perfectly as specified. The `flexDirection: 'row'` implementation correctly positions all elements according to the design requirements.
   - agent: "main"
     message: |
       ## FIX LOGICA LIBRI ACQUISTABILI (16/03/2026)
