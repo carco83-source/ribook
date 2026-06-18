@@ -299,10 +299,27 @@ async def classifica_libri_studente(
     # =====================================================
     # CATEGORIA 2: VENDIBILI USATI
     # ISBN in 2025/2026 MA NON in 2026/2027
+    # ECCEZIONE: I libri con Volume "U" (Unico) NON sono vendibili
+    #            perché coprono l'intero ciclo scolastico (es. 1-2-3 media)
     # =====================================================
     isbn_vendibili = isbn_2025 - isbn_2026
     for isbn in isbn_vendibili:
         libro = mappa_2025[isbn]
+        volume = str(libro.get("volume", "")).upper().strip()
+        
+        # I libri con Volume Unico (U) NON sono vendibili - servono per più anni
+        # Quindi li spostiamo in "ancora_in_uso" invece che "vendibili"
+        if volume == "U":
+            result["ancora_in_uso"].append({
+                **libro,
+                "categoria": "ANCORA_IN_USO",
+                "motivo": "Testo unico - serve per tutto il ciclo",
+                "is_volume_unico": True,
+                "is_strumento_musicale": False,
+                "escluso_dal_calcolo": False
+            })
+            continue  # Salta alla prossima iterazione
+        
         is_strumento = is_libro_strumento_musicale(libro)
         prezzo_raw = libro.get("prezzo", 0)
         try:
