@@ -10,10 +10,40 @@ LOGICA LIBRI v2 - Classificazione Automatica
 CASI PARTICOLARI:
 - Prima classe (1ª media, 1ª superiore): niente 2025/2026 → solo cat. 3 e 4
 - Ultima classe (3ª media, 5ª superiore): niente 2026/2027 → solo cat. 2
+- LIBRI STRUMENTO MUSICALE: esclusi dal calcolo costi (chitarra, flauto, violino, pianoforte)
 """
 
 from typing import List, Dict, Tuple, Optional, Set
 from motor.motor_asyncio import AsyncIOMotorDatabase
+
+# Parole chiave per identificare libri di strumento musicale (da escludere dal calcolo costi)
+STRUMENTI_MUSICALI_KEYWORDS = [
+    'chitarra', 'flauto', 'violino', 'pianoforte', 'pianistico', 'pianistica',
+    'clarinetto', 'tromba', 'sassofono', 'percussioni', 'batteria',
+    'violoncello', 'contrabbasso', 'oboe', 'fagotto', 'corno',
+]
+
+def is_libro_strumento_musicale(libro: Dict) -> bool:
+    """
+    Verifica se un libro è un libro di strumento musicale (da escludere dal calcolo).
+    
+    I libri di strumento musicale sono quelli specifici per l'insegnamento di uno
+    strumento (chitarra, flauto, violino, pianoforte, etc.).
+    NON include il libro di "musica" generale (es. "Prima la musica").
+    """
+    titolo = (libro.get("titolo") or "").lower()
+    disciplina = (libro.get("disciplina") or "").lower()
+    
+    # Se la disciplina non contiene "musica", non è un libro musicale
+    if "music" not in disciplina:
+        return False
+    
+    # Controlla se il titolo contiene parole chiave di strumenti
+    for strumento in STRUMENTI_MUSICALI_KEYWORDS:
+        if strumento in titolo:
+            return True
+    
+    return False
 
 
 async def get_libri_classe(
@@ -257,10 +287,13 @@ async def classifica_libri_studente(
     isbn_ancora_in_uso = isbn_2025 & isbn_2026
     for isbn in isbn_ancora_in_uso:
         libro = mappa_2026.get(isbn, mappa_2025.get(isbn, {}))
+        is_strumento = is_libro_strumento_musicale(libro)
         result["ancora_in_uso"].append({
             **libro,
             "categoria": "ANCORA_IN_USO",
-            "motivo": "Libro usato anche quest'anno"
+            "motivo": "Libro usato anche quest'anno",
+            "is_strumento_musicale": is_strumento,
+            "escluso_dal_calcolo": is_strumento
         })
     
     # =====================================================
@@ -270,6 +303,7 @@ async def classifica_libri_studente(
     isbn_vendibili = isbn_2025 - isbn_2026
     for isbn in isbn_vendibili:
         libro = mappa_2025[isbn]
+        is_strumento = is_libro_strumento_musicale(libro)
         prezzo_raw = libro.get("prezzo", 0)
         try:
             prezzo = float(prezzo_raw) if prezzo_raw else 0
@@ -280,9 +314,13 @@ async def classifica_libri_studente(
             **libro,
             "categoria": "VENDIBILE_USATO",
             "prezzo_vendita_consigliato": prezzo_vendita,
-            "motivo": "Non più necessario"
+            "motivo": "Non più necessario",
+            "is_strumento_musicale": is_strumento,
+            "escluso_dal_calcolo": is_strumento
         })
-        result["riepilogo"]["potenziale_vendita"] += prezzo_vendita
+        # Aggiungi al potenziale vendita SOLO se NON è strumento musicale
+        if not is_strumento:
+            result["riepilogo"]["potenziale_vendita"] += prezzo_vendita
     
     # =====================================================
     # CATEGORIE 3 e 4: DA ACQUISTARE
@@ -295,6 +333,7 @@ async def classifica_libri_studente(
     
     for isbn in isbn_da_acquistare:
         libro = mappa_2026[isbn]
+        is_strumento = is_libro_strumento_musicale(libro)
         prezzo_raw = libro.get("prezzo", 0)
         # Assicura che il prezzo sia un numero
         try:
@@ -308,9 +347,13 @@ async def classifica_libri_studente(
             result["da_acquistare_nuovi"].append({
                 **libro,
                 "categoria": "DA_ACQUISTARE_NUOVO",
-                "motivo": "Nuova adozione - non disponibile usato"
+                "motivo": "Nuova adozione - non disponibile usato",
+                "is_strumento_musicale": is_strumento,
+                "escluso_dal_calcolo": is_strumento
             })
-            result["riepilogo"]["costo_nuovi"] += prezzo
+            # Aggiungi al costo SOLO se NON è strumento musicale
+            if not is_strumento:
+                result["riepilogo"]["costo_nuovi"] += prezzo
         
         elif isbn in disponibilita_usato:
             # CATEGORIA 3: DA ACQUISTARE USATO
@@ -322,25 +365,37 @@ async def classifica_libri_studente(
                 "prezzo_usato": prezzo_usato,
                 "risparmio": round(prezzo - prezzo_usato, 2),
                 "venditori_disponibili": len(venditori),
-                "motivo": f"Disponibile usato da {len(venditori)} studenti"
+                "motivo": f"Disponibile usato da {len(venditori)} studenti",
+                "is_strumento_musicale": is_strumento,
+                "escluso_dal_calcolo": is_strumento
             })
-            result["riepilogo"]["costo_usati"] += prezzo_usato
-            result["riepilogo"]["risparmio_stimato"] += round(prezzo - prezzo_usato, 2)
+            # Aggiungi al costo SOLO se NON è strumento musicale
+            if not is_strumento:
+                result["riepilogo"]["costo_usati"] += prezzo_usato
+                result["riepilogo"]["risparmio_stimato"] += round(prezzo - prezzo_usato, 2)
         
         else:
             # CATEGORIA 4: DA ACQUISTARE NUOVO (non disponibile usato)
             result["da_acquistare_nuovi"].append({
                 **libro,
                 "categoria": "DA_ACQUISTARE_NUOVO",
-                "motivo": "Non disponibile usato nelle scuole di Catanzaro"
+                "motivo": "Non disponibile usato nelle scuole di Catanzaro",
+                "is_strumento_musicale": is_strumento,
+                "escluso_dal_calcolo": is_strumento
             })
-            result["riepilogo"]["costo_nuovi"] += prezzo
+            # Aggiungi al costo SOLO se NON è strumento musicale
+            if not is_strumento:
+                result["riepilogo"]["costo_nuovi"] += prezzo
     
     # Aggiorna conteggi
     result["riepilogo"]["totale_ancora_in_uso"] = len(result["ancora_in_uso"])
     result["riepilogo"]["totale_vendibili"] = len(result["vendibili_usati"])
     result["riepilogo"]["totale_da_comprare_usati"] = len(result["da_acquistare_usati"])
     result["riepilogo"]["totale_da_comprare_nuovi"] = len(result["da_acquistare_nuovi"])
+    
+    # Conta libri strumento esclusi
+    strumenti_esclusi = sum(1 for l in result["da_acquistare_usati"] + result["da_acquistare_nuovi"] if l.get("is_strumento_musicale"))
+    result["riepilogo"]["libri_strumento_esclusi"] = strumenti_esclusi
     
     return result
 

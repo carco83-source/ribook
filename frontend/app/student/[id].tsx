@@ -254,14 +254,31 @@ export default function StudentDetailScreen() {
     const costoNuovi = parseFloat(String(riepilogo.costo_nuovi)) || 0;
     
     // Calcola il costo totale se tutti i libri fossero comprati nuovi
-    // (libri usati a prezzo pieno + libri nuovi)
+    // ESCLUDI i libri di strumento musicale dal calcolo
     const costoUsatiSeNuovi = libriUsati.reduce((sum: number, libro: any) => {
+      // Salta libri di strumento musicale
+      if (libro.is_strumento_musicale || libro.escluso_dal_calcolo) {
+        return sum;
+      }
       const prezzo = parseFloat(String(libro.prezzo)) || 0;
       return sum + prezzo;
     }, 0);
-    const totaleSeTuttiNuovi = costoUsatiSeNuovi + costoNuovi;
     
-    console.log('[calculateTotals] Costs:', { costoUsatiSeNuovi, costoNuovi, totaleSeTuttiNuovi });
+    // Calcola anche il costo nuovi senza strumenti musicali
+    const costoNuoviSenzaStrumenti = libriNuovi.reduce((sum: number, libro: any) => {
+      if (libro.is_strumento_musicale || libro.escluso_dal_calcolo) {
+        return sum;
+      }
+      const prezzo = parseFloat(String(libro.prezzo)) || 0;
+      return sum + prezzo;
+    }, 0);
+    
+    const totaleSeTuttiNuovi = costoUsatiSeNuovi + costoNuoviSenzaStrumenti;
+    
+    // Conta libri strumento esclusi
+    const strumentiEsclusi = riepilogo.libri_strumento_esclusi || 0;
+    
+    console.log('[calculateTotals] Costs:', { costoUsatiSeNuovi, costoNuovi, totaleSeTuttiNuovi, strumentiEsclusi });
     
     // Numero totale libri da acquistare
     const numLibriUsati = riepilogo.totale_da_comprare_usati || 0;
@@ -287,6 +304,7 @@ export default function StudentDetailScreen() {
       spesaNetta,
       numLibriUsati,
       numLibriNuovi,
+      strumentiEsclusi,
     };
   }, [compatibility]);
 
@@ -489,6 +507,11 @@ export default function StudentDetailScreen() {
                     <Text style={styles.spesaNote}>
                       (se acquistati tutti a prezzo di copertina)
                     </Text>
+                    {totals.strumentiEsclusi > 0 && (
+                      <Text style={[styles.spesaNote, { color: '#9C27B0', fontStyle: 'italic' }]}>
+                        * Esclusi {totals.strumentiEsclusi} libri strumento musicale
+                      </Text>
+                    )}
                   </View>
                   <Text style={styles.spesaAmount}>
                     €{totals.totaleSeTuttiNuovi.toFixed(2)}
