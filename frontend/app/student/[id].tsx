@@ -161,7 +161,14 @@ export default function StudentDetailScreen() {
 
   // Download PDF directly
   const downloadPdf = async () => {
-    if (!child || !userId) return;
+    if (!child) {
+      showAlert('Errore', 'Dati studente non caricati');
+      return;
+    }
+    if (!userId) {
+      showAlert('Errore', 'Sessione non valida. Rieffettua il login.');
+      return;
+    }
     
     setDownloadingPdf(true);
     try {
@@ -171,24 +178,12 @@ export default function StudentDetailScreen() {
       const filename = `lista_libri_${child.nome_figlio}_${child.classe}${tipoLabel}.pdf`;
       
       console.log('PDF URL:', pdfUrl);
+      console.log('userId:', userId);
+      console.log('childId:', child.id);
       
       if (Platform.OS === 'web') {
-        // On web - use direct link approach for download
-        // Create a temporary link and trigger click
-        const link = document.createElement('a');
-        link.href = pdfUrl;
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-        // Set download attribute
-        link.setAttribute('download', filename);
-        // Append to body
-        document.body.appendChild(link);
-        // Trigger the click
-        link.click();
-        // Clean up
-        setTimeout(() => {
-          document.body.removeChild(link);
-        }, 100);
+        // Apri direttamente l'URL del PDF in una nuova scheda
+        window.open(pdfUrl, '_blank');
       } else {
         // Su iOS e Android: scarica il file e poi condividi
         const fileUri = FileSystem.cacheDirectory + filename;
