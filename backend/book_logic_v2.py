@@ -282,8 +282,13 @@ async def classifica_libri_studente(
     
     # =====================================================
     # CATEGORIA 1: ANCORA IN USO
-    # ISBN presenti in ENTRAMBI gli anni
+    # Include:
+    # - ISBN presenti in ENTRAMBI gli anni (confermati in uso)
+    # - Libri del 2026/2027 con da_acquistare=False (già posseduti)
+    # - Libri Volume U che non vanno comprati
     # =====================================================
+    
+    # Prima aggiungi i libri in comune tra i due anni
     isbn_ancora_in_uso = isbn_2025 & isbn_2026
     for isbn in isbn_ancora_in_uso:
         libro = mappa_2026.get(isbn, mappa_2025.get(isbn, {}))
@@ -295,6 +300,20 @@ async def classifica_libri_studente(
             "is_strumento_musicale": is_strumento,
             "escluso_dal_calcolo": is_strumento
         })
+    
+    # Aggiungi anche i libri 2026/2027 con da_acquistare=False che non sono già nella lista
+    isbn_gia_aggiunti = set(isbn_ancora_in_uso)
+    for isbn, libro in mappa_2026.items():
+        if isbn not in isbn_gia_aggiunti and not libro.get("da_acquistare", True):
+            is_strumento = is_libro_strumento_musicale(libro)
+            result["ancora_in_uso"].append({
+                **libro,
+                "categoria": "ANCORA_IN_USO",
+                "motivo": "Già in possesso - non da acquistare",
+                "is_strumento_musicale": is_strumento,
+                "escluso_dal_calcolo": is_strumento
+            })
+            isbn_gia_aggiunti.add(isbn)
     
     # =====================================================
     # CATEGORIA 2: VENDIBILI USATI
@@ -341,15 +360,28 @@ async def classifica_libri_studente(
     
     # =====================================================
     # CATEGORIE 3 e 4: DA ACQUISTARE
-    # ISBN richiesti nel 2026/2027 che NON possediamo già
+    # Usa il campo 'da_acquistare' dal database per determinare
+    # quali libri l'utente deve effettivamente comprare
     # =====================================================
-    isbn_da_acquistare = isbn_2026 - isbn_2025
+    
+    # Filtra solo i libri con da_acquistare=True
+    libri_da_comprare = {isbn: libro for isbn, libro in mappa_2026.items() 
+                         if libro.get("da_acquistare", False) and isbn not in isbn_2025}
+    
+    # Aggiungi anche libri nuovi che non erano nel 2025/2026
+    # (per studenti che passano di anno)
+    for isbn in (isbn_2026 - isbn_2025):
+        libro = mappa_2026[isbn]
+        # Se da_acquistare è True O se è un libro che non avevamo l'anno scorso
+        # e non è un Volume Unico (che dovremmo già avere)
+        volume = str(libro.get("volume", "")).upper().strip()
+        if libro.get("da_acquistare", False) or (volume != "U" and isbn not in libri_da_comprare):
+            libri_da_comprare[isbn] = libro
     
     # Verifica disponibilità usato nelle scuole di Catanzaro
-    disponibilita_usato = await get_isbn_vendibili_catanzaro(db, isbn_da_acquistare)
+    disponibilita_usato = await get_isbn_vendibili_catanzaro(db, set(libri_da_comprare.keys()))
     
-    for isbn in isbn_da_acquistare:
-        libro = mappa_2026[isbn]
+    for isbn, libro in libri_da_comprare.items():
         is_strumento = is_libro_strumento_musicale(libro)
         prezzo_raw = libro.get("prezzo", 0)
         # Assicura che il prezzo sia un numero
@@ -357,6 +389,10 @@ async def classifica_libri_studente(
             prezzo = float(prezzo_raw) if prezzo_raw else 0
         except (ValueError, TypeError):
             prezzo = 0
+        
+        # Se da_acquistare è False, questo libro non va comprato (già posseduto)
+        if not libro.get("da_acquistare", True):
+            continue
         
         # Controlla se è nuova adozione (nessuno può averlo usato)
         if libro.get("nuova_adozione", False):
