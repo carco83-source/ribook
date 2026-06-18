@@ -689,7 +689,7 @@ export default function RadarScreen() {
                   Questi libri ti servono ancora - non metterli in vendita
                 </Text>
                 <View style={styles.booksGrid}>
-                  {compatibility.ancora_in_uso.slice(0, 4).map((book: any, idx: number) => {
+                  {compatibility.ancora_in_uso.map((book: any, idx: number) => {
                     const coverUrl = book.isbn ? `https://www.ibs.it/images/${book.isbn}_0_0_0_536_0.jpg` : null;
                     return (
                       <View key={idx} style={[styles.sampleBookItem, { opacity: 0.7 }]}>
@@ -719,11 +719,6 @@ export default function RadarScreen() {
                     );
                   })}
                 </View>
-                {compatibility.ancora_in_uso.length > 4 && (
-                  <Text style={{ color: '#9C27B0', fontSize: 12, textAlign: 'center', marginTop: 8 }}>
-                    ... e altri {compatibility.ancora_in_uso.length - 4} libri
-                  </Text>
-                )}
               </View>
             )}
 
