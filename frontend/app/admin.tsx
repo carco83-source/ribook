@@ -539,25 +539,17 @@ export default function AdminPortalScreen() {
                     const url = `${API_URL}/api/downloads/liste-pdf-2026-2027`;
                     
                     if (Platform.OS === 'web') {
-                      // Force download using fetch + blob
-                      try {
-                        const response = await fetch(url);
-                        if (!response.ok) throw new Error('Download failed');
-                        
-                        const blob = await response.blob();
-                        const blobUrl = window.URL.createObjectURL(blob);
-                        const link = document.createElement('a');
-                        link.href = blobUrl;
-                        link.download = 'liste_libri_2026_2027.zip';
-                        document.body.appendChild(link);
-                        link.click();
+                      // Direct link download
+                      const link = document.createElement('a');
+                      link.href = url;
+                      link.target = '_blank';
+                      link.rel = 'noopener noreferrer';
+                      link.setAttribute('download', 'liste_libri_2026_2027.zip');
+                      document.body.appendChild(link);
+                      link.click();
+                      setTimeout(() => {
                         document.body.removeChild(link);
-                        window.URL.revokeObjectURL(blobUrl);
-                      } catch (fetchError) {
-                        // Fallback: open in new tab
-                        console.log('Fetch failed, opening in new tab:', fetchError);
-                        window.open(url, '_blank');
-                      }
+                      }, 100);
                       setDownloading(null);
                     } else {
                       // Mobile: scarica e condividi

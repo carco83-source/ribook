@@ -173,25 +173,22 @@ export default function StudentDetailScreen() {
       console.log('PDF URL:', pdfUrl);
       
       if (Platform.OS === 'web') {
-        // On web, force download using fetch + blob
-        try {
-          const response = await fetch(pdfUrl);
-          if (!response.ok) throw new Error('Download failed');
-          
-          const blob = await response.blob();
-          const url = window.URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = filename;
-          document.body.appendChild(link);
-          link.click();
+        // On web - use direct link approach for download
+        // Create a temporary link and trigger click
+        const link = document.createElement('a');
+        link.href = pdfUrl;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        // Set download attribute
+        link.setAttribute('download', filename);
+        // Append to body
+        document.body.appendChild(link);
+        // Trigger the click
+        link.click();
+        // Clean up
+        setTimeout(() => {
           document.body.removeChild(link);
-          window.URL.revokeObjectURL(url);
-        } catch (fetchError) {
-          // Fallback: open in new tab
-          console.log('Fetch failed, opening in new tab:', fetchError);
-          window.open(pdfUrl, '_blank');
-        }
+        }, 100);
       } else {
         // Su iOS e Android: scarica il file e poi condividi
         const fileUri = FileSystem.cacheDirectory + filename;
@@ -600,22 +597,6 @@ export default function StudentDetailScreen() {
             <Ionicons name="library" size={22} color="#1a472a" />
             <Text style={styles.sectionTitle}>Situazione Libri</Text>
           </View>
-          
-          {/* Info Classi */}
-          {compatibility?.classe_2025_2026 && (
-            <View style={styles.classiInfoBox}>
-              <Text style={styles.classiInfoText}>
-                📅 2025/2026: {compatibility.classe_2025_2026}ª {child.sezione} → 2026/2027: {compatibility.classe_2026_2027}ª {child.sezione}
-              </Text>
-            </View>
-          )}
-          {compatibility?.is_primo_anno && (
-            <View style={[styles.classiInfoBox, { backgroundColor: '#e3f2fd' }]}>
-              <Text style={styles.classiInfoText}>
-                🎓 Primo anno - Non hai libri dell'anno precedente
-              </Text>
-            </View>
-          )}
           
           <View style={styles.categoryGrid}>
             {/* 1. ANCORA IN USO - Libri che devi conservare */}
