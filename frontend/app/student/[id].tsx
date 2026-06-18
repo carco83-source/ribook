@@ -680,21 +680,39 @@ export default function StudentDetailScreen() {
           </View>
         </View>
 
-        {/* Pulsante Scarica Lista - FUNZIONA DIRETTAMENTE */}
-        <TouchableOpacity
-          style={[styles.downloadButton, downloadingPdf && styles.downloadButtonDisabled]}
-          onPress={downloadPdf}
-          disabled={downloadingPdf}
-        >
-          {downloadingPdf ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <>
-              <Ionicons name="document-text" size={22} color="#fff" />
-              <Text style={styles.downloadButtonText}>Scarica Lista Libri</Text>
-            </>
-          )}
-        </TouchableOpacity>
+        {/* Pulsante Scarica Lista */}
+        {Platform.OS === 'web' && userId && child ? (
+          <TouchableOpacity
+            style={styles.downloadButton}
+            onPress={() => {
+              const pdfUrl = `${API_URL}/api/profiles/${userId}/children/${child.id}/books-pdf`;
+              // Usa un elemento anchor nativo per il download
+              const anchor = document.createElement('a');
+              anchor.href = pdfUrl;
+              anchor.target = '_blank';
+              anchor.rel = 'noopener noreferrer';
+              anchor.click();
+            }}
+          >
+            <Ionicons name="document-text" size={22} color="#fff" />
+            <Text style={styles.downloadButtonText}>Scarica Lista Libri</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={[styles.downloadButton, downloadingPdf && styles.downloadButtonDisabled]}
+            onPress={downloadPdf}
+            disabled={downloadingPdf}
+          >
+            {downloadingPdf ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="document-text" size={22} color="#fff" />
+                <Text style={styles.downloadButtonText}>Scarica Lista Libri</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        )}
 
         {/* Pulsante Chiudi in basso */}
         <TouchableOpacity
