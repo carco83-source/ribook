@@ -4972,19 +4972,19 @@ async def generate_books_pdf(user_id: str, child_id: str):
     doc = SimpleDocTemplate(
         buffer, 
         pagesize=A4,  # Portrait 
-        topMargin=0.6*cm, 
-        bottomMargin=0.6*cm,
-        leftMargin=0.5*cm, 
-        rightMargin=0.5*cm
+        topMargin=0.4*cm,  # Ridotto
+        bottomMargin=0.4*cm,  # Ridotto
+        leftMargin=0.4*cm,  # Ridotto
+        rightMargin=0.4*cm  # Ridotto
     )
     
     elements = []
     styles = getSampleStyleSheet()
     
-    # Styles - font PIÙ GRANDI per header, normali per celle
-    header_style = ParagraphStyle('Header', fontSize=11, leading=14)
-    cell_style = ParagraphStyle('Cell', fontSize=6, leading=8, wordWrap='CJK')
-    cell_bold = ParagraphStyle('CellBold', fontSize=6, leading=8, fontName='Helvetica-Bold', wordWrap='CJK')
+    # Styles - font più compatti per massimizzare spazio
+    header_style = ParagraphStyle('Header', fontSize=10, leading=12)
+    cell_style = ParagraphStyle('Cell', fontSize=5.5, leading=7, wordWrap='CJK')
+    cell_bold = ParagraphStyle('CellBold', fontSize=5.5, leading=7, fontName='Helvetica-Bold', wordWrap='CJK')
     
     # Header
     scuola_nome = child_scuola.split('-')[0].strip() if '-' in child_scuola else child_scuola
@@ -5014,7 +5014,7 @@ async def generate_books_pdf(user_id: str, child_id: str):
         ('ALIGN', (1, 0), (1, 0), 'CENTER'),
     ]))
     elements.append(header_table)
-    elements.append(Spacer(1, 0.5*cm))
+    elements.append(Spacer(1, 0.3*cm))  # Ridotto
     
     # Table header - colonne ridotte per portrait
     table_data = [[
@@ -5097,17 +5097,17 @@ async def generate_books_pdf(user_id: str, child_id: str):
         ('ALIGN', (4, 1), (4, -1), 'CENTER'),
         ('ALIGN', (6, 1), (6, -1), 'RIGHT'),
         ('ALIGN', (7, 1), (-1, -1), 'CENTER'),
-        ('TOPPADDING', (0, 0), (-1, -1), 3),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-        ('LEFTPADDING', (0, 0), (-1, -1), 3),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+        ('TOPPADDING', (0, 0), (-1, -1), 2),  # Ridotto
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),  # Ridotto
+        ('LEFTPADDING', (0, 0), (-1, -1), 2),  # Ridotto
+        ('RIGHTPADDING', (0, 0), (-1, -1), 2),  # Ridotto
         ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
         ('BOX', (0, 0), (-1, -1), 1, colors.black),
     ]))
     elements.append(table)
     
-    # Footer
-    elements.append(Spacer(1, 0.3*cm))
+    # Footer - più compatto
+    elements.append(Spacer(1, 0.2*cm))
     footer_style = ParagraphStyle('Footer', fontSize=9)
     elements.append(Paragraph(f"A.S. 2026/2027 - Aggiornamento: {datetime.now().strftime('%d/%m/%Y')}                                                       Generato da RiLiBro", footer_style))
     
