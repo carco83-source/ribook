@@ -433,7 +433,7 @@ export default function ProfileScreen() {
                 <TouchableOpacity 
                   key={listing.id || index} 
                   style={styles.listingCard}
-                  onPress={() => router.push(`/my-listing/${listing.id}`)}
+                  onPress={() => router.push(`/sell-form?listingId=${listing.id}`)}
                 >
                   <Image 
                     source={{ uri: coverUrl }}

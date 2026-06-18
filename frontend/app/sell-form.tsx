@@ -59,11 +59,15 @@ const bookshopsData = [
 
 export default function SellFormScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ isbn?: string; titolo?: string; prezzo?: string }>();
+  const params = useLocalSearchParams<{ isbn?: string; titolo?: string; prezzo?: string; listingId?: string }>();
   
   const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
+  
+  // Modalità modifica
+  const isEditMode = !!params.listingId;
+  const [existingListingId, setExistingListingId] = useState<string | null>(params.listingId || null);
   
   // Form fields - Condizioni (0=Nessuna, 1=Poche, 2=Diverse, 3=Molte)
   const [scrittePenna, setScrittePenna] = useState(0);
@@ -106,8 +110,68 @@ export default function SellFormScreen() {
       }
       setUserId(storedUserId);
 
+      // MODALITÀ MODIFICA: Carica i dati dell'annuncio esistente
+      if (params.listingId) {
+        try {
+          const response = await axios.get(`${API_URL}/api/listings/${params.listingId}`);
+          if (response.data) {
+            const listing = response.data;
+            
+            // Imposta i dati del libro
+            setSelectedBook({
+              id: listing.book_isbn || listing.isbn,
+              isbn: listing.book_isbn || listing.isbn,
+              titolo: listing.book_titolo || listing.titolo,
+              autori: listing.book_autori,
+              disciplina: listing.book_disciplina,
+              prezzo_copertina: listing.prezzo_copertina || listing.book_prezzo,
+              editore: listing.book_editore,
+            });
+            setAutoCoverUrl(`https://www.ibs.it/images/${listing.book_isbn || listing.isbn}_0_0_0_536_0.jpg`);
+            
+            // Imposta le condizioni salvate
+            if (listing.condizioni) {
+              setScrittePenna(listing.condizioni.scritte_penna || 0);
+              setScritteMatita(listing.condizioni.scritte_matita || 0);
+              setPagineEvidenziate(listing.condizioni.pagine_evidenziate || 0);
+              setCondGenerale(listing.condizioni.usura_pagine || 0);
+            }
+            
+            // Imposta se è nuovo
+            setIsNewBook(listing.is_new || false);
+            
+            // Imposta le foto
+            if (listing.foto_base64) {
+              setListingPhotos([listing.foto_base64]);
+            }
+            if (listing.foto_aggiuntive && Array.isArray(listing.foto_aggiuntive)) {
+              setListingPhotos(prev => [...prev, ...listing.foto_aggiuntive]);
+            }
+            
+            // Imposta i punti di scambio
+            if (listing.punti_scambio && Array.isArray(listing.punti_scambio)) {
+              setSelectedBookshops(listing.punti_scambio);
+            }
+            
+            // Imposta il prezzo - cerca quale opzione è selezionata
+            // Il selectedPriceOption sarà impostato quando calcoliamo i prezzi
+            
+            // Imposta le note
+            if (listing.note) {
+              setNotes(listing.note);
+            }
+            
+            setExistingListingId(listing.id);
+          }
+        } catch (error) {
+          console.error('Error loading listing for edit:', error);
+          Alert.alert('Errore', 'Impossibile caricare i dati dell\'annuncio');
+          router.back();
+          return;
+        }
+      }
       // Se c'è un ISBN nei params, imposta subito il libro con i dati disponibili
-      if (params.isbn) {
+      else if (params.isbn) {
         // Prima imposta il libro con i dati dai params (fallback sicuro)
         const fallbackBook = {
           id: params.isbn,
@@ -522,6 +586,79 @@ export default function SellFormScreen() {
     }
   };
 
+  // Funzione per aggiornare un annuncio esistente
+  const updateListing = async () => {
+    if (!selectedBook || !userId || !existingListingId) return;
+
+    // Validazione foto copertina obbligatoria
+    if (!listingPhotos[0]) {
+      showAlert('Foto richiesta', 'La foto della copertina è obbligatoria');
+      return;
+    }
+
+    if (selectedPriceOption === null) {
+      showAlert('Prezzo richiesto', 'Seleziona un prezzo dalla forbice');
+      return;
+    }
+
+    if (selectedBookshops.length === 0) {
+      showAlert('Punto di scambio richiesto', 'Seleziona almeno una cartolibreria');
+      return;
+    }
+
+    setCreatingListing(true);
+    try {
+      const selectedShopsDetails = bookshopsData.filter(b => selectedBookshops.includes(b.id));
+      
+      // Converti i nuovi valori (0-3) in percentuali (0-100) per compatibilità backend
+      const conditionDetails = {
+        penna: (scrittePenna / 3) * 100,
+        matita: (scritteMatita / 3) * 100,
+        evidenziatore: (pagineEvidenziate / 3) * 100,
+        usura_libro: (condGenerale / 3) * 100,
+        esercizi_penna: eserciziPenna,
+        esercizi_matita: eserciziMatita,
+        esercizi_quantita: eserciziQuantita,
+      };
+      
+      const currentPriceCalc = calcolaPrezzoLibro();
+      const guadagnoUtente = selectedPriceOption * 0.83 - 0.25;
+      
+      await axios.put(`${API_URL}/api/listings/${existingListingId}`, {
+        seller_id: userId,
+        book_id: selectedBook.isbn || selectedBook.id,
+        book_isbn: selectedBook.isbn,
+        book_titolo: selectedBook.titolo,
+        book_autori: selectedBook.autori,
+        book_disciplina: selectedBook.disciplina,
+        prezzo_copertina: selectedBook.prezzo_copertina,
+        condizione: currentPriceCalc.condition,
+        prezzo_vendita: selectedPriceOption,
+        foto_base64: listingPhotos.length > 0 ? listingPhotos[0] : null,
+        foto_aggiuntive: listingPhotos.slice(1),
+        cover_url: autoCoverUrl,
+        condition_details: conditionDetails,
+        bookstore_ids: selectedBookshops,
+        bookstore_names: selectedShopsDetails.map(s => s.name),
+        bookstore_addresses: selectedShopsDetails.map(s => s.address),
+        notes: notes,
+        note: notes,
+        is_new_book: isNewBook,
+        usura: currentPriceCalc.usura || 0,
+        guadagno_utente: guadagnoUtente,
+        foderare: foderare,
+      });
+
+      showAlert('Successo!', 'Annuncio modificato con successo');
+      router.back();
+    } catch (error: any) {
+      console.log('Update listing error:', error.response?.data || error.message);
+      showAlert('Errore', error.response?.data?.detail || 'Impossibile modificare annuncio');
+    } finally {
+      setCreatingListing(false);
+    }
+  };
+
   const getConditionLabel = (condition: string) => {
     switch (condition) {
       case 'nuovo': return 'Nuovo';
@@ -568,7 +705,7 @@ export default function SellFormScreen() {
     <View style={styles.container}>
       <Stack.Screen 
         options={{ 
-          title: 'Vendi libro',
+          title: isEditMode ? 'Modifica annuncio' : 'Vendi libro',
           headerStyle: { backgroundColor: '#1a472a' },
           headerTintColor: '#fff',
         }} 
@@ -897,18 +1034,18 @@ export default function SellFormScreen() {
           />
         </View>
 
-        {/* Bottone Pubblica */}
+        {/* Bottone Pubblica / Salva Modifica */}
         <TouchableOpacity
           style={[styles.publishButton, creatingListing && styles.publishButtonDisabled]}
-          onPress={createListing}
+          onPress={isEditMode ? updateListing : createListing}
           disabled={creatingListing}
         >
           {creatingListing ? (
             <ActivityIndicator color="#fff" />
           ) : (
             <>
-              <Ionicons name="checkmark-circle" size={22} color="#fff" />
-              <Text style={styles.publishButtonText}>Pubblica annuncio</Text>
+              <Ionicons name={isEditMode ? "save" : "checkmark-circle"} size={22} color="#fff" />
+              <Text style={styles.publishButtonText}>{isEditMode ? 'Salva modifica' : 'Pubblica annuncio'}</Text>
             </>
           )}
         </TouchableOpacity>
