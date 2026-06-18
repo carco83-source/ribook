@@ -68,7 +68,7 @@ const getClasseLabel = (classe: number | string): string => {
 };
 
 // Strumenti musicali da nascondere nella Home (ma restano vendibili)
-const STRUMENTI_MUSICALI = ['chitarra', 'flauto', 'violino', 'pianoforte'];
+const STRUMENTI_MUSICALI = ['chitarra', 'flauto', 'violino', 'pianoforte', 'pianistica', 'piano'];
 
 // Filtra libri di strumenti musicali dalla visualizzazione
 const filterOutStrumentiMusicali = (books: any[]): any[] => {
