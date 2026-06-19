@@ -733,43 +733,54 @@ export default function RadarScreen() {
                           onPress={handlePress}
                           disabled={isNuovo || isInUso || isFuoriCorso}
                         >
-                          {/* Copertina a sinistra */}
-                          <View style={styles.bookCoverSection}>
-                            {coverUrl ? (
-                              <Image source={{ uri: coverUrl }} style={styles.bookCoverImage} resizeMode="contain" />
-                            ) : (
-                              <Image source={require('../../assets/images/ribook-logo.png')} style={styles.bookCoverImage} resizeMode="contain" />
-                            )}
-                            {/* Badge copie solo per usati */}
-                            {isUsato && (
-                              <View style={[styles.copieDisponibiliBadge, copieDisponibili === 0 && styles.copieZeroBadge]}>
-                                <Ionicons name="people" size={12} color="#fff" />
-                                <Text style={styles.copieDisponibiliText}>{copieDisponibili} {copieDisponibili === 1 ? 'copia' : 'copie'}</Text>
+                          {/* NUOVA STRUTTURA: Materia in alto */}
+                          <View style={styles.bookCardContent}>
+                            {/* Riga superiore: MATERIA */}
+                            <Text style={styles.bookSubjectTop}>{book.disciplina}</Text>
+                            
+                            {/* Riga centrale: Copertina + Info */}
+                            <View style={styles.bookMainRow}>
+                              {/* Copertina a sinistra con badge copie sotto */}
+                              <View style={styles.bookCoverColumn}>
+                                {coverUrl ? (
+                                  <Image source={{ uri: coverUrl }} style={styles.bookCoverImage} resizeMode="contain" />
+                                ) : (
+                                  <Image source={require('../../assets/images/ribook-logo.png')} style={styles.bookCoverImage} resizeMode="contain" />
+                                )}
+                                {/* Badge copie sotto la copertina - INGRANDITO */}
+                                {isUsato && (
+                                  <View style={[styles.copieDisponibiliBadgeBig, copieDisponibili === 0 && styles.copieZeroBadge]}>
+                                    <Ionicons name="people" size={14} color="#fff" />
+                                    <Text style={styles.copieDisponibiliTextBig}>{copieDisponibili}</Text>
+                                    <Text style={styles.copieLabel}>{copieDisponibili === 1 ? 'copia' : 'copie'}</Text>
+                                  </View>
+                                )}
                               </View>
-                            )}
-                          </View>
-                          {/* Info a destra */}
-                          <View style={styles.bookInfoSection}>
-                            <Text style={styles.bookSubjectBig}>{book.disciplina}</Text>
-                            <View style={[styles.bookCategoryBadge, { backgroundColor: currentCategory.color + '20' }]}>
-                              <Text style={[styles.bookCategoryText, { color: currentCategory.color }]}>
-                                {isVendibile ? 'VENDIBILE' : isUsato ? 'USATO DISPONIBILE' : isNuovo ? 'DA COMPRARE NUOVO' : isFuoriCorso ? 'FUORI CORSO' : 'ANCORA IN USO'}
-                              </Text>
+                              
+                              {/* Info a destra della copertina */}
+                              <View style={styles.bookInfoColumn}>
+                                {/* Badge categoria in alto */}
+                                <View style={[styles.bookCategoryBadge, { backgroundColor: currentCategory.color + '20' }]}>
+                                  <Text style={[styles.bookCategoryText, { color: currentCategory.color }]}>
+                                    {isVendibile ? 'VENDIBILE' : isUsato ? 'USATO DISPONIBILE' : isNuovo ? 'DA COMPRARE NUOVO' : isFuoriCorso ? 'FUORI CORSO' : 'ANCORA IN USO'}
+                                  </Text>
+                                </View>
+                                {/* Titolo, autori, editore, volume, ISBN */}
+                                <Text style={styles.bookTitleCompact} numberOfLines={2}>{book.titolo}</Text>
+                                {book.autori && <Text style={styles.bookMetaText} numberOfLines={1}>{book.autori}</Text>}
+                                {book.editore && <Text style={styles.bookMetaLabel}>{book.editore}</Text>}
+                                {book.volume && (
+                                  <Text style={styles.bookVolumeText}>
+                                    Volume: {book.volume === 'U' ? 'Unico' : book.volume}
+                                  </Text>
+                                )}
+                                <Text style={styles.bookIsbnText}>ISBN: {book.isbn}</Text>
+                              </View>
                             </View>
-                            <View style={styles.bookDetailsCompact}>
-                              <Text style={styles.bookTitleCompact} numberOfLines={2}>{book.titolo}</Text>
-                              {book.autori && <Text style={styles.bookMetaText}>{book.autori}</Text>}
-                              {book.editore && <Text style={styles.bookMetaLabel}>{book.editore}</Text>}
-                              {book.volume && (
-                                <Text style={styles.bookVolumeText}>
-                                  Volume: {book.volume === 'U' ? 'Unico' : book.volume}
-                                </Text>
-                              )}
-                              <Text style={styles.bookIsbnText}>ISBN: {book.isbn}</Text>
-                            </View>
-                            {/* Prezzi */}
+                            
+                            {/* Riga inferiore: Prezzi */}
                             {(isVendibile || isUsato || isNuovo) && (
-                              <View style={styles.priceRowCompact}>
+                              <View style={styles.priceRowBottom}>
                                 {isVendibile && (
                                   <>
                                     <Text style={styles.priceNewBig}>€{prezzoNuovo.toFixed(2)}</Text>
@@ -1593,6 +1604,131 @@ const styles = StyleSheet.create({
   sampleBookItemClickable: {
     borderColor: '#1a472a',
     borderWidth: 1.5,
+  },
+  // NUOVO LAYOUT CARD
+  bookCardContent: {
+    flex: 1,
+  },
+  // Materia in alto a sinistra
+  bookSubjectTop: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#1a472a',
+    textTransform: 'uppercase',
+    marginBottom: 8,
+  },
+  // Riga principale: copertina + info
+  bookMainRow: {
+    flexDirection: 'row',
+  },
+  // Colonna copertina con badge copie sotto
+  bookCoverColumn: {
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  bookCoverImage: {
+    width: 70,
+    height: 95,
+    borderRadius: 4,
+    backgroundColor: '#f5f5f5',
+  },
+  // Badge copie INGRANDITO sotto copertina
+  copieDisponibiliBadgeBig: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginTop: 6,
+    gap: 4,
+  },
+  copieDisponibiliTextBig: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  copieLabel: {
+    color: '#fff',
+    fontSize: 11,
+  },
+  copieZeroBadge: {
+    backgroundColor: '#999',
+  },
+  // Colonna info a destra
+  bookInfoColumn: {
+    flex: 1,
+  },
+  // Badge categoria
+  bookCategoryBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginBottom: 4,
+  },
+  bookCategoryText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  bookTitleCompact: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#333',
+    lineHeight: 17,
+    marginBottom: 2,
+  },
+  bookMetaText: {
+    fontSize: 11,
+    color: '#555',
+  },
+  bookMetaLabel: {
+    fontSize: 11,
+    color: '#777',
+  },
+  bookVolumeText: {
+    fontSize: 11,
+    color: '#555',
+  },
+  bookIsbnText: {
+    fontSize: 10,
+    color: '#999',
+    marginTop: 2,
+  },
+  // Riga prezzi in basso
+  priceRowBottom: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+  },
+  priceStrikethrough: {
+    fontSize: 12,
+    color: '#999',
+    textDecorationLine: 'line-through',
+  },
+  priceUsedBig: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#4CAF50',
+  },
+  priceNewBig: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  priceSaving: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#4CAF50',
+  },
+  priceTagSell: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#2196F3',
   },
   sampleBookUsable: {
     backgroundColor: '#e8f5e9',
