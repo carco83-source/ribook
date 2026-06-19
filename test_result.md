@@ -1469,3 +1469,167 @@ agent_communication:
       - "Fine ciclo" toggle functionality
       - Form validation
       - Modal open/close behavior
+
+  - task: "RiBook Complete Purchase Flow - Order Creation, Payment, Delivery, Pickup"
+    implemented: true
+    working: false
+    file: "/app/backend/server.py"
+    stuck_count: 1
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: false
+        agent: "testing"
+        comment: |
+          RiBook Complete Purchase Flow Testing (2026-06-19)
+          
+          ### Test Results: 62.5% SUCCESS RATE (15/24 tests passed)
+          
+          #### ✅ WORKING FEATURES:
+          1. GET /api/listings?status=available - Successfully retrieves available listings
+          2. GET /api/bookstores - Successfully retrieves bookstores
+          3. User login - Working correctly
+          4. POST /api/orders/create - Order creation successful
+          5. Seller/Buyer initial notifications - Created correctly
+          6. POST /api/orders/{order_id}/seller-confirm - Seller confirmation working
+          7. POST /api/orders/{order_id}/pay - Payment processing successful (Stripe MOCKED)
+          8. Seller notification after payment - Has QR code ✅, order code ✅, book conditions ✅, NO price in message ✅
+          9. Bookstore notification - NO price in message ✅
+          10. GET /api/bookstore/{bookstore_id}/orders - Dashboard endpoint working
+          
+          #### ❌ CRITICAL BUGS FOUND:
+          
+          **BUG 1: Buyer notification has QR code when it shouldn't (AFTER PAYMENT)**
+          - Location: /app/backend/server.py lines 7021-7022
+          - Issue: Buyer notification after payment has `show_qr: True` and `show_qr_always: True`
+          - Expected: Buyer should NOT receive QR code after payment, only after bookstore confirms ready for pickup
+          - Actual: Buyer receives QR code immediately after payment
+          - Impact: Violates business requirements - buyer could try to pick up before book is delivered
+          
+          **BUG 2: Bookstore notification has QR code when it shouldn't**
+          - Location: /app/backend/server.py line 6992
+          - Issue: Bookstore notification has `show_qr: True`
+          - Expected: Bookstore should only receive alphanumeric code (NO QR)
+          - Actual: Bookstore receives QR code
+          - Impact: Violates business requirements - bookstore should only use alphanumeric code for verification
+          
+          **BUG 3: Status mismatch prevents delivery flow**
+          - Location: /app/backend/server.py lines 6913 (pay endpoint) and 7256 (deliver endpoint)
+          - Issue: Pay endpoint sets status to "pagato_attesa_consegna" but deliver-to-bookstore endpoint expects "paid_escrow"
+          - Error: "L'ordine deve essere pagato prima della consegna"
+          - Impact: BLOCKS entire delivery flow - seller cannot deliver book to bookstore
+          - Root cause: Inconsistent status naming throughout codebase (both "paid_escrow" and "pagato_attesa_consegna" are used)
+          
+          **BUG 4: GET /api/orders/{order_id} requires user_id parameter**
+          - Location: Order detail endpoint
+          - Issue: Missing required query parameter
+          - Error: HTTP 422 - Field required: user_id
+          - Impact: Cannot verify final order status without user_id
+          
+          #### 🔍 DETAILED TEST FLOW:
+          1. ✅ Found 1 available listing: "OSSERVARE IL MONDO - VOLUME 1"
+          2. ✅ Found 1 bookstore: "Cartolibreria NiCa"
+          3. ✅ Buyer login successful
+          4. ✅ Order created: R2LDPM, Status: in_attesa_conferma_venditore
+          5. ✅ Seller notification created (type: seller_confirmation_request)
+          6. ✅ Buyer notification created (type: order_pending_seller)
+          7. ✅ Seller confirmed availability, Status: in_attesa_pagamento
+          8. ✅ Payment successful, Status: pagato_attesa_consegna
+          9. ✅ Seller notification verified: QR ✅, Code ✅, Conditions ✅, No price ✅
+          10. ❌ Buyer notification has QR (should NOT have QR yet)
+          11. ❌ Bookstore notification has QR (should NOT have QR)
+          12. ✅ Bookstore notification has no price in message
+          13. ❌ Seller delivery FAILED - Status mismatch error
+          14. ❌ Subsequent steps blocked by delivery failure
+          
+          #### 📋 REQUIREMENTS VERIFICATION:
+          
+          **Seller Notification (After Payment):**
+          - ✅ Has QR code
+          - ✅ Has order code
+          - ✅ Has book conditions
+          - ✅ NO price in message
+          
+          **Buyer Notification (After Payment):**
+          - ✅ Mentions waiting for delivery
+          - ❌ Should NOT have QR yet (BUG: has QR)
+          
+          **Bookstore Notification (After Payment):**
+          - ✅ Has order code
+          - ❌ Should NOT have QR (BUG: has QR)
+          - ✅ NO price in message
+          
+          #### 🔧 FIXES REQUIRED:
+          
+          1. **Remove QR from buyer notification after payment** (line 7021-7022)
+             Change: `"show_qr": False` (remove show_qr_always)
+             
+          2. **Remove QR from bookstore notification** (line 6992)
+             Change: Remove `"show_qr": True` or set to False
+             
+          3. **Fix status mismatch** (line 7256)
+             Option A: Change deliver endpoint to accept both "paid_escrow" and "pagato_attesa_consegna"
+             Option B: Standardize all status names to one convention
+             Recommended: Option A for backward compatibility
+             
+          4. **Fix order detail endpoint** 
+             Make user_id parameter optional or handle missing parameter gracefully
+          
+          #### 🎯 NEXT STEPS:
+          After fixing these bugs, the complete flow should work:
+          1. Order creation ✅
+          2. Seller confirmation ✅
+          3. Payment ✅
+          4. Seller delivers to bookstore (currently blocked)
+          5. Bookstore confirms ready for pickup (currently blocked)
+          6. Buyer receives QR code (currently premature)
+          7. Buyer completes pickup (currently blocked)
+
+agent_communication:
+  - agent: "testing"
+    message: |
+      ## RIBOOK COMPLETE PURCHASE FLOW TESTING COMPLETED (2026-06-19)
+      
+      ### Summary: 62.5% SUCCESS RATE (15/24 tests passed)
+      
+      Tested the complete purchase, delivery, and pickup flow for RiBook as requested.
+      
+      ### ✅ WORKING CORRECTLY:
+      - Order creation and seller confirmation flow
+      - Payment processing (Stripe MOCKED)
+      - Seller notification: Has QR, order code, conditions, NO price ✅
+      - Bookstore notification: NO price in message ✅
+      - Bookstore dashboard endpoint
+      
+      ### ❌ CRITICAL BUGS BLOCKING FLOW:
+      
+      **1. Buyer notification has QR code too early** (lines 7021-7022)
+         - Buyer receives QR immediately after payment
+         - Should only receive QR after bookstore confirms ready for pickup
+         - Fix: Set `show_qr: False` in buyer notification after payment
+      
+      **2. Bookstore notification has QR code** (line 6992)
+         - Bookstore should only receive alphanumeric code
+         - Fix: Remove `show_qr: True` from bookstore notification
+      
+      **3. Status mismatch blocks delivery** (lines 6913, 7256)
+         - Pay endpoint sets "pagato_attesa_consegna"
+         - Deliver endpoint expects "paid_escrow"
+         - Error: "L'ordine deve essere pagato prima della consegna"
+         - Fix: Update deliver endpoint to accept both status values
+      
+      ### 📊 TEST COVERAGE:
+      - ✅ Listings retrieval
+      - ✅ Order creation
+      - ✅ Seller confirmation
+      - ✅ Payment (MOCKED)
+      - ✅ Notification verification (partial)
+      - ❌ Seller delivery (blocked by status mismatch)
+      - ❌ Bookstore confirmation (blocked)
+      - ❌ Buyer pickup (blocked)
+      
+      ### 🔧 RECOMMENDED FIXES:
+      See detailed fixes in task status_history above.
+      
+      After these fixes are applied, please re-run the test to verify the complete flow.
+
