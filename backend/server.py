@@ -4555,23 +4555,28 @@ async def get_child_compatibility(user_id: str, child_id: str):
     costo_obbligatori_usati = sum(l["prezzo_nuovo"] for l in comprare_usato)
     costo_totale_obbligatori = costo_obbligatori_nuovi + costo_obbligatori_usati
     
+    # Per il confronto con il tetto ministeriale usiamo SOLO il costo dei testi NUOVI
+    # (non la spesa stimata che include gli usati a prezzo ridotto)
+    costo_testi_nuovi_totale = costo_obbligatori_nuovi + costo_obbligatori_usati  # Prezzo copertina di tutti i libri da comprare
+    
     # Calcola anche il costo totale REALE (inclusi consigliati)
     costo_consigliati = sum(l.get("prezzo", 0) for l in libri_consigliati)
     costo_totale_tutti = costo_totale_obbligatori + costo_consigliati
     
-    # Confronto con tetto di spesa
+    # Confronto con tetto di spesa - basato sul TOTALE TESTI NUOVI
     tetto_info = {
         "tetto_ministeriale": round(tetto_spesa, 2),
         "tetto_con_deroga_10": round(tetto_spesa * 1.10, 2),  # +10% deroga consentita
         "tetto_con_deroga_15": round(tetto_spesa * 1.15, 2),  # +15% deroga massima
         "costo_obbligatori": round(costo_totale_obbligatori, 2),
+        "costo_testi_nuovi": round(costo_testi_nuovi_totale, 2),  # Totale testi nuovi per confronto ministeriale
         "costo_consigliati": round(costo_consigliati, 2),
         "costo_totale_tutti": round(costo_totale_tutti, 2),  # Obbligatori + Consigliati
-        "differenza": round(costo_totale_obbligatori - tetto_spesa, 2),
-        "percentuale_sforamento": round((costo_totale_obbligatori / tetto_spesa * 100) - 100, 1) if tetto_spesa > 0 else 0,
-        "entro_limite": costo_totale_obbligatori <= tetto_spesa,
-        "entro_deroga_10": costo_totale_obbligatori <= (tetto_spesa * 1.10),
-        "entro_deroga_15": costo_totale_obbligatori <= (tetto_spesa * 1.15),
+        "differenza": round(costo_testi_nuovi_totale - tetto_spesa, 2),
+        "percentuale_sforamento": round((costo_testi_nuovi_totale / tetto_spesa * 100) - 100, 1) if tetto_spesa > 0 else 0,
+        "entro_limite": costo_testi_nuovi_totale <= tetto_spesa,
+        "entro_deroga_10": costo_testi_nuovi_totale <= (tetto_spesa * 1.10),
+        "entro_deroga_15": costo_testi_nuovi_totale <= (tetto_spesa * 1.15),
         "riferimento_normativo": "Art. 15, comma 3 D.L. 112/2008 (conv. L. 133/2008)",
         "indirizzo_scuola": indirizzo_scuola,
         "nome_indirizzo": nome_indirizzo_display
