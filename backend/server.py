@@ -10437,6 +10437,277 @@ async def download_scalfaro_2a():
         )
     raise HTTPException(status_code=404, detail="File non trovato")
 
+# ==================== BOOKSTORE PANEL ENDPOINTS ====================
+
+@api_router.post("/bookstore/login")
+async def bookstore_login(data: dict):
+    """Login per cartolibreria"""
+    email = data.get("email", "").strip().lower()
+    password = data.get("password", "")
+    
+    bookstore = await db.bookstores.find_one({"email": email})
+    if not bookstore:
+        raise HTTPException(status_code=401, detail="Credenziali non valide")
+    
+    # Verifica password (per ora semplice, in produzione usare bcrypt)
+    stored_password = bookstore.get("password", "")
+    if password != stored_password:
+        raise HTTPException(status_code=401, detail="Credenziali non valide")
+    
+    return {
+        "success": True,
+        "bookstore_id": bookstore.get("id"),
+        "bookstore": {
+            "id": bookstore.get("id"),
+            "nome": bookstore.get("nome"),
+            "indirizzo": bookstore.get("indirizzo"),
+            "email": bookstore.get("email")
+        }
+    }
+
+@api_router.get("/bookstore/{bookstore_id}")
+async def get_bookstore_info(bookstore_id: str):
+    """Info cartolibreria"""
+    bookstore = await db.bookstores.find_one({"id": bookstore_id})
+    if not bookstore:
+        raise HTTPException(status_code=404, detail="Cartolibreria non trovata")
+    
+    bookstore.pop("_id", None)
+    bookstore.pop("password", None)
+    return bookstore
+
+@api_router.get("/bookstore/{bookstore_id}/stats")
+async def get_bookstore_stats(bookstore_id: str):
+    """Statistiche cartolibreria"""
+    from datetime import datetime, timedelta
+    
+    # Ordini in attesa di consegna dal venditore
+    pending_deliveries = await db.orders.count_documents({
+        "bookstore_id": bookstore_id,
+        "status": {"$in": ["paid", "awaiting_seller_delivery"]}
+    })
+    
+    # Ordini consegnati, in attesa di ritiro acquirente
+    awaiting_pickup = await db.orders.count_documents({
+        "bookstore_id": bookstore_id,
+        "status": "ready_for_pickup"
+    })
+    
+    # Completati oggi
+    today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    completed_today = await db.orders.count_documents({
+        "bookstore_id": bookstore_id,
+        "status": "completed",
+        "completed_at": {"$gte": today_start}
+    })
+    
+    # Resi in attesa
+    returns_pending = await db.orders.count_documents({
+        "bookstore_id": bookstore_id,
+        "status": "return_requested"
+    })
+    
+    # Guadagni del mese (5% commissione)
+    month_start = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    monthly_orders = await db.orders.find({
+        "bookstore_id": bookstore_id,
+        "status": "completed",
+        "completed_at": {"$gte": month_start}
+    }).to_list(None)
+    
+    monthly_earnings = sum(o.get("commissione_cartolibreria", 0) for o in monthly_orders)
+    
+    return {
+        "pending_deliveries": pending_deliveries,
+        "awaiting_pickup": awaiting_pickup,
+        "completed_today": completed_today,
+        "returns_pending": returns_pending,
+        "monthly_earnings": monthly_earnings,
+        "monthly_transactions": len(monthly_orders)
+    }
+
+@api_router.get("/bookstore/{bookstore_id}/orders/pending")
+async def get_bookstore_pending_orders(bookstore_id: str):
+    """Ordini in attesa di consegna dal venditore"""
+    orders = await db.orders.find({
+        "bookstore_id": bookstore_id,
+        "status": {"$in": ["paid", "awaiting_seller_delivery"]}
+    }).sort("created_at", -1).to_list(100)
+    
+    result = []
+    for o in orders:
+        o.pop("_id", None)
+        result.append({
+            "id": o.get("id"),
+            "order_code": o.get("order_code"),
+            "book_titolo": o.get("book_titolo"),
+            "book_isbn": o.get("book_isbn"),
+            "buyer_name": o.get("buyer_name", "Acquirente"),
+            "seller_name": o.get("seller_name", "Venditore"),
+            "prezzo_acquirente": o.get("prezzo_acquirente"),
+            "status": o.get("status"),
+            "created_at": o.get("created_at"),
+            "seller_delivery_deadline": o.get("seller_delivery_deadline")
+        })
+    return result
+
+@api_router.get("/bookstore/{bookstore_id}/orders/delivered")
+async def get_bookstore_delivered_orders(bookstore_id: str):
+    """Ordini consegnati, in attesa di ritiro"""
+    orders = await db.orders.find({
+        "bookstore_id": bookstore_id,
+        "status": "ready_for_pickup"
+    }).sort("delivered_to_bookstore_at", -1).to_list(100)
+    
+    result = []
+    for o in orders:
+        o.pop("_id", None)
+        result.append({
+            "id": o.get("id"),
+            "order_code": o.get("order_code"),
+            "book_titolo": o.get("book_titolo"),
+            "book_isbn": o.get("book_isbn"),
+            "buyer_name": o.get("buyer_name", "Acquirente"),
+            "prezzo_acquirente": o.get("prezzo_acquirente"),
+            "status": o.get("status"),
+            "delivered_to_bookstore_at": o.get("delivered_to_bookstore_at")
+        })
+    return result
+
+@api_router.get("/bookstore/{bookstore_id}/orders/completed")
+async def get_bookstore_completed_orders(bookstore_id: str):
+    """Ordini completati"""
+    orders = await db.orders.find({
+        "bookstore_id": bookstore_id,
+        "status": "completed"
+    }).sort("completed_at", -1).to_list(100)
+    
+    result = []
+    for o in orders:
+        o.pop("_id", None)
+        result.append({
+            "id": o.get("id"),
+            "order_code": o.get("order_code"),
+            "book_titolo": o.get("book_titolo"),
+            "prezzo_acquirente": o.get("prezzo_acquirente"),
+            "status": o.get("status"),
+            "created_at": o.get("created_at"),
+            "completed_at": o.get("completed_at")
+        })
+    return result
+
+@api_router.get("/bookstore/{bookstore_id}/returns")
+async def get_bookstore_returns(bookstore_id: str):
+    """Resi"""
+    orders = await db.orders.find({
+        "bookstore_id": bookstore_id,
+        "status": {"$in": ["return_requested", "returned"]}
+    }).sort("created_at", -1).to_list(100)
+    
+    result = []
+    for o in orders:
+        o.pop("_id", None)
+        result.append({
+            "id": o.get("id"),
+            "order_code": o.get("order_code"),
+            "book_titolo": o.get("book_titolo"),
+            "prezzo_acquirente": o.get("prezzo_acquirente"),
+            "status": o.get("status"),
+            "return_reason": o.get("return_reason")
+        })
+    return result
+
+@api_router.post("/bookstore/{bookstore_id}/confirm-delivery/{order_id}")
+async def bookstore_confirm_delivery(bookstore_id: str, order_id: str):
+    """Conferma ricezione libro dal venditore"""
+    from datetime import datetime
+    
+    order = await db.orders.find_one({"id": order_id, "bookstore_id": bookstore_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="Ordine non trovato")
+    
+    await db.orders.update_one(
+        {"id": order_id},
+        {"$set": {
+            "status": "ready_for_pickup",
+            "delivered_to_bookstore_at": datetime.now(),
+            "bookstore_verified_at": datetime.now()
+        }}
+    )
+    
+    # Notifica all'acquirente
+    await db.notifications.insert_one({
+        "id": str(uuid.uuid4()),
+        "user_id": order.get("buyer_id"),
+        "type": "ready_for_pickup",
+        "title": "Libro pronto per il ritiro!",
+        "message": f"Il libro '{order.get('book_titolo')}' è pronto per il ritiro presso la cartolibreria.",
+        "data": {
+            "order_id": order_id,
+            "order_code": order.get("order_code"),
+            "bookstore_name": order.get("bookstore_name")
+        },
+        "order_code": order.get("order_code"),
+        "bookstore_name": order.get("bookstore_name"),
+        "read": False,
+        "created_at": datetime.now()
+    })
+    
+    return {"success": True, "message": "Consegna confermata"}
+
+@api_router.post("/bookstore/{bookstore_id}/confirm-pickup/{order_id}")
+async def bookstore_confirm_pickup(bookstore_id: str, order_id: str):
+    """Conferma ritiro libro dall'acquirente"""
+    from datetime import datetime
+    
+    order = await db.orders.find_one({"id": order_id, "bookstore_id": bookstore_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="Ordine non trovato")
+    
+    await db.orders.update_one(
+        {"id": order_id},
+        {"$set": {
+            "status": "completed",
+            "completed_at": datetime.now()
+        }}
+    )
+    
+    # Notifica al venditore (pagamento in arrivo)
+    await db.notifications.insert_one({
+        "id": str(uuid.uuid4()),
+        "user_id": order.get("seller_id"),
+        "type": "order_completed",
+        "title": "Vendita completata!",
+        "message": f"L'acquirente ha ritirato '{order.get('book_titolo')}'. Il pagamento sarà accreditato a breve.",
+        "data": {"order_id": order_id},
+        "read": False,
+        "created_at": datetime.now()
+    })
+    
+    return {"success": True, "message": "Ritiro confermato"}
+
+@api_router.post("/bookstore/{bookstore_id}/return/{order_id}")
+async def bookstore_register_return(bookstore_id: str, order_id: str, data: dict):
+    """Registra reso"""
+    from datetime import datetime
+    
+    order = await db.orders.find_one({"id": order_id, "bookstore_id": bookstore_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="Ordine non trovato")
+    
+    reason = data.get("reason", "Non specificato")
+    
+    await db.orders.update_one(
+        {"id": order_id},
+        {"$set": {
+            "status": "returned",
+            "return_reason": reason,
+            "returned_at": datetime.now()
+        }}
+    )
+    
+    return {"success": True, "message": "Reso registrato"}
+
 
 # Include the router in the main app
 app.include_router(api_router)
