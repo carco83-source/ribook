@@ -93,6 +93,8 @@ export default function SellFormScreen() {
   // Bookshops & Price
   const [selectedBookshops, setSelectedBookshops] = useState<string[]>([]);
   const [selectedPriceOption, setSelectedPriceOption] = useState<number | null>(null);
+  const [customPrice, setCustomPrice] = useState<string>(''); // Prezzo personalizzato
+  const [useCustomPrice, setUseCustomPrice] = useState(false); // Flag per usare prezzo personalizzato
   const [notes, setNotes] = useState('');
   const [creatingListing, setCreatingListing] = useState(false);
   const [foderare, setFoderare] = useState(false);
@@ -570,7 +572,7 @@ export default function SellFormScreen() {
     }
 
     if (selectedPriceOption === null) {
-      showAlert('Prezzo richiesto', 'Seleziona un prezzo dalla forbice');
+      showAlert('Prezzo richiesto', 'Seleziona un prezzo dalla forbice o inserisci un prezzo personalizzato');
       return;
     }
 
@@ -641,7 +643,7 @@ export default function SellFormScreen() {
     }
 
     if (selectedPriceOption === null) {
-      showAlert('Prezzo richiesto', 'Seleziona un prezzo dalla forbice');
+      showAlert('Prezzo richiesto', 'Seleziona un prezzo dalla forbice o inserisci un prezzo personalizzato');
       return;
     }
 
@@ -948,15 +950,18 @@ export default function SellFormScreen() {
               key={idx}
               style={[
                 styles.priceOption,
-                selectedPriceOption === price.prezzoAcquirente && styles.priceOptionSelected
+                !useCustomPrice && selectedPriceOption === price.prezzoAcquirente && styles.priceOptionSelected
               ]}
-              onPress={() => setSelectedPriceOption(price.prezzoAcquirente ?? null)}
+              onPress={() => {
+                setUseCustomPrice(false);
+                setSelectedPriceOption(price.prezzoAcquirente ?? null);
+              }}
             >
               <View style={styles.priceOptionHeader}>
                 <Ionicons 
-                  name={selectedPriceOption === price.prezzoAcquirente ? "radio-button-on" : "radio-button-off"} 
+                  name={!useCustomPrice && selectedPriceOption === price.prezzoAcquirente ? "radio-button-on" : "radio-button-off"} 
                   size={22} 
-                  color={selectedPriceOption === price.prezzoAcquirente ? "#1a472a" : "#666"} 
+                  color={!useCustomPrice && selectedPriceOption === price.prezzoAcquirente ? "#1a472a" : "#666"} 
                 />
                 <Text style={styles.priceLabelBold}>{price.label}</Text>
               </View>
@@ -966,6 +971,62 @@ export default function SellFormScreen() {
               </View>
             </TouchableOpacity>
           ))}
+
+          {/* Prezzo Personalizzato */}
+          <TouchableOpacity
+            style={[
+              styles.priceOption,
+              useCustomPrice && styles.priceOptionSelected
+            ]}
+            onPress={() => {
+              setUseCustomPrice(true);
+              setSelectedPriceOption(null);
+            }}
+          >
+            <View style={styles.priceOptionHeader}>
+              <Ionicons 
+                name={useCustomPrice ? "radio-button-on" : "radio-button-off"} 
+                size={22} 
+                color={useCustomPrice ? "#1a472a" : "#666"} 
+              />
+              <Text style={styles.priceLabelBold}>Prezzo personalizzato</Text>
+            </View>
+            {useCustomPrice && (
+              <View style={styles.customPriceContainer}>
+                <View style={styles.customPriceInputRow}>
+                  <Text style={styles.customPriceLabel}>€</Text>
+                  <TextInput
+                    style={styles.customPriceInput}
+                    placeholder="0.00"
+                    placeholderTextColor="#999"
+                    keyboardType="decimal-pad"
+                    value={customPrice}
+                    onChangeText={(text) => {
+                      // Permetti solo numeri e un punto decimale
+                      const cleaned = text.replace(/[^0-9.]/g, '');
+                      // Assicura che ci sia solo un punto decimale
+                      const parts = cleaned.split('.');
+                      if (parts.length > 2) return;
+                      setCustomPrice(cleaned);
+                      // Aggiorna selectedPriceOption
+                      const numValue = parseFloat(cleaned);
+                      if (!isNaN(numValue) && numValue > 0) {
+                        setSelectedPriceOption(numValue);
+                      }
+                    }}
+                  />
+                </View>
+                {customPrice && parseFloat(customPrice) > 0 && (
+                  <View style={styles.customPriceDetails}>
+                    <Text style={styles.priceEarningMain}>
+                      Guadagni: <Text style={styles.priceEarningValue}>€{(parseFloat(customPrice) * 0.83 - 0.25).toFixed(2)}</Text>
+                    </Text>
+                    <Text style={styles.priceAcquirente}>L'acquirente pagherà €{parseFloat(customPrice).toFixed(2)}</Text>
+                  </View>
+                )}
+              </View>
+            )}
+          </TouchableOpacity>
         </View>
 
         {/* Foto del libro */}
@@ -1465,6 +1526,36 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#888',
     marginTop: 2,
+  },
+  // Stili per prezzo personalizzato
+  customPriceContainer: {
+    paddingLeft: 34,
+    paddingTop: 8,
+  },
+  customPriceInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  customPriceLabel: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1a472a',
+  },
+  customPriceInput: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#1a472a',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1a472a',
+  },
+  customPriceDetails: {
+    marginTop: 10,
   },
   photoLabel: {
     fontSize: 14,
