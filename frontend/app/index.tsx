@@ -27,15 +27,9 @@ export default function WelcomeScreen() {
   const isSmallHeight = height < 700;
 
   useEffect(() => {
-    checkAuth();
+    // Redirect sempre alla Home - sia loggati che non loggati
+    router.replace('/(tabs)');
   }, []);
-
-  const checkAuth = async () => {
-    const userId = await AsyncStorage.getItem('user_id');
-    if (userId) {
-      router.replace('/(tabs)');
-    }
-  };
 
   // Stili dinamici
   const dynamicStyles = {
