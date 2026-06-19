@@ -649,6 +649,11 @@ export default function RadarScreen() {
                               <Text style={styles.bookTitleCompact} numberOfLines={2}>{book.titolo}</Text>
                               {book.autori && <Text style={styles.bookMetaText}>{book.autori}</Text>}
                               {book.editore && <Text style={styles.bookMetaLabel}>{book.editore}</Text>}
+                              {book.volume && (
+                                <Text style={styles.bookVolumeText}>
+                                  Volume: {book.volume === 'U' ? 'Unico' : book.volume}
+                                </Text>
+                              )}
                               <Text style={styles.bookIsbnText}>ISBN: {book.isbn}</Text>
                             </View>
                             {/* Prezzi */}
@@ -1510,6 +1515,12 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#888',
     marginTop: 1,
+  },
+  bookVolumeText: {
+    fontSize: 11,
+    color: '#1a472a',
+    fontWeight: '600',
+    marginTop: 2,
   },
   // Stili per riga prezzi compatta - inline con il contenuto
   priceRowCompact: {
