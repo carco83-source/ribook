@@ -11,8 +11,9 @@ import {
   TextInput,
   Modal,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
-import { useRouter, Stack, useFocusEffect } from 'expo-router';
+import { useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
@@ -34,61 +35,177 @@ if (Platform.OS !== 'web') {
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
+// Calcola giorni lavorativi rimanenti (esclude sabato e domenica)
+const getWorkingDaysRemaining = (deadline: string): { days: number; hours: number; expired: boolean; urgency: 'ok' | 'warning' | 'danger' } => {
+  const now = new Date();
+  const deadlineDate = new Date(deadline);
+  const diff = deadlineDate.getTime() - now.getTime();
+  
+  if (diff <= 0) {
+    return { days: 0, hours: 0, expired: true, urgency: 'danger' };
+  }
+  
+  const totalHours = Math.floor(diff / (1000 * 60 * 60));
+  const days = Math.floor(totalHours / 24);
+  const hours = totalHours % 24;
+  
+  let urgency: 'ok' | 'warning' | 'danger' = 'ok';
+  if (days === 0 && hours < 12) urgency = 'danger';
+  else if (days === 0 || (days === 1 && hours < 12)) urgency = 'warning';
+  
+  return { days, hours, expired: false, urgency };
+};
+
 interface Order {
   id: string;
   order_code: string;
   buyer_id: string;
   buyer_name: string;
   seller_name: string;
+  seller_id: string;
   book_titolo: string;
   book_autore: string;
+  book_isbn: string;
   totale_acquirente: number;
+  prezzo_venditore: number;
+  prezzo_libro: number;
+  costo_foderazione: number;
+  commissione_stripe: number;
+  commissione_cartolibreria: number;
+  commissione_cartolibreria_libro: number;
+  commissione_cartolibreria_foderazione: number;
   status: string;
   status_label: string;
   created_at: string;
+  seller_delivery_deadline?: string;
+  delivered_to_bookstore_at?: string;
   ready_for_pickup_at?: string;
+  completed_at?: string;
+  condition_details?: any;
+  include_foderazione?: boolean;
 }
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; icon: string }> = {
-  paid_escrow: { label: 'In arrivo', color: '#2196F3', icon: 'time-outline' },
-  delivering_to_bookstore: { label: 'In consegna', color: '#9C27B0', icon: 'car-outline' },
-  ready_for_pickup: { label: 'Pronto ritiro', color: '#4CAF50', icon: 'checkmark-circle-outline' },
+interface DashboardStats {
+  in_arrivo: number;
+  da_ritirare: number;
+  completati_oggi: number;
+  completati_mese: number;
+  resi_in_attesa: number;
+  guadagno_oggi: number;
+  guadagno_mese: number;
+  ordini_scaduti: number;
+  // Nuovi campi per calcolo dettagliato
+  guadagno_libri_oggi: number;
+  guadagno_libri_mese: number;
+  guadagno_foderazione_oggi: number;
+  guadagno_foderazione_mese: number;
+  num_foderazione_oggi: number;
+  num_foderazione_mese: number;
+}
+
+// Costanti per calcolo compensi
+const COSTO_FODERAZIONE = 1.50; // €1,50 per copertina
+const COMMISSIONE_CARTOLIBRERIA_PERCENT = 0.10; // 10% sul libro
+const STRIPE_FEE_PERCENT = 0.029; // 2.9%
+const STRIPE_FEE_FIXED = 0.25; // €0.25
+
+// Calcola la commissione Stripe su un importo
+const calcolaCommissioneStripe = (importo: number): number => {
+  return importo * STRIPE_FEE_PERCENT + STRIPE_FEE_FIXED;
 };
+
+// Calcola i compensi della cartolibreria per un ordine
+const calcolaCompensiCartolibreria = (prezzoLibro: number, includeFoderazione: boolean) => {
+  const costoFoderazione = includeFoderazione ? COSTO_FODERAZIONE : 0;
+  const totale = prezzoLibro + costoFoderazione;
+  const commissioneStripe = calcolaCommissioneStripe(totale);
+  
+  // Proporzione per dividere la commissione Stripe
+  const proporzioneLibro = prezzoLibro / totale;
+  const proporzioneFoderazione = costoFoderazione / totale;
+  
+  // Commissione Stripe proporzionale
+  const stripeLibro = commissioneStripe * proporzioneLibro;
+  const stripeFoderazione = commissioneStripe * proporzioneFoderazione;
+  
+  // Compenso cartolibreria dal libro: 10% - 50% della commissione Stripe proporzionale
+  const compensoLibro = (prezzoLibro * COMMISSIONE_CARTOLIBRERIA_PERCENT) - (stripeLibro * 0.5);
+  
+  // Compenso dalla foderazione: €1,50 - commissione Stripe proporzionale
+  const compensoFoderazione = includeFoderazione ? (COSTO_FODERAZIONE - stripeFoderazione) : 0;
+  
+  return {
+    compensoLibro: Math.max(0, compensoLibro),
+    compensoFoderazione: Math.max(0, compensoFoderazione),
+    totale: Math.max(0, compensoLibro) + Math.max(0, compensoFoderazione),
+    commissioneStripe,
+    stripeLibro,
+    stripeFoderazione,
+  };
+};
+
+type TabType = 'dashboard' | 'in_arrivo' | 'da_ritirare' | 'completati' | 'resi';
 
 export default function BookstorePortalScreen() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 768;
+  
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [bookstoreId, setBookstoreId] = useState<string | null>(null);
   const [bookstoreName, setBookstoreName] = useState<string>('');
-  const [orders, setOrders] = useState<Order[]>([]);
   
   // Login state
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
   
+  // Dashboard state
+  const [activeTab, setActiveTab] = useState<TabType>('dashboard');
+  const [stats, setStats] = useState<DashboardStats>({
+    in_arrivo: 0,
+    da_ritirare: 0,
+    completati_oggi: 0,
+    completati_mese: 0,
+    resi_in_attesa: 0,
+    guadagno_oggi: 0,
+    guadagno_mese: 0,
+    ordini_scaduti: 0,
+    guadagno_libri_oggi: 0,
+    guadagno_libri_mese: 0,
+    guadagno_foderazione_oggi: 0,
+    guadagno_foderazione_mese: 0,
+    num_foderazione_oggi: 0,
+    num_foderazione_mese: 0,
+  });
+  
+  // Orders by status
+  const [ordersInArrivo, setOrdersInArrivo] = useState<Order[]>([]);
+  const [ordersDaRitirare, setOrdersDaRitirare] = useState<Order[]>([]);
+  const [ordersCompletati, setOrdersCompletati] = useState<Order[]>([]);
+  const [ordersResi, setOrdersResi] = useState<Order[]>([]);
+  
   // Scanner state
   const [showScanner, setShowScanner] = useState(false);
   const [manualCode, setManualCode] = useState('');
-  const [confirmingPickup, setConfirmingPickup] = useState(false);
+  const [confirmingAction, setConfirmingAction] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
   
-  // Notifications state
-  const [notifications, setNotifications] = useState<any[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  
-  // Returns state
-  const [pendingReturns, setPendingReturns] = useState<any[]>([]);
-  const [showReturnsModal, setShowReturnsModal] = useState(false);
-  const [processingReturn, setProcessingReturn] = useState(false);
-  
-  // Expanded notifications state
-  const [expandedNotifications, setExpandedNotifications] = useState<Set<string>>(new Set());
+  // Timer update
+  const [, setTimerTick] = useState(0);
 
   useEffect(() => {
     checkLoginStatus();
+  }, []);
+
+  // Update timers every minute
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTimerTick(t => t + 1);
+    }, 60000);
+    return () => clearInterval(interval);
   }, []);
 
   const checkLoginStatus = async () => {
@@ -100,7 +217,7 @@ export default function BookstorePortalScreen() {
         setBookstoreId(storedBookstoreId);
         setBookstoreName(storedBookstoreName || '');
         setIsLoggedIn(true);
-        await loadOrders(storedBookstoreId);
+        await loadDashboardData(storedBookstoreId);
       }
     } catch (error) {
       console.error('Error checking login:', error);
@@ -109,127 +226,110 @@ export default function BookstorePortalScreen() {
     }
   };
 
-  const loadOrders = async (bsId: string) => {
+  const loadDashboardData = async (bsId: string) => {
     try {
-      const response = await axios.get(`${API_URL}/api/bookstore/${bsId}/orders`);
-      setOrders(response.data.orders || []);
-      setBookstoreName(response.data.bookstore_name || '');
+      // Load all orders for this bookstore
+      const response = await axios.get(`${API_URL}/api/bookstore/${bsId}/dashboard`);
+      const data = response.data;
       
-      // Carica anche le notifiche e i resi in attesa
-      await loadNotifications(bsId);
-      await loadPendingReturns(bsId);
+      setBookstoreName(data.bookstore_name || '');
+      setStats(data.stats || stats);
+      setOrdersInArrivo(data.orders_in_arrivo || []);
+      setOrdersDaRitirare(data.orders_da_ritirare || []);
+      setOrdersCompletati(data.orders_completati || []);
+      setOrdersResi(data.orders_resi || []);
+      
     } catch (error) {
-      console.error('Error loading orders:', error);
+      console.error('Error loading dashboard:', error);
+      // Fallback: load orders the old way
+      try {
+        const ordersRes = await axios.get(`${API_URL}/api/bookstore/${bsId}/orders`);
+        const allOrders = ordersRes.data.orders || [];
+        
+        // Categorize orders
+        const inArrivo = allOrders.filter((o: Order) => ['paid_escrow', 'delivering_to_bookstore'].includes(o.status));
+        const daRitirare = allOrders.filter((o: Order) => o.status === 'ready_for_pickup');
+        const completati = allOrders.filter((o: Order) => o.status === 'completed');
+        const resi = allOrders.filter((o: Order) => ['return_requested', 'returned', 'refunded'].includes(o.status));
+        
+        setOrdersInArrivo(inArrivo);
+        setOrdersDaRitirare(daRitirare);
+        setOrdersCompletati(completati);
+        setOrdersResi(resi);
+        
+        // Calculate stats con nuovo calcolo compensi
+        const today = new Date().toDateString();
+        const completatiOggi = completati.filter((o: Order) => new Date(o.completed_at || o.created_at).toDateString() === today);
+        
+        // Calcola compensi dettagliati per ogni ordine completato
+        let guadagnoLibriOggi = 0;
+        let guadagnoLibriMese = 0;
+        let guadagnoFoderazioneOggi = 0;
+        let guadagnoFoderazioneMese = 0;
+        let numFoderazioneOggi = 0;
+        let numFoderazioneMese = 0;
+        
+        completati.forEach((order: Order) => {
+          const prezzoLibro = order.prezzo_libro || order.prezzo_venditore || order.totale_acquirente || 0;
+          const includeFoderazione = order.include_foderazione || order.costo_foderazione > 0;
+          
+          const compensi = calcolaCompensiCartolibreria(prezzoLibro, includeFoderazione);
+          
+          const isToday = new Date(order.completed_at || order.created_at).toDateString() === today;
+          
+          if (isToday) {
+            guadagnoLibriOggi += compensi.compensoLibro;
+            guadagnoFoderazioneOggi += compensi.compensoFoderazione;
+            if (includeFoderazione) numFoderazioneOggi++;
+          }
+          
+          guadagnoLibriMese += compensi.compensoLibro;
+          guadagnoFoderazioneMese += compensi.compensoFoderazione;
+          if (includeFoderazione) numFoderazioneMese++;
+        });
+        
+        setStats({
+          in_arrivo: inArrivo.length,
+          da_ritirare: daRitirare.length,
+          completati_oggi: completatiOggi.length,
+          completati_mese: completati.length,
+          resi_in_attesa: resi.filter((o: Order) => o.status === 'return_requested').length,
+          guadagno_oggi: guadagnoLibriOggi + guadagnoFoderazioneOggi,
+          guadagno_mese: guadagnoLibriMese + guadagnoFoderazioneMese,
+          ordini_scaduti: inArrivo.filter((o: Order) => o.seller_delivery_deadline && new Date(o.seller_delivery_deadline) < new Date()).length,
+          guadagno_libri_oggi: guadagnoLibriOggi,
+          guadagno_libri_mese: guadagnoLibriMese,
+          guadagno_foderazione_oggi: guadagnoFoderazioneOggi,
+          guadagno_foderazione_mese: guadagnoFoderazioneMese,
+          num_foderazione_oggi: numFoderazioneOggi,
+          num_foderazione_mese: numFoderazioneMese,
+        });
+        
+        setBookstoreName(ordersRes.data.bookstore_name || '');
+      } catch (e) {
+        console.error('Fallback also failed:', e);
+      }
     } finally {
       setRefreshing(false);
-    }
-  };
-  
-  const loadNotifications = async (bsId: string) => {
-    try {
-      const response = await axios.get(`${API_URL}/api/bookstore/${bsId}/notifications`);
-      setNotifications(response.data.notifications || []);
-      setUnreadCount(response.data.unread_count || 0);
-    } catch (error) {
-      console.error('Error loading notifications:', error);
-    }
-  };
-  
-  const loadPendingReturns = async (bsId: string) => {
-    try {
-      const response = await axios.get(`${API_URL}/api/bookstore/${bsId}/pending-returns`);
-      setPendingReturns(response.data.returns || []);
-    } catch (error) {
-      console.error('Error loading pending returns:', error);
-    }
-  };
-  
-  const handleVerifyReturn = async (orderId: string, accepted: boolean, notificationId?: string) => {
-    const actionText = accepted ? 'accettare' : 'rifiutare';
-    const confirmText = accepted 
-      ? 'Confermi che il libro NON corrisponde alla descrizione? L\'acquirente riceverà un rimborso.'
-      : 'Confermi che il libro corrisponde alla descrizione? Il venditore riceverà il pagamento.';
-    
-    // Usa window.confirm su web, Alert.alert su mobile
-    const doVerify = async () => {
-      setProcessingReturn(true);
-      try {
-        await axios.post(
-          `${API_URL}/api/orders/${orderId}/verify-return?bookstore_id=${bookstoreId}&accepted=${accepted}&notes=`
-        );
-        
-        // Segna la notifica come letta
-        if (notificationId && bookstoreId) {
-          try {
-            await axios.put(`${API_URL}/api/bookstore/${bookstoreId}/notifications/${notificationId}/read`);
-          } catch (e) {
-            console.log('Error marking notification as read:', e);
-          }
-        }
-        
-        const successMsg = accepted 
-          ? 'Reso accettato. L\'acquirente riceverà il rimborso.'
-          : 'Reso rifiutato. Il venditore riceverà il pagamento.';
-        
-        if (Platform.OS === 'web') {
-          window.alert(successMsg);
-        } else {
-          Alert.alert('Reso verificato', successMsg, [{ text: 'OK' }]);
-        }
-        
-        // Ricarica resi e notifiche
-        if (bookstoreId) {
-          await loadPendingReturns(bookstoreId);
-          await loadNotifications(bookstoreId);
-        }
-      } catch (error: any) {
-        const errorMsg = error.response?.data?.detail || 'Errore nella verifica';
-        if (Platform.OS === 'web') {
-          window.alert('Errore: ' + errorMsg);
-        } else {
-          Alert.alert('Errore', errorMsg);
-        }
-      } finally {
-        setProcessingReturn(false);
-      }
-    };
-    
-    if (Platform.OS === 'web') {
-      const confirmed = window.confirm(`Conferma ${actionText} reso\n\n${confirmText}`);
-      if (confirmed) {
-        await doVerify();
-      }
-    } else {
-      Alert.alert(
-        `Conferma ${actionText} reso`,
-        confirmText,
-        [
-          { text: 'Annulla', style: 'cancel' },
-          {
-            text: accepted ? 'Accetta reso' : 'Rifiuta reso',
-            style: accepted ? 'destructive' : 'default',
-            onPress: doVerify,
-          },
-        ]
-      );
     }
   };
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
-      Alert.alert('Errore', 'Inserisci email e password');
+      if (Platform.OS === 'web') {
+        window.alert('Inserisci email e password');
+      } else {
+        Alert.alert('Errore', 'Inserisci email e password');
+      }
       return;
     }
 
     setLoginLoading(true);
     try {
-      const response = await axios.post(
-        `${API_URL}/api/bookstore/login`,
-        {
-          email: email.toLowerCase().trim(),
-          password: password
-        }
-      );
+      const response = await axios.post(`${API_URL}/api/bookstore/login`, {
+        email: email.toLowerCase().trim(),
+        password: password
+      });
       
       await AsyncStorage.setItem('bookstore_id', response.data.bookstore_id);
       await AsyncStorage.setItem('bookstore_name', response.data.bookstore?.nome || response.data.nome || 'Cartolibreria');
@@ -238,10 +338,15 @@ export default function BookstorePortalScreen() {
       setBookstoreName(response.data.bookstore?.nome || response.data.nome || 'Cartolibreria');
       setIsLoggedIn(true);
       
-      await loadOrders(response.data.bookstore_id);
+      await loadDashboardData(response.data.bookstore_id);
     } catch (error: any) {
       console.log('Login error:', error.response?.data);
-      Alert.alert('Errore', error.response?.data?.detail || 'Credenziali non valide');
+      const msg = error.response?.data?.detail || 'Credenziali non valide';
+      if (Platform.OS === 'web') {
+        window.alert(msg);
+      } else {
+        Alert.alert('Errore', msg);
+      }
     } finally {
       setLoginLoading(false);
     }
@@ -254,11 +359,9 @@ export default function BookstorePortalScreen() {
       setIsLoggedIn(false);
       setBookstoreId(null);
       setBookstoreName('');
-      setOrders([]);
-      setNotifications([]);
-      setPendingReturns([]);
       setEmail('');
       setPassword('');
+      setActiveTab('dashboard');
     };
     
     if (Platform.OS === 'web') {
@@ -266,103 +369,156 @@ export default function BookstorePortalScreen() {
         await doLogout();
       }
     } else {
-      Alert.alert(
-        'Logout',
-        'Vuoi uscire dal portale cartolibreria?',
-        [
-          { text: 'Annulla', style: 'cancel' },
-          { text: 'Esci', onPress: doLogout },
-        ]
-      );
+      Alert.alert('Logout', 'Vuoi uscire dal portale cartolibreria?', [
+        { text: 'Annulla', style: 'cancel' },
+        { text: 'Esci', onPress: doLogout },
+      ]);
     }
   };
 
-  const handleConfirmPickup = async (code: string) => {
-    if (!code.trim()) {
-      if (Platform.OS === 'web') {
-        window.alert('Inserisci il codice ordine');
-      } else {
-        Alert.alert('Errore', 'Inserisci il codice ordine');
-      }
-      return;
-    }
-
-    setConfirmingPickup(true);
+  // Conferma ricezione libro dal venditore
+  const handleConfirmSellerDelivery = async (orderCode: string) => {
+    setConfirmingAction(true);
     try {
-      // Prima prova la consegna del venditore (paid_escrow -> ready_for_pickup)
-      try {
-        const response = await axios.post(
-          `${API_URL}/api/bookstore/${bookstoreId}/confirm-seller-delivery?order_code=${code.toUpperCase()}`
-        );
-        
-        const msg = `✅ CONSEGNA VENDITORE CONFERMATA!\n\nOrdine: ${response.data.order_code}\n${response.data.book_titolo}\n\nL'acquirente ${response.data.buyer_name} è stato notificato che può ritirare.`;
-        
-        if (Platform.OS === 'web') {
-          window.alert(msg);
-        } else {
-          Alert.alert('Consegna confermata!', msg, [{ text: 'OK' }]);
-        }
-        
-        setShowScanner(false);
-        setManualCode('');
-        await loadOrders(bookstoreId!);
-        return;
-      } catch (sellerError: any) {
-        // Se non è in stato paid_escrow, prova il ritiro acquirente
-        if (sellerError.response?.status === 400) {
-          // Prova la conferma ritiro acquirente
-          const response = await axios.post(
-            `${API_URL}/api/bookstore/${bookstoreId}/confirm-pickup-by-code?order_code=${code.toUpperCase()}`
-          );
-          
-          const msg = `✅ RITIRO ACQUIRENTE CONFERMATO!\n\nOrdine: ${response.data.order_code}\n${response.data.book_titolo}\n\nAcquirente: ${response.data.buyer_name}\n\n💰 Pagamento rilasciato al venditore!`;
-          
-          if (Platform.OS === 'web') {
-            window.alert(msg);
-          } else {
-            Alert.alert('Ritiro confermato!', msg, [{ text: 'OK' }]);
-          }
-          
-          setShowScanner(false);
-          setManualCode('');
-          await loadOrders(bookstoreId!);
-          return;
-        }
-        throw sellerError;
+      const response = await axios.post(
+        `${API_URL}/api/bookstore/${bookstoreId}/confirm-seller-delivery?order_code=${orderCode.toUpperCase()}`
+      );
+      
+      const msg = `✅ Consegna confermata!\n\nOrdine: ${response.data.order_code}\n${response.data.book_titolo}\n\nL'acquirente è stato notificato.`;
+      
+      if (Platform.OS === 'web') {
+        window.alert(msg);
+      } else {
+        Alert.alert('Successo', msg);
       }
+      
+      setShowScanner(false);
+      setManualCode('');
+      await loadDashboardData(bookstoreId!);
     } catch (error: any) {
-      const errorMsg = error.response?.data?.detail || 'Codice non valido o ordine non trovato';
+      const errorMsg = error.response?.data?.detail || 'Errore durante la conferma';
       if (Platform.OS === 'web') {
         window.alert('Errore: ' + errorMsg);
       } else {
         Alert.alert('Errore', errorMsg);
       }
     } finally {
-      setConfirmingPickup(false);
+      setConfirmingAction(false);
     }
   };
 
-  const handleMarkReady = async (orderId: string) => {
+  // Conferma ritiro acquirente
+  const handleConfirmBuyerPickup = async (orderCode: string) => {
+    setConfirmingAction(true);
     try {
-      await axios.post(`${API_URL}/api/bookstore/${bookstoreId}/mark-ready/${orderId}`);
-      Alert.alert('Fatto!', 'Ordine segnato come pronto per il ritiro');
-      await loadOrders(bookstoreId!);
+      const response = await axios.post(
+        `${API_URL}/api/bookstore/${bookstoreId}/confirm-pickup-by-code?order_code=${orderCode.toUpperCase()}`
+      );
+      
+      const msg = `✅ Ritiro confermato!\n\nOrdine: ${response.data.order_code}\n${response.data.book_titolo}\n\n💰 Pagamento rilasciato al venditore!`;
+      
+      if (Platform.OS === 'web') {
+        window.alert(msg);
+      } else {
+        Alert.alert('Successo', msg);
+      }
+      
+      setShowScanner(false);
+      setManualCode('');
+      await loadDashboardData(bookstoreId!);
     } catch (error: any) {
-      Alert.alert('Errore', error.response?.data?.detail || 'Errore');
+      const errorMsg = error.response?.data?.detail || 'Errore durante la conferma';
+      if (Platform.OS === 'web') {
+        window.alert('Errore: ' + errorMsg);
+      } else {
+        Alert.alert('Errore', errorMsg);
+      }
+    } finally {
+      setConfirmingAction(false);
+    }
+  };
+
+  // Gestione reso
+  const handleVerifyReturn = async (orderId: string, accepted: boolean) => {
+    const actionText = accepted ? 'accettare il reso' : 'rifiutare il reso';
+    const confirmText = accepted 
+      ? 'Il libro NON corrisponde alla descrizione. L\'acquirente riceverà un rimborso.'
+      : 'Il libro corrisponde alla descrizione. Il venditore riceverà il pagamento.';
+    
+    const doVerify = async () => {
+      setConfirmingAction(true);
+      try {
+        await axios.post(
+          `${API_URL}/api/orders/${orderId}/verify-return?bookstore_id=${bookstoreId}&accepted=${accepted}&notes=`
+        );
+        
+        const successMsg = accepted 
+          ? 'Reso accettato. Rimborso in corso.'
+          : 'Reso rifiutato. Pagamento al venditore confermato.';
+        
+        if (Platform.OS === 'web') {
+          window.alert(successMsg);
+        } else {
+          Alert.alert('Completato', successMsg);
+        }
+        
+        await loadDashboardData(bookstoreId!);
+      } catch (error: any) {
+        const errorMsg = error.response?.data?.detail || 'Errore nella verifica';
+        if (Platform.OS === 'web') {
+          window.alert('Errore: ' + errorMsg);
+        } else {
+          Alert.alert('Errore', errorMsg);
+        }
+      } finally {
+        setConfirmingAction(false);
+      }
+    };
+    
+    if (Platform.OS === 'web') {
+      if (window.confirm(`Vuoi ${actionText}?\n\n${confirmText}`)) {
+        await doVerify();
+      }
+    } else {
+      Alert.alert(`Conferma ${actionText}`, confirmText, [
+        { text: 'Annulla', style: 'cancel' },
+        { text: accepted ? 'Accetta' : 'Rifiuta', style: accepted ? 'destructive' : 'default', onPress: doVerify },
+      ]);
+    }
+  };
+
+  const handleScanOrManualCode = async (code: string) => {
+    if (!code.trim()) return;
+    
+    setConfirmingAction(true);
+    try {
+      // Prima prova consegna venditore
+      try {
+        await handleConfirmSellerDelivery(code);
+        return;
+      } catch (e: any) {
+        if (e.response?.status === 400) {
+          // Prova ritiro acquirente
+          await handleConfirmBuyerPickup(code);
+          return;
+        }
+        throw e;
+      }
+    } catch (error: any) {
+      const errorMsg = error.response?.data?.detail || 'Codice non valido';
+      if (Platform.OS === 'web') {
+        window.alert('Errore: ' + errorMsg);
+      } else {
+        Alert.alert('Errore', errorMsg);
+      }
+    } finally {
+      setConfirmingAction(false);
     }
   };
 
   const handleBarCodeScanned = ({ data }: { data: string }) => {
-    console.log('=== QR CODE DETECTED ===');
-    console.log('Data:', data);
-    console.log('========================');
-    
     setShowScanner(false);
-    handleConfirmPickup(data);
-  };
-
-  const getStatusConfig = (status: string) => {
-    return STATUS_CONFIG[status] || { label: status, color: '#666', icon: 'help-circle-outline' };
+    handleScanOrManualCode(data);
   };
 
   const handleGoBack = () => {
@@ -373,21 +529,31 @@ export default function BookstorePortalScreen() {
     }
   };
 
+  // Render timer badge
+  const renderTimer = (deadline: string | undefined) => {
+    if (!deadline) return null;
+    
+    const timer = getWorkingDaysRemaining(deadline);
+    
+    const bgColor = timer.expired ? '#f44336' : timer.urgency === 'danger' ? '#FF5722' : timer.urgency === 'warning' ? '#FF9800' : '#4CAF50';
+    const text = timer.expired 
+      ? '⚠️ SCADUTO' 
+      : timer.days > 0 
+        ? `${timer.days}g ${timer.hours}h` 
+        : `${timer.hours}h`;
+    
+    return (
+      <View style={[styles.timerBadge, { backgroundColor: bgColor }]}>
+        <Ionicons name="timer-outline" size={14} color="#fff" />
+        <Text style={styles.timerText}>{text}</Text>
+      </View>
+    );
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <Stack.Screen
-          options={{
-            title: 'Portale Cartolibreria',
-            headerStyle: { backgroundColor: '#1a472a' },
-            headerTintColor: '#fff',
-            headerLeft: () => (
-              <TouchableOpacity onPress={handleGoBack} style={{ paddingHorizontal: 16 }}>
-                <Ionicons name="arrow-back" size={24} color="#fff" />
-              </TouchableOpacity>
-            ),
-          }}
-        />
+        <Stack.Screen options={{ headerShown: false }} />
         <ActivityIndicator size="large" color="#1a472a" />
       </View>
     );
@@ -397,23 +563,12 @@ export default function BookstorePortalScreen() {
   if (!isLoggedIn) {
     return (
       <ScrollView style={styles.container} contentContainerStyle={styles.loginContainer}>
-        <Stack.Screen
-          options={{
-            title: 'Accesso Cartolibreria',
-            headerStyle: { backgroundColor: '#1a472a' },
-            headerTintColor: '#fff',
-            headerLeft: () => (
-              <TouchableOpacity onPress={handleGoBack} style={{ paddingHorizontal: 16 }}>
-                <Ionicons name="arrow-back" size={24} color="#fff" />
-              </TouchableOpacity>
-            ),
-          }}
-        />
+        <Stack.Screen options={{ headerShown: false }} />
 
         <View style={styles.loginCard}>
           <Ionicons name="storefront" size={64} color="#1a472a" />
           <Text style={styles.loginTitle}>Portale Cartolibreria</Text>
-          <Text style={styles.loginSubtitle}>Accedi per gestire gli ordini</Text>
+          <Text style={styles.loginSubtitle}>Gestisci ordini, consegne e resi</Text>
 
           <View style={styles.inputContainer}>
             <Ionicons name="mail-outline" size={20} color="#666" style={styles.inputIcon} />
@@ -435,6 +590,7 @@ export default function BookstorePortalScreen() {
               value={password}
               onChangeText={setPassword}
               secureTextEntry
+              onSubmitEditing={handleLogin}
             />
           </View>
 
@@ -453,11 +609,9 @@ export default function BookstorePortalScreen() {
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.registerLink}
-            onPress={() => router.push('/bookstore-register')}
-          >
-            <Text style={styles.registerLinkText}>Non hai un account? Richiedi accesso</Text>
+          <TouchableOpacity style={styles.backLink} onPress={handleGoBack}>
+            <Ionicons name="arrow-back" size={18} color="#666" />
+            <Text style={styles.backLinkText}>Torna indietro</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -467,481 +621,442 @@ export default function BookstorePortalScreen() {
   // Dashboard
   return (
     <View style={styles.container}>
-      <Stack.Screen
-        options={{
-          title: bookstoreName || 'Portale Cartolibreria',
-          headerStyle: { backgroundColor: '#1a472a' },
-          headerTintColor: '#fff',
-          headerLeft: () => (
-            <TouchableOpacity onPress={handleGoBack} style={{ paddingHorizontal: 16 }}>
-              <Ionicons name="arrow-back" size={24} color="#fff" />
-            </TouchableOpacity>
-          ),
-          headerRight: () => (
-            <TouchableOpacity onPress={handleLogout} style={{ paddingHorizontal: 16 }}>
-              <Ionicons name="log-out-outline" size={24} color="#fff" />
-            </TouchableOpacity>
-          ),
-        }}
-      />
-
-      {/* Header Bar with name and logout */}
-      <View style={styles.headerBar}>
-        <View style={styles.headerBarLeft}>
-          <Ionicons name="storefront" size={24} color="#1a472a" />
-          <Text style={styles.headerBarTitle}>{bookstoreName || 'Cartolibreria'}</Text>
+      <Stack.Screen options={{ headerShown: false }} />
+      
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <TouchableOpacity onPress={handleGoBack} style={styles.headerBackBtn}>
+            <Ionicons name="arrow-back" size={22} color="#fff" />
+          </TouchableOpacity>
+          <Ionicons name="storefront" size={24} color="#fff" />
+          <Text style={styles.headerTitle}>{bookstoreName}</Text>
         </View>
-        <TouchableOpacity onPress={handleLogout} style={styles.logoutButtonVisible}>
-          <Ionicons name="log-out-outline" size={20} color="#f44336" />
-          <Text style={styles.logoutButtonText}>Esci</Text>
+        <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
+          <Ionicons name="log-out-outline" size={20} color="#fff" />
+          <Text style={styles.logoutBtnText}>Esci</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Scan Button */}
-      <TouchableOpacity
-        style={styles.scanButton}
-        onPress={() => setShowScanner(true)}
-      >
-        <Ionicons name="qr-code" size={24} color="#fff" />
-        <Text style={styles.scanButtonText}>Scansiona QR / Inserisci Codice</Text>
-      </TouchableOpacity>
+      {/* Tabs */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabsContainer}>
+        {[
+          { key: 'dashboard', label: 'Dashboard', icon: 'grid-outline', count: null },
+          { key: 'in_arrivo', label: 'In Arrivo', icon: 'time-outline', count: stats.in_arrivo },
+          { key: 'da_ritirare', label: 'Da Ritirare', icon: 'cube-outline', count: stats.da_ritirare },
+          { key: 'completati', label: 'Completati', icon: 'checkmark-circle-outline', count: stats.completati_mese },
+          { key: 'resi', label: 'Resi', icon: 'refresh-outline', count: stats.resi_in_attesa },
+        ].map((tab) => (
+          <TouchableOpacity
+            key={tab.key}
+            style={[styles.tab, activeTab === tab.key && styles.tabActive]}
+            onPress={() => setActiveTab(tab.key as TabType)}
+          >
+            <Ionicons name={tab.icon as any} size={18} color={activeTab === tab.key ? '#1a472a' : '#666'} />
+            <Text style={[styles.tabText, activeTab === tab.key && styles.tabTextActive]}>{tab.label}</Text>
+            {tab.count !== null && tab.count > 0 && (
+              <View style={[styles.tabBadge, activeTab === tab.key && styles.tabBadgeActive]}>
+                <Text style={[styles.tabBadgeText, activeTab === tab.key && styles.tabBadgeTextActive]}>{tab.count}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
 
-      {/* Orders List */}
+      {/* Content */}
       <ScrollView
-        style={styles.scrollView}
+        style={styles.content}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={() => {
               setRefreshing(true);
-              loadOrders(bookstoreId!);
+              loadDashboardData(bookstoreId!);
             }}
+            colors={['#1a472a']}
           />
         }
       >
-        {/* Notifiche Section */}
-        {notifications.length > 0 && (
-          <View style={styles.notificationsSection}>
-            <View style={styles.notificationHeader}>
-              <Ionicons name="notifications" size={20} color="#FF9800" />
-              <Text style={styles.notificationTitle}>
-                Notifiche {unreadCount > 0 && `(${unreadCount} nuove)`}
-              </Text>
+        {/* Dashboard Tab */}
+        {activeTab === 'dashboard' && (
+          <View style={styles.dashboardContent}>
+            {/* Quick Actions */}
+            <TouchableOpacity style={styles.scanButton} onPress={() => setShowScanner(true)}>
+              <Ionicons name="qr-code" size={28} color="#fff" />
+              <View style={styles.scanButtonTextContainer}>
+                <Text style={styles.scanButtonTitle}>Scansiona QR Code</Text>
+                <Text style={styles.scanButtonSubtitle}>Conferma consegna o ritiro</Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* Stats Grid */}
+            <View style={[styles.statsGrid, isDesktop && styles.statsGridDesktop]}>
+              {/* In Arrivo */}
+              <TouchableOpacity 
+                style={[styles.statCard, styles.statCardBlue]}
+                onPress={() => setActiveTab('in_arrivo')}
+              >
+                <Ionicons name="time-outline" size={32} color="#1976D2" />
+                <Text style={styles.statNumber}>{stats.in_arrivo}</Text>
+                <Text style={styles.statLabel}>In Arrivo</Text>
+                {stats.ordini_scaduti > 0 && (
+                  <View style={styles.alertBadge}>
+                    <Ionicons name="warning" size={12} color="#fff" />
+                    <Text style={styles.alertBadgeText}>{stats.ordini_scaduti} scaduti</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+
+              {/* Da Ritirare */}
+              <TouchableOpacity 
+                style={[styles.statCard, styles.statCardOrange]}
+                onPress={() => setActiveTab('da_ritirare')}
+              >
+                <Ionicons name="cube-outline" size={32} color="#F57C00" />
+                <Text style={styles.statNumber}>{stats.da_ritirare}</Text>
+                <Text style={styles.statLabel}>Da Ritirare</Text>
+              </TouchableOpacity>
+
+              {/* Completati Oggi */}
+              <TouchableOpacity 
+                style={[styles.statCard, styles.statCardGreen]}
+                onPress={() => setActiveTab('completati')}
+              >
+                <Ionicons name="checkmark-circle-outline" size={32} color="#388E3C" />
+                <Text style={styles.statNumber}>{stats.completati_oggi}</Text>
+                <Text style={styles.statLabel}>Oggi</Text>
+              </TouchableOpacity>
+
+              {/* Resi */}
+              <TouchableOpacity 
+                style={[styles.statCard, styles.statCardRed]}
+                onPress={() => setActiveTab('resi')}
+              >
+                <Ionicons name="refresh-outline" size={32} color="#C2185B" />
+                <Text style={styles.statNumber}>{stats.resi_in_attesa}</Text>
+                <Text style={styles.statLabel}>Resi in attesa</Text>
+              </TouchableOpacity>
             </View>
-            {notifications.slice(0, 5).map((notif) => {
-              const isCompleted = notif.type === 'order_completed';
-              const isReturnRequest = notif.type === 'return_request';
-              const isExpanded = expandedNotifications.has(notif.id);
-              
-              // Determina lo stato della notifica per i colori
-              // ROSSO pastello = in attesa (paid_escrow, delivering_to_bookstore, new_order)
-              // ARANCIONE pastello = consegnato alla cartolibreria (ready_for_pickup)
-              // VERDE pastello = ritirato/completato (order_completed, picked_up)
-              const orderStatus = notif.order_status || notif.status || '';
-              const isPending = ['paid_escrow', 'delivering_to_bookstore', 'new_order', 'seller_delivery'].includes(notif.type) || 
-                               ['paid_escrow', 'delivering_to_bookstore'].includes(orderStatus);
-              const isDelivered = notif.type === 'ready_for_pickup' || orderStatus === 'ready_for_pickup';
-              const isPickedUp = isCompleted || notif.type === 'picked_up' || orderStatus === 'completed';
-              
-              const toggleExpand = () => {
-                const newExpanded = new Set(expandedNotifications);
-                if (isExpanded) {
-                  newExpanded.delete(notif.id);
-                } else {
-                  newExpanded.add(notif.id);
-                }
-                setExpandedNotifications(newExpanded);
-              };
-              
-              return (
-                <TouchableOpacity
-                  key={notif.id} 
-                  style={[
-                    styles.notificationCard,
-                    !notif.read && styles.notificationUnread,
-                    // Applica colori basati sullo stato
-                    isPending && styles.notificationPending,
-                    isDelivered && styles.notificationDelivered,
-                    isPickedUp && styles.notificationPickedUp,
-                    isReturnRequest && styles.notificationReturn,
-                    isExpanded && styles.notificationExpanded
-                  ]}
-                  onPress={toggleExpand}
-                  activeOpacity={0.8}
-                >
-                  <View style={styles.notificationCardHeader}>
-                    <View style={[
-                      styles.notificationIcon, 
-                      isPending && { backgroundColor: '#ffcdd2' },
-                      isDelivered && { backgroundColor: '#ffe0b2' },
-                      isPickedUp && { backgroundColor: '#c8e6c9' },
-                      isReturnRequest && { backgroundColor: '#ffebee' }
-                    ]}>
-                      <Ionicons 
-                        name={
-                          isPickedUp ? "checkmark-circle" : 
-                          isDelivered ? "time" :
-                          isReturnRequest ? "arrow-undo" : 
-                          isPending ? "cube" : "cube"
-                        } 
-                        size={20} 
-                        color={
-                          isPickedUp ? "#4CAF50" : 
-                          isDelivered ? "#ff9800" :
-                          isReturnRequest ? "#f44336" : 
-                          isPending ? "#e53935" : "#FF9800"
-                        } 
-                      />
+
+            {/* Earnings Card - Commissione Libri (10% - 50% Stripe) */}
+            <View style={styles.earningsCard}>
+              <View style={styles.earningsHeader}>
+                <Ionicons name="book-outline" size={28} color="#fff" />
+                <Text style={styles.earningsTitle}>Commissione Libri (10% - 50% Stripe)</Text>
+              </View>
+              <View style={styles.earningsGrid}>
+                <View style={styles.earningsItem}>
+                  <Text style={styles.earningsItemLabel}>Oggi</Text>
+                  <Text style={styles.earningsItemValue}>€{stats.guadagno_libri_oggi.toFixed(2)}</Text>
+                </View>
+                <View style={styles.earningsDivider} />
+                <View style={styles.earningsItem}>
+                  <Text style={styles.earningsItemLabel}>Questo mese</Text>
+                  <Text style={styles.earningsItemValue}>€{stats.guadagno_libri_mese.toFixed(2)}</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Foderazione Card - €1,50 per copertina */}
+            <View style={styles.foderazioneCard}>
+              <View style={styles.earningsHeader}>
+                <Ionicons name="layers-outline" size={28} color="#fff" />
+                <View style={{flex: 1}}>
+                  <Text style={styles.earningsTitle}>Foderazione (€1,50/copertina - Stripe)</Text>
+                  <Text style={styles.foderazioneSubtitle}>Copertine foderate: {stats.num_foderazione_mese} questo mese</Text>
+                </View>
+              </View>
+              <View style={styles.earningsGrid}>
+                <View style={styles.earningsItem}>
+                  <Text style={styles.earningsItemLabel}>Oggi ({stats.num_foderazione_oggi})</Text>
+                  <Text style={styles.earningsItemValue}>€{stats.guadagno_foderazione_oggi.toFixed(2)}</Text>
+                </View>
+                <View style={styles.earningsDivider} />
+                <View style={styles.earningsItem}>
+                  <Text style={styles.earningsItemLabel}>Questo mese</Text>
+                  <Text style={styles.earningsItemValue}>€{stats.guadagno_foderazione_mese.toFixed(2)}</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Totale Guadagni */}
+            <View style={styles.totalEarningsCard}>
+              <View style={styles.totalEarningsRow}>
+                <View style={styles.totalEarningsLeft}>
+                  <Ionicons name="wallet" size={32} color="#4CAF50" />
+                  <View>
+                    <Text style={styles.totalEarningsLabel}>TOTALE GUADAGNI</Text>
+                    <Text style={styles.totalEarningsSubLabel}>Libri + Foderazione</Text>
+                  </View>
+                </View>
+                <View style={styles.totalEarningsRight}>
+                  <Text style={styles.totalEarningsSmall}>Oggi: €{stats.guadagno_oggi.toFixed(2)}</Text>
+                  <Text style={styles.totalEarningsValue}>€{stats.guadagno_mese.toFixed(2)}</Text>
+                  <Text style={styles.totalEarningsSmall}>questo mese</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Formula Calcolo */}
+            <View style={styles.formulaCard}>
+              <Text style={styles.formulaTitle}>📊 Come vengono calcolati i compensi</Text>
+              <View style={styles.formulaSection}>
+                <Text style={styles.formulaSubtitle}>Commissione Libri:</Text>
+                <Text style={styles.formulaText}>10% del prezzo libro - 50% della commissione Stripe proporzionale</Text>
+              </View>
+              <View style={styles.formulaSection}>
+                <Text style={styles.formulaSubtitle}>Foderazione:</Text>
+                <Text style={styles.formulaText}>€1,50 per copertina - commissione Stripe proporzionale</Text>
+              </View>
+              <View style={styles.formulaExample}>
+                <Text style={styles.formulaExampleTitle}>Esempio: Libro €20 + Foderazione €1,50</Text>
+                <Text style={styles.formulaExampleText}>• Stripe (2.9% + €0.25): ~€0.87</Text>
+                <Text style={styles.formulaExampleText}>• Commissione libro: €2.00 - €0.40 = €1.60</Text>
+                <Text style={styles.formulaExampleText}>• Foderazione: €1.50 - €0.06 = €1.44</Text>
+                <Text style={styles.formulaExampleTotal}>• Totale cartolibreria: €3.04</Text>
+              </View>
+            </View>
+
+            {/* Info Card */}
+            <View style={styles.infoCard}>
+              <Ionicons name="information-circle-outline" size={24} color="#1a472a" />
+              <View style={styles.infoCardContent}>
+                <Text style={styles.infoCardTitle}>Timer Consegne (2 giorni lavorativi)</Text>
+                <Text style={styles.infoCardText}>
+                  I venditori hanno 2 giorni lavorativi per consegnare i libri. 
+                  Se il timer scade, l'ordine viene annullato automaticamente e l'acquirente rimborsato.
+                </Text>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* In Arrivo Tab */}
+        {activeTab === 'in_arrivo' && (
+          <View style={styles.ordersList}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>📦 Ordini In Arrivo ({ordersInArrivo.length})</Text>
+              <Text style={styles.sectionSubtitle}>Attendi la consegna del venditore</Text>
+            </View>
+            
+            {ordersInArrivo.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Ionicons name="checkmark-circle" size={64} color="#4CAF50" />
+                <Text style={styles.emptyStateText}>Nessun ordine in arrivo</Text>
+              </View>
+            ) : (
+              ordersInArrivo.map((order) => (
+                <View key={order.id} style={[styles.orderCard, styles.orderCardInArrivo]}>
+                  <View style={styles.orderCardHeader}>
+                    <View style={styles.orderCodeContainer}>
+                      <Text style={styles.orderCode}>{order.order_code}</Text>
+                      {renderTimer(order.seller_delivery_deadline)}
                     </View>
-                    <View style={styles.notificationContent}>
-                      <Text style={[
-                        styles.notificationTitleText, 
-                        isPending && { color: '#c62828' },
-                        isDelivered && { color: '#e65100' },
-                        isPickedUp && { color: '#2e7d32' },
-                        isReturnRequest && { color: '#f44336' }
-                      ]}>
-                        {notif.title}
-                      </Text>
-                      {!isExpanded && (
-                        <Text style={styles.notificationMessage} numberOfLines={2}>
-                          {notif.message}
-                        </Text>
-                      )}
-                    </View>
-                    <Ionicons 
-                      name={isExpanded ? "chevron-up" : "chevron-down"} 
-                      size={20} 
-                      color="#666" 
-                    />
                   </View>
                   
-                  {/* Contenuto espanso */}
-                  {isExpanded && (
-                    <View style={styles.notificationExpandedContent}>
-                      {/* Messaggio completo */}
-                      <Text style={styles.notificationFullMessage}>
-                        {notif.message}
+                  <Text style={styles.orderBookTitle}>{order.book_titolo}</Text>
+                  {order.book_autore && <Text style={styles.orderBookAuthor}>{order.book_autore}</Text>}
+                  
+                  <View style={styles.orderMeta}>
+                    <View style={styles.orderMetaRow}>
+                      <Ionicons name="person" size={14} color="#666" />
+                      <Text style={styles.orderMetaText}>Venditore: {order.seller_name}</Text>
+                    </View>
+                    <View style={styles.orderMetaRow}>
+                      <Ionicons name="cart" size={14} color="#666" />
+                      <Text style={styles.orderMetaText}>Acquirente: {order.buyer_name}</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.orderFooter}>
+                    <Text style={styles.orderPrice}>€{order.totale_acquirente?.toFixed(2)}</Text>
+                    <TouchableOpacity
+                      style={styles.actionBtn}
+                      onPress={() => handleConfirmSellerDelivery(order.order_code)}
+                    >
+                      <Ionicons name="checkmark" size={18} color="#fff" />
+                      <Text style={styles.actionBtnText}>Ricevuto</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))
+            )}
+          </View>
+        )}
+
+        {/* Da Ritirare Tab */}
+        {activeTab === 'da_ritirare' && (
+          <View style={styles.ordersList}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>🏪 Da Ritirare ({ordersDaRitirare.length})</Text>
+              <Text style={styles.sectionSubtitle}>In attesa che l'acquirente venga a ritirare</Text>
+            </View>
+            
+            {ordersDaRitirare.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Ionicons name="cube-outline" size={64} color="#ccc" />
+                <Text style={styles.emptyStateText}>Nessun libro da ritirare</Text>
+              </View>
+            ) : (
+              ordersDaRitirare.map((order) => (
+                <View key={order.id} style={[styles.orderCard, styles.orderCardDaRitirare]}>
+                  <View style={styles.orderCardHeader}>
+                    <Text style={styles.orderCode}>{order.order_code}</Text>
+                    <View style={styles.statusBadgeReady}>
+                      <Text style={styles.statusBadgeReadyText}>Pronto</Text>
+                    </View>
+                  </View>
+                  
+                  <Text style={styles.orderBookTitle}>{order.book_titolo}</Text>
+                  
+                  <View style={styles.orderMeta}>
+                    <View style={styles.orderMetaRow}>
+                      <Ionicons name="person" size={14} color="#666" />
+                      <Text style={styles.orderMetaText}>Acquirente: {order.buyer_name}</Text>
+                    </View>
+                  </View>
+
+                  {/* QR Code per ritiro */}
+                  <View style={styles.qrContainer}>
+                    <QRCode value={order.order_code} size={100} backgroundColor="#fff" />
+                    <Text style={styles.qrHint}>L'acquirente mostrerà questo QR</Text>
+                  </View>
+
+                  <View style={styles.orderFooter}>
+                    <Text style={styles.orderPrice}>€{order.totale_acquirente?.toFixed(2)}</Text>
+                    <TouchableOpacity
+                      style={[styles.actionBtn, styles.actionBtnGreen]}
+                      onPress={() => handleConfirmBuyerPickup(order.order_code)}
+                    >
+                      <Ionicons name="bag-check" size={18} color="#fff" />
+                      <Text style={styles.actionBtnText}>Consegnato</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))
+            )}
+          </View>
+        )}
+
+        {/* Completati Tab */}
+        {activeTab === 'completati' && (
+          <View style={styles.ordersList}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>✅ Completati ({ordersCompletati.length})</Text>
+              <Text style={styles.sectionSubtitle}>Ordini consegnati con successo</Text>
+            </View>
+            
+            {ordersCompletati.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Ionicons name="checkmark-circle-outline" size={64} color="#ccc" />
+                <Text style={styles.emptyStateText}>Nessun ordine completato</Text>
+              </View>
+            ) : (
+              ordersCompletati.slice(0, 20).map((order) => (
+                <View key={order.id} style={[styles.orderCard, styles.orderCardCompleted]}>
+                  <View style={styles.orderCardHeader}>
+                    <Text style={styles.orderCode}>{order.order_code}</Text>
+                    <View style={styles.earningsBadgeSmall}>
+                      <Ionicons name="cash" size={12} color="#4CAF50" />
+                      <Text style={styles.earningsBadgeText}>+€{(order.commissione_cartolibreria || 0).toFixed(2)}</Text>
+                    </View>
+                  </View>
+                  
+                  <Text style={styles.orderBookTitle}>{order.book_titolo}</Text>
+                  
+                  <View style={styles.orderMeta}>
+                    <View style={styles.orderMetaRow}>
+                      <Ionicons name="calendar" size={14} color="#666" />
+                      <Text style={styles.orderMetaText}>
+                        {new Date(order.completed_at || order.created_at).toLocaleDateString('it-IT')}
                       </Text>
-                      
-                      {/* QR Code */}
-                      {notif.order_code && (
-                        <View style={styles.qrCodeContainer}>
-                          <Text style={styles.qrCodeLabel}>Codice ordine</Text>
-                          <View style={styles.qrCodeWrapper}>
-                            <QRCode
-                              value={notif.order_code}
-                              size={120}
-                              backgroundColor="#fff"
-                            />
-                          </View>
-                          <View style={[
-                            styles.notificationCodeBadge, 
-                            isPending && { backgroundColor: '#ffcdd2' },
-                            isDelivered && { backgroundColor: '#ffe0b2' },
-                            isPickedUp && { backgroundColor: '#c8e6c9' },
-                            isReturnRequest && { backgroundColor: '#ffebee' }
-                          ]}>
-                            <Text style={[
-                              styles.notificationCodeText, 
-                              isPending && { color: '#c62828' },
-                              isDelivered && { color: '#e65100' },
-                              isPickedUp && { color: '#2e7d32' },
-                              isReturnRequest && { color: '#f44336' }
-                            ]}>
-                              {notif.order_code}
-                            </Text>
-                          </View>
-                          
-                          {/* Status indicator con icona */}
-                          <View style={[
-                            styles.statusIndicator,
-                            isPending && { backgroundColor: '#ffcdd2' },
-                            isDelivered && { backgroundColor: '#ffe0b2' },
-                            isPickedUp && { backgroundColor: '#c8e6c9' }
-                          ]}>
-                            <Ionicons 
-                              name={isPickedUp ? "checkmark-circle" : isDelivered ? "time" : "cube"} 
-                              size={16} 
-                              color={isPickedUp ? "#2e7d32" : isDelivered ? "#e65100" : "#c62828"} 
-                            />
-                            <Text style={[
-                              styles.statusIndicatorText,
-                              isPending && { color: '#c62828' },
-                              isDelivered && { color: '#e65100' },
-                              isPickedUp && { color: '#2e7d32' }
-                            ]}>
-                              {isPickedUp ? '✓ Ritirato' : isDelivered ? '⏱ In attesa ritiro' : '📦 In arrivo'}
-                            </Text>
-                          </View>
-                        </View>
-                      )}
-                      
-                      {/* Dettagli libro - per TUTTE le notifiche con book_details */}
-                      {notif.book_details && (
-                        <View style={styles.bookDetailsContainer}>
-                          <Text style={styles.bookDetailsTitle}>
-                            {isReturnRequest ? 'Condizioni dichiarate del libro:' : '📋 Condizioni del libro da verificare:'}
-                          </Text>
-                          
-                          {/* Info venditore/acquirente */}
-                          {(notif.seller_name || notif.buyer_name) && (
-                            <View style={styles.partiesInfo}>
-                              {notif.seller_name && (
-                                <View style={styles.partyRow}>
-                                  <Ionicons name="person" size={16} color="#1a472a" />
-                                  <Text style={styles.partyLabel}>Venditore:</Text>
-                                  <Text style={styles.partyValue}>{notif.seller_name}</Text>
-                                </View>
-                              )}
-                              {notif.buyer_name && (
-                                <View style={styles.partyRow}>
-                                  <Ionicons name="cart" size={16} color="#2196F3" />
-                                  <Text style={styles.partyLabel}>Acquirente:</Text>
-                                  <Text style={styles.partyValue}>{notif.buyer_name}</Text>
-                                </View>
-                              )}
-                            </View>
-                          )}
-                          
-                          {notif.book_details.condition_answers && (
-                            <View style={styles.conditionsList}>
-                              {notif.book_details.condition_answers.sottolineature !== undefined && (
-                                <View style={styles.conditionRow}>
-                                  <Ionicons name="pencil" size={16} color="#666" />
-                                  <Text style={styles.conditionLabel}>Scritte/evidenziature:</Text>
-                                  <Text style={styles.conditionValue}>
-                                    {['Nessuna', 'Poche', 'Molte'][notif.book_details.condition_answers.sottolineature] || 'N/D'}
-                                  </Text>
-                                </View>
-                              )}
-                              {notif.book_details.condition_answers.copertina !== undefined && (
-                                <View style={styles.conditionRow}>
-                                  <Ionicons name="book" size={16} color="#666" />
-                                  <Text style={styles.conditionLabel}>Copertina rovinata:</Text>
-                                  <Text style={styles.conditionValue}>
-                                    {['No', 'Un po\'', 'Molto'][notif.book_details.condition_answers.copertina] || 'N/D'}
-                                  </Text>
-                                </View>
-                              )}
-                              {notif.book_details.condition_answers.pagine !== undefined && (
-                                <View style={styles.conditionRow}>
-                                  <Ionicons name="document-text" size={16} color="#666" />
-                                  <Text style={styles.conditionLabel}>Pagine piegate:</Text>
-                                  <Text style={styles.conditionValue}>
-                                    {['Nessuna', 'Qualcuna', 'Molte'][notif.book_details.condition_answers.pagine] || 'N/D'}
-                                  </Text>
-                                </View>
-                              )}
-                              {notif.book_details.condition_answers.esercizi !== undefined && (
-                                <View style={styles.conditionRow}>
-                                  <Ionicons name="create" size={16} color="#666" />
-                                  <Text style={styles.conditionLabel}>Esercizi compilati:</Text>
-                                  <Text style={styles.conditionValue}>
-                                    {['No', 'Qualcuno', 'Molti'][notif.book_details.condition_answers.esercizi] || 'N/D'}
-                                  </Text>
-                                </View>
-                              )}
-                            </View>
-                          )}
-                          
-                          {notif.book_details.note && (
-                            <View style={styles.noteContainer}>
-                              <Text style={styles.noteLabel}>Note del venditore:</Text>
-                              <Text style={styles.noteText}>{notif.book_details.note}</Text>
-                            </View>
-                          )}
-                          
-                          {notif.return_reason && (
-                            <View style={styles.returnReasonContainer}>
-                              <Text style={styles.returnReasonLabel}>Motivo del reso:</Text>
-                              <Text style={styles.returnReasonText}>{notif.return_reason}</Text>
-                            </View>
-                          )}
-                        </View>
-                      )}
-                      
-                      {isCompleted && notif.commissione_cartolibreria && (
-                        <View style={styles.earningsBadge}>
-                          <Ionicons name="cash" size={14} color="#4CAF50" />
-                          <Text style={styles.earningsText}>
-                            Ricavato: €{notif.commissione_cartolibreria.toFixed(2)}
-                          </Text>
-                        </View>
-                      )}
-                      
-                      {/* Pulsanti Accetta/Rifiuta per richieste reso */}
-                      {isReturnRequest && notif.order_id && (
-                        <View style={styles.returnActionButtons}>
-                          <TouchableOpacity
-                            style={[styles.returnActionBtn, styles.returnRejectBtn]}
-                            onPress={() => handleVerifyReturn(notif.order_id, false, notif.id)}
-                          >
-                            <Ionicons name="close" size={18} color="#fff" />
-                            <Text style={styles.returnActionBtnText}>Rifiuta reso</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={[styles.returnActionBtn, styles.returnAcceptBtn]}
-                            onPress={() => handleVerifyReturn(notif.order_id, true, notif.id)}
-                          >
-                            <Ionicons name="checkmark" size={18} color="#fff" />
-                            <Text style={styles.returnActionBtnText}>Accetta reso</Text>
-                          </TouchableOpacity>
-                        </View>
-                      )}
+                    </View>
+                  </View>
+                </View>
+              ))
+            )}
+          </View>
+        )}
+
+        {/* Resi Tab */}
+        {activeTab === 'resi' && (
+          <View style={styles.ordersList}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>🔄 Resi ({ordersResi.length})</Text>
+              <Text style={styles.sectionSubtitle}>Verifica le condizioni e approva/rifiuta</Text>
+            </View>
+            
+            {ordersResi.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Ionicons name="thumbs-up-outline" size={64} color="#4CAF50" />
+                <Text style={styles.emptyStateText}>Nessun reso in attesa</Text>
+              </View>
+            ) : (
+              ordersResi.map((order) => (
+                <View key={order.id} style={[styles.orderCard, styles.orderCardReso]}>
+                  <View style={styles.orderCardHeader}>
+                    <Text style={styles.orderCode}>{order.order_code}</Text>
+                    <View style={styles.statusBadgeReturn}>
+                      <Text style={styles.statusBadgeReturnText}>
+                        {order.status === 'return_requested' ? 'Da verificare' : order.status === 'returned' ? 'Rimborsato' : 'Rifiutato'}
+                      </Text>
+                    </View>
+                  </View>
+                  
+                  <Text style={styles.orderBookTitle}>{order.book_titolo}</Text>
+                  
+                  <View style={styles.orderMeta}>
+                    <View style={styles.orderMetaRow}>
+                      <Ionicons name="person" size={14} color="#666" />
+                      <Text style={styles.orderMetaText}>Acquirente: {order.buyer_name}</Text>
+                    </View>
+                  </View>
+
+                  {order.status === 'return_requested' && (
+                    <View style={styles.returnActions}>
+                      <TouchableOpacity
+                        style={[styles.returnBtn, styles.returnBtnReject]}
+                        onPress={() => handleVerifyReturn(order.id, false)}
+                      >
+                        <Ionicons name="close" size={18} color="#fff" />
+                        <Text style={styles.returnBtnText}>Rifiuta</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.returnBtn, styles.returnBtnAccept]}
+                        onPress={() => handleVerifyReturn(order.id, true)}
+                      >
+                        <Ionicons name="checkmark" size={18} color="#fff" />
+                        <Text style={styles.returnBtnText}>Accetta</Text>
+                      </TouchableOpacity>
                     </View>
                   )}
-                </TouchableOpacity>
-              );
-            })}
+                </View>
+              ))
+            )}
           </View>
         )}
-        
-        {/* Resi in Attesa Section */}
-        {pendingReturns.length > 0 && (
-          <View style={styles.returnsSection}>
-            <View style={styles.returnsSectionHeader}>
-              <Ionicons name="arrow-undo" size={20} color="#f44336" />
-              <Text style={styles.returnsSectionTitle}>
-                Resi da verificare ({pendingReturns.length})
-              </Text>
-            </View>
-            {pendingReturns.map((returnItem) => (
-              <View key={returnItem.id} style={styles.returnCard}>
-                <View style={styles.returnCardHeader}>
-                  <Text style={styles.returnBookTitle}>{returnItem.book_titolo}</Text>
-                  <Text style={styles.returnOrderCode}>#{returnItem.order_code}</Text>
-                </View>
-                <Text style={styles.returnReason}>
-                  Motivo: {returnItem.return_reason || 'Condizioni non conformi'}
-                </Text>
-                <Text style={styles.returnBuyer}>
-                  Acquirente: {returnItem.buyer_name}
-                </Text>
-                <View style={styles.returnActions}>
-                  <TouchableOpacity
-                    style={[styles.returnActionBtn, styles.returnRejectBtn]}
-                    onPress={() => handleVerifyReturn(returnItem.id, false)}
-                    disabled={processingReturn}
-                  >
-                    <Ionicons name="close" size={18} color="#fff" />
-                    <Text style={styles.returnActionText}>Rifiuta</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.returnActionBtn, styles.returnAcceptBtn]}
-                    onPress={() => handleVerifyReturn(returnItem.id, true)}
-                    disabled={processingReturn}
-                  >
-                    <Ionicons name="checkmark" size={18} color="#fff" />
-                    <Text style={styles.returnActionText}>Accetta</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
-        
-        {/* Totale Ricavato */}
-        {orders.filter(o => o.status === 'completed').length > 0 && (
-          <View style={styles.totalEarningsCard}>
-            <Ionicons name="wallet" size={24} color="#4CAF50" />
-            <View style={styles.totalEarningsContent}>
-              <Text style={styles.totalEarningsLabel}>Totale Ricavato (5%)</Text>
-              <Text style={styles.totalEarningsValue}>
-                €{orders
-                  .filter(o => o.status === 'completed')
-                  .reduce((sum, o) => sum + (o.commissione_cartolibreria || 0), 0)
-                  .toFixed(2)}
-              </Text>
-            </View>
-          </View>
-        )}
-        
-        <Text style={styles.sectionTitle}>Ordini ({orders.length})</Text>
 
-        {orders.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Ionicons name="receipt-outline" size={64} color="#ccc" />
-            <Text style={styles.emptyText}>Nessun ordine al momento</Text>
-          </View>
-        ) : (
-          orders.map((order) => {
-            const statusConfig = getStatusConfig(order.status);
-            return (
-              <View key={order.id} style={styles.orderCard}>
-                <View style={styles.orderHeader}>
-                  <View style={[styles.statusBadge, { backgroundColor: statusConfig.color }]}>
-                    <Ionicons name={statusConfig.icon as any} size={14} color="#fff" />
-                    <Text style={styles.statusText}>{statusConfig.label}</Text>
-                  </View>
-                  <Text style={styles.orderCode}>{order.order_code}</Text>
-                </View>
-
-                <Text style={styles.bookTitle}>{order.book_titolo}</Text>
-                {order.book_autore && (
-                  <Text style={styles.bookAuthor}>{order.book_autore}</Text>
-                )}
-
-                <View style={styles.orderDetails}>
-                  <View style={styles.detailRow}>
-                    <Ionicons name="person" size={16} color="#666" />
-                    <Text style={styles.detailText}>Acquirente: {order.buyer_name}</Text>
-                  </View>
-                  <View style={styles.detailRow}>
-                    <Ionicons name="cash" size={16} color="#666" />
-                    <Text style={styles.detailText}>€{order.totale_acquirente.toFixed(2)}</Text>
-                  </View>
-                </View>
-
-                {/* Actions */}
-                {order.status === 'delivering_to_bookstore' && (
-                  <TouchableOpacity
-                    style={styles.actionButton}
-                    onPress={() => handleMarkReady(order.id)}
-                  >
-                    <Ionicons name="checkmark-circle" size={20} color="#fff" />
-                    <Text style={styles.actionButtonText}>Segna come pronto</Text>
-                  </TouchableOpacity>
-                )}
-
-                {order.status === 'ready_for_pickup' && (
-                  <TouchableOpacity
-                    style={[styles.actionButton, { backgroundColor: '#4CAF50' }]}
-                    onPress={() => handleConfirmPickup(order.order_code)}
-                  >
-                    <Ionicons name="bag-check" size={20} color="#fff" />
-                    <Text style={styles.actionButtonText}>Conferma ritiro</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            );
-          })
-        )}
         <View style={{ height: 40 }} />
       </ScrollView>
 
       {/* Scanner Modal */}
-      <Modal
-        visible={showScanner}
-        animationType="slide"
-        onRequestClose={() => setShowScanner(false)}
-      >
-        <View style={styles.scannerContainer}>
+      <Modal visible={showScanner} animationType="slide" onRequestClose={() => setShowScanner(false)}>
+        <View style={styles.scannerModal}>
           <View style={styles.scannerHeader}>
-            <Text style={styles.scannerTitle}>Scansiona QR o inserisci codice</Text>
+            <Text style={styles.scannerTitle}>Scansiona o inserisci codice</Text>
             <TouchableOpacity onPress={() => setShowScanner(false)}>
               <Ionicons name="close" size={28} color="#333" />
             </TouchableOpacity>
           </View>
 
-          {permission?.granted ? (
+          {Platform.OS !== 'web' && permission?.granted && CameraView ? (
             <View style={styles.cameraContainer}>
               <CameraView
                 style={styles.camera}
                 facing="back"
                 onBarcodeScanned={handleBarCodeScanned}
                 barcodeScannerSettings={{
-                  barcodeTypes: ['qr', 'aztec', 'datamatrix', 'code128', 'code39'],
+                  barcodeTypes: ['qr'],
                   interval: 500,
                 }}
               />
@@ -951,20 +1066,21 @@ export default function BookstorePortalScreen() {
               </View>
             </View>
           ) : (
-            <View style={styles.permissionContainer}>
-              <Ionicons name="camera-outline" size={64} color="#ccc" />
-              <Text style={styles.permissionText}>Permesso fotocamera non concesso</Text>
-              <TouchableOpacity
-                style={styles.permissionButton}
-                onPress={requestPermission}
-              >
-                <Text style={styles.permissionButtonText}>Concedi permesso</Text>
-              </TouchableOpacity>
+            <View style={styles.noCameraContainer}>
+              <Ionicons name="qr-code-outline" size={80} color="#ccc" />
+              <Text style={styles.noCameraText}>
+                {Platform.OS === 'web' ? 'Scanner non disponibile su web' : 'Permesso fotocamera non concesso'}
+              </Text>
+              {Platform.OS !== 'web' && (
+                <TouchableOpacity style={styles.permissionBtn} onPress={requestPermission}>
+                  <Text style={styles.permissionBtnText}>Concedi permesso</Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
 
           <View style={styles.manualInputContainer}>
-            <Text style={styles.manualInputLabel}>Oppure inserisci il codice manualmente:</Text>
+            <Text style={styles.manualInputLabel}>Inserisci codice manualmente:</Text>
             <View style={styles.manualInputRow}>
               <TextInput
                 style={styles.manualInput}
@@ -975,11 +1091,11 @@ export default function BookstorePortalScreen() {
                 maxLength={6}
               />
               <TouchableOpacity
-                style={[styles.confirmButton, confirmingPickup && styles.confirmButtonDisabled]}
-                onPress={() => handleConfirmPickup(manualCode)}
-                disabled={confirmingPickup || !manualCode.trim()}
+                style={[styles.manualInputBtn, confirmingAction && styles.manualInputBtnDisabled]}
+                onPress={() => handleScanOrManualCode(manualCode)}
+                disabled={confirmingAction || !manualCode.trim()}
               >
-                {confirmingPickup ? (
+                {confirmingAction ? (
                   <ActivityIndicator color="#fff" size="small" />
                 ) : (
                   <Ionicons name="checkmark" size={24} color="#fff" />
@@ -1004,6 +1120,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#f5f5f5',
   },
+  // Login
   loginContainer: {
     flexGrow: 1,
     justifyContent: 'center',
@@ -1070,158 +1187,567 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  registerLink: {
+  backLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginTop: 20,
+    gap: 6,
   },
-  registerLinkText: {
-    color: '#1a472a',
+  backLinkText: {
+    color: '#666',
     fontSize: 14,
   },
-  headerBar: {
+  // Header
+  header: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#fff',
+    alignItems: 'center',
+    backgroundColor: '#1a472a',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    paddingVertical: 14,
+    paddingTop: Platform.OS === 'ios' ? 50 : 14,
   },
-  headerBarLeft: {
+  headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
   },
-  headerBarTitle: {
+  headerBackBtn: {
+    padding: 4,
+  },
+  headerTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1a472a',
+    color: '#fff',
   },
-  logoutButtonVisible: {
+  logoutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#ffebee',
-    paddingHorizontal: 14,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 20,
     gap: 6,
   },
-  logoutButtonText: {
-    color: '#f44336',
+  logoutBtnText: {
+    color: '#fff',
     fontSize: 14,
+    fontWeight: '500',
+  },
+  // Tabs
+  tabsContainer: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 8,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  tab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    marginHorizontal: 4,
+    borderRadius: 20,
+    backgroundColor: '#f5f5f5',
+    gap: 6,
+  },
+  tabActive: {
+    backgroundColor: '#E8F5E9',
+  },
+  tabText: {
+    fontSize: 13,
+    color: '#666',
+    fontWeight: '500',
+  },
+  tabTextActive: {
+    color: '#1a472a',
     fontWeight: '600',
   },
+  tabBadge: {
+    backgroundColor: '#e0e0e0',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    minWidth: 20,
+    alignItems: 'center',
+  },
+  tabBadgeActive: {
+    backgroundColor: '#1a472a',
+  },
+  tabBadgeText: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#666',
+  },
+  tabBadgeTextActive: {
+    color: '#fff',
+  },
+  // Content
+  content: {
+    flex: 1,
+  },
+  dashboardContent: {
+    padding: 16,
+  },
+  // Scan Button
   scanButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     backgroundColor: '#1a472a',
     padding: 16,
-    margin: 16,
     borderRadius: 12,
-    gap: 10,
+    marginBottom: 16,
+    gap: 16,
   },
-  scanButtonText: {
+  scanButtonTextContainer: {
+    flex: 1,
+  },
+  scanButtonTitle: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: 'bold',
   },
-  scrollView: {
-    flex: 1,
+  scanButtonSubtitle: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  // Stats Grid
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 16,
+  },
+  statsGridDesktop: {
+    gap: 16,
+  },
+  statCard: {
+    width: '47%',
     padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
   },
-  sectionTitle: {
-    fontSize: 18,
+  statCardBlue: {
+    backgroundColor: '#E3F2FD',
+  },
+  statCardOrange: {
+    backgroundColor: '#FFF3E0',
+  },
+  statCardGreen: {
+    backgroundColor: '#E8F5E9',
+  },
+  statCardRed: {
+    backgroundColor: '#FCE4EC',
+  },
+  statNumber: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#333',
+    marginTop: 8,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
+  },
+  alertBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f44336',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    marginTop: 8,
+    gap: 4,
+  },
+  alertBadgeText: {
+    color: '#fff',
+    fontSize: 11,
     fontWeight: '600',
+  },
+  // Earnings Card
+  earningsCard: {
+    backgroundColor: '#1a472a',
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 16,
+  },
+  earningsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 16,
+  },
+  earningsTitle: {
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  earningsGrid: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  earningsItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  earningsItemLabel: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 12,
+  },
+  earningsItemValue: {
+    color: '#fff',
+    fontSize: 28,
+    fontWeight: 'bold',
+    marginTop: 4,
+  },
+  earningsDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+  // Foderazione Card
+  foderazioneCard: {
+    backgroundColor: '#FF9800',
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 16,
+  },
+  foderazioneSubtitle: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  // Total Earnings Card
+  totalEarningsCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: '#4CAF50',
+  },
+  totalEarningsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  totalEarningsLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  totalEarningsRight: {
+    alignItems: 'flex-end',
+  },
+  totalEarningsLabel: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  totalEarningsSubLabel: {
+    fontSize: 11,
+    color: '#666',
+  },
+  totalEarningsValue: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#4CAF50',
+  },
+  totalEarningsSmall: {
+    fontSize: 12,
+    color: '#666',
+  },
+  // Formula Card
+  formulaCard: {
+    backgroundColor: '#f5f5f5',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  formulaTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
     color: '#333',
     marginBottom: 12,
   },
-  emptyContainer: {
+  formulaSection: {
+    marginBottom: 8,
+  },
+  formulaSubtitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1a472a',
+  },
+  formulaText: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
+  },
+  formulaExample: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: '#1a472a',
+  },
+  formulaExampleTitle: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 6,
+  },
+  formulaExampleText: {
+    fontSize: 11,
+    color: '#666',
+    marginBottom: 2,
+  },
+  formulaExampleTotal: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#4CAF50',
+    marginTop: 4,
+  },
+  // Info Card
+  infoCard: {
+    flexDirection: 'row',
+    backgroundColor: '#E8F5E9',
+    borderRadius: 12,
+    padding: 16,
+    gap: 12,
+  },
+  infoCardContent: {
+    flex: 1,
+  },
+  infoCardTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1a472a',
+    marginBottom: 4,
+  },
+  infoCardText: {
+    fontSize: 13,
+    color: '#666',
+    lineHeight: 18,
+  },
+  // Orders List
+  ordersList: {
+    padding: 16,
+  },
+  sectionHeader: {
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  sectionSubtitle: {
+    fontSize: 13,
+    color: '#666',
+    marginTop: 4,
+  },
+  emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 40,
+    paddingVertical: 60,
   },
-  emptyText: {
+  emptyStateText: {
     fontSize: 16,
     color: '#666',
     marginTop: 16,
   },
+  // Order Card
   orderCard: {
     backgroundColor: '#fff',
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
+    borderLeftWidth: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.05,
     shadowRadius: 4,
     elevation: 2,
   },
-  orderHeader: {
+  orderCardInArrivo: {
+    borderLeftColor: '#1976D2',
+  },
+  orderCardDaRitirare: {
+    borderLeftColor: '#FF9800',
+  },
+  orderCardCompleted: {
+    borderLeftColor: '#4CAF50',
+  },
+  orderCardReso: {
+    borderLeftColor: '#f44336',
+  },
+  orderCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 8,
   },
-  statusBadge: {
+  orderCodeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  statusText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
+    gap: 10,
   },
   orderCode: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#1a472a',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
-  bookTitle: {
-    fontSize: 16,
+  timerBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  timerText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  orderBookTitle: {
+    fontSize: 15,
     fontWeight: '600',
     color: '#333',
   },
-  bookAuthor: {
-    fontSize: 14,
+  orderBookAuthor: {
+    fontSize: 13,
     color: '#666',
-    marginTop: 4,
+    marginTop: 2,
   },
-  orderDetails: {
+  orderMeta: {
     marginTop: 12,
-    gap: 8,
+    gap: 6,
   },
-  detailRow: {
+  orderMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
-  detailText: {
-    fontSize: 14,
+  orderMetaText: {
+    fontSize: 13,
     color: '#666',
   },
-  actionButton: {
+  orderFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 16,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+  },
+  orderPrice: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#4CAF50',
+  },
+  actionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1976D2',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    gap: 6,
+  },
+  actionBtnGreen: {
+    backgroundColor: '#4CAF50',
+  },
+  actionBtnText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  // Status badges
+  statusBadgeReady: {
+    backgroundColor: '#E8F5E9',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  statusBadgeReadyText: {
+    color: '#388E3C',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  statusBadgeReturn: {
+    backgroundColor: '#FFEBEE',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  statusBadgeReturnText: {
+    color: '#C2185B',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  // QR Container
+  qrContainer: {
+    alignItems: 'center',
+    marginTop: 16,
+    padding: 16,
+    backgroundColor: '#f9f9f9',
+    borderRadius: 8,
+  },
+  qrHint: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 8,
+  },
+  // Earnings badge
+  earningsBadgeSmall: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E8F5E9',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  earningsBadgeText: {
+    color: '#4CAF50',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  // Return actions
+  returnActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 16,
+  },
+  returnBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#9C27B0',
-    padding: 12,
+    paddingVertical: 12,
     borderRadius: 8,
-    marginTop: 12,
-    gap: 8,
+    gap: 6,
   },
-  actionButtonText: {
+  returnBtnReject: {
+    backgroundColor: '#9e9e9e',
+  },
+  returnBtnAccept: {
+    backgroundColor: '#f44336',
+  },
+  returnBtnText: {
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',
   },
   // Scanner Modal
-  scannerContainer: {
+  scannerModal: {
     flex: 1,
     backgroundColor: '#fff',
   },
@@ -1230,6 +1756,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
+    paddingTop: Platform.OS === 'ios' ? 50 : 16,
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
   },
@@ -1270,27 +1797,28 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 3,
   },
-  permissionContainer: {
+  noCameraContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
   },
-  permissionText: {
+  noCameraText: {
     fontSize: 16,
     color: '#666',
     marginTop: 16,
     textAlign: 'center',
   },
-  permissionButton: {
+  permissionBtn: {
     backgroundColor: '#1a472a',
-    padding: 14,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
     borderRadius: 8,
     marginTop: 16,
   },
-  permissionButtonText: {
+  permissionBtnText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
   },
   manualInputContainer: {
@@ -1319,9 +1847,9 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     textAlign: 'center',
     letterSpacing: 4,
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
-  confirmButton: {
+  manualInputBtn: {
     backgroundColor: '#4CAF50',
     width: 56,
     height: 56,
@@ -1329,376 +1857,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  confirmButtonDisabled: {
+  manualInputBtnDisabled: {
     backgroundColor: '#ccc',
-  },
-  // Notification styles
-  notificationsSection: {
-    backgroundColor: '#fff3e0',
-    margin: 16,
-    marginBottom: 8,
-    borderRadius: 12,
-    padding: 16,
-  },
-  notificationHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
-  notificationTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#e65100',
-  },
-  notificationCard: {
-    flexDirection: 'column',
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 8,
-    borderLeftWidth: 3,
-    borderLeftColor: '#FF9800',
-  },
-  notificationCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  notificationUnread: {
-    backgroundColor: '#fffde7',
-    borderLeftColor: '#f44336',
-  },
-  notificationIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#fff3e0',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  notificationContent: {
-    flex: 1,
-  },
-  notificationTitleText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
-  },
-  notificationMessage: {
-    fontSize: 12,
-    color: '#666',
-    lineHeight: 18,
-  },
-  notificationCodeBadge: {
-    backgroundColor: '#e8f5e9',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
-    alignSelf: 'flex-start',
-    marginTop: 8,
-  },
-  notificationCodeText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#1a472a',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-  },
-  notificationCompleted: {
-    backgroundColor: '#e8f5e9',
-    borderLeftColor: '#4CAF50',
-  },
-  earningsBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#c8e6c9',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-    alignSelf: 'flex-start',
-    marginTop: 8,
-    gap: 6,
-  },
-  earningsText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#2e7d32',
-  },
-  totalEarningsCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#e8f5e9',
-    margin: 16,
-    marginBottom: 8,
-    padding: 16,
-    borderRadius: 12,
-    gap: 12,
-  },
-  totalEarningsContent: {
-    flex: 1,
-  },
-  totalEarningsLabel: {
-    fontSize: 12,
-    color: '#666',
-  },
-  totalEarningsValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#4CAF50',
-  },
-  // Returns section styles
-  returnsSection: {
-    margin: 16,
-    marginBottom: 8,
-    backgroundColor: '#FFF3E0',
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 2,
-    borderColor: '#f44336',
-  },
-  returnsSectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
-  returnsSectionTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#f44336',
-  },
-  returnCard: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 8,
-    borderLeftWidth: 4,
-    borderLeftColor: '#f44336',
-  },
-  returnCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  returnBookTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#333',
-    flex: 1,
-  },
-  returnOrderCode: {
-    fontSize: 12,
-    color: '#666',
-    fontWeight: '500',
-  },
-  returnReason: {
-    fontSize: 13,
-    color: '#f44336',
-    marginBottom: 4,
-    fontStyle: 'italic',
-  },
-  returnBuyer: {
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 12,
-  },
-  returnActions: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  returnActionBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 10,
-    borderRadius: 8,
-    gap: 6,
-  },
-  returnRejectBtn: {
-    backgroundColor: '#9e9e9e',
-  },
-  returnAcceptBtn: {
-    backgroundColor: '#f44336',
-  },
-  returnActionText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  // Stili per pulsanti nella notifica
-  returnActionButtons: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#ffcdd2',
-  },
-  returnActionBtnText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 13,
-  },
-  // Stile notifica reso
-  notificationReturn: {
-    borderLeftColor: '#f44336',
-    borderLeftWidth: 4,
-    backgroundColor: '#fff8f8',
-  },
-  // Stili per stati notifica cartolibreria
-  notificationPending: {
-    backgroundColor: '#ffcdd2', // Rosso pastello - in attesa consegna
-    borderLeftColor: '#e53935',
-    borderLeftWidth: 4,
-  },
-  notificationDelivered: {
-    backgroundColor: '#ffe0b2', // Arancione pastello - consegnato, in attesa ritiro
-    borderLeftColor: '#ff9800',
-    borderLeftWidth: 4,
-  },
-  notificationPickedUp: {
-    backgroundColor: '#c8e6c9', // Verde pastello - ritirato
-    borderLeftColor: '#4CAF50',
-    borderLeftWidth: 4,
-  },
-  // Stili per notifiche espandibili
-  notificationExpanded: {
-    borderWidth: 2,
-    borderColor: '#1a472a',
-    borderLeftWidth: 2,
-  },
-  notificationExpandedContent: {
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
-  },
-  notificationFullMessage: {
-    fontSize: 14,
-    color: '#333',
-    lineHeight: 22,
-    marginBottom: 16,
-  },
-  qrCodeContainer: {
-    alignItems: 'center',
-    marginBottom: 16,
-    padding: 16,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-  },
-  qrCodeLabel: {
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 12,
-  },
-  qrCodeWrapper: {
-    padding: 12,
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-  },
-  statusIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    marginTop: 12,
-    gap: 6,
-  },
-  statusIndicatorText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  bookDetailsContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-  },
-  bookDetailsTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 12,
-  },
-  partiesInfo: {
-    backgroundColor: '#f5f5f5',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 12,
-    gap: 8,
-  },
-  partyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  partyLabel: {
-    fontSize: 13,
-    color: '#666',
-  },
-  partyValue: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#333',
-    flex: 1,
-  },
-  conditionsList: {
-    gap: 10,
-  },
-  conditionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  conditionLabel: {
-    fontSize: 13,
-    color: '#666',
-    flex: 1,
-  },
-  conditionValue: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#333',
-  },
-  noteContainer: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-  },
-  noteLabel: {
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 4,
-  },
-  noteText: {
-    fontSize: 13,
-    color: '#333',
-    fontStyle: 'italic',
-  },
-  returnReasonContainer: {
-    marginTop: 12,
-    padding: 12,
-    backgroundColor: '#ffebee',
-    borderRadius: 8,
-  },
-  returnReasonLabel: {
-    fontSize: 12,
-    color: '#f44336',
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  returnReasonText: {
-    fontSize: 14,
-    color: '#c62828',
-    fontWeight: '500',
   },
 });
