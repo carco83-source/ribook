@@ -248,24 +248,33 @@ export default function BookstorePortalScreen() {
   };
 
   const handleLogout = async () => {
-    Alert.alert(
-      'Logout',
-      'Vuoi uscire dal portale cartolibreria?',
-      [
-        { text: 'Annulla', style: 'cancel' },
-        {
-          text: 'Esci',
-          onPress: async () => {
-            await AsyncStorage.removeItem('bookstore_id');
-            await AsyncStorage.removeItem('bookstore_name');
-            setIsLoggedIn(false);
-            setBookstoreId(null);
-            setEmail('');
-            setPassword('');
-          },
-        },
-      ]
-    );
+    const doLogout = async () => {
+      await AsyncStorage.removeItem('bookstore_id');
+      await AsyncStorage.removeItem('bookstore_name');
+      setIsLoggedIn(false);
+      setBookstoreId(null);
+      setBookstoreName('');
+      setOrders([]);
+      setNotifications([]);
+      setPendingReturns([]);
+      setEmail('');
+      setPassword('');
+    };
+    
+    if (Platform.OS === 'web') {
+      if (window.confirm('Vuoi uscire dal portale cartolibreria?')) {
+        await doLogout();
+      }
+    } else {
+      Alert.alert(
+        'Logout',
+        'Vuoi uscire dal portale cartolibreria?',
+        [
+          { text: 'Annulla', style: 'cancel' },
+          { text: 'Esci', onPress: doLogout },
+        ]
+      );
+    }
   };
 
   const handleConfirmPickup = async (code: string) => {
@@ -475,6 +484,18 @@ export default function BookstorePortalScreen() {
           ),
         }}
       />
+
+      {/* Header Bar with name and logout */}
+      <View style={styles.headerBar}>
+        <View style={styles.headerBarLeft}>
+          <Ionicons name="storefront" size={24} color="#1a472a" />
+          <Text style={styles.headerBarTitle}>{bookstoreName || 'Cartolibreria'}</Text>
+        </View>
+        <TouchableOpacity onPress={handleLogout} style={styles.logoutButtonVisible}>
+          <Ionicons name="log-out-outline" size={20} color="#f44336" />
+          <Text style={styles.logoutButtonText}>Esci</Text>
+        </TouchableOpacity>
+      </View>
 
       {/* Scan Button */}
       <TouchableOpacity
@@ -1055,6 +1076,40 @@ const styles = StyleSheet.create({
   registerLinkText: {
     color: '#1a472a',
     fontSize: 14,
+  },
+  headerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  headerBarLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  headerBarTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1a472a',
+  },
+  logoutButtonVisible: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffebee',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 6,
+  },
+  logoutButtonText: {
+    color: '#f44336',
+    fontSize: 14,
+    fontWeight: '600',
   },
   scanButton: {
     flexDirection: 'row',

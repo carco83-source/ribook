@@ -237,19 +237,27 @@ export default function ProfileScreen() {
     const confirmDelete = async () => {
       setDeletingListing(listingId);
       try {
-        await axios.delete(`${API_URL}/api/listings/${listingId}`);
+        // Get user_id from AsyncStorage - required by backend
+        const userId = await AsyncStorage.getItem('user_id');
+        if (!userId) {
+          throw new Error('User not logged in');
+        }
+        
+        // Pass user_id as query parameter - backend requires it
+        await axios.delete(`${API_URL}/api/listings/${listingId}?user_id=${userId}`);
         setMyListings(prev => prev.filter(l => l.id !== listingId));
         if (Platform.OS === 'web') {
-          alert('Annuncio eliminato con successo');
+          window.alert('Annuncio eliminato con successo');
         } else {
           Alert.alert('Successo', 'Annuncio eliminato con successo');
         }
       } catch (error: any) {
         console.error('Error deleting listing:', error);
+        const errorMsg = error.response?.data?.detail || 'Impossibile eliminare l\'annuncio';
         if (Platform.OS === 'web') {
-          alert('Errore durante l\'eliminazione dell\'annuncio');
+          window.alert('Errore: ' + errorMsg);
         } else {
-          Alert.alert('Errore', 'Impossibile eliminare l\'annuncio');
+          Alert.alert('Errore', errorMsg);
         }
       } finally {
         setDeletingListing(null);
@@ -257,7 +265,7 @@ export default function ProfileScreen() {
     };
 
     if (Platform.OS === 'web') {
-      if (confirm(`Sei sicuro di voler eliminare "${bookTitle}" dalla vendita?`)) {
+      if (window.confirm(`Sei sicuro di voler eliminare "${bookTitle}" dalla vendita?`)) {
         confirmDelete();
       }
     } else {
