@@ -1512,7 +1512,9 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   booksGrid: {
-    flexDirection: 'column',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
   },
   sampleBooksTitle: {
     fontSize: 14,
@@ -1567,14 +1569,14 @@ const styles = StyleSheet.create({
   },
   // Nuova struttura card libro compatta per mobile
   sampleBookItem: {
-    width: '100%',
+    width: '48%',
     backgroundColor: '#fff',
     borderRadius: 8,
     padding: 8,
     marginBottom: 8,
     borderWidth: 1,
     borderColor: '#e0e0e0',
-    flexDirection: 'row',
+    flexDirection: 'column',
   },
   sampleBookItemClickable: {
     borderColor: '#1a472a',
@@ -1592,30 +1594,30 @@ const styles = StyleSheet.create({
   // Copertina più grande
   bookCoverSection: {
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: 10,
   },
   bookCoverImage: {
-    width: 70,
-    height: 95,
+    width: 55,
+    height: 75,
     borderRadius: 4,
     backgroundColor: '#f5f5f5',
   },
   // Container prezzi sotto copertina
   priceUnderCover: {
-    marginTop: 6,
+    marginTop: 4,
     alignItems: 'center',
   },
   priceTagNew: {
-    fontSize: 12,
+    fontSize: 10,
     color: '#666',
   },
   priceTagUsed: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: 'bold',
     color: '#4CAF50',
   },
   priceTagSell: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: 'bold',
     color: '#2196F3',
   },
@@ -1627,11 +1629,11 @@ const styles = StyleSheet.create({
   // Sezione destra: materia + dettagli libro - compatta
   bookInfoSection: {
     flex: 1,
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
   },
   // Materia in alto - più visibile
   bookSubjectBig: {
-    fontSize: 15,
+    fontSize: 11,
     fontWeight: 'bold',
     color: '#1a472a',
     textTransform: 'uppercase',
@@ -1640,13 +1642,13 @@ const styles = StyleSheet.create({
   // Badge categoria - più compatto
   bookCategoryBadge: {
     alignSelf: 'flex-start',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
     borderRadius: 3,
-    marginBottom: 4,
+    marginBottom: 3,
   },
   bookCategoryText: {
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: 'bold',
   },
   // Dettagli libro compatti - senza margini inutili
@@ -1654,28 +1656,28 @@ const styles = StyleSheet.create({
     marginTop: 0,
   },
   bookTitleCompact: {
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: '600',
     color: '#333',
-    lineHeight: 17,
+    lineHeight: 14,
     marginBottom: 1,
   },
   bookMetaRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 4,
+    gap: 2,
     marginTop: 1,
   },
   bookMetaText: {
-    fontSize: 11,
+    fontSize: 9,
     color: '#555',
   },
   bookMetaLabel: {
-    fontSize: 11,
+    fontSize: 9,
     color: '#777',
   },
   bookIsbnText: {
-    fontSize: 10,
+    fontSize: 8,
     color: '#888',
     marginTop: 1,
   },
@@ -2211,9 +2213,9 @@ const styles = StyleSheet.create({
   },
   bookCard: {
     backgroundColor: '#f9f9f9',
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 12,
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 8,
     borderWidth: 1,
     borderColor: '#e0e0e0',
   },
@@ -2221,35 +2223,35 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 4,
   },
   bookDiscipline: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     color: '#1a472a',
     textTransform: 'uppercase',
   },
   conditionBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
     backgroundColor: '#666',
   },
   conditionText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
     color: '#fff',
   },
   bookTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
     color: '#333',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   bookPublisher: {
-    fontSize: 13,
+    fontSize: 11,
     color: '#666',
-    marginBottom: 12,
+    marginBottom: 6,
   },
   bookPriceRow: {
     flexDirection: 'row',
@@ -2257,12 +2259,12 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   bookPriceOld: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#999',
     textDecorationLine: 'line-through',
   },
   bookPrice: {
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#4CAF50',
   },
