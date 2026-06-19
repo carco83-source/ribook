@@ -228,12 +228,14 @@ export default function RadarScreen() {
           for (const child of profiles) {
             try {
               // Usa endpoint pubblico per profili anonimi
+              console.log(`Loading analysis for ${child.nome_figlio}: ${child.codice_scuola}/${child.classe}/${child.sezione}`);
               const compRes = await axios.get(
                 `${API_URL}/api/public/analysis/${child.codice_scuola}/${child.classe}/${child.sezione}`
               );
+              console.log(`Analysis loaded for ${child.nome_figlio}, fuori_corso:`, compRes.data.fuori_corso?.length || 0);
               compatibilityData[child.id] = compRes.data;
             } catch (e) {
-              console.log(`Failed to load analysis for temp profile`);
+              console.log(`Failed to load analysis for temp profile ${child.nome_figlio}:`, e);
             }
           }
           setChildrenCompatibility(compatibilityData);

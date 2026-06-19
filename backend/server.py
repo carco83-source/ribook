@@ -4806,6 +4806,7 @@ async def get_child_analysis_v2(user_id: str, child_id: str):
         "vendibili_usati": classificazione["vendibili_usati"],
         "da_acquistare_usati": classificazione["da_acquistare_usati"],
         "da_acquistare_nuovi": classificazione["da_acquistare_nuovi"],
+        "fuori_corso": classificazione.get("fuori_corso", []),
         
         # RIEPILOGO
         "riepilogo": classificazione["riepilogo"],
