@@ -8555,25 +8555,6 @@ async def reject_bookstore_request(request_id: str, admin_id: str = Query(...), 
 
 # ============== BOOKSTORE PORTAL ==============
 
-@api_router.post("/bookstore/login")
-async def bookstore_login(email: str = Query(...), password: str = Query(...)):
-    """Login cartolibreria"""
-    
-    bookstore = await db.bookstores.find_one({"email": email.lower()})
-    if not bookstore:
-        raise HTTPException(status_code=401, detail="Credenziali non valide")
-    
-    if bookstore.get("password_hash") != hash_password(password):
-        raise HTTPException(status_code=401, detail="Credenziali non valide")
-    
-    return {
-        "success": True,
-        "bookstore_id": bookstore["id"],
-        "nome": bookstore["nome"],
-        "email": bookstore["email"]
-    }
-
-
 @api_router.get("/bookstore/{bookstore_id}/notifications")
 async def get_bookstore_notifications(bookstore_id: str):
     """Cartolibreria: visualizza notifiche"""

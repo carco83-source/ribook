@@ -224,18 +224,23 @@ export default function BookstorePortalScreen() {
     setLoginLoading(true);
     try {
       const response = await axios.post(
-        `${API_URL}/api/bookstore/login?email=${encodeURIComponent(email.toLowerCase())}&password=${encodeURIComponent(password)}`
+        `${API_URL}/api/bookstore/login`,
+        {
+          email: email.toLowerCase().trim(),
+          password: password
+        }
       );
       
       await AsyncStorage.setItem('bookstore_id', response.data.bookstore_id);
-      await AsyncStorage.setItem('bookstore_name', response.data.nome);
+      await AsyncStorage.setItem('bookstore_name', response.data.bookstore?.nome || response.data.nome || 'Cartolibreria');
       
       setBookstoreId(response.data.bookstore_id);
-      setBookstoreName(response.data.nome);
+      setBookstoreName(response.data.bookstore?.nome || response.data.nome || 'Cartolibreria');
       setIsLoggedIn(true);
       
       await loadOrders(response.data.bookstore_id);
     } catch (error: any) {
+      console.log('Login error:', error.response?.data);
       Alert.alert('Errore', error.response?.data?.detail || 'Credenziali non valide');
     } finally {
       setLoginLoading(false);
