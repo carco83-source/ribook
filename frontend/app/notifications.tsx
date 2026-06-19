@@ -398,7 +398,7 @@ export default function NotificationsScreen() {
                 )}
                 
                 {/* QR Code per ordini completati */}
-                {(notification.type === 'order_qr_code' || notification.type === 'order_paid' || notification.type === 'ready_for_pickup' || notification.type === 'order_paid_deliver' || notification.type === 'order_paid_waiting') && (notification.data?.order_code || notification.order_code) && (
+                {(notification.type === 'order_qr_code' || notification.type === 'order_paid' || notification.type === 'ready_for_pickup' || notification.type === 'order_paid_deliver' || notification.type === 'order_paid_waiting') && (notification.data?.order_code || notification.order_code) && notification.data?.show_qr !== false && (
                   <View style={styles.qrCodeContainer}>
                     <View style={styles.qrCodeBox}>
                       {Platform.OS !== 'web' ? (
@@ -415,18 +415,27 @@ export default function NotificationsScreen() {
                       )}
                     </View>
                     <View style={styles.qrCodeInfo}>
-                      <Text style={styles.qrCodeLabel}>CODICE RITIRO</Text>
+                      <Text style={styles.qrCodeLabel}>CODICE</Text>
                       <Text style={styles.qrCodeValue}>{notification.data?.order_code || notification.order_code}</Text>
                       {(notification.data?.bookstore_name || notification.bookstore_name) && (
                         <Text style={styles.qrCodeBookstore}>📍 {notification.data?.bookstore_name || notification.bookstore_name}</Text>
                       )}
                     </View>
-                    <View style={styles.screenshotTip}>
-                      <Ionicons name="camera" size={16} color="#1a472a" />
-                      <Text style={styles.screenshotTipText}>
-                        📸 Fai uno screenshot per mostrare questo codice al libraio
-                      </Text>
-                    </View>
+                  </View>
+                )}
+                
+                {/* Condizioni del libro (senza prezzo) */}
+                {notification.data?.books_conditions && notification.data.books_conditions.length > 0 && (
+                  <View style={styles.conditionsContainer}>
+                    <Text style={styles.conditionsTitle}>📋 CONDIZIONI LIBRO</Text>
+                    {notification.data.books_conditions.map((book: any, idx: number) => (
+                      <View key={idx} style={styles.conditionItem}>
+                        {notification.data.books_conditions.length > 1 && (
+                          <Text style={styles.conditionBookTitle}>{book.title}</Text>
+                        )}
+                        <Text style={styles.conditionText}>{book.conditions}</Text>
+                      </View>
+                    ))}
                   </View>
                 )}
               </View>
@@ -647,5 +656,35 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#1a472a',
     fontWeight: '500',
+  },
+  conditionsContainer: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+    width: '100%',
+  },
+  conditionsTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 12,
+  },
+  conditionItem: {
+    backgroundColor: '#f9f9f9',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  conditionBookTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1a472a',
+    marginBottom: 6,
+  },
+  conditionText: {
+    fontSize: 13,
+    color: '#555',
+    lineHeight: 20,
   },
 });

@@ -7084,6 +7084,46 @@ async def pay_orders_batch(user_id: str = Query(...), order_ids: str = Query(...
         total_netto = sum(o.get("netto_venditore", 0) for o in group_orders)
         book_titles = [o.get("book_titolo", "")[:40] for o in group_orders]
         
+        # Recupera le condizioni dei libri dai listings
+        books_conditions = []
+        books_photos = []
+        for order in group_orders:
+            listing = await db.listings.find_one({"id": order.get("listing_id")})
+            if listing:
+                cond = listing.get("condition_details", {})
+                note = listing.get("note", "")
+                photo = listing.get("foto_base64") or listing.get("photo_1") or ""
+                
+                # Formatta condizioni
+                def get_label(val):
+                    if val == 0: return "Nessuna"
+                    if val <= 33: return "Poche"
+                    if val <= 66: return "Diverse"
+                    return "Molte"
+                
+                cond_text = ""
+                if cond.get("penna", 0) > 0:
+                    cond_text += f"• Scritte a penna: {get_label(cond.get('penna', 0))}\n"
+                else:
+                    cond_text += "• Scritte a penna: Nessuna\n"
+                if cond.get("matita", 0) > 0:
+                    cond_text += f"• Scritte a matita: {get_label(cond.get('matita', 0))}\n"
+                else:
+                    cond_text += "• Scritte a matita: Nessuna\n"
+                if cond.get("evidenziatore", 0) > 0:
+                    cond_text += f"• Evidenziature: {get_label(cond.get('evidenziatore', 0))}\n"
+                else:
+                    cond_text += "• Evidenziature: Nessuna\n"
+                if note:
+                    cond_text += f"• Note: {note}\n"
+                
+                books_conditions.append({
+                    "title": order.get("book_titolo", ""),
+                    "conditions": cond_text.strip(),
+                    "photo": photo
+                })
+                books_photos.append(photo)
+        
         # Paga tutti gli ordini del gruppo
         for order in group_orders:
             payment_intent_id = f"pi_mock_{uuid.uuid4().hex[:16]}"
@@ -7110,11 +7150,16 @@ async def pay_orders_batch(user_id: str = Query(...), order_ids: str = Query(...
             paid_orders.append(order)
         
         # Notifica al venditore - UNA SOLA per tutto il gruppo
+        # Formatta le condizioni dei libri per il venditore
+        conditions_text = ""
+        for bc in books_conditions:
+            conditions_text += f"\n📚 {bc['title']}\n{bc['conditions']}\n"
+        
         if len(group_orders) > 1:
             books_list = "\n".join([f"• {t}" for t in book_titles])
-            seller_message = f"COMPLIMENTI! {len(group_orders)} LIBRI VENDUTI!\n\n{books_list}\n\nCODICE CONSEGNA UNICO: {batch_code}\n\nCONSEGNA ENTRO 2 GIORNI LAVORATIVI PRESSO:\n{group_orders[0].get('bookstore_name')}\n\nMostra questo codice alla cartolibreria.\nTutti i libri con lo stesso codice!\n\n📸 Fai uno screenshot!"
+            seller_message = f"COMPLIMENTI! {len(group_orders)} LIBRI VENDUTI!\n\n{books_list}\n\nAssicurati che i testi corrispondano alle condizioni descritte e consegnali a partire dal giorno successivo entro 2 giorni lavorativi presso:\n🏪 {group_orders[0].get('bookstore_name')}\n\n📋 CONDIZIONI DESCRITTE:{conditions_text}"
         else:
-            seller_message = f"COMPLIMENTI!\n{book_titles[0]}\nÈ STATO VENDUTO!\n\nCODICE CONSEGNA: {batch_code}\n\nCONSEGNA ENTRO 2 GIORNI PRESSO:\n{group_orders[0].get('bookstore_name')}\n\n📸 Fai uno screenshot!"
+            seller_message = f"COMPLIMENTI!\n📚 {book_titles[0]}\nÈ STATO VENDUTO!\n\nAssicurati che il testo corrisponda alle condizioni descritte e consegnalo a partire dal giorno successivo entro 2 giorni lavorativi presso:\n🏪 {group_orders[0].get('bookstore_name')}\n\n📋 CONDIZIONI DESCRITTE:{conditions_text}"
         
         seller_notification = {
             "id": str(uuid.uuid4()),
@@ -7129,6 +7174,7 @@ async def pay_orders_batch(user_id: str = Query(...), order_ids: str = Query(...
                 "order_ids": [o.get("id") for o in group_orders],
                 "order_code": batch_code,
                 "books": book_titles,
+                "books_conditions": books_conditions,
                 "total_count": len(group_orders),
                 "bookstore_name": group_orders[0].get("bookstore_name"),
                 "show_qr": True,
@@ -7141,16 +7187,17 @@ async def pay_orders_batch(user_id: str = Query(...), order_ids: str = Query(...
         await db.notifications.insert_one(seller_notification)
         
         # Notifica all'acquirente - UNA SOLA per tutto il gruppo
+        # L'acquirente viene avvisato che sarà notificato quando il venditore consegnerà
         if len(group_orders) > 1:
-            buyer_message = f"HAI ACQUISTATO {len(group_orders)} LIBRI!\n\n{books_list}\n\nCODICE RITIRO UNICO: {batch_code}\n\nRITIRA PRESSO:\n{group_orders[0].get('bookstore_name')}\n\nMostra questo codice alla cartolibreria.\nTutti i libri con lo stesso codice!\n\n📸 Fai uno screenshot!"
+            buyer_message = f"ACQUISTO ANDATO A BUON FINE!\n\n📚 {len(group_orders)} LIBRI:\n{books_list}\n\nSarai avvisato/a appena il venditore consegnerà i libri presso:\n🏪 {group_orders[0].get('bookstore_name')}"
         else:
-            buyer_message = f"Il tuo ordine per:\n{book_titles[0]}\n\nCODICE RITIRO: {batch_code}\n\nRITIRA PRESSO:\n{group_orders[0].get('bookstore_name')}\n\n📸 Fai uno screenshot!"
+            buyer_message = f"ACQUISTO ANDATO A BUON FINE!\n\n📚 {book_titles[0]}\n\nSarai avvisato/a appena il venditore consegnerà il libro presso:\n🏪 {group_orders[0].get('bookstore_name')}"
         
         buyer_qr_notification = {
             "id": str(uuid.uuid4()),
             "user_id": user_id,
-            "type": "order_qr_code",
-            "title": f"🎉 {'ACQUISTI COMPLETATI!' if len(group_orders) > 1 else 'ACQUISTO COMPLETATO!'}",
+            "type": "order_pending",
+            "title": f"🎉 {'ACQUISTI CONFERMATI!' if len(group_orders) > 1 else 'ACQUISTO CONFERMATO!'}",
             "message": buyer_message,
             "order_id": batch_id,
             "order_code": batch_code,
@@ -7161,8 +7208,8 @@ async def pay_orders_batch(user_id: str = Query(...), order_ids: str = Query(...
                 "books": book_titles,
                 "total_count": len(group_orders),
                 "bookstore_name": group_orders[0].get("bookstore_name"),
-                "total_amount": total_amount,
-                "show_qr": True
+                "show_qr": False,
+                "awaiting_delivery": True
             },
             "read": False,
             "persistent": True,
@@ -7170,16 +7217,22 @@ async def pay_orders_batch(user_id: str = Query(...), order_ids: str = Query(...
         }
         await db.notifications.insert_one(buyer_qr_notification)
         
-        # Notifica alla cartolibreria
+        # Notifica alla cartolibreria - con foto e descrizioni, senza QR e senza prezzo
+        bookstore_conditions_text = ""
+        for bc in books_conditions:
+            bookstore_conditions_text += f"\n📚 {bc['title']}\n{bc['conditions']}\n"
+        
         bookstore_notification = {
             "id": str(uuid.uuid4()),
             "bookstore_id": bookstore_id,
             "type": "incoming_order",
             "title": f"{'ORDINE MULTIPLO' if len(group_orders) > 1 else 'NUOVO ORDINE'} IN ARRIVO",
-            "message": f"CODICE: {batch_code}\n\n{'LIBRI:' if len(group_orders) > 1 else 'LIBRO:'}\n{books_list if len(group_orders) > 1 else book_titles[0]}\n\nVENDITORE: {group_orders[0].get('seller_name')}\nACQUIRENTE: {group_orders[0].get('buyer_name')}",
+            "message": f"CODICE: {batch_code}\n\nVENDITORE: {group_orders[0].get('seller_name')}\nACQUIRENTE: {group_orders[0].get('buyer_name')}\n\n📋 DETTAGLI LIBRI:{bookstore_conditions_text}",
             "order_id": batch_id,
             "order_code": batch_code,
             "order_count": len(group_orders),
+            "books_conditions": books_conditions,
+            "books_photos": books_photos,
             "read": False,
             "created_at": now.isoformat()
         }
@@ -7291,16 +7344,56 @@ async def mark_ready_for_pickup(order_id: str, bookstore_id: str = Query(None)):
     
     await db.orders.update_one({"id": order_id}, {"$set": update_data})
     
-    # Notifica all'acquirente
+    # Recupera le condizioni del libro dal listing
+    listing = await db.listings.find_one({"id": order.get("listing_id")})
+    cond = listing.get("condition_details", {}) if listing else {}
+    note = listing.get("note", "") if listing else ""
+    
+    def get_label(val):
+        if val == 0: return "Nessuna"
+        if val <= 33: return "Poche"
+        if val <= 66: return "Diverse"
+        return "Molte"
+    
+    conditions_text = ""
+    if cond.get("penna", 0) > 0:
+        conditions_text += f"• Scritte a penna: {get_label(cond.get('penna', 0))}\n"
+    else:
+        conditions_text += "• Scritte a penna: Nessuna\n"
+    if cond.get("matita", 0) > 0:
+        conditions_text += f"• Scritte a matita: {get_label(cond.get('matita', 0))}\n"
+    else:
+        conditions_text += "• Scritte a matita: Nessuna\n"
+    if cond.get("evidenziatore", 0) > 0:
+        conditions_text += f"• Evidenziature: {get_label(cond.get('evidenziatore', 0))}\n"
+    else:
+        conditions_text += "• Evidenziature: Nessuna\n"
+    if note:
+        conditions_text += f"• Note: {note}\n"
+    
+    # Notifica all'acquirente con QR code e condizioni
     notification = {
         "id": str(uuid.uuid4()),
         "user_id": order.get("buyer_id"),
-        "type": "ready_for_pickup",
-        "title": "LIBRO PRONTO PER IL RITIRO",
-        "message": f"{order.get('book_titolo')}\n\nÈ DISPONIBILE PER IL RITIRO PRESSO:\n{order.get('bookstore_name')}\n\nCodice ritiro: {order.get('order_code')}",
+        "type": "order_qr_code",
+        "title": "📦 LIBRO CONSEGNATO!",
+        "message": f"📚 {order.get('book_titolo')}\n\nEffettua il ritiro presso:\n🏪 {order.get('bookstore_name')}\n\nMostra il QR code o il codice alla cartolibreria.\n\n📋 CONDIZIONI LIBRO:\n{conditions_text}",
         "order_id": order_id,
         "order_code": order.get("order_code"),
+        "bookstore_name": order.get("bookstore_name"),
+        "data": {
+            "order_code": order.get("order_code"),
+            "books": [order.get("book_titolo")],
+            "books_conditions": [{
+                "title": order.get("book_titolo"),
+                "conditions": conditions_text.strip()
+            }],
+            "bookstore_name": order.get("bookstore_name"),
+            "show_qr": True,
+            "role": "buyer"
+        },
         "read": False,
+        "persistent": True,
         "created_at": now.isoformat()
     }
     await db.notifications.insert_one(notification)
