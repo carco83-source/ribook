@@ -278,7 +278,7 @@ export default function ListingDetailScreen() {
   const calculateCommission = () => {
     if (!listing) return { commission: 0, total: 0, foderazione: 0 };
     const sellingPrice = getListingSellingPrice(listing);
-    const foderazioneCost = richiediFoderazione ? 1.30 : 0;
+    const foderazioneCost = richiediFoderazione ? 1.50 : 0;
     if (isPremium) {
       return { commission: 0, total: sellingPrice, foderazione: foderazioneCost };
     }
@@ -909,16 +909,15 @@ export default function ListingDetailScreen() {
           </View>
         ) : null}
 
-        {/* Price Display - Breakdown dettagliato */}
+        {/* Price Display - Semplificato */}
         <View style={styles.priceBreakdown}>
           <View style={styles.priceRow}>
-            <Text style={styles.priceRowLabel}>Costo del testo usato</Text>
+            <Text style={styles.priceRowLabel}>Libro</Text>
             <Text style={styles.priceRowValue}>€{total.toFixed(2)}</Text>
           </View>
-          <Text style={styles.priceSubLabel}>comprensivo di gestione RB</Text>
           
           {richiediFoderazione && (
-            <View style={[styles.priceRow, { marginTop: 12 }]}>
+            <View style={[styles.priceRow, { marginTop: 8 }]}>
               <Text style={styles.priceRowLabel}>Foderazione</Text>
               <Text style={styles.priceRowValue}>€{foderazione.toFixed(2)}</Text>
             </View>
@@ -927,7 +926,7 @@ export default function ListingDetailScreen() {
           <View style={styles.totalDivider} />
           <View style={styles.priceRow}>
             <Text style={styles.totalLabel}>Totale</Text>
-            <Text style={styles.totalValue}>€{(total + commission + foderazione).toFixed(2)}</Text>
+            <Text style={styles.totalValue}>€{(total + foderazione).toFixed(2)}</Text>
           </View>
         </View>
 

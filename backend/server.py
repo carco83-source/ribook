@@ -9786,6 +9786,19 @@ async def get_conversation_detail(conversation_id: str):
         raise HTTPException(status_code=404, detail="Conversazione non trovata")
     
     conversation.pop("_id", None)
+    
+    # Se manca il book_title, cercalo dal listing
+    if not conversation.get("book_title") and conversation.get("listing_id"):
+        listing = await db.listings.find_one({"id": conversation["listing_id"]})
+        if listing:
+            book_title = listing.get("book_titolo") or listing.get("book_title") or "Libro"
+            conversation["book_title"] = book_title
+            # Aggiorna anche nel DB per le prossime volte
+            await db.conversations.update_one(
+                {"id": conversation_id},
+                {"$set": {"book_title": book_title}}
+            )
+    
     return conversation
 
 

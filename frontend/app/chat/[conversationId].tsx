@@ -258,7 +258,7 @@ export default function ChatScreen() {
         <View style={styles.bookBanner}>
           <Ionicons name="book" size={16} color="#1a472a" />
           <Text style={styles.bookBannerText} numberOfLines={1}>
-            {conversation.book_title}
+            {conversation.book_title || 'Libro'}
           </Text>
         </View>
       )}
