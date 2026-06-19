@@ -96,6 +96,7 @@ export default function SellFormScreen() {
   const [notes, setNotes] = useState('');
   const [creatingListing, setCreatingListing] = useState(false);
   const [foderare, setFoderare] = useState(false);
+  const [originalPrice, setOriginalPrice] = useState<number | null>(null); // Prezzo originale per modalità modifica
 
   useEffect(() => {
     loadData();
@@ -129,12 +130,37 @@ export default function SellFormScreen() {
             });
             setAutoCoverUrl(`https://www.ibs.it/images/${listing.book_isbn || listing.isbn}_0_0_0_536_0.jpg`);
             
-            // Imposta le condizioni salvate
-            if (listing.condizioni) {
+            // Imposta le condizioni salvate da condition_details
+            if (listing.condition_details) {
+              // Converti le percentuali (0-100) in indici (0-3)
+              const pennaPercent = listing.condition_details.penna || 0;
+              const matitaPercent = listing.condition_details.matita || 0;
+              const evidenziatorePercent = listing.condition_details.evidenziatore || 0;
+              const usuraPercent = listing.condition_details.usura_libro || 0;
+              
+              // Mappa percentuali -> indici (0=0%, 1=33%, 2=66%, 3=100%)
+              const percentToIndex = (p: number) => {
+                if (p <= 10) return 0;
+                if (p <= 40) return 1;
+                if (p <= 70) return 2;
+                return 3;
+              };
+              
+              setScrittePenna(percentToIndex(pennaPercent));
+              setScritteMatita(percentToIndex(matitaPercent));
+              setPagineEvidenziate(percentToIndex(evidenziatorePercent));
+              setCondGenerale(percentToIndex(usuraPercent));
+            } else if (listing.condizioni) {
+              // Fallback per vecchio formato
               setScrittePenna(listing.condizioni.scritte_penna || 0);
               setScritteMatita(listing.condizioni.scritte_matita || 0);
               setPagineEvidenziate(listing.condizioni.pagine_evidenziate || 0);
               setCondGenerale(listing.condizioni.usura_pagine || 0);
+            }
+            
+            // Salva il prezzo originale per selezionare l'opzione corretta dopo il calcolo
+            if (listing.prezzo_vendita) {
+              setOriginalPrice(listing.prezzo_vendita);
             }
             
             // Imposta se è nuovo
@@ -442,16 +468,34 @@ export default function SellFormScreen() {
 
   const priceRange = calculatePriceRange();
 
-  // Auto-seleziona prezzo consigliato
+  // Auto-seleziona prezzo: in modalità modifica usa il prezzo originale, altrimenti prezzo consigliato
   useEffect(() => {
     if (selectedBook && selectedPriceOption === null) {
-      const defaultPriceIndex = isNewBook ? 0 : 1;
-      const defaultPrice = priceRange.prices[defaultPriceIndex]?.prezzoAcquirente || priceRange.prices[0]?.prezzoAcquirente;
-      if (defaultPrice) {
-        setSelectedPriceOption(defaultPrice);
+      // In modalità modifica, cerca il prezzo più vicino a quello originale
+      if (isEditMode && originalPrice !== null) {
+        // Trova l'opzione di prezzo più vicina al prezzo originale
+        const prices = priceRange.prices.map(p => p.prezzoAcquirente);
+        let closestPrice = prices[0];
+        let minDiff = Math.abs(prices[0] - originalPrice);
+        
+        for (const price of prices) {
+          const diff = Math.abs(price - originalPrice);
+          if (diff < minDiff) {
+            minDiff = diff;
+            closestPrice = price;
+          }
+        }
+        setSelectedPriceOption(closestPrice);
+      } else {
+        // Nuovo annuncio: seleziona prezzo consigliato
+        const defaultPriceIndex = isNewBook ? 0 : 1;
+        const defaultPrice = priceRange.prices[defaultPriceIndex]?.prezzoAcquirente || priceRange.prices[0]?.prezzoAcquirente;
+        if (defaultPrice) {
+          setSelectedPriceOption(defaultPrice);
+        }
       }
     }
-  }, [selectedBook, isNewBook]);
+  }, [selectedBook, isNewBook, originalPrice]);
 
   const toggleBookshop = (shopId: string) => {
     setSelectedBookshops(prev => {
