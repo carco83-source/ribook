@@ -1960,6 +1960,17 @@ async def get_listing_by_id(listing_id: str):
     
     listing.pop('_id', None)
     
+    # Se manca prezzo_copertina, cercalo nelle adozioni
+    if not listing.get("prezzo_copertina") and not listing.get("book_prezzo"):
+        isbn = listing.get("book_isbn") or listing.get("isbn")
+        if isbn:
+            adozione = await db.adozioni.find_one({"isbn": isbn})
+            if adozione:
+                prezzo = adozione.get("prezzo") or adozione.get("prezzo_copertina")
+                if prezzo:
+                    listing["prezzo_copertina"] = prezzo
+                    listing["book_prezzo"] = prezzo
+    
     # Generate anonymous seller code
     seller_id = listing.get("seller_id", "")
     seller = await db.users.find_one({"id": seller_id})

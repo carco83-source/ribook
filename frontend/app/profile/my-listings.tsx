@@ -8,6 +8,8 @@ import {
   ActivityIndicator,
   Image,
   RefreshControl,
+  Alert,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,6 +25,7 @@ export default function MyListingsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [listings, setListings] = useState<any[]>([]);
+  const [deleting, setDeleting] = useState<string | null>(null);
 
   useEffect(() => {
     loadListings();
@@ -43,6 +46,47 @@ export default function MyListingsScreen() {
     } finally {
       setLoading(false);
       setRefreshing(false);
+    }
+  };
+
+  const handleDeleteListing = async (listingId: string, bookTitle: string) => {
+    const confirmDelete = () => {
+      setDeleting(listingId);
+      axios.delete(`${API_URL}/api/listings/${listingId}`)
+        .then(() => {
+          setListings(prev => prev.filter(l => l.id !== listingId));
+          if (Platform.OS === 'web') {
+            alert('Annuncio eliminato con successo');
+          } else {
+            Alert.alert('Successo', 'Annuncio eliminato con successo');
+          }
+        })
+        .catch((error) => {
+          console.error('Error deleting listing:', error);
+          if (Platform.OS === 'web') {
+            alert('Errore durante l\'eliminazione dell\'annuncio');
+          } else {
+            Alert.alert('Errore', 'Impossibile eliminare l\'annuncio');
+          }
+        })
+        .finally(() => {
+          setDeleting(null);
+        });
+    };
+
+    if (Platform.OS === 'web') {
+      if (confirm(`Sei sicuro di voler eliminare "${bookTitle}" dalla vendita?`)) {
+        confirmDelete();
+      }
+    } else {
+      Alert.alert(
+        'Elimina annuncio',
+        `Sei sicuro di voler eliminare "${bookTitle}" dalla vendita?`,
+        [
+          { text: 'Annulla', style: 'cancel' },
+          { text: 'Elimina', style: 'destructive', onPress: confirmDelete }
+        ]
+      );
     }
   };
 
@@ -182,6 +226,23 @@ export default function MyListingsScreen() {
                     <Ionicons name="chevron-forward" size={20} color="#ccc" />
                   </TouchableOpacity>
                   
+                  {/* Pulsante Elimina */}
+                  {listing.stato === 'disponibile' && (
+                    <TouchableOpacity
+                      style={styles.deleteButton}
+                      onPress={() => handleDeleteListing(listing.id, listing.book_titolo || 'questo libro')}
+                      disabled={deleting === listing.id}
+                    >
+                      {deleting === listing.id ? (
+                        <ActivityIndicator size="small" color="#f44336" />
+                      ) : (
+                        <>
+                          <Ionicons name="trash-outline" size={18} color="#f44336" />
+                          <Text style={styles.deleteButtonText}>Elimina</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  )}
                 </View>
               );
             })}
@@ -283,8 +344,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   listingCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
     backgroundColor: '#fff',
     borderRadius: 12,
     padding: 12,
@@ -294,6 +353,25 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 3,
     elevation: 2,
+  },
+  listingCardInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  deleteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 10,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+    gap: 6,
+  },
+  deleteButtonText: {
+    color: '#f44336',
+    fontSize: 14,
+    fontWeight: '500',
   },
   listingCover: {
     width: 70,
@@ -385,10 +463,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: '#FF9800',
-  },
-  listingCardInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
   },
   conditionsInfo: {
     marginTop: 6,
