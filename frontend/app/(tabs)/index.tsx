@@ -166,6 +166,9 @@ export default function RadarScreen() {
   
   // Modal informativo per Libri Vendibili
   const [showVendibiliInfo, setShowVendibiliInfo] = useState(false);
+  
+  // Tab categoria libri selezionata
+  const [selectedBookCategory, setSelectedBookCategory] = useState<string>('vendibili');
 
   // Notifications state
   const [notifications, setNotifications] = useState<any[]>([]);
@@ -533,215 +536,152 @@ export default function RadarScreen() {
         return (
           <View style={styles.classCompatSection}>
 
-            {/* NUOVA LOGICA v2 - 4 CATEGORIE */}
-            
-            {/* 1. LIBRI VENDIBILI USATI */}
+            {/* TABS CATEGORIE LIBRI - Riga orizzontale scorrevole */}
             {(() => {
               const vendibiliFiltered = filterOutStrumentiMusicali(compatibility.vendibili_usati || []);
-              return vendibiliFiltered.length > 0 && (
-              <View style={styles.classCard}>
-                <View style={styles.sectionTitleRow}>
-                  <Text style={styles.sectionTitleBlue}>
-                    LIBRI VENDIBILI ({vendibiliFiltered.length})
-                  </Text>
-                  <TouchableOpacity onPress={() => setShowVendibiliInfo(true)}>
-                    <Ionicons name="information-circle-outline" size={22} color="#2196F3" />
-                  </TouchableOpacity>
-                </View>
-                <View style={styles.booksGrid}>
-                  {vendibiliFiltered.map((book: any, idx: number) => {
-                    const coverUrl = book.isbn ? `https://www.ibs.it/images/${book.isbn}_0_0_0_536_0.jpg` : null;
-                    const prezzoNuovo = Number(book.prezzo) || Number(book.prezzo_copertina) || 0;
-                    const prezzoUsato = Number(book.prezzo_vendita_consigliato) || (prezzoNuovo * 0.5);
-                    return (
-                      <TouchableOpacity 
-                        key={idx} 
-                        style={[styles.sampleBookItem, styles.sampleBookItemClickable]}
-                        onPress={() => router.push(`/sell-form?isbn=${book.isbn}&titolo=${encodeURIComponent(book.titolo || '')}&prezzo=${prezzoNuovo}`)}
-                      >
-                        {/* Copertina a sinistra */}
-                        <View style={styles.bookCoverSection}>
-                          {coverUrl ? (
-                            <Image source={{ uri: coverUrl }} style={styles.bookCoverImage} resizeMode="contain" />
-                          ) : (
-                            <Image source={require('../../assets/images/ribook-logo.png')} style={styles.bookCoverImage} resizeMode="contain" />
-                          )}
-                        </View>
-                        {/* Info a destra */}
-                        <View style={styles.bookInfoSection}>
-                          <Text style={styles.bookSubjectBig}>{book.disciplina}</Text>
-                          <View style={[styles.bookCategoryBadge, { backgroundColor: '#e3f2fd' }]}>
-                            <Text style={[styles.bookCategoryText, { color: '#2196F3' }]}>VENDIBILE</Text>
-                          </View>
-                          <View style={styles.bookDetailsCompact}>
-                            <Text style={styles.bookTitleCompact} numberOfLines={2}>{book.titolo}</Text>
-                            {book.autori && <Text style={styles.bookMetaText}>{book.autori}</Text>}
-                            {book.editore && <Text style={styles.bookMetaLabel}>{book.editore}</Text>}
-                            <Text style={styles.bookIsbnText}>ISBN: {book.isbn}</Text>
-                          </View>
-                          <View style={styles.priceRowCompact}>
-                            <Text style={styles.priceNewBig}>€{prezzoNuovo.toFixed(2)}</Text>
-                            <Text style={styles.priceTagSell}>Vendi €{prezzoUsato.toFixed(2)}</Text>
-                          </View>
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </View>
-            );
-            })()}
-
-            {/* 2. LIBRI DA ACQUISTARE USATI */}
-            {(() => {
               const usatiFiltered = filterOutStrumentiMusicali(compatibility.da_acquistare_usati || []);
-              return usatiFiltered.length > 0 && (
-              <View style={styles.classCard}>
-                <Text style={styles.sectionTitleGreen}>
-                  DA COMPRARE USATI ({usatiFiltered.length})
-                </Text>
-                <View style={styles.booksGrid}>
-                  {usatiFiltered.map((book: any, idx: number) => {
-                    const coverUrl = book.isbn ? `https://www.ibs.it/images/${book.isbn}_0_0_0_536_0.jpg` : null;
-                    const prezzoNuovo = Number(book.prezzo) || 0;
-                    const prezzoUsato = Number(book.prezzo_usato) || (prezzoNuovo * 0.5);
-                    const risparmio = Number(book.risparmio) || (prezzoNuovo - prezzoUsato);
-                    const copieDisponibili = book.venditori_disponibili || 0;
-                    return (
-                      <TouchableOpacity 
-                        key={idx} 
-                        style={[styles.sampleBookItem, styles.sampleBookItemClickable]}
-                        onPress={() => router.push(`/book-sellers/${book.isbn}`)}
-                      >
-                        {/* Copertina a sinistra */}
-                        <View style={styles.bookCoverSection}>
-                          {coverUrl ? (
-                            <Image source={{ uri: coverUrl }} style={styles.bookCoverImage} resizeMode="contain" />
-                          ) : (
-                            <Image source={require('../../assets/images/ribook-logo.png')} style={styles.bookCoverImage} resizeMode="contain" />
-                          )}
-                          {/* Numero copie disponibili - mostra sempre */}
-                          <View style={[styles.copieDisponibiliBadge, copieDisponibili === 0 && styles.copieZeroBadge]}>
-                            <Ionicons name="people" size={12} color="#fff" />
-                            <Text style={styles.copieDisponibiliText}>{copieDisponibili} {copieDisponibili === 1 ? 'copia' : 'copie'}</Text>
-                          </View>
-                        </View>
-                        {/* Info a destra */}
-                        <View style={styles.bookInfoSection}>
-                          <Text style={styles.bookSubjectBig}>{book.disciplina}</Text>
-                          <View style={[styles.bookCategoryBadge, { backgroundColor: '#e8f5e9' }]}>
-                            <Text style={[styles.bookCategoryText, { color: '#4CAF50' }]}>USATO DISPONIBILE</Text>
-                          </View>
-                          <View style={styles.bookDetailsCompact}>
-                            <Text style={styles.bookTitleCompact} numberOfLines={2}>{book.titolo}</Text>
-                            {book.autori && <Text style={styles.bookMetaText}>{book.autori}</Text>}
-                            {book.editore && <Text style={styles.bookMetaLabel}>{book.editore}</Text>}
-                            <Text style={styles.bookIsbnText}>ISBN: {book.isbn}</Text>
-                          </View>
-                          <View style={styles.priceRowCompact}>
-                            <Text style={styles.priceStrikethrough}>€{prezzoNuovo.toFixed(2)}</Text>
-                            <Text style={styles.priceUsedBig}>€{prezzoUsato.toFixed(2)}</Text>
-                            <Text style={styles.priceSaving}>-€{risparmio.toFixed(2)}</Text>
-                          </View>
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </View>
-            );
-            })()}
-
-            {/* 3. LIBRI DA ACQUISTARE NUOVI */}
-            {(() => {
               const nuoviFiltered = filterOutStrumentiMusicali(compatibility.da_acquistare_nuovi || []);
-              return nuoviFiltered.length > 0 && (
-              <View style={styles.classCard}>
-                <Text style={styles.sectionTitleOrange}>
-                  DA COMPRARE NUOVI ({nuoviFiltered.length})
-                </Text>
-                <View style={styles.booksGrid}>
-                  {nuoviFiltered.map((book: any, idx: number) => {
-                    const coverUrl = book.isbn ? `https://www.ibs.it/images/${book.isbn}_0_0_0_536_0.jpg` : null;
-                    const prezzo = Number(book.prezzo) || 0;
-                    return (
-                      <View key={idx} style={styles.sampleBookItem}>
-                        {/* Copertina a sinistra */}
-                        <View style={styles.bookCoverSection}>
-                          {coverUrl ? (
-                            <Image source={{ uri: coverUrl }} style={styles.bookCoverImage} resizeMode="contain" />
-                          ) : (
-                            <Image source={require('../../assets/images/ribook-logo.png')} style={styles.bookCoverImage} resizeMode="contain" />
-                          )}
-                        </View>
-                        {/* Info a destra */}
-                        <View style={styles.bookInfoSection}>
-                          <Text style={styles.bookSubjectBig}>{book.disciplina}</Text>
-                          <View style={[styles.bookCategoryBadge, { backgroundColor: '#fff3e0' }]}>
-                            <Text style={[styles.bookCategoryText, { color: '#FF9800' }]}>DA COMPRARE NUOVO</Text>
-                          </View>
-                          <View style={styles.bookDetailsCompact}>
-                            <Text style={styles.bookTitleCompact} numberOfLines={2}>{book.titolo}</Text>
-                            {book.autori && <Text style={styles.bookMetaText}>{book.autori}</Text>}
-                            {book.editore && <Text style={styles.bookMetaLabel}>{book.editore}</Text>}
-                            <Text style={styles.bookIsbnText}>ISBN: {book.isbn}</Text>
-                          </View>
-                          <View style={styles.priceRowCompact}>
-                            <Text style={styles.priceNewBig}>€{prezzo.toFixed(2)}</Text>
-                            <Text style={styles.bookMetaLabel}>{book.motivo}</Text>
-                          </View>
-                        </View>
-                      </View>
-                    );
-                  })}
-                </View>
-              </View>
-            );
-            })()}
-
-            {/* 4. LIBRI ANCORA IN USO (non vendibili) */}
-            {(() => {
               const inUsoFiltered = filterOutStrumentiMusicali(compatibility.ancora_in_uso || []);
-              return inUsoFiltered.length > 0 && (
-              <View style={styles.classCard}>
-                <Text style={styles.sectionTitlePurple}>
-                  ANCORA IN USO ({inUsoFiltered.length})
-                </Text>
-                <Text style={{ color: '#666', fontSize: 12, marginBottom: 8 }}>
-                  Questi libri ti servono ancora - non metterli in vendita
-                </Text>
-                <View style={styles.booksGrid}>
-                  {inUsoFiltered.map((book: any, idx: number) => {
-                    const coverUrl = book.isbn ? `https://www.ibs.it/images/${book.isbn}_0_0_0_536_0.jpg` : null;
-                    return (
-                      <View key={idx} style={[styles.sampleBookItem, { opacity: 0.7 }]}>
-                        {/* Copertina a sinistra */}
-                        <View style={styles.bookCoverSection}>
-                          {coverUrl ? (
-                            <Image source={{ uri: coverUrl }} style={styles.bookCoverImage} resizeMode="contain" />
-                          ) : (
-                            <Image source={require('../../assets/images/ribook-logo.png')} style={styles.bookCoverImage} resizeMode="contain" />
-                          )}
-                        </View>
-                        {/* Info a destra */}
-                        <View style={styles.bookInfoSection}>
-                          <Text style={styles.bookSubjectBig}>{book.disciplina}</Text>
-                          <View style={[styles.bookCategoryBadge, { backgroundColor: '#f3e5f5' }]}>
-                            <Text style={[styles.bookCategoryText, { color: '#9C27B0' }]}>ANCORA IN USO</Text>
+              
+              const categories = [
+                { id: 'vendibili', label: 'Vendibili', count: vendibiliFiltered.length, color: '#2196F3', books: vendibiliFiltered },
+                { id: 'usati', label: 'Comprare Usati', count: usatiFiltered.length, color: '#4CAF50', books: usatiFiltered },
+                { id: 'nuovi', label: 'Comprare Nuovi', count: nuoviFiltered.length, color: '#FF9800', books: nuoviFiltered },
+                { id: 'inuso', label: 'Ancora in Uso', count: inUsoFiltered.length, color: '#9C27B0', books: inUsoFiltered },
+              ].filter(cat => cat.count > 0);
+              
+              const currentCategory = categories.find(c => c.id === selectedBookCategory) || categories[0];
+              
+              return (
+                <>
+                  {/* Barra tabs scorrevole */}
+                  <ScrollView 
+                    horizontal 
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.categoryTabsContainer}
+                    contentContainerStyle={styles.categoryTabsContent}
+                  >
+                    {categories.map((cat) => (
+                      <TouchableOpacity
+                        key={cat.id}
+                        style={[
+                          styles.categoryTab,
+                          selectedBookCategory === cat.id && styles.categoryTabSelected,
+                          selectedBookCategory === cat.id && { borderBottomColor: cat.color }
+                        ]}
+                        onPress={() => setSelectedBookCategory(cat.id)}
+                      >
+                        <Text style={[
+                          styles.categoryTabText,
+                          selectedBookCategory === cat.id && styles.categoryTabTextSelected,
+                          selectedBookCategory === cat.id && { color: cat.color }
+                        ]}>
+                          {cat.label} ({cat.count})
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                    {selectedBookCategory === 'vendibili' && (
+                      <TouchableOpacity onPress={() => setShowVendibiliInfo(true)} style={styles.infoIconTab}>
+                        <Ionicons name="information-circle-outline" size={20} color="#2196F3" />
+                      </TouchableOpacity>
+                    )}
+                  </ScrollView>
+                  
+                  {/* Contenuto della categoria selezionata */}
+                  <View style={styles.booksGrid}>
+                    {currentCategory && currentCategory.books.map((book: any, idx: number) => {
+                      const coverUrl = book.isbn ? `https://www.ibs.it/images/${book.isbn}_0_0_0_536_0.jpg` : null;
+                      const prezzoNuovo = Number(book.prezzo) || Number(book.prezzo_copertina) || 0;
+                      const prezzoUsato = Number(book.prezzo_usato) || Number(book.prezzo_vendita_consigliato) || (prezzoNuovo * 0.5);
+                      const copieDisponibili = book.venditori_disponibili || 0;
+                      const risparmio = Number(book.risparmio) || (prezzoNuovo - prezzoUsato);
+                      
+                      // Determina azione e stile in base alla categoria
+                      const isVendibile = currentCategory.id === 'vendibili';
+                      const isUsato = currentCategory.id === 'usati';
+                      const isNuovo = currentCategory.id === 'nuovi';
+                      const isInUso = currentCategory.id === 'inuso';
+                      
+                      const handlePress = () => {
+                        if (isVendibile) {
+                          router.push(`/sell-form?isbn=${book.isbn}&titolo=${encodeURIComponent(book.titolo || '')}&prezzo=${prezzoNuovo}`);
+                        } else if (isUsato) {
+                          router.push(`/book-sellers/${book.isbn}`);
+                        }
+                        // nuovi e inuso non hanno azione
+                      };
+                      
+                      return (
+                        <TouchableOpacity 
+                          key={idx} 
+                          style={[
+                            styles.sampleBookItem, 
+                            (isVendibile || isUsato) && styles.sampleBookItemClickable,
+                            isInUso && { opacity: 0.7 }
+                          ]}
+                          onPress={handlePress}
+                          disabled={isNuovo || isInUso}
+                        >
+                          {/* Copertina a sinistra */}
+                          <View style={styles.bookCoverSection}>
+                            {coverUrl ? (
+                              <Image source={{ uri: coverUrl }} style={styles.bookCoverImage} resizeMode="contain" />
+                            ) : (
+                              <Image source={require('../../assets/images/ribook-logo.png')} style={styles.bookCoverImage} resizeMode="contain" />
+                            )}
+                            {/* Badge copie solo per usati */}
+                            {isUsato && (
+                              <View style={[styles.copieDisponibiliBadge, copieDisponibili === 0 && styles.copieZeroBadge]}>
+                                <Ionicons name="people" size={12} color="#fff" />
+                                <Text style={styles.copieDisponibiliText}>{copieDisponibili} {copieDisponibili === 1 ? 'copia' : 'copie'}</Text>
+                              </View>
+                            )}
                           </View>
-                          <View style={styles.bookDetailsCompact}>
-                            <Text style={styles.bookTitleCompact} numberOfLines={2}>{book.titolo}</Text>
-                            {book.autori && <Text style={styles.bookMetaText}>{book.autori}</Text>}
-                            {book.editore && <Text style={styles.bookMetaLabel}>{book.editore}</Text>}
-                            {book.isbn && <Text style={styles.bookIsbnText}>ISBN: {book.isbn}</Text>}
+                          {/* Info a destra */}
+                          <View style={styles.bookInfoSection}>
+                            <Text style={styles.bookSubjectBig}>{book.disciplina}</Text>
+                            <View style={[styles.bookCategoryBadge, { backgroundColor: currentCategory.color + '20' }]}>
+                              <Text style={[styles.bookCategoryText, { color: currentCategory.color }]}>
+                                {isVendibile ? 'VENDIBILE' : isUsato ? 'USATO DISPONIBILE' : isNuovo ? 'DA COMPRARE NUOVO' : 'ANCORA IN USO'}
+                              </Text>
+                            </View>
+                            <View style={styles.bookDetailsCompact}>
+                              <Text style={styles.bookTitleCompact} numberOfLines={2}>{book.titolo}</Text>
+                              {book.autori && <Text style={styles.bookMetaText}>{book.autori}</Text>}
+                              {book.editore && <Text style={styles.bookMetaLabel}>{book.editore}</Text>}
+                              <Text style={styles.bookIsbnText}>ISBN: {book.isbn}</Text>
+                            </View>
+                            {/* Prezzi */}
+                            {(isVendibile || isUsato || isNuovo) && (
+                              <View style={styles.priceRowCompact}>
+                                {isVendibile && (
+                                  <>
+                                    <Text style={styles.priceNewBig}>€{prezzoNuovo.toFixed(2)}</Text>
+                                    <Text style={styles.priceTagSell}>Vendi €{prezzoUsato.toFixed(2)}</Text>
+                                  </>
+                                )}
+                                {isUsato && (
+                                  <>
+                                    <Text style={styles.priceStrikethrough}>€{prezzoNuovo.toFixed(2)}</Text>
+                                    <Text style={styles.priceUsedBig}>€{prezzoUsato.toFixed(2)}</Text>
+                                    <Text style={styles.priceSaving}>-€{risparmio.toFixed(2)}</Text>
+                                  </>
+                                )}
+                                {isNuovo && (
+                                  <>
+                                    <Text style={styles.priceNewBig}>€{prezzoNuovo.toFixed(2)}</Text>
+                                    <Text style={styles.bookMetaLabel}>{book.motivo}</Text>
+                                  </>
+                                )}
+                              </View>
+                            )}
                           </View>
-                        </View>
-                      </View>
-                    );
-                  })}
-                </View>
-              </View>
-            );
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </>
+              );
             })()}
 
           </View>
@@ -1222,6 +1162,42 @@ const styles = StyleSheet.create({
   classCompatSection: {
     marginHorizontal: 16,
     marginBottom: 16,
+  },
+  // Stili per tabs categorie libri
+  categoryTabsContainer: {
+    marginBottom: 12,
+  },
+  categoryTabsContent: {
+    paddingRight: 16,
+    gap: 8,
+  },
+  categoryTab: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 20,
+    borderBottomWidth: 3,
+    borderBottomColor: 'transparent',
+  },
+  categoryTabSelected: {
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  categoryTabText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#666',
+  },
+  categoryTabTextSelected: {
+    fontWeight: 'bold',
+  },
+  infoIconTab: {
+    paddingHorizontal: 8,
+    justifyContent: 'center',
   },
   sectionHeader: {
     flexDirection: 'row',
