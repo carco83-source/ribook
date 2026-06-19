@@ -23,6 +23,25 @@ STRUMENTI_MUSICALI_KEYWORDS = [
     'violoncello', 'contrabbasso', 'oboe', 'fagotto', 'corno',
 ]
 
+# =============================================================================
+# MAPPATURA ISBN: Correzioni per libri che cambiano ISBN tra anni scolastici
+# Formato: { 'isbn_vecchio': 'isbn_nuovo' }
+# Quando un libro dell'anno precedente ha un ISBN che è stato sostituito,
+# questa mappatura permette di riconoscerlo come lo stesso libro.
+# =============================================================================
+ISBN_MAPPING = {
+    '9788839304292': '9788839303875',  # Let's Movie - vecchio ISBN → nuovo ISBN
+}
+
+def normalize_isbn(isbn: str) -> str:
+    """
+    Normalizza un ISBN applicando la mappatura se necessario.
+    Se l'ISBN è nella mappatura, restituisce quello nuovo, altrimenti restituisce l'originale.
+    """
+    if not isbn:
+        return isbn
+    return ISBN_MAPPING.get(isbn, isbn)
+
 def is_libro_strumento_musicale(libro: Dict) -> bool:
     """
     Verifica se un libro è un libro di strumento musicale (da escludere dal calcolo).
@@ -291,6 +310,10 @@ async def classifica_libri_studente(
         libri_2025 = await get_libri_classe_2025_2026(
             db, codice_scuola, classe_2025_2026, sezione
         )
+        # Normalizza gli ISBN del 2025/2026 applicando la mappatura
+        for libro in libri_2025:
+            libro["isbn_originale"] = libro["isbn"]  # Salva l'originale
+            libro["isbn"] = normalize_isbn(libro["isbn"])  # Applica mappatura
         isbn_2025 = {l["isbn"] for l in libri_2025}
     
     # Recupera libri 2026/2027 (se esiste classe corrente)
@@ -302,7 +325,7 @@ async def classifica_libri_studente(
         )
         isbn_2026 = {l["isbn"] for l in libri_2026}
     
-    # Mappa ISBN -> libro per accesso rapido
+    # Mappa ISBN -> libro per accesso rapido (usa ISBN normalizzati)
     mappa_2025 = {l["isbn"]: l for l in libri_2025}
     mappa_2026 = {l["isbn"]: l for l in libri_2026}
     
