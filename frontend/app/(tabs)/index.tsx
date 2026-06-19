@@ -85,6 +85,25 @@ const filterOutStrumentiMusicali = (books: any[]): any[] => {
   });
 };
 
+// Semplifica i nomi delle lingue
+const semplificaLingua = (disciplina: string): string => {
+  if (!disciplina) return disciplina;
+  const d = disciplina.toUpperCase();
+  
+  // Estrai la lingua principale
+  if (d.includes('FRANCESE')) return 'FRANCESE';
+  if (d.includes('INGLESE')) return 'INGLESE';
+  if (d.includes('SPAGNOLO')) return 'SPAGNOLO';
+  if (d.includes('TEDESCO')) return 'TEDESCO';
+  if (d.includes('PORTOGHESE')) return 'PORTOGHESE';
+  if (d.includes('CINESE')) return 'CINESE';
+  if (d.includes('RUSSO')) return 'RUSSO';
+  if (d.includes('ARABO')) return 'ARABO';
+  if (d.includes('GIAPPONESE')) return 'GIAPPONESE';
+  
+  return disciplina;
+};
+
 interface CartData {
   total_confirmed: number;
   total_pending: number;
@@ -733,10 +752,17 @@ export default function RadarScreen() {
                           onPress={handlePress}
                           disabled={isNuovo || isInUso || isFuoriCorso}
                         >
-                          {/* NUOVA STRUTTURA: Materia in alto */}
+                          {/* NUOVA STRUTTURA: Materia e Badge in alto sulla stessa riga */}
                           <View style={styles.bookCardContent}>
-                            {/* Riga superiore: MATERIA */}
-                            <Text style={styles.bookSubjectTop}>{book.disciplina}</Text>
+                            {/* Riga superiore: MATERIA + BADGE */}
+                            <View style={styles.bookTopHeader}>
+                              <Text style={styles.bookSubjectTop}>{semplificaLingua(book.disciplina)}</Text>
+                              <View style={[styles.bookCategoryBadgeTop, { backgroundColor: currentCategory.color + '20' }]}>
+                                <Text style={[styles.bookCategoryTextTop, { color: currentCategory.color }]}>
+                                  {isVendibile ? 'VENDIBILE' : isUsato ? 'USATO DISPONIBILE' : isNuovo ? 'DA COMPRARE NUOVO' : isFuoriCorso ? 'FUORI CORSO' : 'ANCORA IN USO'}
+                                </Text>
+                              </View>
+                            </View>
                             
                             {/* Riga centrale: Copertina + Info */}
                             <View style={styles.bookMainRow}>
@@ -757,14 +783,8 @@ export default function RadarScreen() {
                                 )}
                               </View>
                               
-                              {/* Info a destra della copertina */}
+                              {/* Info a destra della copertina - senza badge categoria */}
                               <View style={styles.bookInfoColumn}>
-                                {/* Badge categoria in alto */}
-                                <View style={[styles.bookCategoryBadge, { backgroundColor: currentCategory.color + '20' }]}>
-                                  <Text style={[styles.bookCategoryText, { color: currentCategory.color }]}>
-                                    {isVendibile ? 'VENDIBILE' : isUsato ? 'USATO DISPONIBILE' : isNuovo ? 'DA COMPRARE NUOVO' : isFuoriCorso ? 'FUORI CORSO' : 'ANCORA IN USO'}
-                                  </Text>
-                                </View>
                                 {/* Titolo, autori, editore, volume, ISBN */}
                                 <Text style={styles.bookTitleCompact} numberOfLines={2}>{book.titolo}</Text>
                                 {book.autori && <Text style={styles.bookMetaText} numberOfLines={1}>{book.autori}</Text>}
@@ -1609,13 +1629,31 @@ const styles = StyleSheet.create({
   bookCardContent: {
     flex: 1,
   },
+  // Header in alto: Materia + Badge sulla stessa riga
+  bookTopHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   // Materia in alto a sinistra
   bookSubjectTop: {
     fontSize: 14,
     fontWeight: 'bold',
     color: '#1a472a',
     textTransform: 'uppercase',
-    marginBottom: 8,
+    flex: 1,
+  },
+  // Badge categoria in alto a destra
+  bookCategoryBadgeTop: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+    marginLeft: 8,
+  },
+  bookCategoryTextTop: {
+    fontSize: 9,
+    fontWeight: 'bold',
   },
   // Riga principale: copertina + info
   bookMainRow: {
@@ -1627,8 +1665,8 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   bookCoverImage: {
-    width: 70,
-    height: 95,
+    width: 80,
+    height: 110,
     borderRadius: 4,
     backgroundColor: '#f5f5f5',
   },
@@ -1695,10 +1733,11 @@ const styles = StyleSheet.create({
     color: '#999',
     marginTop: 2,
   },
-  // Riga prezzi in basso
+  // Riga prezzi in basso - allineati a destra
   priceRowBottom: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'flex-end',
     gap: 8,
     marginTop: 8,
     paddingTop: 8,
