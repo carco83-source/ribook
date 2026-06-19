@@ -716,14 +716,14 @@ export default function BookstorePortalScreen() {
         {/* Dashboard Tab */}
         {activeTab === 'dashboard' && (
           <View style={styles.dashboardContent}>
-            {/* Stats Grid - Horizontal compact */}
+            {/* Stats Grid - Card quadrate */}
             <View style={[styles.statsGrid, isDesktop && styles.statsGridDesktop]}>
               {/* In Arrivo */}
               <TouchableOpacity 
                 style={[styles.statCard, styles.statCardBlue]}
                 onPress={() => setActiveTab('in_arrivo')}
               >
-                <Ionicons name="time-outline" size={20} color="#1976D2" />
+                <Ionicons name="time-outline" size={26} color="#1976D2" />
                 <Text style={styles.statNumber}>{stats.in_arrivo}</Text>
                 <Text style={styles.statLabel}>In Arrivo</Text>
                 {stats.ordini_scaduti > 0 && (
@@ -738,7 +738,7 @@ export default function BookstorePortalScreen() {
                 style={[styles.statCard, styles.statCardOrange]}
                 onPress={() => setActiveTab('da_ritirare')}
               >
-                <Ionicons name="cube-outline" size={20} color="#F57C00" />
+                <Ionicons name="cube-outline" size={26} color="#F57C00" />
                 <Text style={styles.statNumber}>{stats.da_ritirare}</Text>
                 <Text style={styles.statLabel}>Da Ritirare</Text>
               </TouchableOpacity>
@@ -748,9 +748,9 @@ export default function BookstorePortalScreen() {
                 style={[styles.statCard, styles.statCardGreen]}
                 onPress={() => setActiveTab('completati')}
               >
-                <Ionicons name="checkmark-circle-outline" size={20} color="#388E3C" />
+                <Ionicons name="checkmark-circle-outline" size={26} color="#388E3C" />
                 <Text style={styles.statNumber}>{stats.completati_oggi}</Text>
-                <Text style={styles.statLabel}>Oggi</Text>
+                <Text style={styles.statLabel}>Completati Oggi</Text>
               </TouchableOpacity>
 
               {/* Resi */}
@@ -758,7 +758,7 @@ export default function BookstorePortalScreen() {
                 style={[styles.statCard, styles.statCardRed]}
                 onPress={() => setActiveTab('resi')}
               >
-                <Ionicons name="refresh-outline" size={20} color="#C2185B" />
+                <Ionicons name="refresh-outline" size={26} color="#C2185B" />
                 <Text style={styles.statNumber}>{stats.resi_in_attesa}</Text>
                 <Text style={styles.statLabel}>Resi</Text>
               </TouchableOpacity>
@@ -1288,37 +1288,38 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 8,
   },
-  // Tabs
+  // Tabs - più schiacciati
   tabsContainer: {
     backgroundColor: '#fff',
-    paddingHorizontal: 8,
-    paddingVertical: 8,
+    paddingHorizontal: 4,
+    paddingVertical: 4,
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
+    flexDirection: 'row',
   },
   tab: {
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginHorizontal: 4,
-    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginHorizontal: 2,
+    borderRadius: 8,
     backgroundColor: '#f5f5f5',
-    minWidth: 70,
+    minWidth: 60,
   },
   tabActive: {
     backgroundColor: '#E8F5E9',
   },
   tabIconContainer: {
     position: 'relative',
-    marginBottom: 4,
   },
   tabText: {
-    fontSize: 12,
+    fontSize: 9,
     color: '#666',
     fontWeight: '500',
     textAlign: 'center',
+    marginTop: 2,
   },
   tabTextActive: {
     color: '#1a472a',
@@ -1326,20 +1327,20 @@ const styles = StyleSheet.create({
   },
   tabBadge: {
     position: 'absolute',
-    top: -6,
-    right: -10,
+    top: -4,
+    right: -8,
     backgroundColor: '#f44336',
-    paddingHorizontal: 5,
+    paddingHorizontal: 4,
     paddingVertical: 1,
-    borderRadius: 8,
-    minWidth: 16,
+    borderRadius: 6,
+    minWidth: 14,
     alignItems: 'center',
   },
   tabBadgeActive: {
     backgroundColor: '#f44336',
   },
   tabBadgeText: {
-    fontSize: 10,
+    fontSize: 8,
     fontWeight: 'bold',
     color: '#fff',
   },
@@ -1439,23 +1440,25 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 2,
   },
-  // Stats Grid - Horizontal compact cards
+  // Stats Grid - Card quadrate verticali
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 10,
     marginBottom: 12,
   },
   statsGridDesktop: {
-    gap: 10,
+    gap: 12,
   },
   statCard: {
-    width: '48%',
-    flexDirection: 'row',
+    width: '47%',
+    flexDirection: 'column',
     alignItems: 'center',
-    padding: 10,
-    borderRadius: 10,
-    gap: 10,
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    minHeight: 90,
   },
   statCardBlue: {
     backgroundColor: '#E3F2FD',
@@ -1470,31 +1473,32 @@ const styles = StyleSheet.create({
     backgroundColor: '#FCE4EC',
   },
   statNumber: {
-    fontSize: 28,
+    fontSize: 36,
     fontWeight: 'bold',
     color: '#333',
+    marginTop: 4,
   },
   statLabel: {
-    fontSize: 11,
-    color: '#666',
-    flex: 1,
+    fontSize: 12,
+    color: '#555',
+    marginTop: 2,
+    fontWeight: '500',
   },
   alertBadge: {
     position: 'absolute',
-    top: -4,
-    right: -4,
+    top: 6,
+    right: 6,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#f44336',
-    paddingHorizontal: 5,
+    paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 8,
-    gap: 2,
+    borderRadius: 10,
   },
   alertBadgeText: {
     color: '#fff',
-    fontSize: 9,
-    fontWeight: '600',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
   // Earnings Card
   earningsCard: {
