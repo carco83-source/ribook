@@ -770,7 +770,7 @@ export default function SellFormScreen() {
             {selectedBook.prezzo_copertina && (
               <View style={styles.bookPriceRow}>
                 <Text style={styles.bookPriceLabel}>Prezzo copertina: </Text>
-                <Text style={styles.bookPriceValue}>€{selectedBook.prezzo_copertina.toFixed(2)}</Text>
+                <Text style={styles.bookPriceValue}>€{(selectedBook.prezzo_copertina || 0).toFixed(2)}</Text>
               </View>
             )}
           </View>
