@@ -716,20 +716,19 @@ export default function BookstorePortalScreen() {
         {/* Dashboard Tab */}
         {activeTab === 'dashboard' && (
           <View style={styles.dashboardContent}>
-            {/* Stats Grid */}
+            {/* Stats Grid - Horizontal compact */}
             <View style={[styles.statsGrid, isDesktop && styles.statsGridDesktop]}>
               {/* In Arrivo */}
               <TouchableOpacity 
                 style={[styles.statCard, styles.statCardBlue]}
                 onPress={() => setActiveTab('in_arrivo')}
               >
-                <Ionicons name="time-outline" size={24} color="#1976D2" />
+                <Ionicons name="time-outline" size={20} color="#1976D2" />
                 <Text style={styles.statNumber}>{stats.in_arrivo}</Text>
                 <Text style={styles.statLabel}>In Arrivo</Text>
                 {stats.ordini_scaduti > 0 && (
                   <View style={styles.alertBadge}>
-                    <Ionicons name="warning" size={10} color="#fff" />
-                    <Text style={styles.alertBadgeText}>{stats.ordini_scaduti}</Text>
+                    <Text style={styles.alertBadgeText}>{stats.ordini_scaduti}!</Text>
                   </View>
                 )}
               </TouchableOpacity>
@@ -739,7 +738,7 @@ export default function BookstorePortalScreen() {
                 style={[styles.statCard, styles.statCardOrange]}
                 onPress={() => setActiveTab('da_ritirare')}
               >
-                <Ionicons name="cube-outline" size={24} color="#F57C00" />
+                <Ionicons name="cube-outline" size={20} color="#F57C00" />
                 <Text style={styles.statNumber}>{stats.da_ritirare}</Text>
                 <Text style={styles.statLabel}>Da Ritirare</Text>
               </TouchableOpacity>
@@ -749,7 +748,7 @@ export default function BookstorePortalScreen() {
                 style={[styles.statCard, styles.statCardGreen]}
                 onPress={() => setActiveTab('completati')}
               >
-                <Ionicons name="checkmark-circle-outline" size={24} color="#388E3C" />
+                <Ionicons name="checkmark-circle-outline" size={20} color="#388E3C" />
                 <Text style={styles.statNumber}>{stats.completati_oggi}</Text>
                 <Text style={styles.statLabel}>Oggi</Text>
               </TouchableOpacity>
@@ -759,9 +758,9 @@ export default function BookstorePortalScreen() {
                 style={[styles.statCard, styles.statCardRed]}
                 onPress={() => setActiveTab('resi')}
               >
-                <Ionicons name="refresh-outline" size={32} color="#C2185B" />
+                <Ionicons name="refresh-outline" size={20} color="#C2185B" />
                 <Text style={styles.statNumber}>{stats.resi_in_attesa}</Text>
-                <Text style={styles.statLabel}>Resi in attesa</Text>
+                <Text style={styles.statLabel}>Resi</Text>
               </TouchableOpacity>
             </View>
 
@@ -1440,21 +1439,23 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 2,
   },
-  // Stats Grid
+  // Stats Grid - Horizontal compact cards
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 16,
+    gap: 8,
+    marginBottom: 12,
   },
   statsGridDesktop: {
-    gap: 16,
+    gap: 10,
   },
   statCard: {
-    width: '47%',
-    padding: 16,
-    borderRadius: 12,
+    width: '48%',
+    flexDirection: 'row',
     alignItems: 'center',
+    padding: 10,
+    borderRadius: 10,
+    gap: 10,
   },
   statCardBlue: {
     backgroundColor: '#E3F2FD',
@@ -1469,29 +1470,30 @@ const styles = StyleSheet.create({
     backgroundColor: '#FCE4EC',
   },
   statNumber: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: 'bold',
     color: '#333',
-    marginTop: 8,
   },
   statLabel: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#666',
-    marginTop: 4,
+    flex: 1,
   },
   alertBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#f44336',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 10,
-    marginTop: 8,
-    gap: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 8,
+    gap: 2,
   },
   alertBadgeText: {
     color: '#fff',
-    fontSize: 11,
+    fontSize: 9,
     fontWeight: '600',
   },
   // Earnings Card
