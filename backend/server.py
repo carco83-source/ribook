@@ -5028,25 +5028,25 @@ async def generate_books_pdf(user_id: str, child_id: str):
             prima_sezione = all_books[0].get("sezione")
             books = [b for b in all_books if b.get("sezione") == prima_sezione]
     
-    # Create PDF - PORTRAIT A4 (verticale per iOS)
+    # Create PDF - LANDSCAPE A4 (orizzontale)
     buffer = io.BytesIO()
-    page_width, page_height = A4  # Portrait orientation
+    page_width, page_height = landscape(A4)  # Landscape orientation
     doc = SimpleDocTemplate(
         buffer, 
-        pagesize=A4,  # Portrait 
-        topMargin=0.4*cm,  # Ridotto
-        bottomMargin=0.4*cm,  # Ridotto
-        leftMargin=0.4*cm,  # Ridotto
-        rightMargin=0.4*cm  # Ridotto
+        pagesize=landscape(A4),  # Landscape 
+        topMargin=0.5*cm,
+        bottomMargin=0.5*cm,
+        leftMargin=0.5*cm,
+        rightMargin=0.5*cm
     )
     
     elements = []
     styles = getSampleStyleSheet()
     
-    # Styles - font più compatti per massimizzare spazio
-    header_style = ParagraphStyle('Header', fontSize=10, leading=12)
-    cell_style = ParagraphStyle('Cell', fontSize=5.5, leading=7, wordWrap='CJK')
-    cell_bold = ParagraphStyle('CellBold', fontSize=5.5, leading=7, fontName='Helvetica-Bold', wordWrap='CJK')
+    # Styles - font più leggibili per landscape
+    header_style = ParagraphStyle('Header', fontSize=11, leading=13)
+    cell_style = ParagraphStyle('Cell', fontSize=7, leading=9, wordWrap='CJK')
+    cell_bold = ParagraphStyle('CellBold', fontSize=7, leading=9, fontName='Helvetica-Bold', wordWrap='CJK')
     
     # Header
     scuola_nome = child_scuola.split('-')[0].strip() if '-' in child_scuola else child_scuola
@@ -5070,13 +5070,13 @@ async def generate_books_pdf(user_id: str, child_id: str):
                  ParagraphStyle('RightHeader', fontSize=10, leading=12, alignment=TA_LEFT))
     ]]
     
-    header_table = Table(header_data, colWidths=[5.5*cm, 4.5*cm, 6.5*cm])
+    header_table = Table(header_data, colWidths=[8*cm, 5*cm, 10*cm])
     header_table.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('ALIGN', (1, 0), (1, 0), 'CENTER'),
     ]))
     elements.append(header_table)
-    elements.append(Spacer(1, 0.3*cm))  # Ridotto
+    elements.append(Spacer(1, 0.4*cm))
     
     # Table header - colonne ridotte per portrait
     table_data = [[
@@ -5092,8 +5092,8 @@ async def generate_books_pdf(user_id: str, child_id: str):
         Paragraph('<b>Cons.</b>', cell_bold),
     ]]
     
-    # Colonne ottimizzate per A4 Portrait (larghezza ~19.5cm disponibili)
-    col_widths = [2.2*cm, 2.2*cm, 2.8*cm, 5.5*cm, 0.6*cm, 2.2*cm, 1.1*cm, 0.9*cm, 0.8*cm, 0.8*cm]
+    # Colonne ottimizzate per A4 Landscape (larghezza ~28cm disponibili)
+    col_widths = [3*cm, 2.5*cm, 4*cm, 9*cm, 0.8*cm, 3*cm, 1.5*cm, 1.2*cm, 1.1*cm, 1.1*cm]
     
     # Totale libri da acquistare
     total_price = 0
