@@ -4827,11 +4827,11 @@ async def get_child_analysis_v2(user_id: str, child_id: str):
         # RIEPILOGO
         "riepilogo": classificazione["riepilogo"],
         
-        # TETTO DI SPESA MINISTERIALE
+        # TETTO DI SPESA MINISTERIALE - usa costo_testi_nuovi_totale (prezzo copertina)
         "tetto_spesa": calcola_tetto_spesa(
             child_tipo,
             child_classe_2026_2027,
-            classificazione["riepilogo"]["costo_usati"] + classificazione["riepilogo"]["costo_nuovi"]
+            classificazione["riepilogo"]["costo_testi_nuovi_totale"]
         ),
         
         # TOTALI PER RETRO-COMPATIBILITÀ

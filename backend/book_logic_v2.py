@@ -299,6 +299,7 @@ async def classifica_libri_studente(
             "risparmio_stimato": 0,
             "costo_nuovi": 0,
             "costo_usati": 0,
+            "costo_testi_nuovi_totale": 0,  # Somma prezzi copertina di tutti i libri da comprare (per confronto ministeriale)
             "potenziale_vendita": 0,
         }
     }
@@ -495,6 +496,7 @@ async def classifica_libri_studente(
             # Aggiungi al costo SOLO se NON è strumento musicale
             if not is_strumento:
                 result["riepilogo"]["costo_nuovi"] += prezzo
+                result["riepilogo"]["costo_testi_nuovi_totale"] += prezzo  # Prezzo copertina per confronto ministeriale
         
         elif isbn in disponibilita_usato:
             # CATEGORIA 3: DA ACQUISTARE USATO
@@ -516,6 +518,7 @@ async def classifica_libri_studente(
             # Aggiungi al costo SOLO se NON è strumento musicale
             if not is_strumento:
                 result["riepilogo"]["costo_usati"] += prezzo_usato
+                result["riepilogo"]["costo_testi_nuovi_totale"] += prezzo  # Prezzo copertina per confronto ministeriale
                 result["riepilogo"]["risparmio_stimato"] += round(prezzo - prezzo_usato, 2)
         
         else:
@@ -530,6 +533,7 @@ async def classifica_libri_studente(
             # Aggiungi al costo SOLO se NON è strumento musicale
             if not is_strumento:
                 result["riepilogo"]["costo_nuovi"] += prezzo
+                result["riepilogo"]["costo_testi_nuovi_totale"] += prezzo  # Prezzo copertina per confronto ministeriale
     
     # Aggiorna conteggi
     result["riepilogo"]["totale_ancora_in_uso"] = len(result["ancora_in_uso"])
