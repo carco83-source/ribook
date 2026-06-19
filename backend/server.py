@@ -129,6 +129,7 @@ class UserCreate(BaseModel):
     email: str
     telefono: Optional[str] = None
     password: str
+    iban: Optional[str] = None  # IBAN per ricevere pagamenti
     scuola: Optional[str] = None
     classe: Optional[str] = None
     sezione: Optional[str] = None
@@ -145,6 +146,7 @@ class User(BaseModel):
     email: str
     telefono: Optional[str] = None
     password_hash: str
+    iban: Optional[str] = None  # IBAN per ricevere pagamenti
     scuola: Optional[str] = None
     classe: Optional[str] = None
     sezione: Optional[str] = None
@@ -576,6 +578,7 @@ async def register_user(user_data: UserCreate):
         email=user_data.email.lower(),
         telefono=user_data.telefono,
         password_hash=hash_password(user_data.password),
+        iban=user_data.iban,
         scuola=user_data.scuola,
         classe=user_data.classe,
         sezione=user_data.sezione,
@@ -4822,6 +4825,48 @@ async def get_child_analysis_v2(user_id: str, child_id: str):
             classificazione["riepilogo"]["totale_da_comprare_nuovi"]
         ),
     }
+
+
+# =====================================================
+# ENDPOINT PUBBLICO PER UTENTI ANONIMI
+# =====================================================
+@api_router.get("/public/analysis/{codice_scuola}/{classe}/{sezione}")
+async def get_public_analysis(codice_scuola: str, classe: int, sezione: str):
+    """
+    Endpoint pubblico per analisi libri senza autenticazione.
+    Usato per utenti anonimi che hanno creato profili temporanei.
+    """
+    # Determina il tipo di scuola dal codice
+    # MM = medie (primo_grado), altri = secondo_grado
+    tipo_scuola = "primo_grado" if "MM" in codice_scuola else "secondo_grado"
+    
+    # Calcola la classe 2025/2026 (anno precedente)
+    classe_2025_2026 = classe - 1 if classe > 1 else None
+    classe_2026_2027 = classe
+    
+    # Usa la logica v2 per classificare i libri
+    classificazione = await classifica_libri_studente(
+        db,
+        codice_scuola=codice_scuola,
+        classe_2025_2026=classe_2025_2026,
+        classe_2026_2027=classe_2026_2027,
+        sezione=sezione
+    )
+    
+    return {
+        "codice_scuola": codice_scuola,
+        "classe": classe,
+        "sezione": sezione,
+        "tipo_scuola": tipo_scuola,
+        # Categorie libri dalla nuova logica v2
+        "ancora_in_uso": classificazione["ancora_in_uso"],
+        "vendibili_usati": classificazione["vendibili_usati"],
+        "da_acquistare_usati": classificazione["da_acquistare_usati"],
+        "da_acquistare_nuovi": classificazione["da_acquistare_nuovi"],
+        "fuori_corso": classificazione.get("fuori_corso", []),
+        "riepilogo": classificazione["riepilogo"],
+    }
+
 
 @api_router.get("/profiles/{user_id}/children/{child_id}/lista-ufficiale")
 async def get_lista_ufficiale(user_id: str, child_id: str):

@@ -164,6 +164,10 @@ export default function RadarScreen() {
   // Cart state
   const [cartData, setCartData] = useState<CartData | null>(null);
   
+  // Navigazione anonima
+  const [isAnonymous, setIsAnonymous] = useState(false);
+  const [showRegisterModal, setShowRegisterModal] = useState(false);
+  
   // Modal informativo per Libri Vendibili
   const [showVendibiliInfo, setShowVendibiliInfo] = useState(false);
   
@@ -210,11 +214,40 @@ export default function RadarScreen() {
       const storedUserId = await AsyncStorage.getItem('user_id');
       const storedPremium = await AsyncStorage.getItem('is_premium');
       
+      // NAVIGAZIONE ANONIMA: Se non c'è user_id, carica profili temporanei da localStorage
       if (!storedUserId) {
-        router.replace('/');
+        setIsAnonymous(true);
+        // Carica profili temporanei salvati localmente
+        const tempProfiles = await AsyncStorage.getItem('temp_profiles');
+        if (tempProfiles) {
+          const profiles = JSON.parse(tempProfiles);
+          setChildProfiles(profiles);
+          
+          // Carica compatibility per profili temporanei
+          const compatibilityData: {[key: string]: any} = {};
+          for (const child of profiles) {
+            try {
+              // Usa endpoint pubblico per profili anonimi
+              const compRes = await axios.get(
+                `${API_URL}/api/public/analysis/${child.codice_scuola}/${child.classe}/${child.sezione}`
+              );
+              compatibilityData[child.id] = compRes.data;
+            } catch (e) {
+              console.log(`Failed to load analysis for temp profile`);
+            }
+          }
+          setCompatibilityByChild(compatibilityData);
+          
+          // Seleziona primo profilo se non c'è selezione
+          if (profiles.length > 0 && !selectedChildId) {
+            setSelectedChildId(profiles[0].id);
+          }
+        }
+        setLoading(false);
         return;
       }
       
+      setIsAnonymous(false);
       setUserId(storedUserId);
       setIsPremium(storedPremium === 'true');
 
@@ -378,6 +411,13 @@ export default function RadarScreen() {
 
   // Funzione per salvare nuovo profilo
   const saveNewProfile = async () => {
+    // BLOCCO SECONDO PROFILO PER UTENTI ANONIMI
+    if (isAnonymous && childProfiles.length >= 1) {
+      setShowAddProfileModal(false);
+      setShowRegisterModal(true);
+      return;
+    }
+    
     if (!newProfile.nome_figlio.trim()) {
       if (Platform.OS === 'web') {
         window.alert('Inserisci il nome dell\'alunno');
@@ -413,6 +453,61 @@ export default function RadarScreen() {
 
     setSavingProfile(true);
     try {
+      // Se utente anonimo, salva in localStorage invece che nel backend
+      if (isAnonymous) {
+        const profileToSave = {
+          id: Date.now().toString(),
+          nome_figlio: newProfile.nome_figlio,
+          tipo_scuola: newProfile.tipo_scuola,
+          scuola: newProfile.scuola,
+          codice_scuola: newProfile.codice_scuola,
+          classe: newProfile.classe,
+          sezione: newProfile.sezione,
+        };
+        
+        const existingProfiles = await AsyncStorage.getItem('temp_profiles');
+        const profiles = existingProfiles ? JSON.parse(existingProfiles) : [];
+        profiles.push(profileToSave);
+        await AsyncStorage.setItem('temp_profiles', JSON.stringify(profiles));
+        
+        // Aggiorna lo stato locale
+        setChildProfiles(profiles);
+        setSelectedChildId(profileToSave.id);
+        
+        // Carica l'analisi per il nuovo profilo
+        try {
+          const compRes = await axios.get(
+            `${API_URL}/api/public/analysis/${newProfile.codice_scuola}/${newProfile.classe}/${newProfile.sezione}`
+          );
+          setCompatibilityByChild(prev => ({
+            ...prev,
+            [profileToSave.id]: compRes.data
+          }));
+        } catch (e) {
+          console.log('Failed to load analysis for temp profile');
+        }
+        
+        // Reset form
+        setNewProfile({
+          nome_figlio: '',
+          tipo_scuola: 'primo_grado',
+          scuola: '',
+          codice_scuola: '',
+          classe: '',
+          sezione: '',
+        });
+        setAvailableSections([]);
+        setSectionsByClass({});
+        setShowAddProfileModal(false);
+        
+        if (Platform.OS === 'web') {
+          window.alert('Profilo aggiunto! Registrati per salvarlo definitivamente.');
+        } else {
+          Alert.alert('Successo', 'Profilo aggiunto! Registrati per salvarlo definitivamente.');
+        }
+        return;
+      }
+      
       await axios.post(`${API_URL}/api/users/${userId}/profiles`, newProfile);
       
       // Reset form
@@ -606,6 +701,12 @@ export default function RadarScreen() {
                       const isFuoriCorso = currentCategory.id === 'fuoricorso';
                       
                       const handlePress = () => {
+                        // Se utente anonimo e azione protetta, mostra modal registrazione
+                        if (isAnonymous && (isVendibile || isUsato)) {
+                          setShowRegisterModal(true);
+                          return;
+                        }
+                        
                         if (isVendibile) {
                           router.push(`/sell-form?isbn=${book.isbn}&titolo=${encodeURIComponent(book.titolo || '')}&prezzo=${prezzoNuovo}`);
                         } else if (isUsato) {
@@ -903,6 +1004,63 @@ export default function RadarScreen() {
         </View>
       </Modal>
 
+      {/* Modal Richiesta Registrazione per utenti anonimi */}
+      <Modal
+        visible={showRegisterModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowRegisterModal(false)}
+      >
+        <View style={styles.registerModalOverlay}>
+          <View style={styles.registerModalContent}>
+            <TouchableOpacity 
+              style={styles.registerModalClose}
+              onPress={() => setShowRegisterModal(false)}
+            >
+              <Ionicons name="close" size={24} color="#666" />
+            </TouchableOpacity>
+            
+            <View style={styles.registerModalIcon}>
+              <Ionicons name="person-add" size={48} color="#1a472a" />
+            </View>
+            
+            <Text style={styles.registerModalTitle}>Registrati per continuare</Text>
+            
+            <Text style={styles.registerModalText}>
+              Per vendere o acquistare libri usati devi creare un account gratuito.
+            </Text>
+            
+            <Text style={styles.registerModalBenefits}>
+              ✓ Vendi i tuoi libri e guadagna{'\n'}
+              ✓ Acquista libri usati a metà prezzo{'\n'}
+              ✓ Ricevi pagamenti sul tuo IBAN
+            </Text>
+            
+            <TouchableOpacity
+              style={styles.registerModalButton}
+              onPress={() => {
+                setShowRegisterModal(false);
+                router.push('/(auth)/register');
+              }}
+            >
+              <Ionicons name="person-add-outline" size={20} color="#fff" />
+              <Text style={styles.registerModalButtonText}>Registrati ora</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.registerModalLoginLink}
+              onPress={() => {
+                setShowRegisterModal(false);
+                router.push('/(auth)/login');
+              }}
+            >
+              <Text style={styles.registerModalLoginText}>
+                Hai già un account? <Text style={styles.registerModalLoginBold}>Accedi</Text>
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </>
   );
 }
@@ -2552,5 +2710,87 @@ const styles = StyleSheet.create({
     color: '#F44336',
     fontStyle: 'italic',
     marginTop: 2,
+  },
+  // Modal Registrazione
+  registerModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  registerModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    alignItems: 'center',
+  },
+  registerModalClose: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    padding: 8,
+  },
+  registerModalIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#e8f5e9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  registerModalTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#1a472a',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  registerModalText: {
+    fontSize: 15,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 16,
+    lineHeight: 22,
+  },
+  registerModalBenefits: {
+    fontSize: 14,
+    color: '#333',
+    lineHeight: 24,
+    marginBottom: 24,
+    backgroundColor: '#f5f5f5',
+    padding: 16,
+    borderRadius: 12,
+    width: '100%',
+  },
+  registerModalButton: {
+    backgroundColor: '#1a472a',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: 25,
+    width: '100%',
+    gap: 8,
+  },
+  registerModalButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  registerModalLoginLink: {
+    marginTop: 16,
+  },
+  registerModalLoginText: {
+    color: '#666',
+    fontSize: 14,
+  },
+  registerModalLoginBold: {
+    color: '#1a472a',
+    fontWeight: 'bold',
   },
 });

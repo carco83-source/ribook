@@ -41,20 +41,39 @@ export default function RegisterScreen() {
     email: '',
     password: '',
     confirmPassword: '',
+    iban: '',
   });
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
+  // Funzione per validare IBAN italiano
+  const validateIBAN = (iban: string): boolean => {
+    if (!iban) return true; // IBAN è opzionale
+    const cleanIban = iban.replace(/\s/g, '').toUpperCase();
+    // IBAN italiano: IT + 2 cifre controllo + 1 lettera + 5 cifre ABI + 5 cifre CAB + 12 caratteri conto
+    const ibanRegex = /^IT\d{2}[A-Z]\d{5}\d{5}[A-Z0-9]{12}$/;
+    return ibanRegex.test(cleanIban);
+  };
+
+  const formatIBAN = (value: string): string => {
+    const clean = value.replace(/\s/g, '').toUpperCase();
+    // Formatta in gruppi di 4 caratteri
+    return clean.replace(/(.{4})/g, '$1 ').trim();
+  };
+
   const updateField = (field: string, value: string) => {
+    if (field === 'iban') {
+      value = formatIBAN(value);
+    }
     setFormData(prev => ({ ...prev, [field]: value }));
     setErrorMessage('');
   };
 
   const handleRegister = async () => {
     setErrorMessage('');
-    const { nome, cognome, email, password, confirmPassword } = formData;
+    const { nome, cognome, email, password, confirmPassword, iban } = formData;
 
     // Validazione campi
     if (!nome.trim()) {
@@ -85,14 +104,21 @@ export default function RegisterScreen() {
       setErrorMessage('Le password non corrispondono');
       return;
     }
+    // Validazione IBAN (opzionale ma se inserito deve essere valido)
+    if (iban && !validateIBAN(iban)) {
+      setErrorMessage('IBAN non valido. Formato: IT + 25 caratteri');
+      return;
+    }
 
     setLoading(true);
     try {
+      const cleanIban = iban ? iban.replace(/\s/g, '').toUpperCase() : null;
       const response = await axios.post(`${API_URL}/api/auth/register`, {
         nome: nome.trim(),
         cognome: cognome.trim(),
         email: email.trim().toLowerCase(),
         password,
+        iban: cleanIban,
       });
 
       // Il backend ritorna { message, user_id, username }
@@ -341,6 +367,35 @@ export default function RegisterScreen() {
                     </TouchableOpacity>
                   </View>
                 </View>
+              </View>
+
+              {/* Sezione Pagamenti */}
+              <Text style={[
+                styles.sectionTitle, 
+                { marginTop: 24, fontSize: dynamicStyles.fontSize.sectionTitle }
+              ]}>
+                Pagamenti (opzionale)
+              </Text>
+
+              {/* IBAN */}
+              <View style={[styles.inputGroup, { marginBottom: dynamicStyles.spacing.inputMargin }]}>
+                <Text style={styles.inputLabel}>IBAN</Text>
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="card-outline" size={20} color="#666" style={styles.inputIcon} />
+                  <TextInput
+                    style={[styles.input, { fontSize: dynamicStyles.fontSize.input }]}
+                    placeholder="IT00 A000 0000 0000 0000 0000 000"
+                    placeholderTextColor="#999"
+                    value={formData.iban}
+                    onChangeText={(v) => updateField('iban', v)}
+                    autoCapitalize="characters"
+                    autoCorrect={false}
+                    maxLength={31}
+                  />
+                </View>
+                <Text style={styles.ibanHint}>
+                  Inserisci il tuo IBAN per ricevere i pagamenti quando vendi i libri
+                </Text>
               </View>
 
               {/* Info Box */}
@@ -593,5 +648,11 @@ const styles = StyleSheet.create({
   loginLinkBold: {
     color: '#1a472a',
     fontWeight: '700',
+  },
+  ibanHint: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 6,
+    lineHeight: 16,
   },
 });
