@@ -13,6 +13,7 @@ import {
   TextInput,
   Platform,
   KeyboardAvoidingView,
+  useWindowDimensions,
 } from 'react-native';
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -145,6 +146,9 @@ interface ClassCompatibilityData {
 export default function RadarScreen() {
   const router = useRouter();
   const { scrollTo, childId, ts, t } = useLocalSearchParams<{ scrollTo?: string; childId?: string; ts?: string; t?: string }>();
+  const { width } = useWindowDimensions();
+  const isDesktop = width > 768; // Desktop se larghezza > 768px
+  
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [radarData, setRadarData] = useState<RadarData | null>(null);
@@ -687,7 +691,7 @@ export default function RadarScreen() {
                   </ScrollView>
                   
                   {/* Contenuto della categoria selezionata */}
-                  <View style={styles.booksGrid}>
+                  <View style={[styles.booksGrid, isDesktop && styles.booksGridDesktop]}>
                     {currentCategory && currentCategory.books.map((book: any, idx: number) => {
                       const coverUrl = book.isbn ? `https://www.ibs.it/images/${book.isbn}_0_0_0_536_0.jpg` : null;
                       const prezzoNuovo = Number(book.prezzo) || Number(book.prezzo_copertina) || 0;
@@ -722,6 +726,7 @@ export default function RadarScreen() {
                           key={idx} 
                           style={[
                             styles.sampleBookItem, 
+                            isDesktop && styles.sampleBookItemDesktop,
                             (isVendibile || isUsato) && styles.sampleBookItemClickable,
                             (isInUso || isFuoriCorso) && { opacity: 0.7 }
                           ]}
@@ -1512,6 +1517,9 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   booksGrid: {
+    flexDirection: 'column',  // Mobile: 1 colonna
+  },
+  booksGridDesktop: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
@@ -1569,14 +1577,18 @@ const styles = StyleSheet.create({
   },
   // Nuova struttura card libro compatta per mobile
   sampleBookItem: {
-    width: '48%',
+    width: '100%',  // Mobile: 1 colonna
     backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 8,
-    marginBottom: 8,
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: '#e0e0e0',
-    flexDirection: 'column',
+    flexDirection: 'row',
+  },
+  sampleBookItemDesktop: {
+    width: '48%',  // Desktop: 2 colonne
+    padding: 14,
   },
   sampleBookItemClickable: {
     borderColor: '#1a472a',
@@ -1594,11 +1606,11 @@ const styles = StyleSheet.create({
   // Copertina più grande
   bookCoverSection: {
     alignItems: 'center',
-    marginRight: 10,
+    marginRight: 12,
   },
   bookCoverImage: {
-    width: 55,
-    height: 75,
+    width: 70,
+    height: 95,
     borderRadius: 4,
     backgroundColor: '#f5f5f5',
   },
@@ -1633,7 +1645,7 @@ const styles = StyleSheet.create({
   },
   // Materia in alto - più visibile
   bookSubjectBig: {
-    fontSize: 11,
+    fontSize: 14,
     fontWeight: 'bold',
     color: '#1a472a',
     textTransform: 'uppercase',
@@ -1642,13 +1654,13 @@ const styles = StyleSheet.create({
   // Badge categoria - più compatto
   bookCategoryBadge: {
     alignSelf: 'flex-start',
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    borderRadius: 3,
-    marginBottom: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginBottom: 4,
   },
   bookCategoryText: {
-    fontSize: 8,
+    fontSize: 10,
     fontWeight: 'bold',
   },
   // Dettagli libro compatti - senza margini inutili
@@ -1656,28 +1668,28 @@ const styles = StyleSheet.create({
     marginTop: 0,
   },
   bookTitleCompact: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '600',
     color: '#333',
-    lineHeight: 14,
-    marginBottom: 1,
+    lineHeight: 17,
+    marginBottom: 2,
   },
   bookMetaRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 2,
-    marginTop: 1,
+    gap: 4,
+    marginTop: 2,
   },
   bookMetaText: {
-    fontSize: 9,
+    fontSize: 11,
     color: '#555',
   },
   bookMetaLabel: {
-    fontSize: 9,
+    fontSize: 11,
     color: '#777',
   },
   bookIsbnText: {
-    fontSize: 8,
+    fontSize: 10,
     color: '#888',
     marginTop: 1,
   },
