@@ -195,10 +195,10 @@ export default function ProfileScreen() {
           'user_nome',
           'is_premium',
         ]);
-        router.replace('/(tabs)');
+        router.replace('/(auth)/login');
       } catch (error) {
         console.error('Logout error:', error);
-        router.replace('/(tabs)');
+        router.replace('/(auth)/login');
       }
       return;
     }
@@ -220,10 +220,10 @@ export default function ProfileScreen() {
                 'user_nome',
                 'is_premium',
               ]);
-              router.replace('/(tabs)');
+              router.replace('/(auth)/login');
             } catch (error) {
               console.error('Logout error:', error);
-              router.replace('/(tabs)');
+              router.replace('/(auth)/login');
             }
           },
         },
