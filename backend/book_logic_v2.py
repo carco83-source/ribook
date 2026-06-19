@@ -536,6 +536,7 @@ async def classifica_libri_studente(
     result["riepilogo"]["totale_vendibili"] = len(result["vendibili_usati"])
     result["riepilogo"]["totale_da_comprare_usati"] = len(result["da_acquistare_usati"])
     result["riepilogo"]["totale_da_comprare_nuovi"] = len(result["da_acquistare_nuovi"])
+    result["riepilogo"]["totale_fuori_corso"] = len(result["fuori_corso"])
     
     # Conta libri strumento esclusi
     strumenti_esclusi = sum(1 for l in result["da_acquistare_usati"] + result["da_acquistare_nuovi"] if l.get("is_strumento_musicale"))

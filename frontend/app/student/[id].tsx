@@ -677,6 +677,29 @@ export default function StudentDetailScreen() {
               </View>
               <Ionicons name="chevron-forward" size={20} color="#FF9800" />
             </TouchableOpacity>
+
+            {/* 5. FUORI CORSO */}
+            {(compatibility?.fuori_corso?.length > 0) && (
+              <TouchableOpacity 
+                style={[styles.categoryCard, { borderLeftColor: '#795548' }]}
+                onPress={() => {
+                  router.push(`/?childId=${id}&t=${Date.now()}`);
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.categoryIcon, { backgroundColor: '#efebe9' }]}>
+                  <Ionicons name="close-circle" size={28} color="#795548" />
+                </View>
+                <View style={styles.categoryInfo}>
+                  <Text style={styles.categoryNumber}>{compatibility?.fuori_corso?.length || 0}</Text>
+                  <Text style={styles.categoryLabel}>Fuori corso</Text>
+                  <Text style={styles.categoryHint}>
+                    Libri non più richiesti
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#795548" />
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
