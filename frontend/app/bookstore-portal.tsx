@@ -638,6 +638,40 @@ export default function BookstorePortalScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Fixed Scan Bar - Always on top */}
+      <View style={styles.fixedScanBar}>
+        <View style={styles.scanInputRow}>
+          <TextInput
+            style={styles.scanInput}
+            placeholder="Codice ordine"
+            value={manualCode}
+            onChangeText={setManualCode}
+            autoCapitalize="characters"
+            maxLength={6}
+            placeholderTextColor="#999"
+          />
+          <TouchableOpacity
+            style={[styles.scanSubmitBtn, (!manualCode.trim() || confirmingAction) && styles.scanSubmitBtnDisabled]}
+            onPress={() => handleScanOrManualCode(manualCode)}
+            disabled={!manualCode.trim() || confirmingAction}
+          >
+            {confirmingAction ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <>
+                <Ionicons name="checkmark" size={18} color="#fff" />
+                <Text style={styles.scanSubmitBtnText}>Conferma</Text>
+              </>
+            )}
+          </TouchableOpacity>
+          {Platform.OS !== 'web' && (
+            <TouchableOpacity style={styles.cameraBtn} onPress={() => setShowScanner(true)}>
+              <Ionicons name="camera" size={22} color="#fff" />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
       {/* Tabs */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabsContainer}>
         {[
@@ -652,13 +686,15 @@ export default function BookstorePortalScreen() {
             style={[styles.tab, activeTab === tab.key && styles.tabActive]}
             onPress={() => setActiveTab(tab.key as TabType)}
           >
-            <Ionicons name={tab.icon as any} size={18} color={activeTab === tab.key ? '#1a472a' : '#666'} />
+            <View style={styles.tabIconContainer}>
+              <Ionicons name={tab.icon as any} size={22} color={activeTab === tab.key ? '#1a472a' : '#666'} />
+              {tab.count !== null && tab.count > 0 && (
+                <View style={[styles.tabBadge, activeTab === tab.key && styles.tabBadgeActive]}>
+                  <Text style={[styles.tabBadgeText, activeTab === tab.key && styles.tabBadgeTextActive]}>{tab.count}</Text>
+                </View>
+              )}
+            </View>
             <Text style={[styles.tabText, activeTab === tab.key && styles.tabTextActive]}>{tab.label}</Text>
-            {tab.count !== null && tab.count > 0 && (
-              <View style={[styles.tabBadge, activeTab === tab.key && styles.tabBadgeActive]}>
-                <Text style={[styles.tabBadgeText, activeTab === tab.key && styles.tabBadgeTextActive]}>{tab.count}</Text>
-              </View>
-            )}
           </TouchableOpacity>
         ))}
       </ScrollView>
@@ -680,41 +716,6 @@ export default function BookstorePortalScreen() {
         {/* Dashboard Tab */}
         {activeTab === 'dashboard' && (
           <View style={styles.dashboardContent}>
-            {/* Quick Actions - Scan QR + Input Code */}
-            <View style={styles.quickActionsCard}>
-              <View style={styles.quickActionsHeader}>
-                <Ionicons name="qr-code" size={24} color="#1a472a" />
-                <Text style={styles.quickActionsTitle}>Scansiona QR / Inserisci Codice</Text>
-              </View>
-              <View style={styles.codeInputRow}>
-                <TextInput
-                  style={styles.codeInput}
-                  placeholder="Codice ordine (es. A1B2C3)"
-                  value={manualCode}
-                  onChangeText={setManualCode}
-                  autoCapitalize="characters"
-                  maxLength={6}
-                />
-                <TouchableOpacity
-                  style={[styles.codeSubmitBtn, (!manualCode.trim() || confirmingAction) && styles.codeSubmitBtnDisabled]}
-                  onPress={() => handleScanOrManualCode(manualCode)}
-                  disabled={!manualCode.trim() || confirmingAction}
-                >
-                  {confirmingAction ? (
-                    <ActivityIndicator color="#fff" size="small" />
-                  ) : (
-                    <Ionicons name="checkmark" size={22} color="#fff" />
-                  )}
-                </TouchableOpacity>
-              </View>
-              {Platform.OS !== 'web' && (
-                <TouchableOpacity style={styles.scanQrBtn} onPress={() => setShowScanner(true)}>
-                  <Ionicons name="camera" size={18} color="#1a472a" />
-                  <Text style={styles.scanQrBtnText}>Scansiona con fotocamera</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-
             {/* Stats Grid */}
             <View style={[styles.statsGrid, isDesktop && styles.statsGridDesktop]}>
               {/* In Arrivo */}
@@ -722,13 +723,13 @@ export default function BookstorePortalScreen() {
                 style={[styles.statCard, styles.statCardBlue]}
                 onPress={() => setActiveTab('in_arrivo')}
               >
-                <Ionicons name="time-outline" size={32} color="#1976D2" />
+                <Ionicons name="time-outline" size={24} color="#1976D2" />
                 <Text style={styles.statNumber}>{stats.in_arrivo}</Text>
                 <Text style={styles.statLabel}>In Arrivo</Text>
                 {stats.ordini_scaduti > 0 && (
                   <View style={styles.alertBadge}>
-                    <Ionicons name="warning" size={12} color="#fff" />
-                    <Text style={styles.alertBadgeText}>{stats.ordini_scaduti} scaduti</Text>
+                    <Ionicons name="warning" size={10} color="#fff" />
+                    <Text style={styles.alertBadgeText}>{stats.ordini_scaduti}</Text>
                   </View>
                 )}
               </TouchableOpacity>
@@ -738,7 +739,7 @@ export default function BookstorePortalScreen() {
                 style={[styles.statCard, styles.statCardOrange]}
                 onPress={() => setActiveTab('da_ritirare')}
               >
-                <Ionicons name="cube-outline" size={32} color="#F57C00" />
+                <Ionicons name="cube-outline" size={24} color="#F57C00" />
                 <Text style={styles.statNumber}>{stats.da_ritirare}</Text>
                 <Text style={styles.statLabel}>Da Ritirare</Text>
               </TouchableOpacity>
@@ -748,7 +749,7 @@ export default function BookstorePortalScreen() {
                 style={[styles.statCard, styles.statCardGreen]}
                 onPress={() => setActiveTab('completati')}
               >
-                <Ionicons name="checkmark-circle-outline" size={32} color="#388E3C" />
+                <Ionicons name="checkmark-circle-outline" size={24} color="#388E3C" />
                 <Text style={styles.statNumber}>{stats.completati_oggi}</Text>
                 <Text style={styles.statLabel}>Oggi</Text>
               </TouchableOpacity>
@@ -1240,38 +1241,95 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
   },
+  // Fixed Scan Bar
+  fixedScanBar: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  scanInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  scanInput: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+    fontWeight: 'bold',
+    letterSpacing: 2,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  scanSubmitBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 8,
+    gap: 4,
+  },
+  scanSubmitBtnDisabled: {
+    backgroundColor: '#ccc',
+  },
+  scanSubmitBtnText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  cameraBtn: {
+    backgroundColor: '#1a472a',
+    padding: 10,
+    borderRadius: 8,
+  },
   // Tabs
   tabsContainer: {
     backgroundColor: '#fff',
-    paddingHorizontal: 4,
-    paddingVertical: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
   },
   tab: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    marginHorizontal: 2,
-    borderRadius: 16,
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginHorizontal: 4,
+    borderRadius: 12,
     backgroundColor: '#f5f5f5',
-    gap: 4,
+    minWidth: 70,
   },
   tabActive: {
     backgroundColor: '#E8F5E9',
   },
+  tabIconContainer: {
+    position: 'relative',
+    marginBottom: 4,
+  },
   tabText: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#666',
     fontWeight: '500',
+    textAlign: 'center',
   },
   tabTextActive: {
     color: '#1a472a',
-    fontWeight: '600',
+    fontWeight: '700',
   },
   tabBadge: {
-    backgroundColor: '#e0e0e0',
+    position: 'absolute',
+    top: -6,
+    right: -10,
+    backgroundColor: '#f44336',
     paddingHorizontal: 5,
     paddingVertical: 1,
     borderRadius: 8,
@@ -1279,12 +1337,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   tabBadgeActive: {
-    backgroundColor: '#1a472a',
+    backgroundColor: '#f44336',
   },
   tabBadgeText: {
     fontSize: 10,
     fontWeight: 'bold',
-    color: '#666',
+    color: '#fff',
   },
   tabBadgeTextActive: {
     color: '#fff',
