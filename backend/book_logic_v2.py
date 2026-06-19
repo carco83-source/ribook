@@ -216,6 +216,30 @@ async def get_isbn_vendibili_catanzaro(
     return vendibili
 
 
+async def get_listings_count_by_isbn(
+    db: AsyncIOMotorDatabase,
+    isbn_list: Set[str]
+) -> Dict[str, int]:
+    """
+    Conta quanti annunci ATTIVI (listings) esistono per ogni ISBN.
+    Solo i listings con stato 'disponibile' vengono contati.
+    
+    Returns:
+        Dict[isbn] -> numero di copie in vendita
+    """
+    listings_count = {}
+    
+    for isbn in isbn_list:
+        # Conta solo listings disponibili (non venduti, non in trattativa)
+        count = await db.listings.count_documents({
+            "book_isbn": isbn,
+            "stato": "disponibile"
+        })
+        listings_count[isbn] = count
+    
+    return listings_count
+
+
 async def classifica_libri_studente(
     db: AsyncIOMotorDatabase,
     codice_scuola: str,
@@ -377,6 +401,9 @@ async def classifica_libri_studente(
     # Verifica disponibilità usato nelle scuole di Catanzaro
     disponibilita_usato = await get_isbn_vendibili_catanzaro(db, isbn_da_acquistare)
     
+    # Conta le copie REALMENTE in vendita (listings attivi)
+    copie_in_vendita = await get_listings_count_by_isbn(db, isbn_da_acquistare)
+    
     for isbn in isbn_da_acquistare:
         libro = mappa_2026[isbn]
         is_strumento = is_libro_strumento_musicale(libro)
@@ -405,13 +432,16 @@ async def classifica_libri_studente(
             # CATEGORIA 3: DA ACQUISTARE USATO
             venditori = disponibilita_usato[isbn]
             prezzo_usato = round(prezzo * 0.5, 2)
+            # Usa il conteggio REALE delle copie in vendita (listings attivi)
+            copie_reali = copie_in_vendita.get(isbn, 0)
             result["da_acquistare_usati"].append({
                 **libro,
                 "categoria": "DA_ACQUISTARE_USATO",
                 "prezzo_usato": prezzo_usato,
                 "risparmio": round(prezzo - prezzo_usato, 2),
-                "venditori_disponibili": len(venditori),
-                "motivo": f"Disponibile usato da {len(venditori)} studenti",
+                "venditori_disponibili": copie_reali,  # Copie REALMENTE in vendita
+                "potenziali_venditori": len(venditori),  # Chi potrebbe vendere
+                "motivo": f"{copie_reali} {'copia' if copie_reali == 1 else 'copie'} in vendita" if copie_reali > 0 else "Nessuna copia in vendita",
                 "is_strumento_musicale": is_strumento,
                 "escluso_dal_calcolo": is_strumento
             })

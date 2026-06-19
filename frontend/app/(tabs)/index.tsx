@@ -620,13 +620,11 @@ export default function RadarScreen() {
                           ) : (
                             <Image source={require('../../assets/images/ribook-logo.png')} style={styles.bookCoverImage} resizeMode="contain" />
                           )}
-                          {/* Numero copie disponibili */}
-                          {copieDisponibili > 0 && (
-                            <View style={styles.copieDisponibiliBadge}>
-                              <Ionicons name="people" size={12} color="#fff" />
-                              <Text style={styles.copieDisponibiliText}>{copieDisponibili} {copieDisponibili === 1 ? 'copia' : 'copie'}</Text>
-                            </View>
-                          )}
+                          {/* Numero copie disponibili - mostra sempre */}
+                          <View style={[styles.copieDisponibiliBadge, copieDisponibili === 0 && styles.copieZeroBadge]}>
+                            <Ionicons name="people" size={12} color="#fff" />
+                            <Text style={styles.copieDisponibiliText}>{copieDisponibili} {copieDisponibili === 1 ? 'copia' : 'copie'}</Text>
+                          </View>
                         </View>
                         {/* Info a destra */}
                         <View style={styles.bookInfoSection}>
@@ -1584,6 +1582,9 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '600',
     color: '#fff',
+  },
+  copieZeroBadge: {
+    backgroundColor: '#9e9e9e',
   },
   // Vecchi stili mantenuti per compatibilità
   bookCoverContainer: {
