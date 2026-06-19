@@ -1538,15 +1538,14 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   customPriceLabel: {
-    fontSize: 16,
+    fontSize: 22,
     fontWeight: 'bold',
     color: '#1a472a',
   },
   customPriceInput: {
     width: 100,
     backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#1a472a',
+    borderWidth: 0,
     borderRadius: 6,
     paddingHorizontal: 10,
     paddingVertical: 8,
