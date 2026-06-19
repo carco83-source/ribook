@@ -236,7 +236,7 @@ export default function RadarScreen() {
               console.log(`Failed to load analysis for temp profile`);
             }
           }
-          setCompatibilityByChild(compatibilityData);
+          setChildrenCompatibility(compatibilityData);
           
           // Seleziona primo profilo se non c'è selezione
           if (profiles.length > 0 && !selectedChildId) {
@@ -479,7 +479,7 @@ export default function RadarScreen() {
           const compRes = await axios.get(
             `${API_URL}/api/public/analysis/${newProfile.codice_scuola}/${newProfile.classe}/${newProfile.sezione}`
           );
-          setCompatibilityByChild(prev => ({
+          setChildrenCompatibility(prev => ({
             ...prev,
             [profileToSave.id]: compRes.data
           }));
@@ -701,9 +701,9 @@ export default function RadarScreen() {
                       const isFuoriCorso = currentCategory.id === 'fuoricorso';
                       
                       const handlePress = () => {
-                        // Se utente anonimo e azione protetta, mostra modal registrazione
+                        // Se utente anonimo e azione protetta, vai alla registrazione
                         if (isAnonymous && (isVendibile || isUsato)) {
-                          setShowRegisterModal(true);
+                          router.push('/(auth)/register');
                           return;
                         }
                         

@@ -53,6 +53,8 @@ export default function SearchSellScreen() {
   const router = useRouter();
   const [userId, setUserId] = useState<string | null>(null);
   const [permission, requestPermission] = useCameraPermissions();
+  const [isAnonymous, setIsAnonymous] = useState(false);
+  const [loading, setLoading] = useState(true);
   
   // Vendi states
   const [vendiIsbn, setVendiIsbn] = useState('');
@@ -84,6 +86,8 @@ export default function SearchSellScreen() {
   const loadUserId = async () => {
     const id = await AsyncStorage.getItem('user_id');
     setUserId(id);
+    setIsAnonymous(!id);
+    setLoading(false);
   };
 
   const loadPopularBooks = async () => {
@@ -475,6 +479,36 @@ export default function SearchSellScreen() {
             <Text style={styles.cameraReadyText}>Pronto</Text>
           </View>
         )}
+      </View>
+    );
+  }
+
+  // Schermata per utenti non loggati (anonimi)
+  if (isAnonymous) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.anonymousContainer}>
+          <Ionicons name="search-outline" size={80} color="#ccc" />
+          <Text style={styles.anonymousTitle}>Accedi per cercare e vendere</Text>
+          <Text style={styles.anonymousSubtitle}>
+            Per cercare libri usati e mettere in vendita i tuoi libri devi accedere al tuo account
+          </Text>
+          <TouchableOpacity
+            style={styles.anonymousButton}
+            onPress={() => router.push('/(auth)/login')}
+          >
+            <Ionicons name="log-in-outline" size={20} color="#fff" />
+            <Text style={styles.anonymousButtonText}>Accedi</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.anonymousRegisterLink}
+            onPress={() => router.push('/(auth)/register')}
+          >
+            <Text style={styles.anonymousRegisterText}>
+              Non hai un account? <Text style={styles.anonymousRegisterBold}>Registrati</Text>
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
@@ -1028,5 +1062,53 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 8,
     fontStyle: 'italic',
+  },
+  // Stili per utenti anonimi
+  anonymousContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  anonymousTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#333',
+    marginTop: 20,
+    marginBottom: 12,
+  },
+  anonymousSubtitle: {
+    fontSize: 15,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 32,
+    maxWidth: 300,
+  },
+  anonymousButton: {
+    backgroundColor: '#1a472a',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 40,
+    borderRadius: 25,
+    gap: 8,
+  },
+  anonymousButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  anonymousRegisterLink: {
+    marginTop: 20,
+  },
+  anonymousRegisterText: {
+    color: '#666',
+    fontSize: 14,
+  },
+  anonymousRegisterBold: {
+    color: '#1a472a',
+    fontWeight: 'bold',
   },
 });
