@@ -1288,7 +1288,7 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 8,
   },
-  // Tabs - più schiacciati
+  // Tabs - più schiacciati e grigi
   tabsContainer: {
     backgroundColor: '#fff',
     paddingHorizontal: 4,
@@ -1305,18 +1305,18 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     marginHorizontal: 2,
     borderRadius: 8,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#e8e8e8',
     minWidth: 60,
   },
   tabActive: {
-    backgroundColor: '#E8F5E9',
+    backgroundColor: '#d0d0d0',
   },
   tabIconContainer: {
     position: 'relative',
   },
   tabText: {
     fontSize: 9,
-    color: '#666',
+    color: '#444',
     fontWeight: '500',
     textAlign: 'center',
     marginTop: 2,
