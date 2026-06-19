@@ -606,6 +606,7 @@ export default function RadarScreen() {
                     const prezzoNuovo = Number(book.prezzo) || 0;
                     const prezzoUsato = Number(book.prezzo_usato) || (prezzoNuovo * 0.5);
                     const risparmio = Number(book.risparmio) || (prezzoNuovo - prezzoUsato);
+                    const copieDisponibili = book.venditori_disponibili || 0;
                     return (
                       <TouchableOpacity 
                         key={idx} 
@@ -618,6 +619,13 @@ export default function RadarScreen() {
                             <Image source={{ uri: coverUrl }} style={styles.bookCoverImage} resizeMode="contain" />
                           ) : (
                             <Image source={require('../../assets/images/ribook-logo.png')} style={styles.bookCoverImage} resizeMode="contain" />
+                          )}
+                          {/* Numero copie disponibili */}
+                          {copieDisponibili > 0 && (
+                            <View style={styles.copieDisponibiliBadge}>
+                              <Ionicons name="people" size={12} color="#fff" />
+                              <Text style={styles.copieDisponibiliText}>{copieDisponibili} {copieDisponibili === 1 ? 'copia' : 'copie'}</Text>
+                            </View>
                           )}
                         </View>
                         {/* Info a destra */}
@@ -1559,6 +1567,23 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#FF9800',
+  },
+  // Badge copie disponibili sotto copertina
+  copieDisponibiliBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 10,
+    marginTop: 4,
+    gap: 3,
+  },
+  copieDisponibiliText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#fff',
   },
   // Vecchi stili mantenuti per compatibilità
   bookCoverContainer: {
