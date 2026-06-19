@@ -6939,8 +6939,8 @@ async def pay_order(order_id: str, user_id: str = Query(...)):
         "id": str(uuid.uuid4()),
         "user_id": order.get("seller_id"),
         "type": "order_paid_deliver",
-        "title": "NUOVO ORDINE IN ARRIVO",
-        "message": f"CODICE: {order.get('order_code')}\n\nLIBRO:\n{order.get('book_titolo')}\n\nCONDIZIONI: {order.get('book_condizioni', 'N/D')}\n\nVENDITORE: {order.get('seller_username', 'Tu')}\nACQUIRENTE: {order.get('buyer_username', 'Acquirente')}\n\n🏪 CONSEGNA presso:\n{order.get('bookstore_name')}{address_line}\n\n⏰ Hai 2 giorni per consegnare il libro",
+        "title": "🎉 VENDITA COMPLETATA!",
+        "message": f"COMPLIMENTI!\n\n📚 {order.get('book_titolo')}\n\nAssicurati che il testo corrisponda alle condizioni descritte e consegnalo a partire dal giorno successivo entro 2 giorni lavorativi presso:\n🏪 {order.get('bookstore_name')}{address_line}",
         "order_id": order_id,
         "order_code": order.get("order_code"),
         "bookstore_name": order.get("bookstore_name"),
@@ -6955,11 +6955,9 @@ async def pay_order(order_id: str, user_id: str = Query(...)):
             "condizioni": order.get("book_condizioni"),
             "condition_answers": condition_answers,
             "note": listing_note,
-            "prezzo": order.get("prezzo_libro"),
         },
         "delivery_deadline": delivery_deadline.isoformat(),
         "show_qr": True,
-        "show_qr_always": True,
         "requires_action": True,
         "read": False,
         "persistent": True,
@@ -6967,7 +6965,7 @@ async def pay_order(order_id: str, user_id: str = Query(...)):
     }
     await db.notifications.insert_one(seller_notification)
     
-    # Notifica alla cartolibreria con TUTTI i dettagli
+    # Notifica alla cartolibreria con TUTTI i dettagli (NO QR, NO prezzo)
     bookstore_notification = {
         "id": str(uuid.uuid4()),
         "bookstore_id": order.get("bookstore_id"),
@@ -6987,21 +6985,20 @@ async def pay_order(order_id: str, user_id: str = Query(...)):
             "isbn": order.get("book_isbn"),
             "condition_answers": condition_answers,
             "note": listing_note,
-            "prezzo": order.get("prezzo_libro"),
         },
-        "show_qr": True,
+        "show_qr": False,
         "read": False,
         "created_at": now.isoformat()
     }
     await db.bookstore_notifications.insert_one(bookstore_notification)
     
-    # Notifica all'acquirente - STESSO FORMATO CARTOLIBRERIA
+    # Notifica all'acquirente - SENZA QR (riceverà QR dopo consegna venditore)
     buyer_notification = {
         "id": str(uuid.uuid4()),
         "user_id": order.get("buyer_id"),
-        "type": "order_paid_waiting",
-        "title": "NUOVO ORDINE IN ARRIVO",
-        "message": f"CODICE: {order.get('order_code')}\n\nLIBRO:\n{order.get('book_titolo')}\n\nCONDIZIONI: {order.get('book_condizioni', 'N/D')}\n\nVENDITORE: {order.get('seller_username', 'Venditore')}\nACQUIRENTE: {order.get('buyer_username', 'Tu')}\n\n🏪 RITIRO presso:\n{order.get('bookstore_name')}\n📍 {bookstore_address if bookstore_address else ''}\n\nRiceverai una notifica quando il libro sarà pronto",
+        "type": "order_pending",
+        "title": "🎉 ACQUISTO CONFERMATO!",
+        "message": f"📚 {order.get('book_titolo')}\n\nSarai avvisato/a appena il venditore consegnerà il libro presso:\n🏪 {order.get('bookstore_name')}\n📍 {bookstore_address if bookstore_address else ''}",
         "order_id": order_id,
         "order_code": order.get("order_code"),
         "bookstore_name": order.get("bookstore_name"),
@@ -7016,10 +7013,9 @@ async def pay_order(order_id: str, user_id: str = Query(...)):
             "condizioni": order.get("book_condizioni"),
             "condition_answers": condition_answers,
             "note": listing_note,
-            "prezzo": order.get("prezzo_libro"),
         },
-        "show_qr": True,
-        "show_qr_always": True,
+        "show_qr": False,
+        "awaiting_delivery": True,
         "read": False,
         "persistent": True,
         "created_at": now.isoformat()
@@ -7253,7 +7249,8 @@ async def mark_delivered_to_bookstore(order_id: str, user_id: str = Query(...)):
     if not order:
         raise HTTPException(status_code=404, detail="Ordine non trovato")
     
-    if order.get("status") != "paid_escrow":
+    # Accetta sia paid_escrow che pagato_attesa_consegna (italiano)
+    if order.get("status") not in ["paid_escrow", "pagato_attesa_consegna"]:
         raise HTTPException(status_code=400, detail="L'ordine deve essere pagato prima della consegna")
     
     now = datetime.utcnow()

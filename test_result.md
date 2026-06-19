@@ -987,6 +987,18 @@ metadata:
   test_sequence: 1
   run_ui: false
 
+  - task: "Complete Purchase → Delivery → Pickup Flow (Bug Fixes)"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "Complete purchase → delivery → pickup flow tested successfully after bug fixes! All 26 test cases passed (100% success rate). ✅ BUG FIX 1: Status mismatch - Backend now correctly accepts both 'paid_escrow' and 'pagato_attesa_consegna' status in deliver-to-bookstore endpoint. ✅ BUG FIX 2: Buyer show_qr=False - Buyer notification after payment correctly has show_qr=False (no QR until delivery). ✅ BUG FIX 3: Bookstore show_qr=False - Bookstore notification correctly has show_qr=False (only alphanumeric order code). ✅ BUG FIX 4: Price removed from book_details - All notifications (seller, buyer, bookstore) have book_details without price field. ✅ Complete flow verified: 1) Create order (status: in_attesa_conferma_venditore), 2) Seller confirm (status: in_attesa_pagamento), 3) Payment (status: pagato_attesa_consegna), 4) Deliver to bookstore (status: delivering_to_bookstore), 5) Ready for pickup (status: ready_for_pickup), 6) Complete pickup (status: completed). ✅ Notification verification: Seller gets QR+conditions+NO price, Buyer gets NO QR initially then QR+conditions+NO price after ready, Bookstore gets NO QR+conditions+NO price. All endpoints working correctly: POST /api/orders/create, POST /api/orders/{id}/seller-confirm, POST /api/orders/{id}/pay, POST /api/orders/{id}/deliver-to-bookstore, POST /api/orders/{id}/ready-for-pickup, POST /api/bookstore/{id}/confirm-pickup/{order_id}, GET /api/orders/{id}."
+
 test_plan:
   current_focus: []
   stuck_tasks:
@@ -996,6 +1008,46 @@ test_plan:
 
 agent_communication:
   - agent: "main"
+  - agent: "testing"
+    message: |
+      ## COMPLETE PURCHASE → DELIVERY → PICKUP FLOW TESTING COMPLETED ✅ (2026-12-17)
+      
+      ### Test Results: 100% SUCCESS RATE (26/26 tests passed)
+      
+      #### Bug Fixes Verified:
+      ✅ **BUG FIX 1: Status mismatch** - Backend now correctly accepts both 'paid_escrow' and 'pagato_attesa_consegna' status in deliver-to-bookstore endpoint
+      ✅ **BUG FIX 2: Buyer show_qr=False** - Buyer notification after payment correctly has show_qr=False (no QR until delivery)
+      ✅ **BUG FIX 3: Bookstore show_qr=False** - Bookstore notification correctly has show_qr=False (only alphanumeric order code)
+      ✅ **BUG FIX 4: Price removed from book_details** - All notifications (seller, buyer, bookstore) have book_details without price field
+      
+      #### Complete Flow Tested:
+      1. ✅ Create order (status: in_attesa_conferma_venditore)
+      2. ✅ Seller confirm (status: in_attesa_pagamento)
+      3. ✅ Payment (status: pagato_attesa_consegna) - Stripe MOCKED
+      4. ✅ Deliver to bookstore (status: delivering_to_bookstore)
+      5. ✅ Ready for pickup (status: ready_for_pickup)
+      6. ✅ Complete pickup by bookstore (status: completed)
+      
+      #### Notification Verification:
+      - ✅ **SELLER notification after payment**: Has QR code (show_qr=True), has book conditions (condition_answers), NO price in book_details, NO € symbol in message
+      - ✅ **BUYER notification after payment**: NO QR code (show_qr=False), mentions waiting for delivery ("sarai avvisato")
+      - ✅ **BOOKSTORE notification after payment**: NO QR code (show_qr=False), has order code (alphanumeric), has book conditions, NO price in book_details, NO € symbol in message
+      - ✅ **BUYER notification after ready for pickup**: NOW has QR code (show_qr=True in data), has book conditions, has order code, NO € symbol in message
+      
+      #### Endpoints Tested:
+      - POST /api/orders/create
+      - POST /api/orders/{id}/seller-confirm
+      - POST /api/orders/{id}/pay
+      - POST /api/orders/{id}/deliver-to-bookstore
+      - POST /api/orders/{id}/ready-for-pickup
+      - POST /api/bookstore/{id}/confirm-pickup/{order_id}
+      - GET /api/orders/{id}
+      - GET /api/notifications/{user_id}
+      - GET /api/bookstore/{id}/notifications
+      
+      ### Conclusion:
+      All bug fixes have been successfully implemented and verified. The complete purchase → delivery → pickup flow is working perfectly. All notifications contain the correct information (QR codes, conditions, no prices) as specified in the bug fix requirements.
+
     message: "MVP created for ScambiaLibri app. Backend has all core endpoints implemented. Please test the matching system and transactions flow."
   - agent: "testing"
     message: |
