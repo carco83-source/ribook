@@ -31,6 +31,9 @@ interface Notification {
   listing_id?: string;
   prezzo?: number;
   order_id?: string;
+  order_code?: string;
+  bookstore_name?: string;
+  bookstore_address?: string;
 }
 
 const NOTIFICATION_CONFIG: Record<string, { icon: string; color: string }> = {
@@ -395,12 +398,12 @@ export default function NotificationsScreen() {
                 )}
                 
                 {/* QR Code per ordini completati */}
-                {notification.type === 'order_qr_code' && notification.data?.order_code && (
+                {(notification.type === 'order_qr_code' || notification.type === 'order_paid' || notification.type === 'ready_for_pickup' || notification.type === 'order_paid_deliver' || notification.type === 'order_paid_waiting') && (notification.data?.order_code || notification.order_code) && (
                   <View style={styles.qrCodeContainer}>
                     <View style={styles.qrCodeBox}>
                       {Platform.OS !== 'web' ? (
                         <QRCode
-                          value={notification.data.order_code}
+                          value={notification.data?.order_code || notification.order_code}
                           size={150}
                           backgroundColor="white"
                           color="#1a472a"
@@ -413,8 +416,10 @@ export default function NotificationsScreen() {
                     </View>
                     <View style={styles.qrCodeInfo}>
                       <Text style={styles.qrCodeLabel}>CODICE RITIRO</Text>
-                      <Text style={styles.qrCodeValue}>{notification.data.order_code}</Text>
-                      <Text style={styles.qrCodeBookstore}>📍 {notification.data.bookstore_name}</Text>
+                      <Text style={styles.qrCodeValue}>{notification.data?.order_code || notification.order_code}</Text>
+                      {(notification.data?.bookstore_name || notification.bookstore_name) && (
+                        <Text style={styles.qrCodeBookstore}>📍 {notification.data?.bookstore_name || notification.bookstore_name}</Text>
+                      )}
                     </View>
                     <View style={styles.screenshotTip}>
                       <Ionicons name="camera" size={16} color="#1a472a" />
