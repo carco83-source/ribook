@@ -680,14 +680,40 @@ export default function BookstorePortalScreen() {
         {/* Dashboard Tab */}
         {activeTab === 'dashboard' && (
           <View style={styles.dashboardContent}>
-            {/* Quick Actions */}
-            <TouchableOpacity style={styles.scanButton} onPress={() => setShowScanner(true)}>
-              <Ionicons name="qr-code" size={28} color="#fff" />
-              <View style={styles.scanButtonTextContainer}>
-                <Text style={styles.scanButtonTitle}>Scansiona QR Code</Text>
-                <Text style={styles.scanButtonSubtitle}>Conferma consegna o ritiro</Text>
+            {/* Quick Actions - Scan QR + Input Code */}
+            <View style={styles.quickActionsCard}>
+              <View style={styles.quickActionsHeader}>
+                <Ionicons name="qr-code" size={24} color="#1a472a" />
+                <Text style={styles.quickActionsTitle}>Scansiona QR / Inserisci Codice</Text>
               </View>
-            </TouchableOpacity>
+              <View style={styles.codeInputRow}>
+                <TextInput
+                  style={styles.codeInput}
+                  placeholder="Codice ordine (es. A1B2C3)"
+                  value={manualCode}
+                  onChangeText={setManualCode}
+                  autoCapitalize="characters"
+                  maxLength={6}
+                />
+                <TouchableOpacity
+                  style={[styles.codeSubmitBtn, (!manualCode.trim() || confirmingAction) && styles.codeSubmitBtnDisabled]}
+                  onPress={() => handleScanOrManualCode(manualCode)}
+                  disabled={!manualCode.trim() || confirmingAction}
+                >
+                  {confirmingAction ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Ionicons name="checkmark" size={22} color="#fff" />
+                  )}
+                </TouchableOpacity>
+              </View>
+              {Platform.OS !== 'web' && (
+                <TouchableOpacity style={styles.scanQrBtn} onPress={() => setShowScanner(true)}>
+                  <Ionicons name="camera" size={18} color="#1a472a" />
+                  <Text style={styles.scanQrBtnText}>Scansiona con fotocamera</Text>
+                </TouchableOpacity>
+              )}
+            </View>
 
             {/* Stats Grid */}
             <View style={[styles.statsGrid, isDesktop && styles.statsGridDesktop]}>
@@ -738,11 +764,11 @@ export default function BookstorePortalScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Earnings Card - Commissione Libri (10% - 50% Stripe) */}
+            {/* Gestione Libri */}
             <View style={styles.earningsCard}>
               <View style={styles.earningsHeader}>
                 <Ionicons name="book-outline" size={28} color="#fff" />
-                <Text style={styles.earningsTitle}>Commissione Libri (10% - 50% Stripe)</Text>
+                <Text style={styles.earningsTitle}>Gestione Libri</Text>
               </View>
               <View style={styles.earningsGrid}>
                 <View style={styles.earningsItem}>
@@ -757,13 +783,13 @@ export default function BookstorePortalScreen() {
               </View>
             </View>
 
-            {/* Foderazione Card - €1,50 per copertina */}
+            {/* Foderazioni */}
             <View style={styles.foderazioneCard}>
               <View style={styles.earningsHeader}>
                 <Ionicons name="layers-outline" size={28} color="#fff" />
                 <View style={{flex: 1}}>
-                  <Text style={styles.earningsTitle}>Foderazione (€1,50/copertina - Stripe)</Text>
-                  <Text style={styles.foderazioneSubtitle}>Copertine foderate: {stats.num_foderazione_mese} questo mese</Text>
+                  <Text style={styles.earningsTitle}>Foderazioni</Text>
+                  <Text style={styles.foderazioneSubtitle}>Copertine: {stats.num_foderazione_mese} questo mese</Text>
                 </View>
               </View>
               <View style={styles.earningsGrid}>
@@ -786,7 +812,7 @@ export default function BookstorePortalScreen() {
                   <Ionicons name="wallet" size={32} color="#4CAF50" />
                   <View>
                     <Text style={styles.totalEarningsLabel}>TOTALE GUADAGNI</Text>
-                    <Text style={styles.totalEarningsSubLabel}>Libri + Foderazione</Text>
+                    <Text style={styles.totalEarningsSubLabel}>Libri + Foderazioni</Text>
                   </View>
                 </View>
                 <View style={styles.totalEarningsRight}>
@@ -794,26 +820,6 @@ export default function BookstorePortalScreen() {
                   <Text style={styles.totalEarningsValue}>€{stats.guadagno_mese.toFixed(2)}</Text>
                   <Text style={styles.totalEarningsSmall}>questo mese</Text>
                 </View>
-              </View>
-            </View>
-
-            {/* Formula Calcolo */}
-            <View style={styles.formulaCard}>
-              <Text style={styles.formulaTitle}>📊 Come vengono calcolati i compensi</Text>
-              <View style={styles.formulaSection}>
-                <Text style={styles.formulaSubtitle}>Commissione Libri:</Text>
-                <Text style={styles.formulaText}>10% del prezzo libro - 50% della commissione Stripe proporzionale</Text>
-              </View>
-              <View style={styles.formulaSection}>
-                <Text style={styles.formulaSubtitle}>Foderazione:</Text>
-                <Text style={styles.formulaText}>€1,50 per copertina - commissione Stripe proporzionale</Text>
-              </View>
-              <View style={styles.formulaExample}>
-                <Text style={styles.formulaExampleTitle}>Esempio: Libro €20 + Foderazione €1,50</Text>
-                <Text style={styles.formulaExampleText}>• Stripe (2.9% + €0.25): ~€0.87</Text>
-                <Text style={styles.formulaExampleText}>• Commissione libro: €2.00 - €0.40 = €1.60</Text>
-                <Text style={styles.formulaExampleText}>• Foderazione: €1.50 - €0.06 = €1.44</Text>
-                <Text style={styles.formulaExampleTotal}>• Totale cartolibreria: €3.04</Text>
               </View>
             </View>
 
@@ -1237,26 +1243,26 @@ const styles = StyleSheet.create({
   // Tabs
   tabsContainer: {
     backgroundColor: '#fff',
-    paddingHorizontal: 8,
-    paddingVertical: 10,
+    paddingHorizontal: 4,
+    paddingVertical: 6,
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
   },
   tab: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    marginHorizontal: 4,
-    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    marginHorizontal: 2,
+    borderRadius: 16,
     backgroundColor: '#f5f5f5',
-    gap: 6,
+    gap: 4,
   },
   tabActive: {
     backgroundColor: '#E8F5E9',
   },
   tabText: {
-    fontSize: 13,
+    fontSize: 11,
     color: '#666',
     fontWeight: '500',
   },
@@ -1266,17 +1272,17 @@ const styles = StyleSheet.create({
   },
   tabBadge: {
     backgroundColor: '#e0e0e0',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 10,
-    minWidth: 20,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 8,
+    minWidth: 16,
     alignItems: 'center',
   },
   tabBadgeActive: {
     backgroundColor: '#1a472a',
   },
   tabBadgeText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: 'bold',
     color: '#666',
   },
@@ -1290,7 +1296,70 @@ const styles = StyleSheet.create({
   dashboardContent: {
     padding: 16,
   },
-  // Scan Button
+  // Quick Actions Card
+  quickActionsCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: '#1a472a',
+  },
+  quickActionsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 12,
+  },
+  quickActionsTitle: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#1a472a',
+  },
+  codeInputRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  codeInput: {
+    flex: 1,
+    backgroundColor: '#f8f9fa',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 10,
+    padding: 14,
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    letterSpacing: 3,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  codeSubmitBtn: {
+    backgroundColor: '#4CAF50',
+    width: 52,
+    height: 52,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  codeSubmitBtnDisabled: {
+    backgroundColor: '#ccc',
+  },
+  scanQrBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 12,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+  },
+  scanQrBtnText: {
+    color: '#1a472a',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  // Scan Button (old - kept for compatibility)
   scanButton: {
     flexDirection: 'row',
     alignItems: 'center',
