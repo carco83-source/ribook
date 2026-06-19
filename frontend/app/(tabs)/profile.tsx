@@ -58,6 +58,7 @@ export default function ProfileScreen() {
   const [myListings, setMyListings] = useState<any[]>([]);
   const [loadingListings, setLoadingListings] = useState(false);
   const [isAnonymous, setIsAnonymous] = useState(false);
+  const [deletingListing, setDeletingListing] = useState<string | null>(null);
 
   // Calcola dimensioni logo responsive
   const getLogoSize = () => {
@@ -229,6 +230,46 @@ export default function ProfileScreen() {
         },
       ]
     );
+  };
+
+  // Funzione per eliminare un annuncio
+  const handleDeleteListing = async (listingId: string, bookTitle: string) => {
+    const confirmDelete = async () => {
+      setDeletingListing(listingId);
+      try {
+        await axios.delete(`${API_URL}/api/listings/${listingId}`);
+        setMyListings(prev => prev.filter(l => l.id !== listingId));
+        if (Platform.OS === 'web') {
+          alert('Annuncio eliminato con successo');
+        } else {
+          Alert.alert('Successo', 'Annuncio eliminato con successo');
+        }
+      } catch (error: any) {
+        console.error('Error deleting listing:', error);
+        if (Platform.OS === 'web') {
+          alert('Errore durante l\'eliminazione dell\'annuncio');
+        } else {
+          Alert.alert('Errore', 'Impossibile eliminare l\'annuncio');
+        }
+      } finally {
+        setDeletingListing(null);
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (confirm(`Sei sicuro di voler eliminare "${bookTitle}" dalla vendita?`)) {
+        confirmDelete();
+      }
+    } else {
+      Alert.alert(
+        'Elimina annuncio',
+        `Sei sicuro di voler eliminare "${bookTitle}" dalla vendita?`,
+        [
+          { text: 'Annulla', style: 'cancel' },
+          { text: 'Elimina', style: 'destructive', onPress: confirmDelete }
+        ]
+      );
+    }
   };
 
   // Get status color and label (kept for future use)
@@ -512,6 +553,23 @@ export default function ProfileScreen() {
                           {listing.stato === 'disponibile' ? 'In vendita' : listing.stato}
                         </Text>
                       </View>
+                      {/* Pulsante Elimina */}
+                      {listing.stato === 'disponibile' && (
+                        <TouchableOpacity
+                          style={styles.deleteListingButton}
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            handleDeleteListing(listing.id, listing.book_titolo || 'questo libro');
+                          }}
+                          disabled={deletingListing === listing.id}
+                        >
+                          {deletingListing === listing.id ? (
+                            <ActivityIndicator size="small" color="#f44336" />
+                          ) : (
+                            <Ionicons name="trash-outline" size={18} color="#f44336" />
+                          )}
+                        </TouchableOpacity>
+                      )}
                     </View>
                   </View>
                 </TouchableOpacity>
@@ -1944,8 +2002,14 @@ const styles = StyleSheet.create({
   listingCardMeta: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: 8,
     marginTop: 4,
+  },
+  deleteListingButton: {
+    padding: 6,
+    borderRadius: 6,
+    backgroundColor: '#ffebee',
   },
   listingStatusBadge: {
     flexDirection: 'row',
