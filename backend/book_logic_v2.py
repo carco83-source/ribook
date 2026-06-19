@@ -270,11 +270,13 @@ async def classifica_libri_studente(
         "vendibili_usati": [],
         "da_acquistare_usati": [],
         "da_acquistare_nuovi": [],
+        "fuori_corso": [],  # Libri non più richiesti da nessuna scuola
         "riepilogo": {
             "totale_ancora_in_uso": 0,
             "totale_vendibili": 0,
             "totale_da_comprare_usati": 0,
             "totale_da_comprare_nuovi": 0,
+            "totale_fuori_corso": 0,
             "risparmio_stimato": 0,
             "costo_nuovi": 0,
             "costo_usati": 0,
@@ -344,16 +346,59 @@ async def classifica_libri_studente(
         volume = str(libro.get("volume", "")).upper().strip()
         
         # I libri con Volume Unico (U) NON sono vendibili - servono per più anni
-        # Quindi li spostiamo in "ancora_in_uso" invece che "vendibili"
+        # MA solo se sono ancora richiesti dalla stessa scuola/classe
         if volume == "U":
-            result["ancora_in_uso"].append({
-                **libro,
-                "categoria": "ANCORA_IN_USO",
-                "motivo": "Testo unico - serve per tutto il ciclo",
-                "is_volume_unico": True,
-                "is_strumento_musicale": False,
-                "escluso_dal_calcolo": False
+            # Verifica se il libro Volume U è ancora richiesto per questa classe
+            libro_ancora_richiesto = await db.adozioni.find_one({
+                "codice_scuola": codice_scuola,
+                "anno_corso": str(classe_2026_2027) if classe_2026_2027 else None,
+                "isbn": isbn
             })
+            
+            if libro_ancora_richiesto:
+                # Volume U ancora richiesto → ANCORA IN USO
+                result["ancora_in_uso"].append({
+                    **libro,
+                    "categoria": "ANCORA_IN_USO",
+                    "motivo": "Testo unico - serve per tutto il ciclo",
+                    "is_volume_unico": True,
+                    "is_strumento_musicale": False,
+                    "escluso_dal_calcolo": False
+                })
+            else:
+                # Volume U non più richiesto → verifica domanda generale
+                if isbn in isbn_con_domanda:
+                    # È richiesto da altre scuole → VENDIBILE
+                    is_strumento = is_libro_strumento_musicale(libro)
+                    prezzo_raw = libro.get("prezzo", 0)
+                    try:
+                        prezzo = float(prezzo_raw) if prezzo_raw else 0
+                    except (ValueError, TypeError):
+                        prezzo = 0
+                    prezzo_vendita = round(prezzo * 0.5, 2)
+                    
+                    result["vendibili_usati"].append({
+                        **libro,
+                        "categoria": "VENDIBILE_USATO",
+                        "prezzo_vendita_consigliato": prezzo_vendita,
+                        "motivo": "Volume Unico non più richiesto dalla tua scuola",
+                        "ha_domanda": True,
+                        "is_strumento_musicale": is_strumento,
+                        "escluso_dal_calcolo": is_strumento
+                    })
+                    if not is_strumento:
+                        result["riepilogo"]["potenziale_vendita"] += prezzo_vendita
+                else:
+                    # Nessuna domanda → FUORI CORSO
+                    result["fuori_corso"].append({
+                        **libro,
+                        "categoria": "FUORI_CORSO",
+                        "motivo": "Fuori corso - Volume unico non più richiesto",
+                        "ha_domanda": False,
+                        "is_volume_unico": True,
+                        "is_strumento_musicale": False,
+                        "escluso_dal_calcolo": True
+                    })
             continue  # Salta alla prossima iterazione
         
         is_strumento = is_libro_strumento_musicale(libro)
@@ -382,11 +427,11 @@ async def classifica_libri_studente(
             if not is_strumento:
                 result["riepilogo"]["potenziale_vendita"] += prezzo_vendita
         else:
-            # Libro non vendibile - nessuna scuola lo richiede
-            result["ancora_in_uso"].append({
+            # Libro FUORI CORSO - nessuna scuola lo richiede più
+            result["fuori_corso"].append({
                 **libro,
-                "categoria": "NON_VENDIBILE",
-                "motivo": "Nessuna scuola lo richiede nel 2026/2027",
+                "categoria": "FUORI_CORSO",
+                "motivo": "Fuori corso - nessuna scuola lo richiede nel 2026/2027",
                 "ha_domanda": False,
                 "is_strumento_musicale": is_strumento,
                 "escluso_dal_calcolo": True  # Non contare nel potenziale vendita

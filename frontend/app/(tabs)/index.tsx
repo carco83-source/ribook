@@ -542,12 +542,14 @@ export default function RadarScreen() {
               const usatiFiltered = filterOutStrumentiMusicali(compatibility.da_acquistare_usati || []);
               const nuoviFiltered = filterOutStrumentiMusicali(compatibility.da_acquistare_nuovi || []);
               const inUsoFiltered = filterOutStrumentiMusicali(compatibility.ancora_in_uso || []);
+              const fuoriCorsoFiltered = filterOutStrumentiMusicali(compatibility.fuori_corso || []);
               
               const categories = [
                 { id: 'vendibili', label: 'Vendibili', count: vendibiliFiltered.length, color: '#2196F3', books: vendibiliFiltered },
                 { id: 'usati', label: 'Comprare Usati', count: usatiFiltered.length, color: '#4CAF50', books: usatiFiltered },
                 { id: 'nuovi', label: 'Comprare Nuovi', count: nuoviFiltered.length, color: '#FF9800', books: nuoviFiltered },
                 { id: 'inuso', label: 'Ancora in Uso', count: inUsoFiltered.length, color: '#9C27B0', books: inUsoFiltered },
+                { id: 'fuoricorso', label: 'Fuori Corso', count: fuoriCorsoFiltered.length, color: '#795548', books: fuoriCorsoFiltered },
               ].filter(cat => cat.count > 0);
               
               const currentCategory = categories.find(c => c.id === selectedBookCategory) || categories[0];
@@ -601,6 +603,7 @@ export default function RadarScreen() {
                       const isUsato = currentCategory.id === 'usati';
                       const isNuovo = currentCategory.id === 'nuovi';
                       const isInUso = currentCategory.id === 'inuso';
+                      const isFuoriCorso = currentCategory.id === 'fuoricorso';
                       
                       const handlePress = () => {
                         if (isVendibile) {
@@ -608,7 +611,7 @@ export default function RadarScreen() {
                         } else if (isUsato) {
                           router.push(`/book-sellers/${book.isbn}`);
                         }
-                        // nuovi e inuso non hanno azione
+                        // nuovi, inuso e fuoricorso non hanno azione
                       };
                       
                       return (
@@ -617,10 +620,10 @@ export default function RadarScreen() {
                           style={[
                             styles.sampleBookItem, 
                             (isVendibile || isUsato) && styles.sampleBookItemClickable,
-                            isInUso && { opacity: 0.7 }
+                            (isInUso || isFuoriCorso) && { opacity: 0.7 }
                           ]}
                           onPress={handlePress}
-                          disabled={isNuovo || isInUso}
+                          disabled={isNuovo || isInUso || isFuoriCorso}
                         >
                           {/* Copertina a sinistra */}
                           <View style={styles.bookCoverSection}>
@@ -642,7 +645,7 @@ export default function RadarScreen() {
                             <Text style={styles.bookSubjectBig}>{book.disciplina}</Text>
                             <View style={[styles.bookCategoryBadge, { backgroundColor: currentCategory.color + '20' }]}>
                               <Text style={[styles.bookCategoryText, { color: currentCategory.color }]}>
-                                {isVendibile ? 'VENDIBILE' : isUsato ? 'USATO DISPONIBILE' : isNuovo ? 'DA COMPRARE NUOVO' : 'ANCORA IN USO'}
+                                {isVendibile ? 'VENDIBILE' : isUsato ? 'USATO DISPONIBILE' : isNuovo ? 'DA COMPRARE NUOVO' : isFuoriCorso ? 'FUORI CORSO' : 'ANCORA IN USO'}
                               </Text>
                             </View>
                             <View style={styles.bookDetailsCompact}>
