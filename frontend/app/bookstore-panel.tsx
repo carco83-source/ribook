@@ -154,10 +154,35 @@ export default function BookstorePanelScreen() {
   };
 
   const handleLogout = async () => {
-    await AsyncStorage.removeItem('bookstore_id');
-    setIsLoggedIn(false);
-    setBookstoreId(null);
-    setBookstoreInfo(null);
+    const doLogout = async () => {
+      await AsyncStorage.removeItem('bookstore_id');
+      setIsLoggedIn(false);
+      setBookstoreId(null);
+      setBookstoreInfo(null);
+      setStats(null);
+      setPendingDeliveries([]);
+      setDeliveredOrders([]);
+      setCompletedOrders([]);
+      setReturns([]);
+      setEmail('');
+      setPassword('');
+      setActiveTab('dashboard');
+    };
+
+    if (Platform.OS === 'web') {
+      if (window.confirm('Vuoi disconnetterti?')) {
+        await doLogout();
+      }
+    } else {
+      Alert.alert(
+        'Esci',
+        'Vuoi disconnetterti dalla cartolibreria?',
+        [
+          { text: 'Annulla', style: 'cancel' },
+          { text: 'Esci', style: 'destructive', onPress: doLogout }
+        ]
+      );
+    }
   };
 
   // Calcola tempo rimanente per consegna
