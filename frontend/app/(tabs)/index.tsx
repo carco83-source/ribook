@@ -752,40 +752,24 @@ export default function RadarScreen() {
                           onPress={handlePress}
                           disabled={isNuovo || isInUso || isFuoriCorso}
                         >
-                          {/* NUOVA STRUTTURA: Materia e Badge in alto sulla stessa riga */}
+                          {/* NUOVA STRUTTURA: Materia + Badge in alto sulla stessa riga */}
                           <View style={styles.bookCardContent}>
-                            {/* Riga superiore: MATERIA + BADGE */}
-                            <View style={styles.bookTopHeader}>
-                              <Text style={styles.bookSubjectTop}>{semplificaLingua(book.disciplina)}</Text>
-                              <View style={[styles.bookCategoryBadgeTop, { backgroundColor: currentCategory.color + '20' }]}>
-                                <Text style={[styles.bookCategoryTextTop, { color: currentCategory.color }]}>
-                                  {isVendibile ? 'VENDIBILE' : isUsato ? 'USATO DISPONIBILE' : isNuovo ? 'DA COMPRARE NUOVO' : isFuoriCorso ? 'FUORI CORSO' : 'ANCORA IN USO'}
-                                </Text>
-                              </View>
-                            </View>
+                            {/* Riga superiore: solo MATERIA */}
+                            <Text style={styles.bookSubjectTop}>{semplificaLingua(book.disciplina)}</Text>
                             
-                            {/* Riga centrale: Copertina + Info */}
+                            {/* Riga centrale: Copertina GRANDE + Info */}
                             <View style={styles.bookMainRow}>
-                              {/* Copertina a sinistra con badge copie sotto */}
+                              {/* Copertina a sinistra - INGRANDITA */}
                               <View style={styles.bookCoverColumn}>
                                 {coverUrl ? (
-                                  <Image source={{ uri: coverUrl }} style={styles.bookCoverImage} resizeMode="contain" />
+                                  <Image source={{ uri: coverUrl }} style={styles.bookCoverImageBig} resizeMode="contain" />
                                 ) : (
-                                  <Image source={require('../../assets/images/ribook-logo.png')} style={styles.bookCoverImage} resizeMode="contain" />
-                                )}
-                                {/* Badge copie sotto la copertina - INGRANDITO */}
-                                {isUsato && (
-                                  <View style={[styles.copieDisponibiliBadgeBig, copieDisponibili === 0 && styles.copieZeroBadge]}>
-                                    <Ionicons name="people" size={14} color="#fff" />
-                                    <Text style={styles.copieDisponibiliTextBig}>{copieDisponibili}</Text>
-                                    <Text style={styles.copieLabel}>{copieDisponibili === 1 ? 'copia' : 'copie'}</Text>
-                                  </View>
+                                  <Image source={require('../../assets/images/ribook-logo.png')} style={styles.bookCoverImageBig} resizeMode="contain" />
                                 )}
                               </View>
                               
-                              {/* Info a destra della copertina - senza badge categoria */}
+                              {/* Info a destra della copertina - senza badge, tutto in alto */}
                               <View style={styles.bookInfoColumn}>
-                                {/* Titolo, autori, editore, volume, ISBN */}
                                 <Text style={styles.bookTitleCompact} numberOfLines={2}>{book.titolo}</Text>
                                 {book.autori && <Text style={styles.bookMetaText} numberOfLines={1}>{book.autori}</Text>}
                                 {book.editore && <Text style={styles.bookMetaLabel}>{book.editore}</Text>}
@@ -798,30 +782,40 @@ export default function RadarScreen() {
                               </View>
                             </View>
                             
-                            {/* Riga inferiore: Prezzi */}
-                            {(isVendibile || isUsato || isNuovo) && (
-                              <View style={styles.priceRowBottom}>
-                                {isVendibile && (
-                                  <>
-                                    <Text style={styles.priceNewBig}>€{prezzoNuovo.toFixed(2)}</Text>
-                                    <Text style={styles.priceTagSell}>Vendi €{prezzoUsato.toFixed(2)}</Text>
-                                  </>
-                                )}
-                                {isUsato && (
-                                  <>
-                                    <Text style={styles.priceStrikethrough}>€{prezzoNuovo.toFixed(2)}</Text>
-                                    <Text style={styles.priceUsedBig}>€{prezzoUsato.toFixed(2)}</Text>
-                                    <Text style={styles.priceSaving}>-€{risparmio.toFixed(2)}</Text>
-                                  </>
-                                )}
-                                {isNuovo && (
-                                  <>
-                                    <Text style={styles.priceNewBig}>€{prezzoNuovo.toFixed(2)}</Text>
-                                    <Text style={styles.bookMetaLabel}>{book.motivo}</Text>
-                                  </>
-                                )}
-                              </View>
-                            )}
+                            {/* Riga inferiore: Copie + Prezzi */}
+                            <View style={styles.priceRowBottom}>
+                              {/* Badge copie a sinistra */}
+                              {isUsato && (
+                                <View style={[styles.copieInlineGreen, copieDisponibili === 0 && styles.copieInlineGray]}>
+                                  <Ionicons name="people" size={14} color="#fff" />
+                                  <Text style={styles.copieInlineText}>{copieDisponibili} {copieDisponibili === 1 ? 'copia' : 'copie'}</Text>
+                                </View>
+                              )}
+                              {/* Spacer per spingere i prezzi a destra */}
+                              <View style={{ flex: 1 }} />
+                              {/* Prezzi a destra */}
+                              {isVendibile && (
+                                <>
+                                  <Text style={styles.priceNewBig}>€{prezzoNuovo.toFixed(2)}</Text>
+                                  <Text style={styles.priceTagSell}>Vendi €{prezzoUsato.toFixed(2)}</Text>
+                                </>
+                              )}
+                              {isUsato && (
+                                <>
+                                  <Text style={styles.priceStrikethrough}>€{prezzoNuovo.toFixed(2)}</Text>
+                                  <Text style={styles.priceUsedBig}>€{prezzoUsato.toFixed(2)}</Text>
+                                  <Text style={styles.priceSaving}>-€{risparmio.toFixed(2)}</Text>
+                                </>
+                              )}
+                              {isNuovo && (
+                                <>
+                                  <Text style={styles.priceNewBig}>€{prezzoNuovo.toFixed(2)}</Text>
+                                </>
+                              )}
+                              {(isInUso || isFuoriCorso) && (
+                                <Text style={styles.bookMetaLabel}>{isFuoriCorso ? 'Non più richiesto' : 'Ancora in uso'}</Text>
+                              )}
+                            </View>
                           </View>
                         </TouchableOpacity>
                       );
@@ -1629,85 +1623,32 @@ const styles = StyleSheet.create({
   bookCardContent: {
     flex: 1,
   },
-  // Header in alto: Materia + Badge sulla stessa riga
-  bookTopHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  // Materia in alto a sinistra
+  // Materia in alto a sinistra - senza badge
   bookSubjectTop: {
     fontSize: 14,
     fontWeight: 'bold',
     color: '#1a472a',
     textTransform: 'uppercase',
-    flex: 1,
-  },
-  // Badge categoria in alto a destra
-  bookCategoryBadgeTop: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 4,
-    marginLeft: 8,
-  },
-  bookCategoryTextTop: {
-    fontSize: 9,
-    fontWeight: 'bold',
+    marginBottom: 6,
   },
   // Riga principale: copertina + info
   bookMainRow: {
     flexDirection: 'row',
   },
-  // Colonna copertina con badge copie sotto
+  // Colonna copertina - INGRANDITA
   bookCoverColumn: {
     alignItems: 'center',
     marginRight: 12,
   },
-  bookCoverImage: {
-    width: 80,
-    height: 110,
+  bookCoverImageBig: {
+    width: 95,
+    height: 130,
     borderRadius: 4,
     backgroundColor: '#f5f5f5',
-  },
-  // Badge copie INGRANDITO sotto copertina
-  copieDisponibiliBadgeBig: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#4CAF50',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    marginTop: 6,
-    gap: 4,
-  },
-  copieDisponibiliTextBig: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  copieLabel: {
-    color: '#fff',
-    fontSize: 11,
-  },
-  copieZeroBadge: {
-    backgroundColor: '#999',
   },
   // Colonna info a destra
   bookInfoColumn: {
     flex: 1,
-  },
-  // Badge categoria
-  bookCategoryBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    marginBottom: 4,
-  },
-  bookCategoryText: {
-    fontSize: 10,
-    fontWeight: 'bold',
   },
   bookTitleCompact: {
     fontSize: 13,
@@ -1733,16 +1674,33 @@ const styles = StyleSheet.create({
     color: '#999',
     marginTop: 2,
   },
-  // Riga prezzi in basso - allineati a destra
+  // Riga prezzi in basso - con copie a sinistra e prezzi a destra
   priceRowBottom: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-end',
     gap: 8,
-    marginTop: 8,
-    paddingTop: 8,
+    marginTop: 10,
+    paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: '#eee',
+  },
+  // Badge copie inline (verde, a sinistra nella riga prezzi)
+  copieInlineGreen: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    gap: 4,
+  },
+  copieInlineGray: {
+    backgroundColor: '#999',
+  },
+  copieInlineText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
   priceStrikethrough: {
     fontSize: 12,
