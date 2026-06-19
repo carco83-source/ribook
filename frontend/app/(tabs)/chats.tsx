@@ -76,8 +76,16 @@ export default function MessaggiScreen() {
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [expandedNotifications, setExpandedNotifications] = useState<Set<string>>(new Set());
+  const [isAnonymous, setIsAnonymous] = useState(false);
 
   const loadData = async () => {
+    const storedUserId = await AsyncStorage.getItem('user_id');
+    if (!storedUserId) {
+      setIsAnonymous(true);
+      setLoading(false);
+      return;
+    }
+    setIsAnonymous(false);
     try {
       const storedUserId = await AsyncStorage.getItem('user_id');
       setUserId(storedUserId);
@@ -493,6 +501,36 @@ export default function MessaggiScreen() {
         >
           <Text style={styles.loginButtonText}>Accedi</Text>
         </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // Schermata per utenti non loggati
+  if (isAnonymous) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.anonymousContainer}>
+          <Ionicons name="chatbubbles-outline" size={80} color="#ccc" />
+          <Text style={styles.anonymousTitle}>Accedi per i messaggi</Text>
+          <Text style={styles.anonymousSubtitle}>
+            Per visualizzare messaggi e notifiche devi accedere al tuo account
+          </Text>
+          <TouchableOpacity
+            style={styles.anonymousButton}
+            onPress={() => router.push('/(auth)/login')}
+          >
+            <Ionicons name="log-in-outline" size={20} color="#fff" />
+            <Text style={styles.anonymousButtonText}>Accedi</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.anonymousRegisterLink}
+            onPress={() => router.push('/(auth)/register')}
+          >
+            <Text style={styles.anonymousRegisterText}>
+              Non hai un account? <Text style={styles.anonymousRegisterBold}>Registrati</Text>
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
@@ -958,5 +996,53 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     marginTop: 4,
+  },
+  // Stili per utenti anonimi
+  anonymousContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  anonymousTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#333',
+    marginTop: 20,
+    marginBottom: 12,
+  },
+  anonymousSubtitle: {
+    fontSize: 15,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 32,
+    maxWidth: 300,
+  },
+  anonymousButton: {
+    backgroundColor: '#1a472a',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 40,
+    borderRadius: 25,
+    gap: 8,
+  },
+  anonymousButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  anonymousRegisterLink: {
+    marginTop: 20,
+  },
+  anonymousRegisterText: {
+    color: '#666',
+    fontSize: 14,
+  },
+  anonymousRegisterBold: {
+    color: '#1a472a',
+    fontWeight: 'bold',
   },
 });

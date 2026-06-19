@@ -41,6 +41,7 @@ export default function CartScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [payingAll, setPayingAll] = useState(false);
+  const [isAnonymous, setIsAnonymous] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -54,9 +55,11 @@ export default function CartScreen() {
       setUserId(storedUserId);
 
       if (!storedUserId) {
+        setIsAnonymous(true);
         setLoading(false);
         return;
       }
+      setIsAnonymous(false);
 
       // Carica ordini dell'utente
       const response = await axios.get(`${API_URL}/api/user-orders/${storedUserId}`);
@@ -261,6 +264,36 @@ export default function CartScreen() {
           <Text style={styles.emptyTitle}>Accedi per vedere il carrello</Text>
           <TouchableOpacity style={styles.loginButton} onPress={() => router.push('/login')}>
             <Text style={styles.loginButtonText}>Accedi</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Schermata per utenti non loggati
+  if (isAnonymous) {
+    return (
+      <SafeAreaView style={styles.container} edges={['bottom']}>
+        <View style={styles.anonymousContainer}>
+          <Ionicons name="cart-outline" size={80} color="#ccc" />
+          <Text style={styles.anonymousTitle}>Accedi per il carrello</Text>
+          <Text style={styles.anonymousSubtitle}>
+            Per acquistare libri usati devi accedere al tuo account
+          </Text>
+          <TouchableOpacity
+            style={styles.anonymousButton}
+            onPress={() => router.push('/(auth)/login')}
+          >
+            <Ionicons name="log-in-outline" size={20} color="#fff" />
+            <Text style={styles.anonymousButtonText}>Accedi</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.anonymousRegisterLink}
+            onPress={() => router.push('/(auth)/register')}
+          >
+            <Text style={styles.anonymousRegisterText}>
+              Non hai un account? <Text style={styles.anonymousRegisterBold}>Registrati</Text>
+            </Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -568,5 +601,53 @@ const styles = StyleSheet.create({
     color: '#888',
     textAlign: 'center',
     marginTop: 10,
+  },
+  // Stili per utenti anonimi
+  anonymousContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  anonymousTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#333',
+    marginTop: 20,
+    marginBottom: 12,
+  },
+  anonymousSubtitle: {
+    fontSize: 15,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 32,
+    maxWidth: 300,
+  },
+  anonymousButton: {
+    backgroundColor: '#1a472a',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 40,
+    borderRadius: 25,
+    gap: 8,
+  },
+  anonymousButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  anonymousRegisterLink: {
+    marginTop: 20,
+  },
+  anonymousRegisterText: {
+    color: '#666',
+    fontSize: 14,
+  },
+  anonymousRegisterBold: {
+    color: '#1a472a',
+    fontWeight: 'bold',
   },
 });
