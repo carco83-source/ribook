@@ -1288,11 +1288,11 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 8,
   },
-  // Tabs - più schiacciati e grigi
+  // Tabs - più larghi e quadrati
   tabsContainer: {
     backgroundColor: '#fff',
-    paddingHorizontal: 4,
-    paddingVertical: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
     flexDirection: 'row',
@@ -1301,12 +1301,13 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    marginHorizontal: 2,
-    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginHorizontal: 4,
+    borderRadius: 10,
     backgroundColor: '#e8e8e8',
-    minWidth: 60,
+    minWidth: 75,
+    minHeight: 65,
   },
   tabActive: {
     backgroundColor: '#d0d0d0',
@@ -1315,11 +1316,11 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   tabText: {
-    fontSize: 9,
+    fontSize: 10,
     color: '#444',
-    fontWeight: '500',
+    fontWeight: '600',
     textAlign: 'center',
-    marginTop: 2,
+    marginTop: 6,
   },
   tabTextActive: {
     color: '#1a472a',
