@@ -429,6 +429,80 @@ SELLER_CONFIRMATION_HOURS = 24  # 24h per conferma venditore
 DELIVERY_BUSINESS_DAYS = 2      # 2 giorni lavorativi per consegna
 RETURN_WINDOW_HOURS = 72        # 72 ore (3 giorni) per reso
 
+# Costanti commissioni
+COSTO_FODERAZIONE = 1.50  # €1,50 per foderazione
+COMMISSIONE_LIBRO_PERCENT = 0.10  # 10% sul libro
+STRIPE_FEE_PERCENT = 0.029  # 2.9% Stripe
+STRIPE_FEE_FIXED = 0.25  # €0.25 fisso Stripe
+
+def calcola_commissioni(prezzo_libro: float, include_foderazione: bool = False):
+    """
+    Calcola la divisione delle commissioni tra piattaforma e cartolibreria.
+    
+    Logica:
+    - Commissione totale: 10% del libro (divisa 50/50 tra piattaforma e cartolibreria)
+    - Foderazione: €1,50 (va alla cartolibreria)
+    - Stripe: proporzionalmente sottratto da ogni parte
+    
+    Returns dict con:
+    - totale_acquirente: quanto paga l'acquirente
+    - netto_venditore: quanto riceve il venditore
+    - commissione_stripe: costo Stripe
+    - commissione_piattaforma: guadagno piattaforma (5% - proporzione Stripe)
+    - commissione_cartolibreria_libro: guadagno cartolibreria da libro (5% - proporzione Stripe)
+    - commissione_cartolibreria_foderazione: guadagno cartolibreria da foderazione (€1,50 - proporzione Stripe)
+    - commissione_cartolibreria_totale: totale cartolibreria
+    """
+    costo_foderazione = COSTO_FODERAZIONE if include_foderazione else 0
+    
+    # Commissione 10% sul libro (da dividere)
+    commissione_libro = prezzo_libro * COMMISSIONE_LIBRO_PERCENT
+    
+    # Totale che paga l'acquirente
+    totale_acquirente = prezzo_libro + commissione_libro + costo_foderazione
+    
+    # Commissione Stripe sul totale
+    commissione_stripe = (totale_acquirente * STRIPE_FEE_PERCENT) + STRIPE_FEE_FIXED
+    
+    # Proporzioni per dividere la commissione Stripe
+    if totale_acquirente > 0:
+        prop_libro = prezzo_libro / totale_acquirente
+        prop_commissione = commissione_libro / totale_acquirente
+        prop_foderazione = costo_foderazione / totale_acquirente if include_foderazione else 0
+    else:
+        prop_libro = prop_commissione = prop_foderazione = 0
+    
+    # Stripe proporzionale per ogni componente
+    stripe_su_libro = commissione_stripe * prop_libro
+    stripe_su_commissione = commissione_stripe * prop_commissione
+    stripe_su_foderazione = commissione_stripe * prop_foderazione if include_foderazione else 0
+    
+    # Venditore riceve prezzo libro - proporzione Stripe sul libro
+    netto_venditore = prezzo_libro - stripe_su_libro
+    
+    # Commissione libro divisa 50/50 tra piattaforma e cartolibreria
+    # Ognuno paga metà della proporzione Stripe sulla commissione
+    commissione_piattaforma = (commissione_libro / 2) - (stripe_su_commissione / 2)
+    commissione_cartolibreria_libro = (commissione_libro / 2) - (stripe_su_commissione / 2)
+    
+    # Foderazione va alla cartolibreria meno Stripe proporzionale
+    commissione_cartolibreria_foderazione = costo_foderazione - stripe_su_foderazione if include_foderazione else 0
+    
+    # Totale cartolibreria
+    commissione_cartolibreria_totale = commissione_cartolibreria_libro + commissione_cartolibreria_foderazione
+    
+    return {
+        "totale_acquirente": round(totale_acquirente, 2),
+        "netto_venditore": round(netto_venditore, 2),
+        "commissione_stripe": round(commissione_stripe, 2),
+        "commissione_piattaforma": round(max(0, commissione_piattaforma), 2),
+        "commissione_cartolibreria_libro": round(max(0, commissione_cartolibreria_libro), 2),
+        "commissione_cartolibreria_foderazione": round(max(0, commissione_cartolibreria_foderazione), 2),
+        "commissione_cartolibreria_totale": round(max(0, commissione_cartolibreria_totale), 2),
+        "include_foderazione": include_foderazione,
+        "costo_foderazione": costo_foderazione,
+    }
+
 class PaymentIntent(BaseModel):
     """Simula Stripe PaymentIntent"""
     id: str = Field(default_factory=lambda: f"pi_{uuid.uuid4().hex[:24]}")
@@ -8477,7 +8551,7 @@ async def admin_login(data: AdminLogin):
 
 @api_router.get("/admin/stats")
 async def get_admin_stats(admin_id: str = Query(...)):
-    """Admin: statistiche generali"""
+    """Admin: statistiche generali con guadagni piattaforma"""
     admin = await db.users.find_one({"id": admin_id})
     if not admin or not admin.get("is_admin", False):
         raise HTTPException(status_code=403, detail="Accesso non autorizzato")
@@ -8491,7 +8565,7 @@ async def get_admin_stats(admin_id: str = Query(...)):
     # Conta ordini
     total_orders = await db.orders.count_documents({})
     orders_completed = await db.orders.count_documents({"status": "completed"})
-    orders_pending = await db.orders.count_documents({"status": {"$in": ["in_attesa_pagamento", "paid_escrow", "delivering_to_bookstore"]}})
+    orders_pending = await db.orders.count_documents({"status": {"$in": ["in_attesa_pagamento", "paid_escrow", "delivering_to_bookstore", "pagato_attesa_consegna"]}})
     
     # Conta listings
     total_listings = await db.listings.count_documents({})
@@ -8502,6 +8576,46 @@ async def get_admin_stats(admin_id: str = Query(...)):
     
     # Reports non risolti
     pending_reports = await db.reports.count_documents({"status": "pending"})
+    
+    # Calcolo guadagni piattaforma
+    from datetime import timedelta
+    now = datetime.utcnow()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    
+    # Ordini completati oggi
+    orders_today = await db.orders.find({
+        "status": "completed",
+        "completed_at": {"$gte": today_start.isoformat()}
+    }).to_list(1000)
+    
+    # Ordini completati questo mese
+    orders_month = await db.orders.find({
+        "status": "completed",
+        "completed_at": {"$gte": month_start.isoformat()}
+    }).to_list(10000)
+    
+    # Calcola guadagni piattaforma (10% libro / 2 - proporzione Stripe)
+    guadagno_oggi = 0
+    guadagno_mese = 0
+    foderazione_oggi = 0
+    foderazione_mese = 0
+    
+    for order in orders_today:
+        prezzo = order.get("prezzo_libro", 0)
+        include_fod = order.get("include_foderazione", False)
+        comm = calcola_commissioni(prezzo, include_fod)
+        guadagno_oggi += comm["commissione_piattaforma"]
+        if include_fod:
+            foderazione_oggi += 1
+    
+    for order in orders_month:
+        prezzo = order.get("prezzo_libro", 0)
+        include_fod = order.get("include_foderazione", False)
+        comm = calcola_commissioni(prezzo, include_fod)
+        guadagno_mese += comm["commissione_piattaforma"]
+        if include_fod:
+            foderazione_mese += 1
     
     return {
         "users": {
@@ -8514,7 +8628,9 @@ async def get_admin_stats(admin_id: str = Query(...)):
         "orders": {
             "total": total_orders,
             "completed": orders_completed,
-            "pending": orders_pending
+            "pending": orders_pending,
+            "completed_today": len(orders_today),
+            "completed_month": len(orders_month)
         },
         "listings": {
             "total": total_listings,
@@ -8522,6 +8638,15 @@ async def get_admin_stats(admin_id: str = Query(...)):
         },
         "reports": {
             "pending": pending_reports
+        },
+        "guadagni_piattaforma": {
+            "oggi": round(guadagno_oggi, 2),
+            "mese": round(guadagno_mese, 2),
+            "formula": "10% libro / 2 - proporzione Stripe"
+        },
+        "foderazione": {
+            "oggi": foderazione_oggi,
+            "mese": foderazione_mese
         }
     }
 
@@ -8677,6 +8802,118 @@ async def mark_bookstore_notification_read(bookstore_id: str, notification_id: s
         {"$set": {"read": True}}
     )
     return {"success": True}
+
+
+@api_router.get("/bookstore/{bookstore_id}/dashboard")
+async def get_bookstore_dashboard(bookstore_id: str):
+    """Cartolibreria: dashboard completa con ordini, notifiche e statistiche"""
+    
+    bookstore = await db.bookstores.find_one({"id": bookstore_id})
+    if not bookstore:
+        raise HTTPException(status_code=404, detail="Cartolibreria non trovata")
+    
+    # Date per statistiche
+    now = datetime.utcnow()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    
+    # Ordini per stato
+    all_orders = await db.orders.find({"bookstore_id": bookstore_id}).to_list(1000)
+    
+    orders_in_arrivo = []
+    orders_da_ritirare = []
+    orders_completati = []
+    orders_resi = []
+    
+    for order in all_orders:
+        order.pop('_id', None)
+        status = order.get("status", "")
+        
+        if status in ["paid_escrow", "pagato_attesa_consegna", "delivering_to_bookstore"]:
+            orders_in_arrivo.append(order)
+        elif status in ["ready_for_pickup", "pronto_per_ritiro"]:
+            orders_da_ritirare.append(order)
+        elif status == "completed":
+            orders_completati.append(order)
+        elif status in ["return_requested", "returned", "refunded", "reso_richiesto"]:
+            orders_resi.append(order)
+    
+    # Ordini completati oggi e questo mese
+    completati_oggi = [o for o in orders_completati 
+        if o.get("completed_at") and o.get("completed_at") >= today_start.isoformat()]
+    completati_mese = [o for o in orders_completati 
+        if o.get("completed_at") and o.get("completed_at") >= month_start.isoformat()]
+    
+    # Calcolo guadagni cartolibreria con nuova formula
+    guadagno_libri_oggi = 0
+    guadagno_libri_mese = 0
+    guadagno_foderazione_oggi = 0
+    guadagno_foderazione_mese = 0
+    num_foderazione_oggi = 0
+    num_foderazione_mese = 0
+    
+    for order in completati_oggi:
+        prezzo = order.get("prezzo_libro", 0)
+        include_fod = order.get("include_foderazione", False)
+        comm = calcola_commissioni(prezzo, include_fod)
+        guadagno_libri_oggi += comm["commissione_cartolibreria_libro"]
+        guadagno_foderazione_oggi += comm["commissione_cartolibreria_foderazione"]
+        if include_fod:
+            num_foderazione_oggi += 1
+    
+    for order in completati_mese:
+        prezzo = order.get("prezzo_libro", 0)
+        include_fod = order.get("include_foderazione", False)
+        comm = calcola_commissioni(prezzo, include_fod)
+        guadagno_libri_mese += comm["commissione_cartolibreria_libro"]
+        guadagno_foderazione_mese += comm["commissione_cartolibreria_foderazione"]
+        if include_fod:
+            num_foderazione_mese += 1
+    
+    # Ordini scaduti (deadline passata)
+    ordini_scaduti = 0
+    for order in orders_in_arrivo:
+        deadline = order.get("seller_delivery_deadline")
+        if deadline and deadline < now.isoformat():
+            ordini_scaduti += 1
+    
+    # Notifiche non lette
+    notifications = await db.bookstore_notifications.find({
+        "bookstore_id": bookstore_id
+    }).sort("created_at", -1).to_list(50)
+    
+    for n in notifications:
+        n.pop('_id', None)
+    
+    return {
+        "bookstore_name": bookstore.get("nome", "Cartolibreria"),
+        "bookstore_id": bookstore_id,
+        "stats": {
+            "in_arrivo": len(orders_in_arrivo),
+            "da_ritirare": len(orders_da_ritirare),
+            "completati_oggi": len(completati_oggi),
+            "completati_mese": len(completati_mese),
+            "resi_in_attesa": len([o for o in orders_resi if o.get("status") in ["return_requested", "reso_richiesto"]]),
+            "ordini_scaduti": ordini_scaduti,
+            "guadagno_oggi": round(guadagno_libri_oggi + guadagno_foderazione_oggi, 2),
+            "guadagno_mese": round(guadagno_libri_mese + guadagno_foderazione_mese, 2),
+            "guadagno_libri_oggi": round(guadagno_libri_oggi, 2),
+            "guadagno_libri_mese": round(guadagno_libri_mese, 2),
+            "guadagno_foderazione_oggi": round(guadagno_foderazione_oggi, 2),
+            "guadagno_foderazione_mese": round(guadagno_foderazione_mese, 2),
+            "num_foderazione_oggi": num_foderazione_oggi,
+            "num_foderazione_mese": num_foderazione_mese,
+        },
+        "orders_in_arrivo": orders_in_arrivo,
+        "orders_da_ritirare": orders_da_ritirare,
+        "orders_completati": orders_completati[-20:],  # Ultimi 20
+        "orders_resi": orders_resi,
+        "notifications": notifications,
+        "formula": {
+            "libri": "10% / 2 - proporzione Stripe",
+            "foderazione": "€1,50 - proporzione Stripe"
+        }
+    }
 
 
 @api_router.get("/bookstore/{bookstore_id}/orders")

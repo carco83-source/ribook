@@ -12,6 +12,7 @@ import {
   Modal,
   Platform,
   useWindowDimensions,
+  Image,
 } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -144,7 +145,19 @@ const calcolaCompensiCartolibreria = (prezzoLibro: number, includeFoderazione: b
   };
 };
 
-type TabType = 'dashboard' | 'in_arrivo' | 'da_ritirare' | 'completati' | 'resi';
+interface BookstoreNotification {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  order_code?: string;
+  read: boolean;
+  created_at: string;
+  books_conditions?: any[];
+  books_photos?: string[];
+}
+
+type TabType = 'dashboard' | 'in_arrivo' | 'da_ritirare' | 'completati' | 'resi' | 'notifiche';
 
 export default function BookstorePortalScreen() {
   const router = useRouter();
@@ -187,6 +200,10 @@ export default function BookstorePortalScreen() {
   const [ordersCompletati, setOrdersCompletati] = useState<Order[]>([]);
   const [ordersResi, setOrdersResi] = useState<Order[]>([]);
   
+  // Notifiche cartolibreria
+  const [notifications, setNotifications] = useState<BookstoreNotification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  
   // Scanner state
   const [showScanner, setShowScanner] = useState(false);
   const [manualCode, setManualCode] = useState('');
@@ -228,7 +245,7 @@ export default function BookstorePortalScreen() {
 
   const loadDashboardData = async (bsId: string) => {
     try {
-      // Load all orders for this bookstore
+      // Load all data from dashboard endpoint
       const response = await axios.get(`${API_URL}/api/bookstore/${bsId}/dashboard`);
       const data = response.data;
       
@@ -239,6 +256,12 @@ export default function BookstorePortalScreen() {
       setOrdersCompletati(data.orders_completati || []);
       setOrdersResi(data.orders_resi || []);
       
+      // Carica notifiche
+      if (data.notifications) {
+        setNotifications(data.notifications);
+        setUnreadCount(data.notifications.filter((n: BookstoreNotification) => !n.read).length);
+      }
+      
     } catch (error) {
       console.error('Error loading dashboard:', error);
       // Fallback: load orders the old way
@@ -247,10 +270,10 @@ export default function BookstorePortalScreen() {
         const allOrders = ordersRes.data.orders || [];
         
         // Categorize orders
-        const inArrivo = allOrders.filter((o: Order) => ['paid_escrow', 'delivering_to_bookstore'].includes(o.status));
-        const daRitirare = allOrders.filter((o: Order) => o.status === 'ready_for_pickup');
+        const inArrivo = allOrders.filter((o: Order) => ['paid_escrow', 'delivering_to_bookstore', 'pagato_attesa_consegna'].includes(o.status));
+        const daRitirare = allOrders.filter((o: Order) => ['ready_for_pickup', 'pronto_per_ritiro'].includes(o.status));
         const completati = allOrders.filter((o: Order) => o.status === 'completed');
-        const resi = allOrders.filter((o: Order) => ['return_requested', 'returned', 'refunded'].includes(o.status));
+        const resi = allOrders.filter((o: Order) => ['return_requested', 'returned', 'refunded', 'reso_richiesto'].includes(o.status));
         
         setOrdersInArrivo(inArrivo);
         setOrdersDaRitirare(daRitirare);
@@ -680,6 +703,7 @@ export default function BookstorePortalScreen() {
           { key: 'da_ritirare', label: 'Da Ritirare', icon: 'cube-outline', count: stats.da_ritirare },
           { key: 'completati', label: 'Completati', icon: 'checkmark-circle-outline', count: stats.completati_mese },
           { key: 'resi', label: 'Resi', icon: 'refresh-outline', count: stats.resi_in_attesa },
+          { key: 'notifiche', label: 'Notifiche', icon: 'notifications-outline', count: unreadCount },
         ].map((tab) => (
           <TouchableOpacity
             key={tab.key}
@@ -1036,6 +1060,66 @@ export default function BookstorePortalScreen() {
                       </TouchableOpacity>
                     </View>
                   )}
+                </View>
+              ))
+            )}
+          </View>
+        )}
+
+        {/* Notifiche Tab */}
+        {activeTab === 'notifiche' && (
+          <View style={styles.ordersList}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>🔔 Notifiche ({notifications.length})</Text>
+              <Text style={styles.sectionSubtitle}>Ordini e aggiornamenti</Text>
+            </View>
+            
+            {notifications.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Ionicons name="notifications-off-outline" size={64} color="#ccc" />
+                <Text style={styles.emptyStateText}>Nessuna notifica</Text>
+              </View>
+            ) : (
+              notifications.map((notification) => (
+                <View key={notification.id} style={[styles.notificationCard, !notification.read && styles.notificationUnread]}>
+                  <View style={styles.notificationHeader}>
+                    <Text style={styles.notificationTitle}>{notification.title}</Text>
+                    {notification.order_code && (
+                      <Text style={styles.notificationCode}>{notification.order_code}</Text>
+                    )}
+                  </View>
+                  
+                  <Text style={styles.notificationMessage}>{notification.message}</Text>
+                  
+                  {/* Foto copertina */}
+                  {notification.books_photos && notification.books_photos.length > 0 && notification.books_photos[0] && (
+                    <View style={styles.notificationPhotoContainer}>
+                      <Image 
+                        source={{ uri: notification.books_photos[0].startsWith('data:') ? notification.books_photos[0] : `data:image/jpeg;base64,${notification.books_photos[0]}` }}
+                        style={styles.notificationPhoto}
+                        resizeMode="contain"
+                      />
+                    </View>
+                  )}
+                  
+                  {/* Condizioni libro */}
+                  {notification.books_conditions && notification.books_conditions.length > 0 && (
+                    <View style={styles.notificationConditions}>
+                      <Text style={styles.notificationConditionsTitle}>📋 Condizioni:</Text>
+                      {notification.books_conditions.map((book: any, idx: number) => (
+                        <View key={idx} style={styles.notificationConditionItem}>
+                          {notification.books_conditions.length > 1 && (
+                            <Text style={styles.notificationConditionBook}>{book.title}</Text>
+                          )}
+                          <Text style={styles.notificationConditionText}>{book.conditions}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                  
+                  <Text style={styles.notificationTime}>
+                    {new Date(notification.created_at).toLocaleString('it-IT')}
+                  </Text>
                 </View>
               ))
             )}
@@ -1993,5 +2077,92 @@ const styles = StyleSheet.create({
   },
   manualInputBtnDisabled: {
     backgroundColor: '#ccc',
+  },
+  // Notification styles
+  notificationCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#1a472a',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  notificationUnread: {
+    backgroundColor: '#f0f9f0',
+    borderLeftColor: '#4CAF50',
+  },
+  notificationHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  notificationTitle: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#333',
+    flex: 1,
+  },
+  notificationCode: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#1a472a',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    backgroundColor: '#e8f5e9',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  notificationMessage: {
+    fontSize: 13,
+    color: '#555',
+    lineHeight: 20,
+  },
+  notificationPhotoContainer: {
+    marginTop: 12,
+    alignItems: 'center',
+  },
+  notificationPhoto: {
+    width: 120,
+    height: 160,
+    borderRadius: 8,
+    backgroundColor: '#f0f0f0',
+  },
+  notificationConditions: {
+    marginTop: 12,
+    backgroundColor: '#f9f9f9',
+    padding: 12,
+    borderRadius: 8,
+  },
+  notificationConditionsTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  notificationConditionItem: {
+    marginBottom: 4,
+  },
+  notificationConditionBook: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1a472a',
+    marginBottom: 2,
+  },
+  notificationConditionText: {
+    fontSize: 12,
+    color: '#666',
+    lineHeight: 18,
+  },
+  notificationTime: {
+    fontSize: 11,
+    color: '#999',
+    marginTop: 12,
+    textAlign: 'right',
   },
 });
