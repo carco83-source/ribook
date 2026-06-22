@@ -11,7 +11,7 @@ import {
   Modal,
   Platform,
 } from 'react-native';
-import { useRouter, Stack, useFocusEffect } from 'expo-router';
+import { useRouter, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
@@ -198,6 +198,9 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: string
 
 export default function OrdersScreen() {
   const router = useRouter();
+  const { from } = useLocalSearchParams<{ from?: string }>();
+  const fromNotifications = from === 'notifications';
+  
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -969,6 +972,18 @@ export default function OrdersScreen() {
         }}
       />
 
+      {/* Banner Torna alle Notifiche */}
+      {fromNotifications && (
+        <TouchableOpacity 
+          style={styles.backToNotifBanner}
+          onPress={() => router.push('/notifications')}
+        >
+          <Ionicons name="notifications" size={18} color="#fff" />
+          <Text style={styles.backToNotifText}>Torna alle Notifiche</Text>
+          <Ionicons name="chevron-forward" size={18} color="#fff" />
+        </TouchableOpacity>
+      )}
+
       {/* Filter Tabs */}
       <View style={styles.filterTabs}>
         <TouchableOpacity
@@ -1048,6 +1063,20 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+  },
+  backToNotifBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FF9800',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  backToNotifText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
   loadingContainer: {
     flex: 1,

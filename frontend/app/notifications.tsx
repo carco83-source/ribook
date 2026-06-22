@@ -174,27 +174,30 @@ export default function NotificationsScreen() {
       ));
     }
     
+    // Parametro per indicare che si viene dalle notifiche
+    const fromNotif = '?from=notifications';
+    
     switch (notification.type) {
       case 'match':
-        router.push('/radar/sellers');
+        router.push(`/radar/sellers${fromNotif}`);
         break;
       case 'sale':
       case 'delivery':
-        router.push('/orders');
+        router.push(`/orders${fromNotif}`);
         break;
       case 'pickup':
       case 'order_pending':
       case 'ready_for_pickup':
       case 'book_at_bookstore':
-        router.push('/orders');
+        router.push(`/orders${fromNotif}`);
         break;
       case 'chat':
       case 'new_message':
-        router.push('/(tabs)/chats');
+        router.push(`/(tabs)/chats${fromNotif}`);
         break;
       case 'confirmation_request':
         // Naviga agli ordini per confermare
-        router.push('/orders');
+        router.push(`/orders${fromNotif}`);
         break;
       // book_available e seller_confirmed mantengono il comportamento originale
       // (gestiti dal pulsante "Tocca per andare al carrello")
