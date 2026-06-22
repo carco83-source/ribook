@@ -132,7 +132,13 @@ export default function NotificationsScreen() {
           const response = await axios.get(`${API_URL}/api/notifications/${storedUserId}`);
           // API returns { notifications: [...], unread_count: N }
           const apiNotifications = response.data.notifications || response.data || [];
-          setNotifications(apiNotifications);
+          // Ordina per data decrescente (più recenti prima)
+          const sortedNotifications = apiNotifications.sort((a: Notification, b: Notification) => {
+            const dateA = new Date(a.created_at).getTime();
+            const dateB = new Date(b.created_at).getTime();
+            return dateB - dateA;
+          });
+          setNotifications(sortedNotifications);
         } catch (error) {
           // Generate mock notifications based on user activity
           const mockNotifications = await generateNotifications(storedUserId);

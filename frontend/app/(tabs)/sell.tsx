@@ -231,10 +231,6 @@ export default function CartScreen() {
               <Text style={styles.priceLabel}>Prezzo libro</Text>
               <Text style={styles.priceValue}>€{item.prezzo_libro.toFixed(2)}</Text>
             </View>
-            <View style={styles.priceRow}>
-              <Text style={styles.priceLabelSmall}>Commissioni servizio</Text>
-              <Text style={styles.priceValueSmall}>€{(item.commissione_app + item.commissione_cartolibreria).toFixed(2)}</Text>
-            </View>
             <View style={[styles.priceRow, styles.totalRow]}>
               <Text style={styles.totalLabel}>Subtotale</Text>
               <Text style={styles.totalValue}>€{item.totale_acquirente.toFixed(2)}</Text>
