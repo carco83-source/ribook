@@ -533,10 +533,19 @@ class Order(BaseModel):
     
     # Prezzi (in euro)
     prezzo_libro: float  # Prezzo del libro (va al venditore)
-    commissione_app: float  # 17% commissione app
-    commissione_cartolibreria: float  # 5% per la cartolibreria
+    commissione_app: float  # Commissione piattaforma
+    commissione_cartolibreria: float  # Totale cartolibreria
     totale_acquirente: float  # Quello che paga l'acquirente
     netto_venditore: float  # Quello che riceve il venditore
+    
+    # Nuovi campi commissioni dettagliate
+    include_foderazione: bool = False
+    costo_foderazione: float = 0
+    commissione_stripe: float = 0
+    commissione_piattaforma: float = 0  # 10%/2 - stripe prop
+    commissione_cartolibreria_libro: float = 0  # 10%/2 - stripe prop
+    commissione_cartolibreria_foderazione: float = 0  # 1.50 - stripe prop
+    condition_details: dict = Field(default_factory=dict)  # {penna, matita, evidenziatore, pagine}
     
     # Pagamento (simulato)
     payment_intent_id: Optional[str] = None
@@ -581,6 +590,7 @@ class Order(BaseModel):
 class CreateOrderRequest(BaseModel):
     listing_id: str
     bookstore_id: str
+    include_foderazione: bool = False
 
 class ConfirmPaymentRequest(BaseModel):
     order_id: str
@@ -6718,12 +6728,14 @@ async def create_order(
     seller = await db.users.find_one({"id": listing.get("seller_id")})
     seller_name = seller.get("username", "Venditore") if seller else "Venditore"
     
-    # Calcola prezzi
+    # Verifica se include foderazione (dalla request o dal listing)
+    include_foderazione = False
+    if request and hasattr(request, 'include_foderazione'):
+        include_foderazione = request.include_foderazione
+    
+    # Calcola prezzi con la nuova logica
     prezzo_libro = listing.get("prezzo_vendita", listing.get("prezzo", 0))
-    commissione_app = prezzo_libro * 0.12  # 12% app
-    commissione_cartolibreria = prezzo_libro * 0.05  # 5% cartolibreria
-    totale_acquirente = prezzo_libro + commissione_app + commissione_cartolibreria  # +17%
-    netto_venditore = prezzo_libro  # Il venditore riceve il prezzo del libro
+    commissioni = calcola_commissioni(prezzo_libro, include_foderazione)
     
     # Calcola deadline conferma venditore (24h)
     from datetime import timedelta
@@ -6733,7 +6745,7 @@ async def create_order(
     # Genera codice utente anonimo per il venditore
     buyer_code = f"REB-{user_id[:6].upper()}"
     
-    # Crea ordine con nuovo flusso
+    # Crea ordine con nuovo flusso e commissioni corrette
     order = Order(
         buyer_id=user_id,
         buyer_name=buyer.get("username", "Acquirente"),
@@ -6747,12 +6759,19 @@ async def create_order(
         book_autore=listing.get("book_autore", ""),
         book_condizioni=listing.get("condizioni", listing.get("condition", "")),
         prezzo_libro=round(prezzo_libro, 2),
-        commissione_app=round(commissione_app, 2),
-        commissione_cartolibreria=round(commissione_cartolibreria, 2),
-        totale_acquirente=round(totale_acquirente, 2),
-        netto_venditore=round(netto_venditore, 2),
+        commissione_app=round(commissioni["commissione_piattaforma"], 2),
+        commissione_cartolibreria=round(commissioni["commissione_cartolibreria_totale"], 2),
+        totale_acquirente=round(commissioni["totale_acquirente"], 2),
+        netto_venditore=round(commissioni["netto_venditore"], 2),
+        include_foderazione=include_foderazione,
+        costo_foderazione=commissioni["costo_foderazione"],
+        commissione_stripe=commissioni["commissione_stripe"],
+        commissione_piattaforma=commissioni["commissione_piattaforma"],
+        commissione_cartolibreria_libro=commissioni["commissione_cartolibreria_libro"],
+        commissione_cartolibreria_foderazione=commissioni["commissione_cartolibreria_foderazione"],
         status="in_attesa_conferma_venditore",
         seller_confirmation_deadline=seller_confirmation_deadline,
+        condition_details=listing.get("condition_details", {}),
         status_history=[{
             "status": "in_attesa_conferma_venditore",
             "timestamp": now.isoformat(),
@@ -6980,13 +6999,55 @@ async def pay_order(order_id: str, user_id: str = Query(...)):
     # Semplificato: 2 giorni lavorativi = ~3 giorni calendar (considera weekend)
     delivery_deadline = now + timedelta(days=3)
     
-    # Aggiorna ordine con nuovo stato
+    # Recupera il listing per le condizioni dettagliate e la foto
+    listing = await db.listings.find_one({"id": order.get("listing_id")})
+    condition_details = listing.get("condition_details", {}) if listing else {}
+    listing_note = listing.get("note") or listing.get("descrizione") if listing else ""
+    listing_photo = listing.get("foto_base64") or listing.get("photo_1") or "" if listing else ""
+    include_foderazione = order.get("include_foderazione", False)
+    
+    # Calcola commissioni con la nuova logica
+    prezzo_libro = order.get("prezzo_libro", 0)
+    commissioni = calcola_commissioni(prezzo_libro, include_foderazione)
+    
+    # Formatta condizioni per le notifiche
+    def get_label(val):
+        if val == 0: return "Nessuna"
+        if val <= 33: return "Poche"
+        if val <= 66: return "Diverse"
+        return "Molte"
+    
+    conditions_text = ""
+    conditions_text += f"• Scritte a penna: {get_label(condition_details.get('penna', 0))}\n"
+    conditions_text += f"• Scritte a matita: {get_label(condition_details.get('matita', 0))}\n"
+    conditions_text += f"• Evidenziature: {get_label(condition_details.get('evidenziatore', 0))}\n"
+    if listing_note:
+        conditions_text += f"• Note: {listing_note}\n"
+    
+    books_conditions = [{
+        "title": order.get("book_titolo", ""),
+        "conditions": conditions_text.strip()
+    }]
+    
+    # Aggiorna ordine con nuovo stato e commissioni
     update_data = {
         "payment_intent_id": payment_intent_id,
         "payment_status": "paid",
         "status": "pagato_attesa_consegna",
         "paid_at": now,
         "delivery_deadline": delivery_deadline,
+        "seller_delivery_deadline": delivery_deadline.isoformat(),
+        # Salva commissioni calcolate
+        "commissione_stripe": commissioni["commissione_stripe"],
+        "commissione_piattaforma": commissioni["commissione_piattaforma"],
+        "commissione_cartolibreria_libro": commissioni["commissione_cartolibreria_libro"],
+        "commissione_cartolibreria_foderazione": commissioni["commissione_cartolibreria_foderazione"],
+        "commissione_cartolibreria": commissioni["commissione_cartolibreria_totale"],
+        "include_foderazione": include_foderazione,
+        "costo_foderazione": commissioni["costo_foderazione"],
+        "totale_acquirente": commissioni["totale_acquirente"],
+        "netto_venditore": commissioni["netto_venditore"],
+        "condition_details": condition_details,
         "status_history": order.get("status_history", []) + [{
             "status": "pagato_attesa_consegna",
             "timestamp": now.isoformat(),
@@ -7002,33 +7063,26 @@ async def pay_order(order_id: str, user_id: str = Query(...)):
         {"$set": {"status": "reserved", "stato": "riservato", "reserved_by": user_id, "order_id": order_id}}
     )
     
-    # Recupera il listing per le condizioni dettagliate
-    listing = await db.listings.find_one({"id": order.get("listing_id")})
-    condition_answers = listing.get("condition_answers") if listing else None
-    listing_note = listing.get("note") or listing.get("descrizione") if listing else None
-    
-    # Notifica al venditore - STESSO FORMATO CARTOLIBRERIA
+    # Notifica al venditore con QR, condizioni e NO prezzo
     address_line = f"\n📍 {bookstore_address}" if bookstore_address else ""
     seller_notification = {
         "id": str(uuid.uuid4()),
         "user_id": order.get("seller_id"),
         "type": "order_paid_deliver",
         "title": "🎉 VENDITA COMPLETATA!",
-        "message": f"COMPLIMENTI!\n\n📚 {order.get('book_titolo')}\n\nAssicurati che il testo corrisponda alle condizioni descritte e consegnalo a partire dal giorno successivo entro 2 giorni lavorativi presso:\n🏪 {order.get('bookstore_name')}{address_line}",
+        "message": f"COMPLIMENTI!\n\n📚 {order.get('book_titolo')}\n\nAssicurati che il testo corrisponda alle condizioni descritte e consegnalo a partire dal giorno successivo entro 2 giorni lavorativi presso:\n🏪 {order.get('bookstore_name')}{address_line}\n\n📋 CONDIZIONI:\n{conditions_text}",
         "order_id": order_id,
         "order_code": order.get("order_code"),
         "bookstore_name": order.get("bookstore_name"),
         "bookstore_address": bookstore_address,
         "book_titolo": order.get("book_titolo"),
-        "book_condizioni": order.get("book_condizioni"),
-        "seller_username": order.get("seller_username"),
-        "buyer_username": order.get("buyer_username"),
-        "book_details": {
-            "titolo": order.get("book_titolo"),
-            "isbn": order.get("book_isbn"),
-            "condizioni": order.get("book_condizioni"),
-            "condition_answers": condition_answers,
-            "note": listing_note,
+        "data": {
+            "order_code": order.get("order_code"),
+            "books": [order.get("book_titolo")],
+            "books_conditions": books_conditions,
+            "bookstore_name": order.get("bookstore_name"),
+            "show_qr": True,
+            "role": "seller"
         },
         "delivery_deadline": delivery_deadline.isoformat(),
         "show_qr": True,
@@ -7039,27 +7093,22 @@ async def pay_order(order_id: str, user_id: str = Query(...)):
     }
     await db.notifications.insert_one(seller_notification)
     
-    # Notifica alla cartolibreria con TUTTI i dettagli (NO QR, NO prezzo)
+    # Notifica alla cartolibreria con condizioni, foto, NO QR, NO prezzo
     bookstore_notification = {
         "id": str(uuid.uuid4()),
         "bookstore_id": order.get("bookstore_id"),
         "user_id": f"bookstore_{order.get('bookstore_id')}",
         "type": "incoming_book_delivery",
-        "title": "📦 LIBRO IN ARRIVO - Consegna venditore",
-        "message": f"📚 LIBRO: {order.get('book_titolo')}\n\n👤 VENDITORE: {order.get('seller_name')}\n🛒 ACQUIRENTE: {order.get('buyer_name')}\n\nAlla consegna, verifica il CODICE e le CONDIZIONI del libro.",
+        "title": "📦 LIBRO IN ARRIVO",
+        "message": f"CODICE: {order.get('order_code')}\n\n📚 LIBRO: {order.get('book_titolo')}\n\n👤 VENDITORE: {order.get('seller_name')}\n🛒 ACQUIRENTE: {order.get('buyer_name')}\n\n📋 CONDIZIONI:\n{conditions_text}",
         "order_id": order_id,
         "order_code": order.get("order_code"),
         "book_titolo": order.get("book_titolo"),
-        "book_isbn": order.get("book_isbn"),
-        "book_condizioni": order.get("book_condizioni"),
         "seller_name": order.get("seller_name"),
         "buyer_name": order.get("buyer_name"),
-        "book_details": {
-            "titolo": order.get("book_titolo"),
-            "isbn": order.get("book_isbn"),
-            "condition_answers": condition_answers,
-            "note": listing_note,
-        },
+        "books_conditions": books_conditions,
+        "books_photos": [listing_photo] if listing_photo else [],
+        "include_foderazione": include_foderazione,
         "show_qr": False,
         "read": False,
         "created_at": now.isoformat()
@@ -7078,15 +7127,12 @@ async def pay_order(order_id: str, user_id: str = Query(...)):
         "bookstore_name": order.get("bookstore_name"),
         "bookstore_address": bookstore_address,
         "book_titolo": order.get("book_titolo"),
-        "book_condizioni": order.get("book_condizioni"),
-        "seller_username": order.get("seller_username"),
-        "buyer_username": order.get("buyer_username"),
-        "book_details": {
-            "titolo": order.get("book_titolo"),
-            "isbn": order.get("book_isbn"),
-            "condizioni": order.get("book_condizioni"),
-            "condition_answers": condition_answers,
-            "note": listing_note,
+        "data": {
+            "order_code": order.get("order_code"),
+            "books": [order.get("book_titolo")],
+            "bookstore_name": order.get("bookstore_name"),
+            "show_qr": False,
+            "awaiting_delivery": True
         },
         "show_qr": False,
         "awaiting_delivery": True,
@@ -7102,6 +7148,7 @@ async def pay_order(order_id: str, user_id: str = Query(...)):
         "order_code": order.get("order_code"),
         "status": "pagato_attesa_consegna",
         "delivery_deadline": delivery_deadline.isoformat(),
+        "commissioni": commissioni,
         "message": "Pagamento completato! Il venditore ha 2 giorni lavorativi per consegnare il libro."
     }
 
