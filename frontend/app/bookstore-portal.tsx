@@ -212,15 +212,53 @@ export default function BookstorePortalScreen() {
   
   // Scanner state
   const [showScanner, setShowScanner] = useState(false);
-  const [scanMode, setScanMode] = useState<'generic' | 'delivery' | 'pickup'>('generic');
+  const [scanMode, setScanMode] = useState<'generic' | 'delivery' | 'pickup' | 'return'>('generic');
   const [manualCode, setManualCode] = useState('');
   const [confirmingAction, setConfirmingAction] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
+  
+  // Dialogo conferma dopo scansione
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [scannedOrder, setScannedOrder] = useState<any>(null);
+  const [pendingAction, setPendingAction] = useState<'delivery' | 'pickup' | 'return' | null>(null);
 
   // Funzione per aprire scanner in modalità specifica
-  const openScanner = (mode: 'generic' | 'delivery' | 'pickup') => {
+  const openScanner = (mode: 'generic' | 'delivery' | 'pickup' | 'return') => {
     setScanMode(mode);
     setShowScanner(true);
+  };
+  
+  // Cerca ordine per codice e mostra dialogo conferma
+  const findOrderAndShowConfirm = (code: string, action: 'delivery' | 'pickup' | 'return') => {
+    let order = null;
+    
+    if (action === 'delivery') {
+      order = ordersInArrivo.find(o => o.order_code === code);
+    } else if (action === 'pickup') {
+      order = ordersDaRitirare.find(o => o.order_code === code);
+    } else if (action === 'return') {
+      order = ordersResi.find(o => o.order_code === code);
+    }
+    
+    // Se non trovato, cerca in tutti gli ordini
+    if (!order) {
+      order = [...ordersInArrivo, ...ordersDaRitirare, ...ordersResi].find(o => o.order_code === code);
+      if (order) {
+        // Determina automaticamente l'azione
+        if (ordersInArrivo.some(o => o.order_code === code)) action = 'delivery';
+        else if (ordersDaRitirare.some(o => o.order_code === code)) action = 'pickup';
+        else if (ordersResi.some(o => o.order_code === code)) action = 'return';
+      }
+    }
+    
+    if (order) {
+      setScannedOrder(order);
+      setPendingAction(action);
+      setShowScanner(false);
+      setShowConfirmDialog(true);
+    } else {
+      Alert.alert('Errore', `Nessun ordine trovato con codice ${code}`);
+    }
   };
   
   // Timer update
@@ -541,22 +579,54 @@ export default function BookstorePortalScreen() {
   const handleScanOrManualCode = async (code: string) => {
     if (!code.trim()) return;
     
+    // Cerca l'ordine corrispondente al codice
+    const orderInArrivo = ordersInArrivo.find(o => o.order_code === code.toUpperCase());
+    const orderDaRitirare = ordersDaRitirare.find(o => o.order_code === code.toUpperCase());
+    const orderReso = ordersResi.find(o => o.order_code === code.toUpperCase() && o.status === 'return_requested');
+    
+    if (orderInArrivo) {
+      setScannedOrder(orderInArrivo);
+      setPendingAction('delivery');
+      setShowScanner(false);
+      setShowConfirmDialog(true);
+    } else if (orderDaRitirare) {
+      setScannedOrder(orderDaRitirare);
+      setPendingAction('pickup');
+      setShowScanner(false);
+      setShowConfirmDialog(true);
+    } else if (orderReso) {
+      setScannedOrder(orderReso);
+      setPendingAction('return');
+      setShowScanner(false);
+      setShowConfirmDialog(true);
+    } else {
+      if (Platform.OS === 'web') {
+        window.alert('Nessun ordine trovato con codice: ' + code.toUpperCase());
+      } else {
+        Alert.alert('Errore', 'Nessun ordine trovato con codice: ' + code.toUpperCase());
+      }
+    }
+    setManualCode('');
+  };
+  
+  // Conferma azione dopo scansione
+  const handleConfirmScannedAction = async (accept: boolean = true) => {
+    if (!scannedOrder || !pendingAction) return;
+    
     setConfirmingAction(true);
     try {
-      // Prima prova consegna venditore
-      try {
-        await handleConfirmSellerDelivery(code);
-        return;
-      } catch (e: any) {
-        if (e.response?.status === 400) {
-          // Prova ritiro acquirente
-          await handleConfirmBuyerPickup(code);
-          return;
-        }
-        throw e;
+      if (pendingAction === 'delivery') {
+        await handleConfirmSellerDelivery(scannedOrder.order_code);
+      } else if (pendingAction === 'pickup') {
+        await handleConfirmBuyerPickup(scannedOrder.order_code);
+      } else if (pendingAction === 'return') {
+        await handleVerifyReturn(scannedOrder.id, accept);
       }
+      setShowConfirmDialog(false);
+      setScannedOrder(null);
+      setPendingAction(null);
     } catch (error: any) {
-      const errorMsg = error.response?.data?.detail || 'Codice non valido';
+      const errorMsg = error.response?.data?.detail || 'Errore durante l\'operazione';
       if (Platform.OS === 'web') {
         window.alert('Errore: ' + errorMsg);
       } else {
@@ -1120,22 +1190,40 @@ export default function BookstorePortalScreen() {
                   </View>
 
                   {order.status === 'return_requested' && (
-                    <View style={styles.returnActions}>
-                      <TouchableOpacity
-                        style={[styles.returnBtn, styles.returnBtnReject]}
-                        onPress={() => handleVerifyReturn(order.id, false)}
-                      >
-                        <Ionicons name="close" size={18} color="#fff" />
-                        <Text style={styles.returnBtnText}>Rifiuta</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.returnBtn, styles.returnBtnAccept]}
-                        onPress={() => handleVerifyReturn(order.id, true)}
-                      >
-                        <Ionicons name="checkmark" size={18} color="#fff" />
-                        <Text style={styles.returnBtnText}>Accetta</Text>
-                      </TouchableOpacity>
-                    </View>
+                    <>
+                      {/* Codice alfanumerico per verifica reso */}
+                      <View style={styles.alphaCodeContainer}>
+                        <Text style={styles.alphaCodeLabel}>Codice reso:</Text>
+                        <Text style={styles.alphaCodeValue}>{order.order_code}</Text>
+                        <Text style={styles.alphaCodeHint}>Richiedi QR o codice all'acquirente</Text>
+                      </View>
+                      
+                      <View style={styles.returnActions}>
+                        {Platform.OS !== 'web' && (
+                          <TouchableOpacity
+                            style={[styles.returnBtn, styles.actionBtnScan]}
+                            onPress={() => openScanner('return')}
+                          >
+                            <Ionicons name="qr-code" size={18} color="#fff" />
+                            <Text style={styles.returnBtnText}>Scansiona</Text>
+                          </TouchableOpacity>
+                        )}
+                        <TouchableOpacity
+                          style={[styles.returnBtn, styles.returnBtnReject]}
+                          onPress={() => handleVerifyReturn(order.id, false)}
+                        >
+                          <Ionicons name="close" size={18} color="#fff" />
+                          <Text style={styles.returnBtnText}>Rifiuta</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.returnBtn, styles.returnBtnAccept]}
+                          onPress={() => handleVerifyReturn(order.id, true)}
+                        >
+                          <Ionicons name="checkmark" size={18} color="#fff" />
+                          <Text style={styles.returnBtnText}>Accetta</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </>
                   )}
                 </View>
               ))
@@ -1213,6 +1301,7 @@ export default function BookstorePortalScreen() {
             <Text style={styles.scannerTitle}>
               {scanMode === 'delivery' ? '📦 Scansiona QR Venditore' : 
                scanMode === 'pickup' ? '🛍️ Scansiona QR Acquirente' : 
+               scanMode === 'return' ? '🔄 Scansiona QR Reso' :
                'Scansiona o inserisci codice'}
             </Text>
             <TouchableOpacity onPress={() => setShowScanner(false)}>
@@ -1273,6 +1362,121 @@ export default function BookstorePortalScreen() {
                 )}
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal Conferma Azione dopo Scansione */}
+      <Modal visible={showConfirmDialog} transparent animationType="fade" onRequestClose={() => setShowConfirmDialog(false)}>
+        <View style={styles.confirmModalOverlay}>
+          <View style={styles.confirmModalContent}>
+            {scannedOrder && (
+              <>
+                <View style={styles.confirmModalHeader}>
+                  <Ionicons 
+                    name={pendingAction === 'delivery' ? 'cube' : pendingAction === 'pickup' ? 'bag-check' : 'refresh'} 
+                    size={40} 
+                    color={pendingAction === 'return' ? '#FF9800' : '#4CAF50'} 
+                  />
+                  <Text style={styles.confirmModalTitle}>
+                    {pendingAction === 'delivery' ? '📦 Conferma Consegna' : 
+                     pendingAction === 'pickup' ? '🛍️ Conferma Ritiro' : 
+                     '🔄 Verifica Reso'}
+                  </Text>
+                </View>
+                
+                <View style={styles.confirmModalBody}>
+                  <Text style={styles.confirmModalCode}>{scannedOrder.order_code}</Text>
+                  <Text style={styles.confirmModalBook}>{scannedOrder.book_titolo}</Text>
+                  
+                  {pendingAction === 'delivery' && (
+                    <Text style={styles.confirmModalInfo}>
+                      Venditore: {scannedOrder.seller_name}
+                    </Text>
+                  )}
+                  {pendingAction === 'pickup' && (
+                    <Text style={styles.confirmModalInfo}>
+                      Acquirente: {scannedOrder.buyer_name}
+                    </Text>
+                  )}
+                  {pendingAction === 'return' && (
+                    <Text style={styles.confirmModalInfo}>
+                      Reso richiesto da: {scannedOrder.buyer_name}
+                    </Text>
+                  )}
+                  
+                  <Text style={styles.confirmModalPrice}>€{scannedOrder.totale_acquirente?.toFixed(2)}</Text>
+                </View>
+                
+                <View style={styles.confirmModalActions}>
+                  {pendingAction === 'return' ? (
+                    // Per i resi: due pulsanti Accetta/Rifiuta
+                    <>
+                      <TouchableOpacity 
+                        style={[styles.confirmModalBtn, styles.confirmModalBtnReject]}
+                        onPress={() => handleConfirmScannedAction(false)}
+                        disabled={confirmingAction}
+                      >
+                        {confirmingAction ? (
+                          <ActivityIndicator color="#fff" size="small" />
+                        ) : (
+                          <>
+                            <Ionicons name="close" size={20} color="#fff" />
+                            <Text style={styles.confirmModalBtnText}>Rifiuta Reso</Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        style={[styles.confirmModalBtn, styles.confirmModalBtnAccept]}
+                        onPress={() => handleConfirmScannedAction(true)}
+                        disabled={confirmingAction}
+                      >
+                        {confirmingAction ? (
+                          <ActivityIndicator color="#fff" size="small" />
+                        ) : (
+                          <>
+                            <Ionicons name="checkmark" size={20} color="#fff" />
+                            <Text style={styles.confirmModalBtnText}>Accetta Reso</Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    </>
+                  ) : (
+                    // Per consegne e ritiri: Annulla/Conferma
+                    <>
+                      <TouchableOpacity 
+                        style={[styles.confirmModalBtn, styles.confirmModalBtnCancel]}
+                        onPress={() => {
+                          setShowConfirmDialog(false);
+                          setScannedOrder(null);
+                          setPendingAction(null);
+                        }}
+                        disabled={confirmingAction}
+                      >
+                        <Ionicons name="close" size={20} color="#666" />
+                        <Text style={[styles.confirmModalBtnText, { color: '#666' }]}>Annulla</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        style={[styles.confirmModalBtn, styles.confirmModalBtnConfirm]}
+                        onPress={() => handleConfirmScannedAction(true)}
+                        disabled={confirmingAction}
+                      >
+                        {confirmingAction ? (
+                          <ActivityIndicator color="#fff" size="small" />
+                        ) : (
+                          <>
+                            <Ionicons name="checkmark" size={20} color="#fff" />
+                            <Text style={styles.confirmModalBtnText}>
+                              {pendingAction === 'delivery' ? 'Conferma Ricevuto' : 'Conferma Consegnato'}
+                            </Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    </>
+                  )}
+                </View>
+              </>
+            )}
           </View>
         </View>
       </Modal>
@@ -2342,5 +2546,96 @@ const styles = StyleSheet.create({
     color: '#999',
     marginTop: 12,
     textAlign: 'right',
+  },
+  // Modal Conferma Azione
+  confirmModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  confirmModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    width: '100%',
+    maxWidth: 400,
+    overflow: 'hidden',
+  },
+  confirmModalHeader: {
+    alignItems: 'center',
+    padding: 20,
+    paddingBottom: 10,
+    backgroundColor: '#f9f9f9',
+  },
+  confirmModalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginTop: 10,
+    textAlign: 'center',
+  },
+  confirmModalBody: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  confirmModalCode: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#1a472a',
+    letterSpacing: 2,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    marginBottom: 8,
+  },
+  confirmModalBook: {
+    fontSize: 16,
+    color: '#333',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  confirmModalInfo: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 4,
+  },
+  confirmModalPrice: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#4CAF50',
+    marginTop: 12,
+  },
+  confirmModalActions: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+  },
+  confirmModalBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    gap: 6,
+  },
+  confirmModalBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  confirmModalBtnCancel: {
+    backgroundColor: '#f5f5f5',
+    borderRightWidth: 1,
+    borderRightColor: '#e0e0e0',
+  },
+  confirmModalBtnConfirm: {
+    backgroundColor: '#4CAF50',
+  },
+  confirmModalBtnAccept: {
+    backgroundColor: '#f44336',
+  },
+  confirmModalBtnReject: {
+    backgroundColor: '#666',
+    borderRightWidth: 1,
+    borderRightColor: '#555',
   },
 });
