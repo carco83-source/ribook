@@ -702,11 +702,6 @@ export default function RadarScreen() {
                         </Text>
                       </TouchableOpacity>
                     ))}
-                    {selectedBookCategory === 'vendibili' && (
-                      <TouchableOpacity onPress={() => setShowVendibiliInfo(true)} style={styles.infoIconTab}>
-                        <Ionicons name="information-circle-outline" size={20} color="#2196F3" />
-                      </TouchableOpacity>
-                    )}
                   </ScrollView>
                   
                   {/* Contenuto della categoria selezionata */}
