@@ -638,8 +638,43 @@ export default function BookstorePortalScreen() {
   };
 
   const handleBarCodeScanned = ({ data }: { data: string }) => {
-    setShowScanner(false);
-    handleScanOrManualCode(data);
+    try {
+      // Chiudi lo scanner immediatamente
+      setShowScanner(false);
+      
+      // Valida che il dato sia un codice ordine valido (6 caratteri alfanumerici)
+      if (!data || typeof data !== 'string') {
+        Alert.alert('Errore', 'QR code non valido');
+        return;
+      }
+      
+      // Pulisci il dato
+      const cleanedCode = data.trim().toUpperCase();
+      
+      // Verifica se è un URL (non è un codice ordine)
+      if (cleanedCode.startsWith('HTTP') || cleanedCode.startsWith('WWW') || cleanedCode.includes('://')) {
+        Alert.alert('Codice non valido', 'Questo QR contiene un URL, non un codice ordine.\n\nScansiona il QR dell\'ordine.');
+        return;
+      }
+      
+      // Verifica la lunghezza (i codici ordine sono 6 caratteri)
+      if (cleanedCode.length !== 6) {
+        Alert.alert('Codice non valido', `Il codice deve essere di 6 caratteri.\n\nHai scansionato: "${cleanedCode.substring(0, 20)}${cleanedCode.length > 20 ? '...' : ''}"`);
+        return;
+      }
+      
+      // Verifica che contenga solo caratteri alfanumerici
+      if (!/^[A-Z0-9]+$/.test(cleanedCode)) {
+        Alert.alert('Codice non valido', 'Il codice deve contenere solo lettere e numeri.');
+        return;
+      }
+      
+      // Codice valido, procedi
+      handleScanOrManualCode(cleanedCode);
+    } catch (error) {
+      console.error('Errore scansione QR:', error);
+      Alert.alert('Errore', 'Si è verificato un errore durante la scansione. Riprova.');
+    }
   };
 
   const handleGoBack = () => {
