@@ -18,7 +18,6 @@ import { useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
-import QRCode from 'react-native-qrcode-svg';
 
 // Conditional import for camera (not available on web)
 let CameraView: any = null;
@@ -948,6 +947,13 @@ export default function BookstorePortalScreen() {
                     </View>
                   </View>
 
+                  {/* Codice alfanumerico da verificare per consegna venditore */}
+                  <View style={styles.alphaCodeContainer}>
+                    <Text style={styles.alphaCodeLabel}>Codice consegna:</Text>
+                    <Text style={styles.alphaCodeValue}>{order.order_code}</Text>
+                    <Text style={styles.alphaCodeHint}>Richiedi QR o codice al venditore</Text>
+                  </View>
+
                   <View style={styles.orderFooter}>
                     <Text style={styles.orderPrice}>€{order.totale_acquirente?.toFixed(2)}</Text>
                     <TouchableOpacity
@@ -996,10 +1002,11 @@ export default function BookstorePortalScreen() {
                     </View>
                   </View>
 
-                  {/* QR Code per ritiro */}
-                  <View style={styles.qrContainer}>
-                    <QRCode value={order.order_code} size={100} backgroundColor="#fff" />
-                    <Text style={styles.qrHint}>L'acquirente mostrerà questo QR</Text>
+                  {/* Codice alfanumerico da verificare */}
+                  <View style={styles.alphaCodeContainer}>
+                    <Text style={styles.alphaCodeLabel}>Codice ritiro:</Text>
+                    <Text style={styles.alphaCodeValue}>{order.order_code}</Text>
+                    <Text style={styles.alphaCodeHint}>Richiedi QR o codice all'acquirente</Text>
                   </View>
 
                   <View style={styles.orderFooter}>
@@ -2021,7 +2028,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  // QR Container
+  // QR Container (mantenuto per compatibilità)
   qrContainer: {
     alignItems: 'center',
     marginTop: 16,
@@ -2033,6 +2040,35 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     marginTop: 8,
+  },
+  // Codice Alfanumerico Container
+  alphaCodeContainer: {
+    alignItems: 'center',
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: '#E8F5E9',
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#4CAF50',
+    borderStyle: 'dashed',
+  },
+  alphaCodeLabel: {
+    fontSize: 11,
+    color: '#666',
+    marginBottom: 4,
+  },
+  alphaCodeValue: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#1a472a',
+    letterSpacing: 2,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  alphaCodeHint: {
+    fontSize: 10,
+    color: '#888',
+    marginTop: 6,
+    fontStyle: 'italic',
   },
   // Earnings badge
   earningsBadgeSmall: {
