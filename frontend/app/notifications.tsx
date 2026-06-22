@@ -258,9 +258,15 @@ export default function NotificationsScreen() {
   };
 
   const formatTime = (dateString: string) => {
+    // Converti in orario italiano (Europe/Rome)
     const date = new Date(dateString);
     const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
+    
+    // Calcola la differenza considerando il timezone italiano
+    const italianDate = new Date(date.toLocaleString('en-US', { timeZone: 'Europe/Rome' }));
+    const italianNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Rome' }));
+    
+    const diffMs = italianNow.getTime() - italianDate.getTime();
     const diffMins = Math.floor(diffMs / 60000);
     const diffHours = Math.floor(diffMs / 3600000);
     const diffDays = Math.floor(diffMs / 86400000);
@@ -269,7 +275,7 @@ export default function NotificationsScreen() {
     if (diffMins < 60) return `${diffMins} min fa`;
     if (diffHours < 24) return `${diffHours} ore fa`;
     if (diffDays < 7) return `${diffDays} giorni fa`;
-    return date.toLocaleDateString('it-IT');
+    return date.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' });
   };
 
   if (loading) {

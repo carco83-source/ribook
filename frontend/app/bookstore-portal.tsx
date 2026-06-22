@@ -1283,7 +1283,7 @@ export default function BookstorePortalScreen() {
                   )}
                   
                   <Text style={styles.notificationTime}>
-                    {new Date(notification.created_at).toLocaleString('it-IT')}
+                    {new Date(notification.created_at).toLocaleString('it-IT', { timeZone: 'Europe/Rome' })}
                   </Text>
                 </View>
               ))
