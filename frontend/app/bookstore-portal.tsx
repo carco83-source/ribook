@@ -793,38 +793,9 @@ export default function BookstorePortalScreen() {
         </View>
       </View>
 
-      {/* Tabs */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabsContainer}>
-        {[
-          { key: 'dashboard', label: 'Dashboard', icon: 'grid-outline', count: null },
-          { key: 'in_arrivo', label: 'In Arrivo', icon: 'time-outline', count: stats.in_arrivo },
-          { key: 'da_ritirare', label: 'Da Ritirare', icon: 'cube-outline', count: stats.da_ritirare },
-          { key: 'completati', label: 'Completati', icon: 'checkmark-circle-outline', count: stats.completati_mese },
-          { key: 'resi', label: 'Resi', icon: 'refresh-outline', count: stats.resi_in_attesa },
-          { key: 'notifiche', label: 'Notifiche', icon: 'notifications-outline', count: unreadCount },
-        ].map((tab) => (
-          <TouchableOpacity
-            key={tab.key}
-            style={[styles.tab, activeTab === tab.key && styles.tabActive]}
-            onPress={() => setActiveTab(tab.key as TabType)}
-          >
-            <View style={styles.tabIconContainer}>
-              <Ionicons name={tab.icon as any} size={22} color={activeTab === tab.key ? '#1a472a' : '#666'} />
-              {tab.count !== null && tab.count > 0 && (
-                <View style={[styles.tabBadge, activeTab === tab.key && styles.tabBadgeActive]}>
-                  <Text style={[styles.tabBadgeText, activeTab === tab.key && styles.tabBadgeTextActive]}>{tab.count}</Text>
-                </View>
-              )}
-            </View>
-            <Text style={[styles.tabText, activeTab === tab.key && styles.tabTextActive]}>{tab.label}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-
-      {/* Content */}
+      {/* SINGLE ScrollView containing everything */}
       <ScrollView
         style={styles.content}
-        contentContainerStyle={{ paddingBottom: 20, alignItems: 'stretch' }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -836,11 +807,41 @@ export default function BookstorePortalScreen() {
           />
         }
       >
+        {/* Tabs - now inside the main ScrollView */}
+        <View style={styles.tabsWrapper}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabsContainerInner}>
+            {[
+              { key: 'dashboard', label: 'Dashboard', icon: 'grid-outline', count: null },
+              { key: 'in_arrivo', label: 'In Arrivo', icon: 'time-outline', count: stats.in_arrivo },
+              { key: 'da_ritirare', label: 'Da Ritirare', icon: 'cube-outline', count: stats.da_ritirare },
+              { key: 'completati', label: 'Completati', icon: 'checkmark-circle-outline', count: stats.completati_mese },
+              { key: 'resi', label: 'Resi', icon: 'refresh-outline', count: stats.resi_in_attesa },
+              { key: 'notifiche', label: 'Notifiche', icon: 'notifications-outline', count: unreadCount },
+            ].map((tab) => (
+              <TouchableOpacity
+                key={tab.key}
+                style={[styles.tab, activeTab === tab.key && styles.tabActive]}
+                onPress={() => setActiveTab(tab.key as TabType)}
+              >
+                <View style={styles.tabIconContainer}>
+                  <Ionicons name={tab.icon as any} size={22} color={activeTab === tab.key ? '#1a472a' : '#666'} />
+                  {tab.count !== null && tab.count > 0 && (
+                    <View style={[styles.tabBadge, activeTab === tab.key && styles.tabBadgeActive]}>
+                      <Text style={[styles.tabBadgeText, activeTab === tab.key && styles.tabBadgeTextActive]}>{tab.count}</Text>
+                    </View>
+                  )}
+                </View>
+                <Text style={[styles.tabText, activeTab === tab.key && styles.tabTextActive]}>{tab.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+
         {/* Dashboard Tab */}
         {activeTab === 'dashboard' && (
-          <View style={styles.dashboardContent}>
+          <>
             {/* Stats Grid - Card quadrate */}
-            <View style={[styles.statsGrid, isDesktop && styles.statsGridDesktop]}>
+            <View style={[styles.statsGrid, { paddingHorizontal: 8, paddingTop: 8 }, isDesktop && styles.statsGridDesktop]}>
               {/* In Arrivo */}
               <TouchableOpacity 
                 style={[styles.statCard, styles.statCardBlue]}
@@ -976,7 +977,7 @@ export default function BookstorePortalScreen() {
                 </Text>
               </View>
             </View>
-          </View>
+          </>
         )}
 
         {/* In Arrivo Tab */}
@@ -1674,6 +1675,15 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
     flexDirection: 'row',
   },
+  tabsWrapper: {
+    backgroundColor: '#fff',
+    marginBottom: 0,
+  },
+  tabsContainerInner: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    flexDirection: 'row',
+  },
   tab: {
     flexDirection: 'column',
     alignItems: 'center',
@@ -1727,13 +1737,13 @@ const styles = StyleSheet.create({
   },
   // Content
   content: {
-    flex: 1,
     backgroundColor: '#f5f5f5',
   },
   dashboardContent: {
     paddingHorizontal: 8,
     paddingTop: 8,
     paddingBottom: 8,
+    backgroundColor: 'rgba(255,0,0,0.2)', // DEBUG - rimuovere dopo
   },
   // Quick Actions Card
   quickActionsCard: {
