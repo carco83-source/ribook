@@ -824,7 +824,7 @@ export default function BookstorePortalScreen() {
       {/* Content */}
       <ScrollView
         style={styles.content}
-        contentContainerStyle={{ paddingBottom: 20 }}
+        contentContainerStyle={{ paddingBottom: 20, alignItems: 'stretch' }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -838,9 +838,9 @@ export default function BookstorePortalScreen() {
       >
         {/* Dashboard Tab */}
         {activeTab === 'dashboard' && (
-          <View style={[styles.dashboardContent, { marginTop: 0, alignSelf: 'flex-start', width: '100%' }]}>
+          <View style={styles.dashboardContent}>
             {/* Stats Grid - Card quadrate */}
-            <View style={[styles.statsGrid, isDesktop && styles.statsGridDesktop, { marginTop: 0 }]}>
+            <View style={[styles.statsGrid, isDesktop && styles.statsGridDesktop]}>
               {/* In Arrivo */}
               <TouchableOpacity 
                 style={[styles.statCard, styles.statCardBlue]}
@@ -1729,13 +1729,11 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     backgroundColor: '#f5f5f5',
-    flexDirection: 'column',
   },
   dashboardContent: {
     paddingHorizontal: 8,
-    paddingTop: 0,
+    paddingTop: 8,
     paddingBottom: 8,
-    minHeight: 'auto',
   },
   // Quick Actions Card
   quickActionsCard: {
