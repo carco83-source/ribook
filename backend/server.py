@@ -6219,12 +6219,15 @@ class CartItem(BaseModel):
 
 
 @api_router.post("/cart/add")
-async def add_to_cart(listing_id: str, bookstore_id: str, buyer_id: str):
+async def add_to_cart(listing_id: str, bookstore_id: str, buyer_id: str, include_foderazione: bool = False):
     """Aggiunge un libro al carrello e notifica il venditore"""
     from datetime import timedelta
     
     # Get listing
     listing = await db.listings.find_one({"id": listing_id, "status": "available"})
+    if not listing:
+        # Prova anche con stato disponibile
+        listing = await db.listings.find_one({"id": listing_id, "stato": "disponibile"})
     if not listing:
         raise HTTPException(status_code=404, detail="Libro non disponibile")
     
@@ -6242,6 +6245,10 @@ async def add_to_cart(listing_id: str, bookstore_id: str, buyer_id: str):
     if not bookstore:
         raise HTTPException(status_code=404, detail="Cartolibreria non trovata")
     
+    # Calcola commissioni con foderazione
+    prezzo_libro = listing.get("prezzo_vendita", listing.get("prezzo", 0))
+    commissioni = calcola_commissioni(prezzo_libro, include_foderazione)
+    
     # Create cart item
     now = datetime.utcnow()
     expires_at = now + timedelta(hours=24)
@@ -6254,7 +6261,14 @@ async def add_to_cart(listing_id: str, bookstore_id: str, buyer_id: str):
         "book_isbn": listing.get("book_isbn", ""),
         "book_titolo": listing.get("book_titolo", ""),
         "book_editore": listing.get("book_editore", ""),
-        "prezzo": listing.get("prezzo_vendita", 0),
+        "prezzo_libro": prezzo_libro,
+        "prezzo": prezzo_libro,  # Mantieni per compatibilità
+        "include_foderazione": include_foderazione,
+        "costo_foderazione": commissioni["costo_foderazione"],
+        "totale_acquirente": commissioni["totale_acquirente"],
+        "netto_venditore": commissioni["netto_venditore"],
+        "commissione_app": commissioni["commissione_piattaforma"],
+        "commissione_cartolibreria": commissioni["commissione_cartolibreria_totale"],
         "bookstore_id": bookstore_id,
         "bookstore_nome": bookstore.get("nome", ""),
         "status": "pending",

@@ -454,14 +454,18 @@ export default function ListingDetailScreen() {
 
     setPurchasing(true);
     try {
-      // Add to cart via API (with seller confirmation)
+      // Add to cart via API (with seller confirmation) - include foderazione
       const response = await axios.post(
-        `${API_URL}/api/cart/add?listing_id=${listing?.id}&bookstore_id=${selectedBookstore.id}&buyer_id=${userId}`
+        `${API_URL}/api/cart/add?listing_id=${listing?.id}&bookstore_id=${selectedBookstore.id}&buyer_id=${userId}&include_foderazione=${richiediFoderazione}`
       );
+      
+      const totalePagare = richiediFoderazione 
+        ? (listing?.prezzo_vendita || listing?.price || 0) + 1.50 
+        : (listing?.prezzo_vendita || listing?.price || 0);
       
       Alert.alert(
         'Prenotazione inviata!',
-        `"${listing?.book_titolo}" è stato prenotato.\n\nIl venditore ha 24 ore per confermare la disponibilità.\n\nRitiro: ${selectedBookstore.nome}`,
+        `"${listing?.book_titolo}" è stato prenotato.\n\nTotale: €${totalePagare.toFixed(2)}${richiediFoderazione ? ' (incl. foderazione)' : ''}\n\nIl venditore ha 24 ore per confermare la disponibilità.\n\nRitiro: ${selectedBookstore.nome}`,
         [
           { text: 'Continua acquisti', onPress: () => router.back() },
           { text: 'Vai al carrello', onPress: () => router.push('/cart') }
