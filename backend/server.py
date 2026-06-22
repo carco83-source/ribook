@@ -2199,13 +2199,21 @@ async def get_user_listings(user_id: str, limit: int = 50):
     return listings
 
 @api_router.delete("/listings/{listing_id}")
-async def delete_listing(listing_id: str, user_id: str):
+async def delete_listing(listing_id: str, user_id: str = Query(...)):
     listing = await db.listings.find_one({"id": listing_id, "seller_id": user_id})
     if not listing:
         raise HTTPException(status_code=404, detail="Annuncio non trovato")
     
-    if listing["stato"] != "disponibile":
-        raise HTTPException(status_code=400, detail="Non puoi eliminare un annuncio già prenotato")
+    # Verifica stato - permetti eliminazione anche se riservato ma senza ordine attivo
+    stato = listing.get("stato", "disponibile")
+    if stato not in ["disponibile", "active"]:
+        # Controlla se c'è un ordine attivo
+        active_order = await db.orders.find_one({
+            "listing_id": listing_id,
+            "status": {"$nin": ["cancelled", "refunded", "rejected", "completed"]}
+        })
+        if active_order:
+            raise HTTPException(status_code=400, detail="Non puoi eliminare un annuncio con ordine attivo")
     
     await db.listings.delete_one({"id": listing_id})
     return {"message": "Annuncio eliminato"}
