@@ -102,6 +102,16 @@ const getListingSellingPrice = (listing: Listing | null): number => {
   if (!listing) return 0;
   return listing.prezzo_vendita || listing.price || 0;
 };
+
+// Calcola il prezzo totale per l'acquirente (prezzo libro + 10% commissione)
+const getListingBuyerPrice = (listing: Listing | null, includeFoderazione: boolean = false): number => {
+  if (!listing) return 0;
+  const prezzoLibro = listing.prezzo_vendita || listing.price || 0;
+  const commissione = prezzoLibro * 0.10; // 10% commissione
+  const foderazione = includeFoderazione ? 1.50 : 0;
+  return prezzoLibro + commissione + foderazione;
+};
+
 const getListingSubject = (listing: Listing | null): string => {
   if (!listing) return '';
   return listing.book_materia || listing.book_disciplina || listing.book_subject || '';
@@ -469,6 +479,12 @@ export default function ListingDetailScreen() {
   };
 
   const { commission, total, foderazione } = calculateCommission();
+  
+  // Verifica se l'utente corrente è il venditore
+  const isOwner = userId && listing?.seller_id === userId;
+  
+  // Prezzo da mostrare: venditore vede il suo prezzo, acquirente vede il totale
+  const displayPrice = isOwner ? total : getListingBuyerPrice(listing, richiediFoderazione);
 
   if (loading) {
     return (
@@ -524,7 +540,7 @@ export default function ListingDetailScreen() {
       <View style={styles.content}>
         {/* Book Details */}
         <View style={styles.priceRow}>
-          <Text style={styles.price}>€{total.toFixed(2)}</Text>
+          <Text style={styles.price}>€{displayPrice.toFixed(2)}</Text>
           <View style={styles.conditionBadge}>
             <Text style={styles.conditionText}>
               {getConditionLabel(getListingCondition(listing))}
@@ -909,25 +925,38 @@ export default function ListingDetailScreen() {
           </View>
         ) : null}
 
-        {/* Price Display - Semplificato */}
+        {/* Price Display - Diverso per venditore e acquirente */}
         <View style={styles.priceBreakdown}>
-          <View style={styles.priceRow}>
-            <Text style={styles.priceRowLabel}>Libro</Text>
-            <Text style={styles.priceRowValue}>€{total.toFixed(2)}</Text>
-          </View>
-          
-          {richiediFoderazione && (
-            <View style={[styles.priceRow, { marginTop: 8 }]}>
-              <Text style={styles.priceRowLabel}>Foderazione</Text>
-              <Text style={styles.priceRowValue}>€{foderazione.toFixed(2)}</Text>
-            </View>
+          {isOwner ? (
+            // VENDITORE: vede solo il suo prezzo
+            <>
+              <View style={styles.priceRow}>
+                <Text style={styles.priceRowLabel}>Il tuo guadagno</Text>
+                <Text style={styles.priceRowValue}>€{total.toFixed(2)}</Text>
+              </View>
+            </>
+          ) : (
+            // ACQUIRENTE: vede il breakdown completo
+            <>
+              <View style={styles.priceRow}>
+                <Text style={styles.priceRowLabel}>Libro</Text>
+                <Text style={styles.priceRowValue}>€{getListingBuyerPrice(listing, false).toFixed(2)}</Text>
+              </View>
+              
+              {richiediFoderazione && (
+                <View style={[styles.priceRow, { marginTop: 8 }]}>
+                  <Text style={styles.priceRowLabel}>Foderazione</Text>
+                  <Text style={styles.priceRowValue}>€{foderazione.toFixed(2)}</Text>
+                </View>
+              )}
+              
+              <View style={styles.totalDivider} />
+              <View style={styles.priceRow}>
+                <Text style={styles.totalLabel}>Totale</Text>
+                <Text style={styles.totalValue}>€{getListingBuyerPrice(listing, richiediFoderazione).toFixed(2)}</Text>
+              </View>
+            </>
           )}
-          
-          <View style={styles.totalDivider} />
-          <View style={styles.priceRow}>
-            <Text style={styles.totalLabel}>Totale</Text>
-            <Text style={styles.totalValue}>€{(total + foderazione).toFixed(2)}</Text>
-          </View>
         </View>
 
         {/* Buy Now Button - NEW Escrow System */}
