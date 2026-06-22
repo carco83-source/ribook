@@ -154,71 +154,8 @@ export default function NotificationsScreen() {
   };
 
   const generateNotifications = async (userId: string): Promise<Notification[]> => {
-    const notifications: Notification[] = [];
-    
-    try {
-      // Check for radar matches
-      const radarRes = await axios.get(`${API_URL}/api/radar/${userId}`);
-      if (radarRes.data.total_matches > 0) {
-        notifications.push({
-          id: '1',
-          type: 'match',
-          title: 'Nuovi match trovati!',
-          message: `Hai ${radarRes.data.total_matches} libri disponibili che stai cercando`,
-          read: false,
-          created_at: new Date().toISOString(),
-        });
-      }
-
-      // Check for pending deliveries (as seller)
-      const salesRes = await axios.get(`${API_URL}/api/user/${userId}/sales`);
-      const pendingDeliveries = salesRes.data.filter((s: any) => s.stato === 'venduto');
-      if (pendingDeliveries.length > 0) {
-        notifications.push({
-          id: '2',
-          type: 'delivery',
-          title: 'Libri da consegnare',
-          message: `Hai ${pendingDeliveries.length} libri da consegnare alla cartolibreria`,
-          read: false,
-          created_at: new Date().toISOString(),
-        });
-      }
-
-      // Check for ready pickups (as buyer)
-      const purchasesRes = await axios.get(`${API_URL}/api/user/${userId}/purchases`);
-      const readyPickups = purchasesRes.data.filter((p: any) => p.stato === 'consegnato');
-      if (readyPickups.length > 0) {
-        notifications.push({
-          id: '3',
-          type: 'pickup',
-          title: 'Libri pronti per il ritiro!',
-          message: `${readyPickups.length} libri ti aspettano in cartolibreria`,
-          read: false,
-          created_at: new Date().toISOString(),
-        });
-      }
-
-      // Add welcome notification if no activity
-      if (notifications.length === 0) {
-        notifications.push({
-          id: '0',
-          type: 'system',
-          title: 'Benvenuto su RiLiBro!',
-          message: 'Inizia cercando i libri che ti servono o metti in vendita quelli che non usi più',
-          read: true,
-          created_at: new Date().toISOString(),
-        });
-      }
-    } catch (error) {
-      console.error('Error generating notifications:', error);
-    }
-
-    // Ordina per data decrescente
-    return notifications.sort((a, b) => {
-      const dateA = new Date(a.created_at).getTime();
-      const dateB = new Date(b.created_at).getTime();
-      return dateB - dateA;
-    });
+    // Ritorna array vuoto - le notifiche vengono SOLO dal database
+    return [];
   };
 
   useFocusEffect(
