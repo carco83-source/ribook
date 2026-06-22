@@ -1669,9 +1669,8 @@ const styles = StyleSheet.create({
   tabsContainer: {
     backgroundColor: '#fff',
     paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    paddingVertical: 4,
+    paddingBottom: 4,
     flexDirection: 'row',
   },
   tab: {
@@ -1730,8 +1729,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   dashboardContent: {
-    padding: 12,
-    paddingTop: 8,
+    padding: 8,
+    paddingTop: 0,
   },
   // Quick Actions Card
   quickActionsCard: {
@@ -1823,8 +1822,9 @@ const styles = StyleSheet.create({
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 12,
+    gap: 8,
+    marginBottom: 8,
+    marginTop: 0,
   },
   statsGridDesktop: {
     gap: 12,
