@@ -357,6 +357,10 @@ class Bookstore(BaseModel):
     affiliazione_attiva: bool = True
     affiliazione_scadenza: Optional[datetime] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    # Sistema credito cartolibreria
+    credito_commissioni: float = 0.0  # Credito da commissioni libro
+    credito_foderazione: float = 0.0  # Credito da foderazione
+    credito_totale: float = 0.0  # Totale credito disponibile
 
 class BookstorePublic(BaseModel):
     id: str
@@ -429,64 +433,64 @@ SELLER_CONFIRMATION_HOURS = 24  # 24h per conferma venditore
 DELIVERY_BUSINESS_DAYS = 2      # 2 giorni lavorativi per consegna
 RETURN_WINDOW_HOURS = 72        # 72 ore (3 giorni) per reso
 
-# Costanti commissioni
+# Costanti commissioni - NUOVA LOGICA
 COSTO_FODERAZIONE = 1.50  # €1,50 per foderazione
-COMMISSIONE_LIBRO_PERCENT = 0.10  # 10% sul libro
+COMMISSIONE_VENDITA_PERCENT = 0.20  # 20% commissione sulla vendita
+QUOTA_VENDITORE_PERCENT = 0.80  # 80% al venditore
 STRIPE_FEE_PERCENT = 0.029  # 2.9% Stripe
 STRIPE_FEE_FIXED = 0.25  # €0.25 fisso Stripe
 
 def calcola_commissioni(prezzo_libro: float, include_foderazione: bool = False):
     """
-    Calcola la divisione delle commissioni tra piattaforma e cartolibreria.
+    NUOVA LOGICA COMMISSIONI RIBOOK
     
-    Logica:
-    - Commissione totale: 10% del libro (divisa 50/50 tra piattaforma e cartolibreria)
-    - Foderazione: €1,50 (va alla cartolibreria)
-    - Stripe: proporzionalmente sottratto da ogni parte
+    - Prezzo Acquirente: prezzo_libro + foderazione (opzionale)
+    - Venditore riceve: 80% del prezzo libro
+    - Commissione 20%: divisa 50/50 tra piattaforma e cartolibreria
+    - Fee Stripe sul libro: divisa 50/50 tra piattaforma e cartolibreria
+    - Foderazione (€1,50): 100% alla cartolibreria, meno la fee Stripe extra generata
     
     Returns dict con:
     - totale_acquirente: quanto paga l'acquirente
-    - netto_venditore: quanto riceve il venditore
-    - commissione_stripe: costo Stripe
-    - commissione_piattaforma: guadagno piattaforma (5% - proporzione Stripe)
-    - commissione_cartolibreria_libro: guadagno cartolibreria da libro (5% - proporzione Stripe)
-    - commissione_cartolibreria_foderazione: guadagno cartolibreria da foderazione (€1,50 - proporzione Stripe)
+    - netto_venditore: quanto riceve il venditore (80% prezzo libro)
+    - commissione_stripe: costo Stripe totale
+    - commissione_piattaforma: guadagno piattaforma (10% - 50% Stripe libro)
+    - commissione_cartolibreria_libro: guadagno cartolibreria da libro (10% - 50% Stripe libro)
+    - commissione_cartolibreria_foderazione: guadagno cartolibreria da foderazione (€1,50 - extra Stripe foderazione)
     - commissione_cartolibreria_totale: totale cartolibreria
     """
     costo_foderazione = COSTO_FODERAZIONE if include_foderazione else 0
     
-    # Commissione 10% sul libro (da dividere)
-    commissione_libro = prezzo_libro * COMMISSIONE_LIBRO_PERCENT
+    # Totale che paga l'acquirente (NO commissione aggiuntiva, prezzo = prezzo finale)
+    totale_acquirente = prezzo_libro + costo_foderazione
     
-    # Totale che paga l'acquirente
-    totale_acquirente = prezzo_libro + commissione_libro + costo_foderazione
+    # Venditore riceve 80% del prezzo libro
+    netto_venditore = prezzo_libro * QUOTA_VENDITORE_PERCENT
     
-    # Commissione Stripe sul totale
-    commissione_stripe = (totale_acquirente * STRIPE_FEE_PERCENT) + STRIPE_FEE_FIXED
+    # Commissione 20% sul libro (da dividere 50/50)
+    commissione_totale = prezzo_libro * COMMISSIONE_VENDITA_PERCENT
     
-    # Proporzioni per dividere la commissione Stripe
-    if totale_acquirente > 0:
-        prop_libro = prezzo_libro / totale_acquirente
-        prop_commissione = commissione_libro / totale_acquirente
-        prop_foderazione = costo_foderazione / totale_acquirente if include_foderazione else 0
-    else:
-        prop_libro = prop_commissione = prop_foderazione = 0
+    # Calcolo fee Stripe SENZA foderazione (sul prezzo libro)
+    stripe_senza_foderazione = (prezzo_libro * STRIPE_FEE_PERCENT) + STRIPE_FEE_FIXED
     
-    # Stripe proporzionale per ogni componente
-    stripe_su_libro = commissione_stripe * prop_libro
-    stripe_su_commissione = commissione_stripe * prop_commissione
-    stripe_su_foderazione = commissione_stripe * prop_foderazione if include_foderazione else 0
+    # Calcolo fee Stripe CON foderazione (sul totale)
+    stripe_con_foderazione = (totale_acquirente * STRIPE_FEE_PERCENT) + STRIPE_FEE_FIXED
     
-    # Venditore riceve prezzo libro - proporzione Stripe sul libro
-    netto_venditore = prezzo_libro - stripe_su_libro
+    # Fee Stripe effettiva = quella CON foderazione se presente, altrimenti quella sul libro
+    commissione_stripe = stripe_con_foderazione if include_foderazione else stripe_senza_foderazione
     
-    # Commissione libro divisa 50/50 tra piattaforma e cartolibreria
-    # Ognuno paga metà della proporzione Stripe sulla commissione
-    commissione_piattaforma = (commissione_libro / 2) - (stripe_su_commissione / 2)
-    commissione_cartolibreria_libro = (commissione_libro / 2) - (stripe_su_commissione / 2)
+    # Extra Stripe generato dalla foderazione (da sottrarre alla quota foderazione)
+    extra_stripe_foderazione = stripe_con_foderazione - stripe_senza_foderazione if include_foderazione else 0
     
-    # Foderazione va alla cartolibreria meno Stripe proporzionale
-    commissione_cartolibreria_foderazione = costo_foderazione - stripe_su_foderazione if include_foderazione else 0
+    # Fee Stripe relativa al libro (senza foderazione) - divisa 50/50
+    stripe_libro_per_parte = stripe_senza_foderazione / 2
+    
+    # Commissione divisa 50/50 tra piattaforma e cartolibreria
+    commissione_piattaforma = (commissione_totale / 2) - stripe_libro_per_parte
+    commissione_cartolibreria_libro = (commissione_totale / 2) - stripe_libro_per_parte
+    
+    # Foderazione: 100% alla cartolibreria MENO extra Stripe generato dalla foderazione
+    commissione_cartolibreria_foderazione = costo_foderazione - extra_stripe_foderazione if include_foderazione else 0
     
     # Totale cartolibreria
     commissione_cartolibreria_totale = commissione_cartolibreria_libro + commissione_cartolibreria_foderazione
@@ -501,6 +505,7 @@ def calcola_commissioni(prezzo_libro: float, include_foderazione: bool = False):
         "commissione_cartolibreria_totale": round(max(0, commissione_cartolibreria_totale), 2),
         "include_foderazione": include_foderazione,
         "costo_foderazione": costo_foderazione,
+        "extra_stripe_foderazione": round(extra_stripe_foderazione, 2),
     }
 
 class PaymentIntent(BaseModel):
@@ -7824,6 +7829,58 @@ async def check_and_complete_order_if_expired(order_id: str):
         
         await db.orders.update_one({"id": order_id}, {"$set": update_data})
         
+        # =============== ACCREDITO CARTOLIBRERIA ===============
+        # Aggiorna credito cartolibreria ad operazione conclusa
+        bookstore_id = order.get("bookstore_id")
+        if bookstore_id:
+            commissione_libro = order.get("commissione_cartolibreria_libro", 0)
+            commissione_foderazione = order.get("commissione_cartolibreria_foderazione", 0)
+            commissione_totale = order.get("commissione_cartolibreria", 0)
+            
+            await db.bookstores.update_one(
+                {"id": bookstore_id},
+                {
+                    "$inc": {
+                        "credito_commissioni": commissione_libro,
+                        "credito_foderazione": commissione_foderazione,
+                        "credito_totale": commissione_totale
+                    }
+                }
+            )
+            
+            # Crea log del movimento credito
+            credit_log = {
+                "id": str(uuid.uuid4()),
+                "bookstore_id": bookstore_id,
+                "order_id": order_id,
+                "order_code": order.get("order_code"),
+                "book_titolo": order.get("book_titolo"),
+                "type": "accredito",
+                "commissione_libro": commissione_libro,
+                "commissione_foderazione": commissione_foderazione,
+                "totale": commissione_totale,
+                "created_at": now.isoformat()
+            }
+            await db.bookstore_credit_logs.insert_one(credit_log)
+            
+            # Notifica cartolibreria dell'accredito
+            bookstore_notification = {
+                "id": str(uuid.uuid4()),
+                "bookstore_id": bookstore_id,
+                "type": "credit_added",
+                "title": "💰 Commissione accreditata!",
+                "message": f"Ordine {order.get('order_code')} completato!\n\n📚 {order.get('book_titolo')}\n\n💵 Commissione libro: €{commissione_libro:.2f}\n📦 Foderazione: €{commissione_foderazione:.2f}\n\n✅ Totale accreditato: €{commissione_totale:.2f}",
+                "order_id": order_id,
+                "order_code": order.get("order_code"),
+                "commissione_libro": commissione_libro,
+                "commissione_foderazione": commissione_foderazione,
+                "commissione_totale": commissione_totale,
+                "read": False,
+                "created_at": now.isoformat()
+            }
+            await db.bookstore_notifications.insert_one(bookstore_notification)
+        # ========================================================
+        
         # Notifica al venditore
         notification = {
             "id": str(uuid.uuid4()),
@@ -8110,6 +8167,39 @@ async def verify_return(
         
         await db.orders.update_one({"id": order_id}, {"$set": update_data})
         
+        # =============== ACCREDITO CARTOLIBRERIA (reso rifiutato = ordine completo) ===============
+        commissione_libro = order.get("commissione_cartolibreria_libro", 0)
+        commissione_foderazione = order.get("commissione_cartolibreria_foderazione", 0)
+        commissione_totale = order.get("commissione_cartolibreria", 0)
+        
+        await db.bookstores.update_one(
+            {"id": bookstore_id},
+            {
+                "$inc": {
+                    "credito_commissioni": commissione_libro,
+                    "credito_foderazione": commissione_foderazione,
+                    "credito_totale": commissione_totale
+                }
+            }
+        )
+        
+        # Log movimento credito
+        credit_log = {
+            "id": str(uuid.uuid4()),
+            "bookstore_id": bookstore_id,
+            "order_id": order_id,
+            "order_code": order.get("order_code"),
+            "book_titolo": order.get("book_titolo"),
+            "type": "accredito",
+            "commissione_libro": commissione_libro,
+            "commissione_foderazione": commissione_foderazione,
+            "totale": commissione_totale,
+            "note": "Reso rifiutato - Ordine completato",
+            "created_at": now.isoformat()
+        }
+        await db.bookstore_credit_logs.insert_one(credit_log)
+        # =========================================================================================
+        
         # Notifica acquirente
         notification_buyer = {
             "id": str(uuid.uuid4()),
@@ -8135,6 +8225,22 @@ async def verify_return(
             "created_at": now.isoformat()
         }
         await db.notifications.insert_one(notification_seller)
+        
+        # Notifica cartolibreria dell'accredito
+        bookstore_notification = {
+            "id": str(uuid.uuid4()),
+            "bookstore_id": bookstore_id,
+            "type": "credit_added",
+            "title": "💰 Commissione accreditata!",
+            "message": f"Ordine {order.get('order_code')} completato (reso rifiutato)!\n\n📚 {order.get('book_titolo')}\n\n💵 Commissione libro: €{commissione_libro:.2f}\n📦 Foderazione: €{commissione_foderazione:.2f}\n\n✅ Totale accreditato: €{commissione_totale:.2f}",
+            "order_id": order_id,
+            "commissione_libro": commissione_libro,
+            "commissione_foderazione": commissione_foderazione,
+            "commissione_totale": commissione_totale,
+            "read": False,
+            "created_at": now.isoformat()
+        }
+        await db.bookstore_notifications.insert_one(bookstore_notification)
         
         return {
             "success": True,
@@ -10846,8 +10952,13 @@ async def get_bookstore_info(bookstore_id: str):
 
 @api_router.get("/bookstore/{bookstore_id}/stats")
 async def get_bookstore_stats(bookstore_id: str):
-    """Statistiche cartolibreria"""
+    """Statistiche cartolibreria con sistema credito"""
     from datetime import datetime, timedelta
+    
+    # Recupera cartolibreria per i dati credito
+    bookstore = await db.bookstores.find_one({"id": bookstore_id})
+    if not bookstore:
+        raise HTTPException(status_code=404, detail="Cartolibreria non trovata")
     
     # Ordini in attesa di consegna dal venditore
     pending_deliveries = await db.orders.count_documents({
@@ -10875,7 +10986,7 @@ async def get_bookstore_stats(bookstore_id: str):
         "status": "return_requested"
     })
     
-    # Guadagni del mese (5% commissione)
+    # Guadagni del mese (dalla collezione ordini)
     month_start = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     monthly_orders = await db.orders.find({
         "bookstore_id": bookstore_id,
@@ -10885,13 +10996,24 @@ async def get_bookstore_stats(bookstore_id: str):
     
     monthly_earnings = sum(o.get("commissione_cartolibreria", 0) for o in monthly_orders)
     
+    # Dati sistema credito
+    credito_commissioni = bookstore.get("credito_commissioni", 0)
+    credito_foderazione = bookstore.get("credito_foderazione", 0)
+    credito_totale = bookstore.get("credito_totale", 0)
+    
     return {
         "pending_deliveries": pending_deliveries,
         "awaiting_pickup": awaiting_pickup,
         "completed_today": completed_today,
         "returns_pending": returns_pending,
         "monthly_earnings": monthly_earnings,
-        "monthly_transactions": len(monthly_orders)
+        "monthly_transactions": len(monthly_orders),
+        # Sistema credito
+        "credito": {
+            "commissioni_libro": round(credito_commissioni, 2),
+            "foderazione": round(credito_foderazione, 2),
+            "totale": round(credito_totale, 2)
+        }
     }
 
 @api_router.get("/bookstore/{bookstore_id}/orders/pending")
@@ -11022,6 +11144,68 @@ async def bookstore_confirm_delivery(bookstore_id: str, order_id: str):
     })
     
     return {"success": True, "message": "Consegna confermata"}
+
+# ============== ENDPOINT STORICO CREDITI CARTOLIBRERIA ==============
+
+@api_router.get("/bookstore/{bookstore_id}/credit-history")
+async def get_bookstore_credit_history(bookstore_id: str, limit: int = 50):
+    """Storico movimenti credito cartolibreria"""
+    
+    bookstore = await db.bookstores.find_one({"id": bookstore_id})
+    if not bookstore:
+        raise HTTPException(status_code=404, detail="Cartolibreria non trovata")
+    
+    # Recupera i log dei movimenti
+    credit_logs = await db.bookstore_credit_logs.find({
+        "bookstore_id": bookstore_id
+    }).sort("created_at", -1).to_list(limit)
+    
+    for log in credit_logs:
+        log.pop("_id", None)
+    
+    return {
+        "bookstore_id": bookstore_id,
+        "bookstore_nome": bookstore.get("nome"),
+        "credito_attuale": {
+            "commissioni_libro": round(bookstore.get("credito_commissioni", 0), 2),
+            "foderazione": round(bookstore.get("credito_foderazione", 0), 2),
+            "totale": round(bookstore.get("credito_totale", 0), 2)
+        },
+        "movimenti": credit_logs,
+        "count": len(credit_logs)
+    }
+
+@api_router.get("/admin/bookstores-credits")
+async def get_all_bookstores_credits():
+    """Admin: visualizza crediti di tutte le cartolibrerie"""
+    
+    bookstores = await db.bookstores.find({}).to_list(None)
+    
+    result = []
+    for bs in bookstores:
+        result.append({
+            "id": bs.get("id"),
+            "nome": bs.get("nome"),
+            "citta": bs.get("citta"),
+            "credito_commissioni": round(bs.get("credito_commissioni", 0), 2),
+            "credito_foderazione": round(bs.get("credito_foderazione", 0), 2),
+            "credito_totale": round(bs.get("credito_totale", 0), 2)
+        })
+    
+    # Totali globali
+    totale_commissioni = sum(bs.get("credito_commissioni", 0) for bs in bookstores)
+    totale_foderazione = sum(bs.get("credito_foderazione", 0) for bs in bookstores)
+    totale_crediti = sum(bs.get("credito_totale", 0) for bs in bookstores)
+    
+    return {
+        "cartolibrerie": result,
+        "totali_globali": {
+            "commissioni_libro": round(totale_commissioni, 2),
+            "foderazione": round(totale_foderazione, 2),
+            "totale": round(totale_crediti, 2)
+        },
+        "count": len(result)
+    }
 
 @api_router.post("/bookstore/{bookstore_id}/confirm-pickup/{order_id}")
 async def bookstore_confirm_pickup(bookstore_id: str, order_id: str):

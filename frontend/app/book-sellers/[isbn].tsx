@@ -290,8 +290,8 @@ export default function BookSellersScreen() {
               // Calculate savings safely - handle both field names
               const prezzoCopertina = bookInfo?.prezzo_copertina || 0;
               const prezzoVendita = listing.prezzo_vendita || listing.price || 0;
-              // Prezzo totale per acquirente = prezzo + 10% commissione
-              const prezzoTotale = prezzoVendita * 1.10;
+              // NUOVA LOGICA: Prezzo totale = prezzo libro (nessuna commissione aggiuntiva)
+              const prezzoTotale = prezzoVendita;
               const savings = prezzoCopertina - prezzoTotale;
               const showSavings = prezzoCopertina > 0 && prezzoTotale > 0 && savings > 0;
               const condizione = listing.condizione || listing.condition || 'buono';

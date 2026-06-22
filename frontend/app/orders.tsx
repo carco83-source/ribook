@@ -691,17 +691,19 @@ export default function OrdersScreen() {
                 <Text style={styles.priceRowLabel}>Prezzo libro</Text>
                 <Text style={styles.priceRowValue}>€{selectedOrder.prezzo_libro.toFixed(2)}</Text>
               </View>
-              <View style={styles.priceRow}>
-                <Text style={styles.priceRowLabel}>Commissione RLB (17%)</Text>
-                <Text style={styles.priceRowValue}>€{selectedOrder.commissione_app.toFixed(2)}</Text>
-              </View>
+              {selectedOrder.include_foderazione && (
+                <View style={styles.priceRow}>
+                  <Text style={styles.priceRowLabel}>Foderazione</Text>
+                  <Text style={styles.priceRowValue}>€1.50</Text>
+                </View>
+              )}
               <View style={[styles.priceRow, styles.priceRowTotal]}>
                 <Text style={styles.priceRowLabelTotal}>Totale acquirente</Text>
                 <Text style={styles.priceRowValueTotal}>€{selectedOrder.totale_acquirente.toFixed(2)}</Text>
               </View>
               {isBuyer ? null : (
                 <View style={[styles.priceRow, styles.sellerNet]}>
-                  <Text style={styles.priceRowLabel}>Riceverai</Text>
+                  <Text style={styles.priceRowLabel}>Riceverai (80%)</Text>
                   <Text style={[styles.priceRowValue, { color: '#4CAF50', fontWeight: 'bold' }]}>
                     €{selectedOrder.netto_venditore.toFixed(2)}
                   </Text>

@@ -102,11 +102,18 @@ interface DashboardStats {
   guadagno_foderazione_mese: number;
   num_foderazione_oggi: number;
   num_foderazione_mese: number;
+  // Sistema credito
+  credito?: {
+    commissioni_libro: number;
+    foderazione: number;
+    totale: number;
+  };
 }
 
-// Costanti per calcolo compensi
+// Costanti per calcolo compensi - NUOVA LOGICA 20%
 const COSTO_FODERAZIONE = 1.50; // €1,50 per copertina
-const COMMISSIONE_CARTOLIBRERIA_PERCENT = 0.10; // 10% sul libro
+const COMMISSIONE_VENDITA_PERCENT = 0.20; // 20% sul libro (diviso 50/50)
+const COMMISSIONE_CARTOLIBRERIA_PERCENT = 0.10; // 10% sul libro (metà del 20%)
 const STRIPE_FEE_PERCENT = 0.029; // 2.9%
 const STRIPE_FEE_FIXED = 0.25; // €0.25
 
@@ -250,7 +257,6 @@ export default function BookstorePortalScreen() {
       const data = response.data;
       
       setBookstoreName(data.bookstore_name || '');
-      setStats(data.stats || stats);
       setOrdersInArrivo(data.orders_in_arrivo || []);
       setOrdersDaRitirare(data.orders_da_ritirare || []);
       setOrdersCompletati(data.orders_completati || []);
@@ -260,6 +266,22 @@ export default function BookstorePortalScreen() {
       if (data.notifications) {
         setNotifications(data.notifications);
         setUnreadCount(data.notifications.filter((n: BookstoreNotification) => !n.read).length);
+      }
+      
+      // Carica anche stats con credito dal nuovo endpoint
+      try {
+        const statsRes = await axios.get(`${API_URL}/api/bookstore/${bsId}/stats`);
+        const statsData = statsRes.data;
+        
+        // Merge stats con credito
+        setStats(prev => ({
+          ...prev,
+          ...data.stats,
+          credito: statsData.credito
+        }));
+      } catch (e) {
+        // Se fallisce, usa le stats senza credito
+        setStats(data.stats || stats);
       }
       
     } catch (error) {
@@ -846,6 +868,34 @@ export default function BookstorePortalScreen() {
                 </View>
               </View>
             </View>
+
+            {/* CREDITO ACCUMULATO - dal backend */}
+            {stats.credito && (
+              <View style={styles.creditCard}>
+                <View style={styles.creditHeader}>
+                  <Ionicons name="cash" size={28} color="#fff" />
+                  <Text style={styles.creditTitle}>💰 CREDITO ACCUMULATO</Text>
+                </View>
+                <View style={styles.creditContent}>
+                  <View style={styles.creditRow}>
+                    <Text style={styles.creditLabel}>Commissioni Libro (10%)</Text>
+                    <Text style={styles.creditValue}>€{stats.credito.commissioni_libro.toFixed(2)}</Text>
+                  </View>
+                  <View style={styles.creditRow}>
+                    <Text style={styles.creditLabel}>Foderazioni (€1.50)</Text>
+                    <Text style={styles.creditValue}>€{stats.credito.foderazione.toFixed(2)}</Text>
+                  </View>
+                  <View style={styles.creditDivider} />
+                  <View style={styles.creditRow}>
+                    <Text style={styles.creditTotalLabel}>TOTALE DA INCASSARE</Text>
+                    <Text style={styles.creditTotalValue}>€{stats.credito.totale.toFixed(2)}</Text>
+                  </View>
+                </View>
+                <Text style={styles.creditNote}>
+                  * Il credito viene accumulato al completamento di ogni ordine
+                </Text>
+              </View>
+            )}
 
             {/* Info Card */}
             <View style={styles.infoCard}>
@@ -1677,6 +1727,67 @@ const styles = StyleSheet.create({
   totalEarningsSmall: {
     fontSize: 12,
     color: '#666',
+  },
+  // Credit Card - Sistema Credito Accumulato
+  creditCard: {
+    backgroundColor: '#1a472a',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  creditHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 16,
+  },
+  creditTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  creditContent: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 8,
+    padding: 12,
+  },
+  creditRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  creditLabel: {
+    fontSize: 14,
+    color: '#fff',
+    opacity: 0.9,
+  },
+  creditValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  creditDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    marginVertical: 8,
+  },
+  creditTotalLabel: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#4CAF50',
+  },
+  creditTotalValue: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#4CAF50',
+  },
+  creditNote: {
+    fontSize: 11,
+    color: '#fff',
+    opacity: 0.7,
+    marginTop: 10,
+    fontStyle: 'italic',
   },
   // Formula Card
   formulaCard: {

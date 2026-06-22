@@ -309,9 +309,9 @@ export default function SellFormScreen() {
     
     if (isNewBook) {
       const prezzoAcquirente = prezzoNuovo * 0.93;
-      const commissionePiattaforma = 0.17;
-      const stripeFisso = 0.25;
-      const guadagnoVenditore = prezzoAcquirente * (1 - commissionePiattaforma) - stripeFisso;
+      // NUOVA LOGICA: Venditore riceve 80% del prezzo libro
+      const quotaVenditore = 0.80;
+      const guadagnoVenditore = prezzoAcquirente * quotaVenditore;
       
       return {
         usura: 0,
@@ -376,8 +376,8 @@ export default function SellFormScreen() {
     prezzoUsato = Math.max(prezzoUsato, prezzoNuovo * 0.30);
     prezzoUsato = Math.min(prezzoUsato, prezzoNuovo * 0.70);
     
-    const commissionePiattaforma = 0.17;
-    const stripeFisso = 0.25;
+    // NUOVA LOGICA: Venditore riceve 80% del prezzo
+    const quotaVenditore = 0.80;
     
     const prezzoAlto = Math.min(prezzoUsato * 1.08, prezzoNuovo * 0.70);
     const prezzoMedio = prezzoUsato;
@@ -394,9 +394,9 @@ export default function SellFormScreen() {
       prezzoAlto: Math.round(prezzoAlto * 100) / 100,
       prezzoMedio: Math.round(prezzoMedio * 100) / 100,
       prezzoBasso: Math.round(prezzoBasso * 100) / 100,
-      guadagnoAlto: Math.round((prezzoAlto * (1 - commissionePiattaforma) - stripeFisso) * 100) / 100,
-      guadagnoMedio: Math.round((prezzoMedio * (1 - commissionePiattaforma) - stripeFisso) * 100) / 100,
-      guadagnoBasso: Math.round((prezzoBasso * (1 - commissionePiattaforma) - stripeFisso) * 100) / 100,
+      guadagnoAlto: Math.round(prezzoAlto * quotaVenditore * 100) / 100,
+      guadagnoMedio: Math.round(prezzoMedio * quotaVenditore * 100) / 100,
+      guadagnoBasso: Math.round(prezzoBasso * quotaVenditore * 100) / 100,
       condition
     };
   };
@@ -436,12 +436,12 @@ export default function SellFormScreen() {
     // Se i prezzi sono troppo simili, redistribuisci per avere 3 prezzi distinti
     if (diffAltoMedio < 0.50 || diffMedioBasso < 0.50) {
       // Usa prezzoAlto e prezzoBasso come estremi, calcola la media
-      const commissionePiattaforma = 0.17;
-      const stripeFisso = 0.25;
+      // NUOVA LOGICA: Venditore riceve 80%
+      const quotaVenditore = 0.80;
       
       prezzoMedio = (prezzoAlto + prezzoBasso) / 2;
       prezzoMedio = Math.round(prezzoMedio * 100) / 100;
-      guadagnoMedio = Math.round((prezzoMedio * (1 - commissionePiattaforma) - stripeFisso) * 100) / 100;
+      guadagnoMedio = Math.round(prezzoMedio * quotaVenditore * 100) / 100;
     }
     
     return {

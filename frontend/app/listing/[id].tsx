@@ -103,13 +103,13 @@ const getListingSellingPrice = (listing: Listing | null): number => {
   return listing.prezzo_vendita || listing.price || 0;
 };
 
-// Calcola il prezzo totale per l'acquirente (prezzo libro + 10% commissione)
+// Calcola il prezzo totale per l'acquirente (prezzo libro + foderazione opzionale)
+// NUOVA LOGICA: L'acquirente paga SOLO il prezzo libro, nessuna commissione aggiuntiva
 const getListingBuyerPrice = (listing: Listing | null, includeFoderazione: boolean = false): number => {
   if (!listing) return 0;
   const prezzoLibro = listing.prezzo_vendita || listing.price || 0;
-  const commissione = prezzoLibro * 0.10; // 10% commissione
   const foderazione = includeFoderazione ? 1.50 : 0;
-  return prezzoLibro + commissione + foderazione;
+  return prezzoLibro + foderazione;
 };
 
 const getListingSubject = (listing: Listing | null): string => {
@@ -289,11 +289,9 @@ export default function ListingDetailScreen() {
     if (!listing) return { commission: 0, total: 0, foderazione: 0 };
     const sellingPrice = getListingSellingPrice(listing);
     const foderazioneCost = richiediFoderazione ? 1.50 : 0;
-    if (isPremium) {
-      return { commission: 0, total: sellingPrice, foderazione: foderazioneCost };
-    }
-    const commission = sellingPrice * 0.17;
-    return { commission, total: sellingPrice, foderazione: foderazioneCost };
+    // NUOVA LOGICA: Nessuna commissione aggiuntiva per l'acquirente
+    // Il prezzo visualizzato è il prezzo finale
+    return { commission: 0, total: sellingPrice, foderazione: foderazioneCost };
   };
 
   const handleShare = async () => {
