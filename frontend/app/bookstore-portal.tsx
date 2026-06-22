@@ -1282,6 +1282,14 @@ export default function BookstorePortalScreen() {
                     </View>
                   )}
                   
+                  {/* Badge Foderazione */}
+                  {notification.include_foderazione && (
+                    <View style={styles.foderazioneBadge}>
+                      <Ionicons name="book" size={16} color="#fff" />
+                      <Text style={styles.foderazioneBadgeText}>📗 FODERAZIONE RICHIESTA (+€1.50)</Text>
+                    </View>
+                  )}
+                  
                   <Text style={styles.notificationTime}>
                     {new Date(notification.created_at).toLocaleString('it-IT', { timeZone: 'Europe/Rome' })}
                   </Text>
@@ -2546,6 +2554,23 @@ const styles = StyleSheet.create({
     color: '#999',
     marginTop: 12,
     textAlign: 'right',
+  },
+  // Badge Foderazione nelle notifiche
+  foderazioneBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginTop: 12,
+    gap: 6,
+    alignSelf: 'flex-start',
+  },
+  foderazioneBadgeText: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#fff',
   },
   // Modal Conferma Azione
   confirmModalOverlay: {

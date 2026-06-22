@@ -7124,13 +7124,15 @@ async def pay_order(order_id: str, user_id: str = Query(...)):
     await db.notifications.insert_one(seller_notification)
     
     # Notifica alla cartolibreria con condizioni, foto, NO QR, NO prezzo
+    foderazione_text_bs = "\n\n📗 FODERAZIONE: ✅ RICHIESTA (€1.50)" if include_foderazione else ""
+    
     bookstore_notification = {
         "id": str(uuid.uuid4()),
         "bookstore_id": order.get("bookstore_id"),
         "user_id": f"bookstore_{order.get('bookstore_id')}",
         "type": "incoming_book_delivery",
-        "title": "📦 LIBRO IN ARRIVO",
-        "message": f"CODICE: {order.get('order_code')}\n\n📚 LIBRO: {order.get('book_titolo')}\n\n👤 VENDITORE: {order.get('seller_name')}\n🛒 ACQUIRENTE: {order.get('buyer_name')}\n\n📋 CONDIZIONI:\n{conditions_text}",
+        "title": "📦 LIBRO IN ARRIVO" + (" + 📗 FODERAZIONE" if include_foderazione else ""),
+        "message": f"🔑 CODICE: {order.get('order_code')}\n\n📚 LIBRO: {order.get('book_titolo')}\n\n👤 VENDITORE: {order.get('seller_name')}\n🛒 ACQUIRENTE: {order.get('buyer_name')}{foderazione_text_bs}\n\n📋 CONDIZIONI:\n{conditions_text}",
         "order_id": order_id,
         "order_code": order.get("order_code"),
         "book_titolo": order.get("book_titolo"),
@@ -7437,18 +7439,22 @@ async def mark_delivered_to_bookstore(order_id: str, user_id: str = Query(...)):
     await db.notifications.insert_one(notification)
     
     # Notifica alla CARTOLIBRERIA per la consegna del venditore
+    include_foderazione = order.get("include_foderazione", False)
+    foderazione_text = "\n\n📦 FODERAZIONE RICHIESTA: ✅ SÌ (€1.50)" if include_foderazione else "\n\n📦 FODERAZIONE: ❌ Non richiesta"
+    
     bookstore_delivery_notification = {
         "id": str(uuid.uuid4()),
         "bookstore_id": order.get("bookstore_id"),
         "type": "seller_delivery",
-        "title": "📦 CONSEGNA VENDITORE",
-        "message": f"Il venditore sta per consegnare un libro.\n\n📚 LIBRO: {order.get('book_titolo')}\n\n👤 VENDITORE: {order.get('seller_name')}\n🛒 ACQUIRENTE: {order.get('buyer_name')}\n\nVerifica il codice e le condizioni del libro prima di accettare la consegna.",
+        "title": "📦 CONSEGNA VENDITORE" + (" + 📗 FODERAZIONE" if include_foderazione else ""),
+        "message": f"Il venditore sta per consegnare un libro.\n\n📚 LIBRO: {order.get('book_titolo')}\n\n👤 VENDITORE: {order.get('seller_name')}\n🛒 ACQUIRENTE: {order.get('buyer_name')}{foderazione_text}\n\n🔑 CODICE: {order.get('order_code')}\n\nVerifica il codice e le condizioni del libro prima di accettare la consegna.",
         "order_id": order_id,
         "order_code": order.get("order_code"),
         "book_title": order.get("book_titolo"),
         "book_isbn": order.get("book_isbn"),
         "seller_name": order.get("seller_name"),
         "buyer_name": order.get("buyer_name"),
+        "include_foderazione": include_foderazione,
         "book_details": {
             "titolo": order.get("book_titolo"),
             "isbn": order.get("book_isbn"),
