@@ -800,6 +800,35 @@ export default function BookstorePortalScreen() {
         ))}
       </View>
 
+      {/* SCAN BAR FISSA - sotto i tabs */}
+      <View style={styles.fixedScanBarNew}>
+        <TextInput
+          style={styles.scanInputNew}
+          placeholder="Codice ordine"
+          value={manualCode}
+          onChangeText={setManualCode}
+          autoCapitalize="characters"
+          maxLength={6}
+          placeholderTextColor="#999"
+        />
+        <TouchableOpacity
+          style={[styles.scanConfirmBtn, (!manualCode.trim() || confirmingAction) && styles.scanConfirmBtnDisabled]}
+          onPress={() => handleScanOrManualCode(manualCode)}
+          disabled={!manualCode.trim() || confirmingAction}
+        >
+          {confirmingAction ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <Ionicons name="checkmark" size={20} color="#fff" />
+          )}
+        </TouchableOpacity>
+        {Platform.OS !== 'web' && (
+          <TouchableOpacity style={styles.scanQrBtn} onPress={() => setShowScanner(true)}>
+            <Ionicons name="qr-code" size={22} color="#fff" />
+          </TouchableOpacity>
+        )}
+      </View>
+
       {/* Content - ScrollView come Admin */}
       <ScrollView
         style={styles.adminContent}
@@ -865,41 +894,6 @@ export default function BookstorePortalScreen() {
                 <Ionicons name="stats-chart" size={32} color="#00BCD4" />
                 <Text style={styles.adminStatValue}>{stats.completati_mese}</Text>
                 <Text style={styles.adminStatLabel}>Completati Mese</Text>
-              </View>
-            </View>
-
-            {/* Scan Bar - sotto le stats */}
-            <View style={styles.scanBarCard}>
-              <Text style={styles.scanBarTitle}>📦 Scansiona Ordine</Text>
-              <View style={styles.scanInputRow}>
-                <TextInput
-                  style={styles.scanInput}
-                  placeholder="Codice ordine"
-                  value={manualCode}
-                  onChangeText={setManualCode}
-                  autoCapitalize="characters"
-                  maxLength={6}
-                  placeholderTextColor="#999"
-                />
-                <TouchableOpacity
-                  style={[styles.scanSubmitBtn, (!manualCode.trim() || confirmingAction) && styles.scanSubmitBtnDisabled]}
-                  onPress={() => handleScanOrManualCode(manualCode)}
-                  disabled={!manualCode.trim() || confirmingAction}
-                >
-                  {confirmingAction ? (
-                    <ActivityIndicator color="#fff" size="small" />
-                  ) : (
-                    <>
-                      <Ionicons name="checkmark" size={18} color="#fff" />
-                      <Text style={styles.scanSubmitBtnText}>Conferma</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-                {Platform.OS !== 'web' && (
-                  <TouchableOpacity style={styles.cameraBtn} onPress={() => setShowScanner(true)}>
-                    <Ionicons name="camera" size={22} color="#fff" />
-                  </TouchableOpacity>
-                )}
               </View>
             </View>
 
@@ -1479,6 +1473,41 @@ const styles = StyleSheet.create({
   adminContent: {
     flex: 1,
     padding: 16,
+  },
+  // SCAN BAR FISSA
+  fixedScanBarNew: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1a472a',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 8,
+  },
+  scanInputNew: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: '#333',
+  },
+  scanConfirmBtn: {
+    backgroundColor: '#4CAF50',
+    borderRadius: 8,
+    padding: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  scanConfirmBtnDisabled: {
+    backgroundColor: '#ccc',
+  },
+  scanQrBtn: {
+    backgroundColor: '#2196F3',
+    borderRadius: 8,
+    padding: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   adminStatsGrid: {
     flexDirection: 'row',
