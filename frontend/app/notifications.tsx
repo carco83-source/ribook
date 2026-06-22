@@ -213,7 +213,12 @@ export default function NotificationsScreen() {
       console.error('Error generating notifications:', error);
     }
 
-    return notifications;
+    // Ordina per data decrescente
+    return notifications.sort((a, b) => {
+      const dateA = new Date(a.created_at).getTime();
+      const dateB = new Date(b.created_at).getTime();
+      return dateB - dateA;
+    });
   };
 
   useFocusEffect(
@@ -263,24 +268,33 @@ export default function NotificationsScreen() {
   };
 
   const formatTime = (dateString: string) => {
-    // Converti in orario italiano (Europe/Rome)
-    const date = new Date(dateString);
-    const now = new Date();
-    
-    // Calcola la differenza considerando il timezone italiano
-    const italianDate = new Date(date.toLocaleString('en-US', { timeZone: 'Europe/Rome' }));
-    const italianNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Rome' }));
-    
-    const diffMs = italianNow.getTime() - italianDate.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'Data non valida';
+      
+      const now = new Date();
+      const diffMs = now.getTime() - date.getTime();
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMs / 3600000);
+      const diffDays = Math.floor(diffMs / 86400000);
 
-    if (diffMins < 1) return 'Adesso';
-    if (diffMins < 60) return `${diffMins} min fa`;
-    if (diffHours < 24) return `${diffHours} ore fa`;
-    if (diffDays < 7) return `${diffDays} giorni fa`;
-    return date.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' });
+      if (diffMins < 1) return 'Adesso';
+      if (diffMins < 60) return `${diffMins} min fa`;
+      if (diffHours < 24) return `${diffHours}h fa`;
+      if (diffDays < 1) return 'Oggi';
+      if (diffDays === 1) return 'Ieri';
+      if (diffDays < 7) return `${diffDays} giorni fa`;
+      
+      // Per date più vecchie, mostra data e ora italiana
+      return date.toLocaleString('it-IT', { 
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (e) {
+      return 'Data non valida';
+    }
   };
 
   if (loading) {
