@@ -2098,10 +2098,13 @@ async def get_listing_by_id(listing_id: str):
 @api_router.get("/listings/isbn/{isbn}")
 async def get_listings_by_isbn(isbn: str):
     """Get all available listings for a specific ISBN"""
-    # Find listings for this ISBN
+    # Find listings for this ISBN - cerca sia 'stato' che 'status' per compatibilità
     query = {
         "book_isbn": isbn,
-        "status": "available"
+        "$or": [
+            {"stato": "disponibile"},
+            {"status": "available"}
+        ]
     }
     
     projection = {"foto_base64": 0}
