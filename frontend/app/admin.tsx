@@ -245,6 +245,82 @@ export default function AdminPortalScreen() {
     setRefreshing(false);
   };
 
+  // Funzione per cancellare tutti i dati locali
+  const handleClearLocalData = async () => {
+    const confirm = Platform.OS === 'web' 
+      ? window.confirm('⚠️ ATTENZIONE: Questo cancellerà TUTTI i dati locali (profili, notifiche cache, preferenze).\n\nVuoi procedere?')
+      : await new Promise(resolve => Alert.alert(
+          '⚠️ Cancella Dati Locali', 
+          'Questo cancellerà TUTTI i dati locali (profili, notifiche cache, preferenze).\n\nVuoi procedere?', 
+          [
+            { text: 'Annulla', onPress: () => resolve(false) },
+            { text: 'Cancella Tutto', style: 'destructive', onPress: () => resolve(true) }
+          ]
+        ));
+    
+    if (!confirm) return;
+
+    try {
+      // Cancella TUTTO da AsyncStorage
+      await AsyncStorage.clear();
+      
+      // Cancella anche localStorage su web
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        localStorage.clear();
+        sessionStorage.clear();
+      }
+      
+      if (Platform.OS === 'web') {
+        window.alert('✅ Dati locali cancellati!\n\nLa pagina verrà ricaricata.');
+        window.location.reload();
+      } else {
+        Alert.alert('✅ Fatto', 'Dati locali cancellati! Riavvia l\'app per vedere le modifiche.');
+      }
+    } catch (error) {
+      console.error('Error clearing local data:', error);
+      if (Platform.OS === 'web') {
+        window.alert('Errore durante la cancellazione');
+      } else {
+        Alert.alert('Errore', 'Errore durante la cancellazione');
+      }
+    }
+  };
+
+  // Funzione per cancellare dati dal database (server)
+  const handleClearServerData = async () => {
+    const confirm = Platform.OS === 'web' 
+      ? window.confirm('⚠️ ATTENZIONE: Questo cancellerà TUTTI i dati dal DATABASE SERVER (notifiche, ordini, messaggi, annunci).\n\nQuesta azione è IRREVERSIBILE!\n\nVuoi procedere?')
+      : await new Promise(resolve => Alert.alert(
+          '⚠️ CANCELLA DATABASE', 
+          'Questo cancellerà TUTTI i dati dal SERVER!\n\n• Notifiche\n• Ordini\n• Messaggi\n• Annunci\n• Conversazioni\n\nQuesta azione è IRREVERSIBILE!', 
+          [
+            { text: 'Annulla', onPress: () => resolve(false) },
+            { text: 'CANCELLA TUTTO', style: 'destructive', onPress: () => resolve(true) }
+          ]
+        ));
+    
+    if (!confirm) return;
+
+    try {
+      await axios.post(`${API_URL}/api/admin/clear-all-data?admin_id=${adminId}`);
+      
+      if (Platform.OS === 'web') {
+        window.alert('✅ Database svuotato!');
+      } else {
+        Alert.alert('✅ Fatto', 'Database svuotato!');
+      }
+      
+      loadDashboard(adminId!);
+    } catch (error: any) {
+      const message = error.response?.data?.detail || 'Errore';
+      if (Platform.OS === 'web') {
+        window.alert('Errore: ' + message);
+      } else {
+        Alert.alert('Errore', message);
+      }
+    }
+  };
+
   if (loading) {
     return (
       <View style={[styles.container, styles.centerContent]}>
@@ -391,6 +467,36 @@ export default function AdminPortalScreen() {
               <Text style={styles.statValue}>{stats.orders?.completed || 0}</Text>
               <Text style={styles.statLabel}>Ordini completati</Text>
             </View>
+          </View>
+        )}
+        
+        {/* Sezione Pulizia Dati - solo in Dashboard */}
+        {activeTab === 'dashboard' && (
+          <View style={styles.dangerZone}>
+            <Text style={styles.dangerZoneTitle}>⚠️ Zona Pericolosa</Text>
+            <Text style={styles.dangerZoneSubtitle}>Queste azioni sono irreversibili</Text>
+            
+            <TouchableOpacity
+              style={styles.dangerButton}
+              onPress={handleClearLocalData}
+            >
+              <Ionicons name="phone-portrait-outline" size={20} color="#fff" />
+              <View style={styles.dangerButtonContent}>
+                <Text style={styles.dangerButtonTitle}>Cancella Dati Locali</Text>
+                <Text style={styles.dangerButtonDesc}>Cache, profili salvati, preferenze del dispositivo</Text>
+              </View>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[styles.dangerButton, styles.dangerButtonRed]}
+              onPress={handleClearServerData}
+            >
+              <Ionicons name="server-outline" size={20} color="#fff" />
+              <View style={styles.dangerButtonContent}>
+                <Text style={styles.dangerButtonTitle}>Svuota Database Server</Text>
+                <Text style={styles.dangerButtonDesc}>Notifiche, ordini, messaggi, annunci, conversazioni</Text>
+              </View>
+            </TouchableOpacity>
           </View>
         )}
 

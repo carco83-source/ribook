@@ -11312,6 +11312,54 @@ async def get_all_bookstores_credits():
         "count": len(result)
     }
 
+@api_router.post("/admin/clear-all-data")
+async def admin_clear_all_data(admin_id: str = Query(...)):
+    """Admin: Svuota TUTTI i dati dal database (notifiche, ordini, messaggi, annunci, ecc.)"""
+    
+    # Verifica admin
+    admin = await db.users.find_one({"id": admin_id, "is_admin": True})
+    if not admin:
+        raise HTTPException(status_code=403, detail="Non autorizzato")
+    
+    # Collezioni da svuotare
+    collections_to_clear = [
+        "notifications",
+        "bookstore_notifications",
+        "orders",
+        "cart_items",
+        "listings",
+        "conversations",
+        "messages",
+        "profiles",
+        "bookstore_credit_logs",
+        "transactions",
+        "exchanges",
+        "reservations",
+        "radar_alerts",
+        "wishlists"
+    ]
+    
+    deleted_counts = {}
+    for coll in collections_to_clear:
+        try:
+            result = await db[coll].delete_many({})
+            deleted_counts[coll] = result.deleted_count
+        except Exception as e:
+            deleted_counts[coll] = f"error: {str(e)}"
+    
+    # Reset crediti cartolibrerie
+    await db.bookstores.update_many({}, {"$set": {
+        "credito_commissioni": 0,
+        "credito_foderazione": 0,
+        "credito_totale": 0
+    }})
+    
+    return {
+        "success": True,
+        "message": "Database svuotato",
+        "deleted": deleted_counts
+    }
+
 @api_router.post("/bookstore/{bookstore_id}/confirm-pickup/{order_id}")
 async def bookstore_confirm_pickup(bookstore_id: str, order_id: str):
     """Conferma ritiro libro dall'acquirente"""
