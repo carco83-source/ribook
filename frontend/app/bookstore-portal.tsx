@@ -1669,7 +1669,7 @@ const styles = StyleSheet.create({
   tabsContainer: {
     backgroundColor: '#fff',
     paddingHorizontal: 8,
-    paddingVertical: 8,
+    paddingVertical: 6,
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
     flexDirection: 'row',
@@ -1730,7 +1730,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   dashboardContent: {
-    padding: 16,
+    padding: 12,
+    paddingTop: 8,
   },
   // Quick Actions Card
   quickActionsCard: {
