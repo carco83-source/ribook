@@ -8993,20 +8993,25 @@ async def get_bookstore_dashboard(bookstore_id: str):
         order.pop('_id', None)
         status = order.get("status", "")
         
-        if status in ["paid_escrow", "pagato_attesa_consegna", "delivering_to_bookstore"]:
+        if status in ["paid_escrow", "pagato_attesa_consegna", "delivering_to_bookstore", "in_attesa_consegna"]:
             orders_in_arrivo.append(order)
-        elif status in ["ready_for_pickup", "pronto_per_ritiro"]:
+        elif status in ["ready_for_pickup", "pronto_per_ritiro", "delivered_to_bookstore"]:
             orders_da_ritirare.append(order)
-        elif status == "completed":
+        elif status in ["completed", "picked_up"]:
             orders_completati.append(order)
-        elif status in ["return_requested", "returned", "refunded", "reso_richiesto"]:
+        elif status in ["return_requested", "returned", "refunded", "reso_richiesto", "in_verifica_reso"]:
             orders_resi.append(order)
     
     # Ordini completati oggi e questo mese
+    def normalize_date(val):
+        if isinstance(val, datetime):
+            return val.isoformat()
+        return val if val else ""
+    
     completati_oggi = [o for o in orders_completati 
-        if o.get("completed_at") and o.get("completed_at") >= today_start.isoformat()]
+        if o.get("completed_at") and normalize_date(o.get("completed_at")) >= today_start.isoformat()]
     completati_mese = [o for o in orders_completati 
-        if o.get("completed_at") and o.get("completed_at") >= month_start.isoformat()]
+        if o.get("completed_at") and normalize_date(o.get("completed_at")) >= month_start.isoformat()]
     
     # Calcolo guadagni cartolibreria con nuova formula
     guadagno_libri_oggi = 0
