@@ -926,11 +926,20 @@ export default function ListingDetailScreen() {
         {/* Price Display - Diverso per venditore e acquirente */}
         <View style={styles.priceBreakdown}>
           {isOwner ? (
-            // VENDITORE: vede solo il suo prezzo
+            // VENDITORE: vede prezzo annuncio e quanto guadagnerà (80%)
             <>
               <View style={styles.priceRow}>
-                <Text style={styles.priceRowLabel}>Il tuo guadagno</Text>
+                <Text style={styles.priceRowLabel}>Prezzo annuncio</Text>
                 <Text style={styles.priceRowValue}>€{total.toFixed(2)}</Text>
+              </View>
+              <View style={styles.priceRow}>
+                <Text style={styles.priceRowLabel}>Commissione (20%)</Text>
+                <Text style={[styles.priceRowValue, { color: '#ff6b6b' }]}>-€{(total * 0.20).toFixed(2)}</Text>
+              </View>
+              <View style={styles.totalDivider} />
+              <View style={styles.priceRow}>
+                <Text style={[styles.totalLabel, { color: '#4CAF50' }]}>Riceverai (80%)</Text>
+                <Text style={[styles.totalValue, { color: '#4CAF50' }]}>€{(total * 0.80).toFixed(2)}</Text>
               </View>
             </>
           ) : (
