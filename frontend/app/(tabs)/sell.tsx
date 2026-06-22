@@ -27,9 +27,12 @@ interface OrderToPay {
   seller_name: string;
   bookstore_name: string;
   prezzo_libro: number;
+  prezzo?: number;
   commissione_app: number;
   commissione_cartolibreria: number;
   totale_acquirente: number;
+  include_foderazione?: boolean;
+  costo_foderazione?: number;
   status: string;
   created_at: string;
 }
@@ -229,11 +232,17 @@ export default function CartScreen() {
           <View style={styles.priceBreakdown}>
             <View style={styles.priceRow}>
               <Text style={styles.priceLabel}>Prezzo libro</Text>
-              <Text style={styles.priceValue}>€{item.prezzo_libro.toFixed(2)}</Text>
+              <Text style={styles.priceValue}>€{(item.prezzo_libro || item.prezzo || 0).toFixed(2)}</Text>
             </View>
+            {item.include_foderazione && (
+              <View style={styles.priceRow}>
+                <Text style={styles.priceLabel}>📗 Foderazione</Text>
+                <Text style={styles.priceValue}>€{(item.costo_foderazione || 1.50).toFixed(2)}</Text>
+              </View>
+            )}
             <View style={[styles.priceRow, styles.totalRow]}>
               <Text style={styles.totalLabel}>Subtotale</Text>
-              <Text style={styles.totalValue}>€{item.totale_acquirente.toFixed(2)}</Text>
+              <Text style={styles.totalValue}>€{(item.totale_acquirente || (item.prezzo_libro || item.prezzo || 0) + (item.include_foderazione ? 1.50 : 0)).toFixed(2)}</Text>
             </View>
           </View>
         </View>

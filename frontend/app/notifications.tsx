@@ -238,21 +238,26 @@ export default function NotificationsScreen() {
         break;
       case 'sale':
       case 'delivery':
-        router.push('/my-sales');
+        router.push('/orders');
         break;
       case 'pickup':
-        router.push('/my-purchases');
+      case 'order_pending':
+      case 'ready_for_pickup':
+      case 'book_at_bookstore':
+        router.push('/orders');
         break;
       case 'chat':
+      case 'new_message':
         router.push('/(tabs)/chats');
         break;
-      case 'book_available':
-        // Naviga alla pagina dei venditori per questo libro
-        if (notification.book_isbn) {
-          router.push(`/book-sellers/${notification.book_isbn}`);
-        }
+      case 'confirmation_request':
+        // Naviga agli ordini per confermare
+        router.push('/orders');
         break;
+      // book_available e seller_confirmed mantengono il comportamento originale
+      // (gestiti dal pulsante "Tocca per andare al carrello")
       default:
+        // Per tutte le altre notifiche, resta nella pagina notifiche
         break;
     }
   };
