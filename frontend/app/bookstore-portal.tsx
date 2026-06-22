@@ -822,11 +822,18 @@ export default function BookstorePortalScreen() {
             <Ionicons name="checkmark" size={20} color="#fff" />
           )}
         </TouchableOpacity>
-        {Platform.OS !== 'web' && (
-          <TouchableOpacity style={styles.scanQrBtn} onPress={() => setShowScanner(true)}>
-            <Ionicons name="qr-code" size={22} color="#fff" />
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity 
+          style={styles.scanQrBtn} 
+          onPress={() => {
+            if (Platform.OS === 'web') {
+              Alert.alert('Info', 'La scansione QR funziona solo su dispositivi mobili con fotocamera');
+            } else {
+              setShowScanner(true);
+            }
+          }}
+        >
+          <Ionicons name="qr-code" size={22} color="#fff" />
+        </TouchableOpacity>
       </View>
 
       {/* Content - ScrollView come Admin */}
@@ -1851,16 +1858,6 @@ const styles = StyleSheet.create({
   },
   codeSubmitBtnDisabled: {
     backgroundColor: '#ccc',
-  },
-  scanQrBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    marginTop: 12,
-    paddingVertical: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
   },
   scanQrBtnText: {
     color: '#1a472a',
