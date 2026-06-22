@@ -6278,6 +6278,51 @@ async def add_to_cart(listing_id: str, bookstore_id: str, buyer_id: str, include
     
     await db.cart_items.insert_one(cart_item)
     
+    # CREA ANCHE UN ORDINE nella collezione orders (per essere visualizzato nel carrello)
+    # Questo ordine sarà in stato "in_attesa_conferma_venditore"
+    seller = await db.users.find_one({"id": listing["seller_id"]})
+    seller_name = seller.get("username", "Venditore") if seller else "Venditore"
+    buyer = await db.users.find_one({"id": buyer_id})
+    buyer_name = buyer.get("username", "Acquirente") if buyer else "Acquirente"
+    
+    order_code = f"RB{now.strftime('%d%m')}{str(uuid.uuid4())[:4].upper()}"
+    seller_confirmation_deadline = now + timedelta(hours=24)
+    
+    order_for_cart = {
+        "id": cart_item["id"],  # Usa lo stesso ID del cart_item
+        "order_code": order_code,
+        "buyer_id": buyer_id,
+        "buyer_name": buyer_name,
+        "seller_id": listing["seller_id"],
+        "seller_name": seller_name,
+        "listing_id": listing_id,
+        "book_isbn": listing.get("book_isbn", ""),
+        "book_titolo": listing.get("book_titolo", ""),
+        "book_autore": listing.get("book_autore", ""),
+        "book_editore": listing.get("book_editore", ""),
+        "bookstore_id": bookstore_id,
+        "bookstore_name": bookstore.get("nome", ""),
+        "prezzo_libro": prezzo_libro,
+        "include_foderazione": include_foderazione,
+        "costo_foderazione": commissioni["costo_foderazione"],
+        "totale_acquirente": commissioni["totale_acquirente"],
+        "netto_venditore": commissioni["netto_venditore"],
+        "commissione_app": commissioni["commissione_piattaforma"],
+        "commissione_cartolibreria": commissioni["commissione_cartolibreria_totale"],
+        "commissione_piattaforma": commissioni["commissione_piattaforma"],
+        "commissione_cartolibreria_libro": commissioni["commissione_cartolibreria_libro"],
+        "commissione_cartolibreria_foderazione": commissioni["commissione_cartolibreria_foderazione"],
+        "status": "in_attesa_conferma_venditore",
+        "seller_confirmation_deadline": seller_confirmation_deadline.isoformat(),
+        "created_at": now.isoformat(),
+        "status_history": [{
+            "status": "in_attesa_conferma_venditore",
+            "timestamp": now.isoformat(),
+            "note": "Richiesta inviata - Il venditore ha 24h per confermare"
+        }]
+    }
+    await db.orders.insert_one(order_for_cart)
+    
     # Update listing status to reserved
     await db.listings.update_one(
         {"id": listing_id},
