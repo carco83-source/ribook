@@ -759,43 +759,50 @@ export default function BookstorePortalScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Fixed Scan Bar - Always on top */}
-      <View style={styles.fixedScanBar}>
-        <View style={styles.scanInputRow}>
-          <TextInput
-            style={styles.scanInput}
-            placeholder="Codice ordine"
-            value={manualCode}
-            onChangeText={setManualCode}
-            autoCapitalize="characters"
-            maxLength={6}
-            placeholderTextColor="#999"
-          />
+      {/* Tabs - ESATTAMENTE come Admin */}
+      <View style={styles.adminTabs}>
+        {[
+          { key: 'dashboard', icon: 'grid', label: 'Dashboard' },
+          { key: 'in_arrivo', icon: 'time', label: 'In Arrivo' },
+          { key: 'da_ritirare', icon: 'cube', label: 'Da Ritirare' },
+          { key: 'completati', icon: 'checkmark-circle', label: 'Completati' },
+          { key: 'resi', icon: 'refresh', label: 'Resi' },
+          { key: 'notifiche', icon: 'notifications', label: 'Notifiche' },
+        ].map((tab) => (
           <TouchableOpacity
-            style={[styles.scanSubmitBtn, (!manualCode.trim() || confirmingAction) && styles.scanSubmitBtnDisabled]}
-            onPress={() => handleScanOrManualCode(manualCode)}
-            disabled={!manualCode.trim() || confirmingAction}
+            key={tab.key}
+            style={[styles.adminTab, activeTab === tab.key && styles.adminTabActive]}
+            onPress={() => setActiveTab(tab.key as TabType)}
           >
-            {confirmingAction ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <>
-                <Ionicons name="checkmark" size={18} color="#fff" />
-                <Text style={styles.scanSubmitBtnText}>Conferma</Text>
-              </>
-            )}
+            <View style={styles.adminTabIconContainer}>
+              <Ionicons
+                name={tab.icon as any}
+                size={20}
+                color={activeTab === tab.key ? '#1a472a' : '#666'}
+              />
+              {tab.key !== 'dashboard' && (() => {
+                const count = tab.key === 'in_arrivo' ? stats.in_arrivo
+                  : tab.key === 'da_ritirare' ? stats.da_ritirare
+                  : tab.key === 'completati' ? stats.completati_mese
+                  : tab.key === 'resi' ? stats.resi_in_attesa
+                  : tab.key === 'notifiche' ? unreadCount : 0;
+                return count > 0 ? (
+                  <View style={styles.adminTabBadge}>
+                    <Text style={styles.adminTabBadgeText}>{count}</Text>
+                  </View>
+                ) : null;
+              })()}
+            </View>
+            <Text style={[styles.adminTabText, activeTab === tab.key && styles.adminTabTextActive]}>
+              {tab.label}
+            </Text>
           </TouchableOpacity>
-          {Platform.OS !== 'web' && (
-            <TouchableOpacity style={styles.cameraBtn} onPress={() => setShowScanner(true)}>
-              <Ionicons name="camera" size={22} color="#fff" />
-            </TouchableOpacity>
-          )}
-        </View>
+        ))}
       </View>
 
-      {/* SINGLE ScrollView containing everything */}
+      {/* Content - ScrollView come Admin */}
       <ScrollView
-        style={styles.content}
+        style={styles.adminContent}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -807,179 +814,104 @@ export default function BookstorePortalScreen() {
           />
         }
       >
-        {/* Tabs - now inside the main ScrollView */}
-        <View style={styles.tabsWrapper}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabsContainerInner}>
-            {[
-              { key: 'dashboard', label: 'Dashboard', icon: 'grid-outline', count: null },
-              { key: 'in_arrivo', label: 'In Arrivo', icon: 'time-outline', count: stats.in_arrivo },
-              { key: 'da_ritirare', label: 'Da Ritirare', icon: 'cube-outline', count: stats.da_ritirare },
-              { key: 'completati', label: 'Completati', icon: 'checkmark-circle-outline', count: stats.completati_mese },
-              { key: 'resi', label: 'Resi', icon: 'refresh-outline', count: stats.resi_in_attesa },
-              { key: 'notifiche', label: 'Notifiche', icon: 'notifications-outline', count: unreadCount },
-            ].map((tab) => (
-              <TouchableOpacity
-                key={tab.key}
-                style={[styles.tab, activeTab === tab.key && styles.tabActive]}
-                onPress={() => setActiveTab(tab.key as TabType)}
-              >
-                <View style={styles.tabIconContainer}>
-                  <Ionicons name={tab.icon as any} size={22} color={activeTab === tab.key ? '#1a472a' : '#666'} />
-                  {tab.count !== null && tab.count > 0 && (
-                    <View style={[styles.tabBadge, activeTab === tab.key && styles.tabBadgeActive]}>
-                      <Text style={[styles.tabBadgeText, activeTab === tab.key && styles.tabBadgeTextActive]}>{tab.count}</Text>
-                    </View>
-                  )}
-                </View>
-                <Text style={[styles.tabText, activeTab === tab.key && styles.tabTextActive]}>{tab.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-
-        {/* Dashboard Tab */}
+        {/* Dashboard Tab - Card grandi come Admin */}
         {activeTab === 'dashboard' && (
           <>
-            {/* Stats Grid - Card quadrate */}
-            <View style={[styles.statsGrid, { paddingHorizontal: 8, paddingTop: 8 }, isDesktop && styles.statsGridDesktop]}>
-              {/* In Arrivo */}
+            {/* Stats Grid - ESATTAMENTE come Admin */}
+            <View style={styles.adminStatsGrid}>
               <TouchableOpacity 
-                style={[styles.statCard, styles.statCardBlue]}
+                style={[styles.adminStatCard, { backgroundColor: '#e3f2fd' }]}
                 onPress={() => setActiveTab('in_arrivo')}
               >
-                <Ionicons name="time-outline" size={26} color="#1976D2" />
-                <Text style={styles.statNumber}>{stats.in_arrivo}</Text>
-                <Text style={styles.statLabel}>In Arrivo</Text>
-                {stats.ordini_scaduti > 0 && (
-                  <View style={styles.alertBadge}>
-                    <Text style={styles.alertBadgeText}>{stats.ordini_scaduti}!</Text>
-                  </View>
-                )}
+                <Ionicons name="time" size={32} color="#2196F3" />
+                <Text style={styles.adminStatValue}>{stats.in_arrivo}</Text>
+                <Text style={styles.adminStatLabel}>In Arrivo</Text>
               </TouchableOpacity>
-
-              {/* Da Ritirare */}
+              
               <TouchableOpacity 
-                style={[styles.statCard, styles.statCardOrange]}
+                style={[styles.adminStatCard, { backgroundColor: '#fff3e0' }]}
                 onPress={() => setActiveTab('da_ritirare')}
               >
-                <Ionicons name="cube-outline" size={26} color="#F57C00" />
-                <Text style={styles.statNumber}>{stats.da_ritirare}</Text>
-                <Text style={styles.statLabel}>Da Ritirare</Text>
+                <Ionicons name="cube" size={32} color="#FF9800" />
+                <Text style={styles.adminStatValue}>{stats.da_ritirare}</Text>
+                <Text style={styles.adminStatLabel}>Da Ritirare</Text>
               </TouchableOpacity>
-
-              {/* Completati Oggi */}
+              
               <TouchableOpacity 
-                style={[styles.statCard, styles.statCardGreen]}
+                style={[styles.adminStatCard, { backgroundColor: '#e8f5e9' }]}
                 onPress={() => setActiveTab('completati')}
               >
-                <Ionicons name="checkmark-circle-outline" size={26} color="#388E3C" />
-                <Text style={styles.statNumber}>{stats.completati_oggi}</Text>
-                <Text style={styles.statLabel}>Completati Oggi</Text>
+                <Ionicons name="checkmark-circle" size={32} color="#4CAF50" />
+                <Text style={styles.adminStatValue}>{stats.completati_oggi}</Text>
+                <Text style={styles.adminStatLabel}>Completati Oggi</Text>
               </TouchableOpacity>
-
-              {/* Resi */}
+              
               <TouchableOpacity 
-                style={[styles.statCard, styles.statCardRed]}
+                style={[styles.adminStatCard, { backgroundColor: '#fce4ec' }]}
                 onPress={() => setActiveTab('resi')}
               >
-                <Ionicons name="refresh-outline" size={26} color="#C2185B" />
-                <Text style={styles.statNumber}>{stats.resi_in_attesa}</Text>
-                <Text style={styles.statLabel}>Resi</Text>
+                <Ionicons name="refresh" size={32} color="#E91E63" />
+                <Text style={styles.adminStatValue}>{stats.resi_in_attesa}</Text>
+                <Text style={styles.adminStatLabel}>Resi in Attesa</Text>
               </TouchableOpacity>
-            </View>
-
-            {/* Gestione Libri */}
-            <View style={styles.earningsCard}>
-              <View style={styles.earningsHeader}>
-                <Ionicons name="book-outline" size={28} color="#fff" />
-                <Text style={styles.earningsTitle}>Gestione Libri</Text>
+              
+              <View style={[styles.adminStatCard, { backgroundColor: '#f3e5f5' }]}>
+                <Ionicons name="wallet" size={32} color="#9C27B0" />
+                <Text style={styles.adminStatValue}>€{stats.credito?.totale?.toFixed(2) || '0.00'}</Text>
+                <Text style={styles.adminStatLabel}>Credito Totale</Text>
               </View>
-              <View style={styles.earningsGrid}>
-                <View style={styles.earningsItem}>
-                  <Text style={styles.earningsItemLabel}>Oggi</Text>
-                  <Text style={styles.earningsItemValue}>€{stats.guadagno_libri_oggi.toFixed(2)}</Text>
-                </View>
-                <View style={styles.earningsDivider} />
-                <View style={styles.earningsItem}>
-                  <Text style={styles.earningsItemLabel}>Questo mese</Text>
-                  <Text style={styles.earningsItemValue}>€{stats.guadagno_libri_mese.toFixed(2)}</Text>
-                </View>
+              
+              <View style={[styles.adminStatCard, { backgroundColor: '#e0f7fa' }]}>
+                <Ionicons name="stats-chart" size={32} color="#00BCD4" />
+                <Text style={styles.adminStatValue}>{stats.completati_mese}</Text>
+                <Text style={styles.adminStatLabel}>Completati Mese</Text>
               </View>
             </View>
 
-            {/* Foderazioni */}
-            <View style={styles.foderazioneCard}>
-              <View style={styles.earningsHeader}>
-                <Ionicons name="layers-outline" size={28} color="#fff" />
-                <View style={{flex: 1}}>
-                  <Text style={styles.earningsTitle}>Foderazioni</Text>
-                  <Text style={styles.foderazioneSubtitle}>Copertine: {stats.num_foderazione_mese} questo mese</Text>
-                </View>
-              </View>
-              <View style={styles.earningsGrid}>
-                <View style={styles.earningsItem}>
-                  <Text style={styles.earningsItemLabel}>Oggi ({stats.num_foderazione_oggi})</Text>
-                  <Text style={styles.earningsItemValue}>€{stats.guadagno_foderazione_oggi.toFixed(2)}</Text>
-                </View>
-                <View style={styles.earningsDivider} />
-                <View style={styles.earningsItem}>
-                  <Text style={styles.earningsItemLabel}>Questo mese</Text>
-                  <Text style={styles.earningsItemValue}>€{stats.guadagno_foderazione_mese.toFixed(2)}</Text>
-                </View>
-              </View>
-            </View>
-
-            {/* Totale Guadagni */}
-            <View style={styles.totalEarningsCard}>
-              <View style={styles.totalEarningsRow}>
-                <View style={styles.totalEarningsLeft}>
-                  <Ionicons name="wallet" size={32} color="#4CAF50" />
-                  <View>
-                    <Text style={styles.totalEarningsLabel}>TOTALE GUADAGNI</Text>
-                    <Text style={styles.totalEarningsSubLabel}>Libri + Foderazioni</Text>
-                  </View>
-                </View>
-                <View style={styles.totalEarningsRight}>
-                  <Text style={styles.totalEarningsSmall}>Oggi: €{stats.guadagno_oggi.toFixed(2)}</Text>
-                  <Text style={styles.totalEarningsValue}>€{stats.guadagno_mese.toFixed(2)}</Text>
-                  <Text style={styles.totalEarningsSmall}>questo mese</Text>
-                </View>
+            {/* Scan Bar - sotto le stats */}
+            <View style={styles.scanBarCard}>
+              <Text style={styles.scanBarTitle}>📦 Scansiona Ordine</Text>
+              <View style={styles.scanInputRow}>
+                <TextInput
+                  style={styles.scanInput}
+                  placeholder="Codice ordine"
+                  value={manualCode}
+                  onChangeText={setManualCode}
+                  autoCapitalize="characters"
+                  maxLength={6}
+                  placeholderTextColor="#999"
+                />
+                <TouchableOpacity
+                  style={[styles.scanSubmitBtn, (!manualCode.trim() || confirmingAction) && styles.scanSubmitBtnDisabled]}
+                  onPress={() => handleScanOrManualCode(manualCode)}
+                  disabled={!manualCode.trim() || confirmingAction}
+                >
+                  {confirmingAction ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <>
+                      <Ionicons name="checkmark" size={18} color="#fff" />
+                      <Text style={styles.scanSubmitBtnText}>Conferma</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+                {Platform.OS !== 'web' && (
+                  <TouchableOpacity style={styles.cameraBtn} onPress={() => setShowScanner(true)}>
+                    <Ionicons name="camera" size={22} color="#fff" />
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
 
-            {/* CREDITO ACCUMULATO - dal backend */}
-            {stats.credito && (
-              <View style={styles.creditCard}>
-                <View style={styles.creditHeader}>
-                  <Ionicons name="cash" size={28} color="#fff" />
-                  <Text style={styles.creditTitle}>💰 CREDITO ACCUMULATO</Text>
-                </View>
-                <View style={styles.creditContent}>
-                  <View style={styles.creditRow}>
-                    <Text style={styles.creditTotalLabel}>TOTALE DA INCASSARE</Text>
-                    <Text style={styles.creditTotalValue}>€{stats.credito.totale.toFixed(2)}</Text>
-                  </View>
-                </View>
-                <Text style={styles.creditNote}>
-                  * Il credito viene accumulato al completamento di ogni ordine
-                </Text>
-              </View>
-            )}
-
-            {/* Info Card */}
-            <View style={styles.infoCard}>
-              <Ionicons name="information-circle-outline" size={24} color="#1a472a" />
-              <View style={styles.infoCardContent}>
-                <Text style={styles.infoCardTitle}>Timer Consegne (2 giorni lavorativi)</Text>
-                <Text style={styles.infoCardText}>
-                  I venditori hanno 2 giorni lavorativi per consegnare i libri. 
-                  Se il timer scade, l'ordine viene annullato automaticamente e l'acquirente rimborsato.
-                </Text>
-              </View>
+            {/* Info */}
+            <View style={styles.infoCardBottom}>
+              <Ionicons name="information-circle-outline" size={20} color="#1a472a" />
+              <Text style={styles.infoCardTextSmall}>
+                I venditori hanno 2 giorni lavorativi per consegnare. Timer scaduto = rimborso automatico.
+              </Text>
             </View>
           </>
         )}
-
         {/* In Arrivo Tab */}
         {activeTab === 'in_arrivo' && (
           <View style={styles.ordersList}>
@@ -1499,6 +1431,104 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f5f5f5',
   },
+  // ========== STILI ADMIN-LIKE ==========
+  adminTabs: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  adminTab: {
+    flex: 1,
+    alignItems: 'center',
+    padding: 12,
+    gap: 4,
+  },
+  adminTabActive: {
+    borderBottomWidth: 2,
+    borderBottomColor: '#1a472a',
+  },
+  adminTabIconContainer: {
+    position: 'relative',
+  },
+  adminTabBadge: {
+    position: 'absolute',
+    top: -6,
+    right: -10,
+    backgroundColor: '#f44336',
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  adminTabBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  adminTabText: {
+    fontSize: 10,
+    color: '#666',
+  },
+  adminTabTextActive: {
+    color: '#1a472a',
+    fontWeight: '600',
+  },
+  adminContent: {
+    flex: 1,
+    padding: 16,
+  },
+  adminStatsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  adminStatCard: {
+    width: '48%',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  adminStatValue: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#333',
+    marginTop: 8,
+  },
+  adminStatLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
+  },
+  scanBarCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 16,
+  },
+  scanBarTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1a472a',
+    marginBottom: 12,
+  },
+  infoCardBottom: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#e8f5e9',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 16,
+    gap: 8,
+  },
+  infoCardTextSmall: {
+    flex: 1,
+    fontSize: 12,
+    color: '#1a472a',
+  },
+  // ========== FINE STILI ADMIN-LIKE ==========
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
