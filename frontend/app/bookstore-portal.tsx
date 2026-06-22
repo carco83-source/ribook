@@ -212,9 +212,16 @@ export default function BookstorePortalScreen() {
   
   // Scanner state
   const [showScanner, setShowScanner] = useState(false);
+  const [scanMode, setScanMode] = useState<'generic' | 'delivery' | 'pickup'>('generic');
   const [manualCode, setManualCode] = useState('');
   const [confirmingAction, setConfirmingAction] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
+
+  // Funzione per aprire scanner in modalità specifica
+  const openScanner = (mode: 'generic' | 'delivery' | 'pickup') => {
+    setScanMode(mode);
+    setShowScanner(true);
+  };
   
   // Timer update
   const [, setTimerTick] = useState(0);
@@ -877,15 +884,6 @@ export default function BookstorePortalScreen() {
                 </View>
                 <View style={styles.creditContent}>
                   <View style={styles.creditRow}>
-                    <Text style={styles.creditLabel}>Commissioni Libro (10%)</Text>
-                    <Text style={styles.creditValue}>€{stats.credito.commissioni_libro.toFixed(2)}</Text>
-                  </View>
-                  <View style={styles.creditRow}>
-                    <Text style={styles.creditLabel}>Foderazioni (€1.50)</Text>
-                    <Text style={styles.creditValue}>€{stats.credito.foderazione.toFixed(2)}</Text>
-                  </View>
-                  <View style={styles.creditDivider} />
-                  <View style={styles.creditRow}>
                     <Text style={styles.creditTotalLabel}>TOTALE DA INCASSARE</Text>
                     <Text style={styles.creditTotalValue}>€{stats.credito.totale.toFixed(2)}</Text>
                   </View>
@@ -956,13 +954,24 @@ export default function BookstorePortalScreen() {
 
                   <View style={styles.orderFooter}>
                     <Text style={styles.orderPrice}>€{order.totale_acquirente?.toFixed(2)}</Text>
-                    <TouchableOpacity
-                      style={styles.actionBtn}
-                      onPress={() => handleConfirmSellerDelivery(order.order_code)}
-                    >
-                      <Ionicons name="checkmark" size={18} color="#fff" />
-                      <Text style={styles.actionBtnText}>Ricevuto</Text>
-                    </TouchableOpacity>
+                    <View style={styles.actionBtnsRow}>
+                      {Platform.OS !== 'web' && (
+                        <TouchableOpacity
+                          style={[styles.actionBtn, styles.actionBtnScan]}
+                          onPress={() => openScanner('delivery')}
+                        >
+                          <Ionicons name="qr-code" size={18} color="#fff" />
+                          <Text style={styles.actionBtnText}>Scansiona</Text>
+                        </TouchableOpacity>
+                      )}
+                      <TouchableOpacity
+                        style={styles.actionBtn}
+                        onPress={() => handleConfirmSellerDelivery(order.order_code)}
+                      >
+                        <Ionicons name="checkmark" size={18} color="#fff" />
+                        <Text style={styles.actionBtnText}>Ricevuto</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 </View>
               ))
@@ -1011,13 +1020,24 @@ export default function BookstorePortalScreen() {
 
                   <View style={styles.orderFooter}>
                     <Text style={styles.orderPrice}>€{order.totale_acquirente?.toFixed(2)}</Text>
-                    <TouchableOpacity
-                      style={[styles.actionBtn, styles.actionBtnGreen]}
-                      onPress={() => handleConfirmBuyerPickup(order.order_code)}
-                    >
-                      <Ionicons name="bag-check" size={18} color="#fff" />
-                      <Text style={styles.actionBtnText}>Consegnato</Text>
-                    </TouchableOpacity>
+                    <View style={styles.actionBtnsRow}>
+                      {Platform.OS !== 'web' && (
+                        <TouchableOpacity
+                          style={[styles.actionBtn, styles.actionBtnScan]}
+                          onPress={() => openScanner('pickup')}
+                        >
+                          <Ionicons name="qr-code" size={18} color="#fff" />
+                          <Text style={styles.actionBtnText}>Scansiona</Text>
+                        </TouchableOpacity>
+                      )}
+                      <TouchableOpacity
+                        style={[styles.actionBtn, styles.actionBtnGreen]}
+                        onPress={() => handleConfirmBuyerPickup(order.order_code)}
+                      >
+                        <Ionicons name="bag-check" size={18} color="#fff" />
+                        <Text style={styles.actionBtnText}>Consegnato</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 </View>
               ))
@@ -1190,7 +1210,11 @@ export default function BookstorePortalScreen() {
       <Modal visible={showScanner} animationType="slide" onRequestClose={() => setShowScanner(false)}>
         <View style={styles.scannerModal}>
           <View style={styles.scannerHeader}>
-            <Text style={styles.scannerTitle}>Scansiona o inserisci codice</Text>
+            <Text style={styles.scannerTitle}>
+              {scanMode === 'delivery' ? '📦 Scansiona QR Venditore' : 
+               scanMode === 'pickup' ? '🛍️ Scansiona QR Acquirente' : 
+               'Scansiona o inserisci codice'}
+            </Text>
             <TouchableOpacity onPress={() => setShowScanner(false)}>
               <Ionicons name="close" size={28} color="#333" />
             </TouchableOpacity>
@@ -1999,6 +2023,13 @@ const styles = StyleSheet.create({
   },
   actionBtnGreen: {
     backgroundColor: '#4CAF50',
+  },
+  actionBtnScan: {
+    backgroundColor: '#FF9800',
+  },
+  actionBtnsRow: {
+    flexDirection: 'row',
+    gap: 8,
   },
   actionBtnText: {
     color: '#fff',
