@@ -28,9 +28,12 @@ STRUMENTI_MUSICALI_KEYWORDS = [
 # Formato: { 'isbn_vecchio': 'isbn_nuovo' }
 # Quando un libro dell'anno precedente ha un ISBN che è stato sostituito,
 # questa mappatura permette di riconoscerlo come lo stesso libro.
+# 
+# NOTA: Per la scuola Casalinuovo (CZMM86001P), l'ISBN di Let's Move è stato
+# aggiornato direttamente nel database a 9788839304292 (nuova edizione)
 # =============================================================================
 ISBN_MAPPING = {
-    '9788839304292': '9788839303875',  # Let's Movie - vecchio ISBN → nuovo ISBN
+    # Vuoto - gli ISBN sono stati allineati direttamente nel database
 }
 
 def normalize_isbn(isbn: str) -> str:
