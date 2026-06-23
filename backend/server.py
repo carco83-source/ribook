@@ -6021,12 +6021,23 @@ async def get_books_to_buy(user_id: str, child_id: str):
         if disc in succ_books_disc:
             book_succ = succ_books_disc[disc]
             if same_series(my_book, book_succ):
-                # Conta copie disponibili
+                # Conta copie disponibili e trova prezzo minimo
                 isbn = my_book.get("isbn", "")
-                copie_count = await db.listings.count_documents({
-                    "book_isbn": isbn,
-                    "status": "available"
-                }) if isbn else 0
+                if isbn:
+                    listings_cursor = db.listings.find({
+                        "book_isbn": isbn,
+                        "status": "available"
+                    }, {"prezzo_vendita": 1}).sort("prezzo_vendita", 1)
+                    listings_list = await listings_cursor.to_list(100)
+                    copie_count = len(listings_list)
+                    # Prezzo minimo dagli annunci disponibili, altrimenti 50% del prezzo copertina
+                    if listings_list and listings_list[0].get("prezzo_vendita"):
+                        prezzo_usato_effettivo = listings_list[0].get("prezzo_vendita")
+                    else:
+                        prezzo_usato_effettivo = round(my_book.get("prezzo_copertina", 0) * 0.5, 2)
+                else:
+                    copie_count = 0
+                    prezzo_usato_effettivo = round(my_book.get("prezzo_copertina", 0) * 0.5, 2)
                 
                 comprabilità.append({
                     "id": my_book.get("isbn", ""),
@@ -6036,8 +6047,8 @@ async def get_books_to_buy(user_id: str, child_id: str):
                     "disciplina": disc,
                     "editore": my_book.get("editore", ""),
                     "prezzo_copertina": my_book.get("prezzo_copertina", 0),
-                    "prezzo_usato": round(my_book.get("prezzo_copertina", 0) * 0.5, 2),
-                    "risparmio": round(my_book.get("prezzo_copertina", 0) * 0.5, 2),
+                    "prezzo_usato": prezzo_usato_effettivo,
+                    "risparmio": round(my_book.get("prezzo_copertina", 0) - prezzo_usato_effettivo, 2),
                     "classe_origine": classe_successiva,
                     "copie_disponibili": copie_count
                 })
