@@ -1087,48 +1087,45 @@ export default function BookstorePortalScreen() {
                     <Text style={styles.alphaCodeHint}>Richiedi QR o codice al venditore</Text>
                   </View>
 
-                  <View style={styles.orderFooter}>
-                    <Text style={styles.orderPrice}>€{order.totale_acquirente?.toFixed(2)}</Text>
-                    <View style={styles.actionBtnsRow}>
-                      {Platform.OS !== 'web' && (
-                        <TouchableOpacity
-                          style={[styles.actionBtn, styles.actionBtnScan]}
-                          onPress={() => openScanner('delivery')}
-                        >
-                          <Ionicons name="qr-code" size={18} color="#fff" />
-                          <Text style={styles.actionBtnText}>Scansiona</Text>
-                        </TouchableOpacity>
-                      )}
-                      <TouchableOpacity
-                        style={[styles.actionBtn, styles.actionBtnReject]}
-                        onPress={() => {
-                          if (Platform.OS === 'web') {
-                            if (window.confirm(`Rifiutare il libro "${order.book_titolo}" perché non conforme alle condizioni dichiarate?\n\nL'acquirente riceverà il rimborso.`)) {
-                              handleConfirmSellerDelivery(order.order_code, false);
-                            }
-                          } else {
-                            Alert.alert(
-                              'Rifiuta Libro',
-                              `Rifiutare "${order.book_titolo}" perché non conforme alle condizioni dichiarate?\n\nL'acquirente riceverà il rimborso.`,
-                              [
-                                { text: 'Annulla', style: 'cancel' },
-                                { text: 'Rifiuta', style: 'destructive', onPress: () => handleConfirmSellerDelivery(order.order_code, false) }
-                              ]
-                            );
+                  {/* Pulsanti Accettato/Rifiutato */}
+                  <View style={styles.inArrivoButtonsContainer}>
+                    <TouchableOpacity
+                      style={[styles.inArrivoBtn, styles.inArrivoBtnReject]}
+                      onPress={() => {
+                        if (Platform.OS === 'web') {
+                          if (window.confirm(`Rifiutare il libro "${order.book_titolo}" perché non conforme alle condizioni dichiarate?\n\nL'acquirente riceverà il rimborso.`)) {
+                            handleConfirmSellerDelivery(order.order_code, false);
                           }
-                        }}
-                      >
-                        <Ionicons name="close" size={18} color="#fff" />
-                        <Text style={styles.actionBtnText}>Rifiutato</Text>
-                      </TouchableOpacity>
+                        } else {
+                          Alert.alert(
+                            'Rifiuta Libro',
+                            `Rifiutare "${order.book_titolo}" perché non conforme alle condizioni dichiarate?\n\nL'acquirente riceverà il rimborso.`,
+                            [
+                              { text: 'Annulla', style: 'cancel' },
+                              { text: 'Rifiuta', style: 'destructive', onPress: () => handleConfirmSellerDelivery(order.order_code, false) }
+                            ]
+                          );
+                        }
+                      }}
+                    >
+                      <Ionicons name="close-circle" size={20} color="#fff" />
+                      <Text style={styles.inArrivoBtnText}>Rifiutato</Text>
+                    </TouchableOpacity>
+                    {Platform.OS !== 'web' && (
                       <TouchableOpacity
-                        style={[styles.actionBtn, styles.actionBtnAccept]}
-                        onPress={() => handleConfirmSellerDelivery(order.order_code, true)}
+                        style={[styles.inArrivoBtn, styles.inArrivoBtnScan]}
+                        onPress={() => openScanner('delivery')}
                       >
-                        <Ionicons name="checkmark" size={18} color="#fff" />
-                        <Text style={styles.actionBtnText}>Accettato</Text>
+                        <Ionicons name="qr-code" size={20} color="#fff" />
                       </TouchableOpacity>
-                    </View>
+                    )}
+                    <TouchableOpacity
+                      style={[styles.inArrivoBtn, styles.inArrivoBtnAccept]}
+                      onPress={() => handleConfirmSellerDelivery(order.order_code, true)}
+                    >
+                      <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                      <Text style={styles.inArrivoBtnText}>Accettato</Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
               ))
@@ -2574,6 +2571,42 @@ const styles = StyleSheet.create({
     color: '#888',
     marginTop: 6,
     fontStyle: 'italic',
+  },
+  // Pulsanti In Arrivo compatti
+  inArrivoButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 16,
+    gap: 10,
+  },
+  inArrivoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 8,
+    gap: 6,
+    minWidth: 100,
+  },
+  inArrivoBtnReject: {
+    backgroundColor: '#f44336',
+    flex: 1,
+  },
+  inArrivoBtnAccept: {
+    backgroundColor: '#4CAF50',
+    flex: 1,
+  },
+  inArrivoBtnScan: {
+    backgroundColor: '#FF9800',
+    minWidth: 44,
+    paddingHorizontal: 12,
+  },
+  inArrivoBtnText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
   },
   // Earnings badge
   earningsBadgeSmall: {
