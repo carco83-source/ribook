@@ -7687,7 +7687,7 @@ async def confirm_pickup(order_id: str, user_id: str = Query(...)):
         "user_id": user_id,
         "type": "pickup_confirmed",
         "title": "Libro ritirato!",
-        "message": f"Hai ritirato: {order.get('book_titolo')}\n\nHai 3 giorni per segnalare eventuali problemi con le condizioni del libro.",
+        "message": f"Hai ritirato:\n📚 {order.get('book_titolo')}\n\nHai 3 giorni per richiedere il reso, in \"I miei scambi\" nella sezione Profilo, solo ed esclusivamente se la descrizione delle condizioni inserita non corrisponde a quelle reali del libro, già sottoposto al controllo nei punti di ritiro durante la consegna.",
         "order_id": order_id,
         "read": False,
         "created_at": now.isoformat()
@@ -7711,7 +7711,7 @@ async def confirm_pickup(order_id: str, user_id: str = Query(...)):
         "success": True,
         "status": "picked_up",
         "return_deadline": return_deadline.isoformat(),
-        "message": "Ritiro confermato! Hai 3 giorni per segnalare eventuali problemi."
+        "message": "Ritiro confermato! Hai 3 giorni per richiedere il reso in \"I miei scambi\" (Profilo) solo se le condizioni non corrispondono."
     }
 
 @api_router.get("/user-orders/{user_id}")
@@ -9450,7 +9450,7 @@ async def bookstore_confirm_pickup_by_code(bookstore_id: str, order_code: str = 
         "user_id": order.get("buyer_id"),
         "type": "pickup_confirmed",
         "title": "Libro ritirato!",
-        "message": f"Hai ritirato:\n📚 {order.get('book_titolo')}\n\nHai 3 giorni per segnalare eventuali problemi con le condizioni del libro.",
+        "message": f"Hai ritirato:\n📚 {order.get('book_titolo')}\n\nHai 3 giorni per richiedere il reso, in \"I miei scambi\" nella sezione Profilo, solo ed esclusivamente se la descrizione delle condizioni inserita non corrisponde a quelle reali del libro, già sottoposto al controllo nei punti di ritiro durante la consegna.",
         "order_id": order["id"],
         "order_code": order.get("order_code"),
         "return_deadline": return_deadline.isoformat(),
