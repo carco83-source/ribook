@@ -7221,6 +7221,19 @@ async def pay_order(order_id: str, user_id: str = Query(...)):
     }
     await db.notifications.insert_one(buyer_notification)
     
+    # ==========================================
+    # MARCA COME USATA LA NOTIFICA "LIBRO DISPONIBILE"
+    # Una volta pagato, il pulsante "Vai al carrello" non deve più apparire
+    # ==========================================
+    await db.notifications.update_many(
+        {
+            "user_id": order.get("buyer_id"),
+            "order_id": order_id,
+            "type": {"$in": ["seller_confirmation_request", "ready_for_payment", "book_available"]}
+        },
+        {"$set": {"used": True, "action_completed": True}}
+    )
+    
     return {
         "success": True,
         "order_id": order_id,
