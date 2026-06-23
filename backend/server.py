@@ -11164,29 +11164,8 @@ async def send_message(conversation_id: str, data: MessageCreate):
         }}
     )
     
-    # Crea notifica per il destinatario del messaggio
-    receiver_id = conversation["buyer_id"] if data.sender_id == conversation["seller_id"] else conversation["seller_id"]
-    
-    # Recupera info libro dalla conversazione
-    listing = await db.listings.find_one({"id": conversation.get("listing_id")})
-    book_title = listing.get("book_title", "un libro") if listing else "un libro"
-    
-    notification = {
-        "id": str(uuid.uuid4()),
-        "user_id": receiver_id,
-        "type": "new_message",
-        "title": f"💬 Nuovo messaggio da {sender.get('username', 'Utente')}",
-        "message": f"{data.content[:100]}{'...' if len(data.content) > 100 else ''}",
-        "data": {
-            "conversation_id": conversation_id,
-            "sender_id": data.sender_id,
-            "listing_id": conversation.get("listing_id"),
-            "book_title": book_title
-        },
-        "read": False,
-        "created_at": datetime.utcnow().isoformat()
-    }
-    await db.notifications.insert_one(notification)
+    # I messaggi NON creano notifiche - vengono mostrati solo nella sezione Messaggi
+    # Il badge dei messaggi non letti viene calcolato direttamente dalle conversazioni
     
     return {"message": message.dict()}
 
