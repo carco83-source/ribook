@@ -45,6 +45,7 @@ export default function CartScreen() {
   const [userId, setUserId] = useState<string | null>(null);
   const [payingAll, setPayingAll] = useState(false);
   const [isAnonymous, setIsAnonymous] = useState(false);
+  const [updatingFoderazione, setUpdatingFoderazione] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -126,6 +127,43 @@ export default function CartScreen() {
         },
       ]
     );
+  };
+
+  // Toggle foderazione per un ordine
+  const handleToggleFoderazione = async (order: OrderToPay) => {
+    if (!userId) return;
+    
+    setUpdatingFoderazione(order.id);
+    try {
+      const newValue = !order.include_foderazione;
+      const response = await axios.put(
+        `${API_URL}/api/orders/${order.id}/foderazione?buyer_id=${userId}&include_foderazione=${newValue}`
+      );
+      
+      if (response.data) {
+        // Aggiorna l'ordine nello state locale
+        setOrders(prev => prev.map(o => {
+          if (o.id === order.id) {
+            return {
+              ...o,
+              include_foderazione: response.data.include_foderazione,
+              costo_foderazione: response.data.costo_foderazione,
+              totale_acquirente: response.data.totale_acquirente
+            };
+          }
+          return o;
+        }));
+      }
+    } catch (error: any) {
+      console.error('Error toggling foderazione:', error);
+      if (Platform.OS === 'web') {
+        window.alert('Errore: ' + (error.response?.data?.detail || 'Impossibile aggiornare la foderazione'));
+      } else {
+        Alert.alert('Errore', error.response?.data?.detail || 'Impossibile aggiornare la foderazione');
+      }
+    } finally {
+      setUpdatingFoderazione(null);
+    }
   };
 
   const calculateTotal = () => {
@@ -234,9 +272,32 @@ export default function CartScreen() {
               <Text style={styles.priceLabel}>Prezzo libro</Text>
               <Text style={styles.priceValue}>€{(item.prezzo_libro || item.prezzo || 0).toFixed(2)}</Text>
             </View>
+            
+            {/* Toggle Foderazione */}
+            <TouchableOpacity 
+              style={styles.foderazioneToggle}
+              onPress={() => handleToggleFoderazione(item)}
+              disabled={updatingFoderazione === item.id}
+            >
+              <View style={[
+                styles.foderazioneCheckbox,
+                item.include_foderazione && styles.foderazioneCheckboxChecked
+              ]}>
+                {updatingFoderazione === item.id ? (
+                  <ActivityIndicator size="small" color={item.include_foderazione ? "#fff" : "#1a472a"} />
+                ) : item.include_foderazione ? (
+                  <Ionicons name="checkmark" size={14} color="#fff" />
+                ) : null}
+              </View>
+              <View style={styles.foderazioneInfo}>
+                <Text style={styles.foderazioneLabel}>📗 Foderazione libro</Text>
+              </View>
+              <Text style={styles.foderazionePrice}>+€1.50</Text>
+            </TouchableOpacity>
+            
             {item.include_foderazione && (
               <View style={styles.priceRow}>
-                <Text style={styles.priceLabel}>📗 Foderazione</Text>
+                <Text style={styles.priceLabel}>Foderazione</Text>
                 <Text style={styles.priceValue}>€{(item.costo_foderazione || 1.50).toFixed(2)}</Text>
               </View>
             )}
@@ -654,5 +715,42 @@ const styles = StyleSheet.create({
   anonymousRegisterBold: {
     color: '#1a472a',
     fontWeight: 'bold',
+  },
+  // Toggle Foderazione styles
+  foderazioneToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    borderRadius: 10,
+    padding: 12,
+    marginVertical: 8,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  foderazioneCheckbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#1a472a',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  foderazioneCheckboxChecked: {
+    backgroundColor: '#1a472a',
+  },
+  foderazioneInfo: {
+    flex: 1,
+  },
+  foderazioneLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1a472a',
+  },
+  foderazionePrice: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1a472a',
   },
 });
