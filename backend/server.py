@@ -8055,6 +8055,41 @@ async def check_and_complete_order_if_expired(order_id: str):
             await db.bookstore_notifications.insert_one(bookstore_notification)
         # ========================================================
         
+        # =============== ACCREDITO PIATTAFORMA/ADMIN ===============
+        # Calcola e accredita la commissione piattaforma
+        prezzo_libro = order.get("prezzo_libro", 0)
+        include_fod = order.get("include_foderazione", False)
+        commissioni_calc = calcola_commissioni(prezzo_libro, include_fod)
+        commissione_piattaforma = commissioni_calc["commissione_piattaforma"]
+        
+        # Aggiorna credito piattaforma
+        await db.platform_stats.update_one(
+            {"id": "main"},
+            {
+                "$inc": {
+                    "credito_totale": commissione_piattaforma,
+                    "ordini_completati": 1
+                },
+                "$setOnInsert": {"id": "main", "created_at": now.isoformat()}
+            },
+            upsert=True
+        )
+        
+        # Log movimento credito piattaforma
+        platform_credit_log = {
+            "id": str(uuid.uuid4()),
+            "order_id": order_id,
+            "order_code": order.get("order_code"),
+            "book_titolo": order.get("book_titolo"),
+            "type": "accredito",
+            "commissione_piattaforma": commissione_piattaforma,
+            "prezzo_libro": prezzo_libro,
+            "include_foderazione": include_fod,
+            "created_at": now.isoformat()
+        }
+        await db.platform_credit_logs.insert_one(platform_credit_log)
+        # ===========================================================
+        
         # Notifica al venditore
         notification = {
             "id": str(uuid.uuid4()),
@@ -8373,6 +8408,39 @@ async def verify_return(
         }
         await db.bookstore_credit_logs.insert_one(credit_log)
         # =========================================================================================
+        
+        # =============== ACCREDITO PIATTAFORMA/ADMIN (reso rifiutato) ===============
+        prezzo_libro = order.get("prezzo_libro", 0)
+        include_fod = order.get("include_foderazione", False)
+        commissioni_calc = calcola_commissioni(prezzo_libro, include_fod)
+        commissione_piattaforma = commissioni_calc["commissione_piattaforma"]
+        
+        await db.platform_stats.update_one(
+            {"id": "main"},
+            {
+                "$inc": {
+                    "credito_totale": commissione_piattaforma,
+                    "ordini_completati": 1
+                },
+                "$setOnInsert": {"id": "main", "created_at": now.isoformat()}
+            },
+            upsert=True
+        )
+        
+        platform_credit_log = {
+            "id": str(uuid.uuid4()),
+            "order_id": order_id,
+            "order_code": order.get("order_code"),
+            "book_titolo": order.get("book_titolo"),
+            "type": "accredito",
+            "commissione_piattaforma": commissione_piattaforma,
+            "prezzo_libro": prezzo_libro,
+            "include_foderazione": include_fod,
+            "note": "Reso rifiutato - Ordine completato",
+            "created_at": now.isoformat()
+        }
+        await db.platform_credit_logs.insert_one(platform_credit_log)
+        # ===========================================================================
         
         # Notifica acquirente
         notification_buyer = {
@@ -8944,6 +9012,11 @@ async def get_admin_stats(admin_id: str = Query(...)):
         if include_fod:
             foderazione_mese += 1
     
+    # Recupera credito totale piattaforma
+    platform_stats = await db.platform_stats.find_one({"id": "main"})
+    credito_piattaforma = platform_stats.get("credito_totale", 0) if platform_stats else 0
+    ordini_completati_platform = platform_stats.get("ordini_completati", 0) if platform_stats else 0
+    
     return {
         "users": {
             "total": total_users
@@ -8970,6 +9043,10 @@ async def get_admin_stats(admin_id: str = Query(...)):
             "oggi": round(guadagno_oggi, 2),
             "mese": round(guadagno_mese, 2),
             "formula": "10% libro / 2 - proporzione Stripe"
+        },
+        "credito_piattaforma": {
+            "totale": round(credito_piattaforma, 2),
+            "ordini_processati": ordini_completati_platform
         },
         "foderazione": {
             "oggi": foderazione_oggi,

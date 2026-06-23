@@ -210,6 +210,34 @@ export default function BookstorePortalScreen() {
   const [notifications, setNotifications] = useState<BookstoreNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   
+  // Funzione per marcare tutte le notifiche come lette
+  const markAllNotificationsAsRead = useCallback(async () => {
+    if (!bookstoreId || unreadCount === 0) return;
+    
+    try {
+      // Marca ogni notifica non letta come letta
+      const unreadNotifications = notifications.filter(n => !n.read);
+      for (const notif of unreadNotifications) {
+        await axios.put(`${API_URL}/api/bookstore/${bookstoreId}/notifications/${notif.id}/read`);
+      }
+      
+      // Aggiorna stato locale
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+      setUnreadCount(0);
+    } catch (error) {
+      console.error('Error marking notifications as read:', error);
+    }
+  }, [bookstoreId, notifications, unreadCount]);
+  
+  // Handler per cambio tab con mark-as-read per notifiche
+  const handleTabChange = useCallback((newTab: TabType) => {
+    setActiveTab(newTab);
+    // Se si va sulla tab notifiche, marca tutte come lette
+    if (newTab === 'notifiche') {
+      markAllNotificationsAsRead();
+    }
+  }, [markAllNotificationsAsRead]);
+  
   // Scanner state
   const [showScanner, setShowScanner] = useState(false);
   const [scanMode, setScanMode] = useState<'generic' | 'delivery' | 'pickup' | 'return'>('generic');
@@ -807,7 +835,7 @@ export default function BookstorePortalScreen() {
           <TouchableOpacity
             key={tab.key}
             style={[styles.adminTab, activeTab === tab.key && styles.adminTabActive]}
-            onPress={() => setActiveTab(tab.key as TabType)}
+            onPress={() => handleTabChange(tab.key as TabType)}
           >
             <View style={styles.adminTabIconContainer}>
               <Ionicons
@@ -930,6 +958,20 @@ export default function BookstorePortalScreen() {
                 <Ionicons name="wallet" size={32} color="#9C27B0" />
                 <Text style={styles.adminStatValue}>€{stats.credito?.totale?.toFixed(2) || '0.00'}</Text>
                 <Text style={styles.adminStatLabel}>Credito Totale</Text>
+              </View>
+              
+              {/* Credito Gestione Libri */}
+              <View style={[styles.adminStatCard, { backgroundColor: '#e3f2fd' }]}>
+                <Ionicons name="book" size={32} color="#1976D2" />
+                <Text style={styles.adminStatValue}>€{stats.credito?.commissioni_libro?.toFixed(2) || '0.00'}</Text>
+                <Text style={styles.adminStatLabel}>Gestione Libri</Text>
+              </View>
+              
+              {/* Credito Foderazioni */}
+              <View style={[styles.adminStatCard, { backgroundColor: '#e8f5e9' }]}>
+                <Ionicons name="shield-checkmark" size={32} color="#388E3C" />
+                <Text style={styles.adminStatValue}>€{stats.credito?.foderazione?.toFixed(2) || '0.00'}</Text>
+                <Text style={styles.adminStatLabel}>Foderazioni</Text>
               </View>
               
               <View style={[styles.adminStatCard, { backgroundColor: '#e0f7fa' }]}>

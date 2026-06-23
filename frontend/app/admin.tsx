@@ -467,6 +467,31 @@ export default function AdminPortalScreen() {
               <Text style={styles.statValue}>{stats.orders?.completed || 0}</Text>
               <Text style={styles.statLabel}>Ordini completati</Text>
             </View>
+            
+            {/* Credito Piattaforma */}
+            <View style={[styles.statCard, { backgroundColor: '#c8e6c9' }]}>
+              <Ionicons name="wallet" size={32} color="#1a472a" />
+              <Text style={[styles.statValue, { color: '#1a472a' }]}>
+                €{stats.credito_piattaforma?.totale?.toFixed(2) || '0.00'}
+              </Text>
+              <Text style={styles.statLabel}>Credito Piattaforma</Text>
+            </View>
+            
+            <View style={[styles.statCard, { backgroundColor: '#fff8e1' }]}>
+              <Ionicons name="trending-up" size={32} color="#f57c00" />
+              <Text style={[styles.statValue, { color: '#f57c00' }]}>
+                €{stats.guadagni_piattaforma?.mese?.toFixed(2) || '0.00'}
+              </Text>
+              <Text style={styles.statLabel}>Guadagni Mese</Text>
+            </View>
+            
+            <View style={[styles.statCard, { backgroundColor: '#e1f5fe' }]}>
+              <Ionicons name="today" size={32} color="#0288d1" />
+              <Text style={[styles.statValue, { color: '#0288d1' }]}>
+                €{stats.guadagni_piattaforma?.oggi?.toFixed(2) || '0.00'}
+              </Text>
+              <Text style={styles.statLabel}>Guadagni Oggi</Text>
+            </View>
           </View>
         )}
         
