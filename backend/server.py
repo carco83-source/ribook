@@ -2214,6 +2214,153 @@ async def process_expired_notifications():
     }
 
 
+@api_router.post("/orders/process-completed")
+async def process_completed_orders():
+    """
+    Completa automaticamente gli ordini il cui periodo di reso è scaduto (3 giorni).
+    - Cambia status da 'picked_up' a 'completed'
+    - Accredita le commissioni alla cartolibreria
+    - Accredita le commissioni alla piattaforma
+    - Notifica il venditore del pagamento
+    """
+    from datetime import datetime
+    
+    now = datetime.utcnow()
+    
+    # Trova ordini con periodo reso scaduto
+    orders_to_complete = await db.orders.find({
+        "status": "picked_up",
+        "return_deadline": {"$lt": now.isoformat()}
+    }).to_list(100)
+    
+    # Prova anche con datetime stored as datetime
+    orders_datetime = await db.orders.find({
+        "status": "picked_up",
+        "return_deadline": {"$lt": now, "$type": "date"}
+    }).to_list(100)
+    
+    all_orders = orders_to_complete + orders_datetime
+    seen_ids = set()
+    processed_count = 0
+    
+    for order in all_orders:
+        order_id = order.get("id")
+        if order_id in seen_ids:
+            continue
+        seen_ids.add(order_id)
+        
+        try:
+            # Verifica deadline
+            return_deadline = order.get("return_deadline")
+            if isinstance(return_deadline, str):
+                return_deadline = datetime.fromisoformat(return_deadline.replace('Z', '+00:00').replace('+00:00', ''))
+            
+            if now < return_deadline:
+                continue  # Non ancora scaduto
+            
+            # ============= COMPLETA L'ORDINE =============
+            update_data = {
+                "status": "completed",
+                "completed_at": now,
+                "auto_completed": True,
+                "status_history": order.get("status_history", []) + [{
+                    "status": "completed",
+                    "timestamp": now.isoformat(),
+                    "note": "Ordine completato automaticamente - Periodo reso scaduto"
+                }]
+            }
+            
+            await db.orders.update_one({"id": order_id}, {"$set": update_data})
+            
+            # ============= ACCREDITA CARTOLIBRERIA =============
+            bookstore_id = order.get("bookstore_id")
+            if bookstore_id:
+                commissione_libro = order.get("commissione_cartolibreria_libro", 0)
+                commissione_foderazione = order.get("commissione_cartolibreria_foderazione", 0)
+                commissione_totale = order.get("commissione_cartolibreria", 0)
+                
+                await db.bookstores.update_one(
+                    {"id": bookstore_id},
+                    {
+                        "$inc": {
+                            "credito_commissioni": commissione_libro,
+                            "credito_foderazione": commissione_foderazione,
+                            "credito_totale": commissione_totale
+                        }
+                    }
+                )
+                
+                # Log movimento credito cartolibreria
+                credit_log = {
+                    "id": str(uuid.uuid4()),
+                    "bookstore_id": bookstore_id,
+                    "order_id": order_id,
+                    "order_code": order.get("order_code"),
+                    "book_titolo": order.get("book_titolo"),
+                    "type": "accredito",
+                    "commissione_libro": commissione_libro,
+                    "commissione_foderazione": commissione_foderazione,
+                    "totale": commissione_totale,
+                    "created_at": now.isoformat(),
+                    "note": "Accredito automatico - Periodo reso scaduto"
+                }
+                await db.bookstore_credit_logs.insert_one(credit_log)
+            
+            # ============= ACCREDITA PIATTAFORMA =============
+            commissione_piattaforma = order.get("commissione_piattaforma", 0)
+            if commissione_piattaforma > 0:
+                await db.platform_stats.update_one(
+                    {"id": "main"},
+                    {
+                        "$inc": {
+                            "credito_totale": commissione_piattaforma,
+                            "ordini_completati": 1
+                        }
+                    },
+                    upsert=True
+                )
+                
+                # Log movimento credito piattaforma
+                platform_log = {
+                    "id": str(uuid.uuid4()),
+                    "order_id": order_id,
+                    "order_code": order.get("order_code"),
+                    "type": "accredito",
+                    "amount": commissione_piattaforma,
+                    "created_at": now.isoformat(),
+                    "note": "Commissione piattaforma - Accredito automatico"
+                }
+                await db.platform_credit_logs.insert_one(platform_log)
+            
+            # ============= NOTIFICA VENDITORE =============
+            netto_venditore = order.get("netto_venditore", 0)
+            notification_seller = {
+                "id": str(uuid.uuid4()),
+                "user_id": order.get("seller_id"),
+                "type": "payment_released",
+                "title": "Pagamento sbloccato!",
+                "message": f"Il periodo di reso per:\n📚 {order.get('book_titolo')}\n\nè terminato.\n\n💰 €{netto_venditore:.2f} saranno trasferiti sul tuo conto entro 3-5 giorni lavorativi.",
+                "order_id": order_id,
+                "order_code": order.get("order_code"),
+                "amount": netto_venditore,
+                "read": False,
+                "created_at": now.isoformat()
+            }
+            await db.notifications.insert_one(notification_seller)
+            
+            processed_count += 1
+            print(f"✅ Ordine {order.get('order_code')} completato automaticamente")
+            
+        except Exception as e:
+            print(f"❌ Errore completando ordine {order.get('order_code')}: {e}")
+            continue
+    
+    return {
+        "processed": processed_count,
+        "message": f"Completati {processed_count} ordini con periodo reso scaduto"
+    }
+
+
 @api_router.get("/notifications/check-expired/{user_id}")
 async def check_expired_for_user(user_id: str):
     """
@@ -9482,8 +9629,82 @@ async def get_bookstore_dashboard(bookstore_id: str):
     if not bookstore:
         raise HTTPException(status_code=404, detail="Cartolibreria non trovata")
     
-    # Date per statistiche
+    # ============= AUTO-COMPLETA ORDINI SCADUTI =============
+    # Processa automaticamente gli ordini il cui periodo di reso è scaduto
     now = datetime.utcnow()
+    orders_to_complete = await db.orders.find({
+        "bookstore_id": bookstore_id,
+        "status": "picked_up"
+    }).to_list(100)
+    
+    for order in orders_to_complete:
+        return_deadline = order.get("return_deadline")
+        if return_deadline:
+            if isinstance(return_deadline, str):
+                try:
+                    return_deadline = datetime.fromisoformat(return_deadline.replace('Z', '+00:00').replace('+00:00', ''))
+                except:
+                    continue
+            
+            if now > return_deadline:
+                # Completa l'ordine automaticamente
+                order_id = order.get("id")
+                update_data = {
+                    "status": "completed",
+                    "completed_at": now,
+                    "auto_completed": True,
+                    "status_history": order.get("status_history", []) + [{
+                        "status": "completed",
+                        "timestamp": now.isoformat(),
+                        "note": "Ordine completato automaticamente - Periodo reso scaduto"
+                    }]
+                }
+                await db.orders.update_one({"id": order_id}, {"$set": update_data})
+                
+                # Accredita cartolibreria
+                commissione_libro = order.get("commissione_cartolibreria_libro", 0)
+                commissione_foderazione = order.get("commissione_cartolibreria_foderazione", 0)
+                commissione_totale = order.get("commissione_cartolibreria", 0)
+                
+                await db.bookstores.update_one(
+                    {"id": bookstore_id},
+                    {"$inc": {
+                        "credito_commissioni": commissione_libro,
+                        "credito_foderazione": commissione_foderazione,
+                        "credito_totale": commissione_totale
+                    }}
+                )
+                
+                # Accredita piattaforma
+                commissione_piattaforma = order.get("commissione_piattaforma", 0)
+                if commissione_piattaforma > 0:
+                    await db.platform_stats.update_one(
+                        {"id": "main"},
+                        {"$inc": {"credito_totale": commissione_piattaforma, "ordini_completati": 1}},
+                        upsert=True
+                    )
+                
+                # Notifica venditore
+                netto_venditore = order.get("netto_venditore", 0)
+                notification_seller = {
+                    "id": str(uuid.uuid4()),
+                    "user_id": order.get("seller_id"),
+                    "type": "payment_released",
+                    "title": "Pagamento sbloccato!",
+                    "message": f"Il periodo di reso per:\n📚 {order.get('book_titolo')}\n\nè terminato.\n\n💰 €{netto_venditore:.2f} saranno trasferiti sul tuo conto entro 3-5 giorni lavorativi.",
+                    "order_id": order_id,
+                    "order_code": order.get("order_code"),
+                    "amount": netto_venditore,
+                    "read": False,
+                    "created_at": now.isoformat()
+                }
+                await db.notifications.insert_one(notification_seller)
+                print(f"✅ Auto-completato ordine {order.get('order_code')} dalla dashboard")
+    
+    # Ricarica bookstore dopo eventuali aggiornamenti
+    bookstore = await db.bookstores.find_one({"id": bookstore_id})
+    
+    # Date per statistiche
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     
