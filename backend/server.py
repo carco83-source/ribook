@@ -7098,10 +7098,17 @@ async def pay_order(order_id: str, user_id: str = Query(...)):
         if val <= 66: return "Moderata"
         return "Elevata"
     
+    def get_esercizi_label(val):
+        if val == 0: return "Nessuno"
+        if val <= 33: return "Pochi"
+        if val <= 66: return "Alcuni"
+        return "Molti"
+    
     conditions_text = ""
     conditions_text += f"• Scritte a penna: {get_label(condition_details.get('penna', 0))}\n"
     conditions_text += f"• Scritte a matita: {get_label(condition_details.get('matita', 0))}\n"
     conditions_text += f"• Evidenziature: {get_label(condition_details.get('evidenziatore', 0))}\n"
+    conditions_text += f"• Esercizi svolti: {get_esercizi_label(condition_details.get('esercizi', 0))}\n"
     conditions_text += f"• Usura pagine: {get_usura_label(condition_details.get('usura_pagine', 0))}\n"
     if listing_note:
         conditions_text += f"• Note venditore: {listing_note}\n"
