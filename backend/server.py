@@ -7221,7 +7221,7 @@ async def pay_order(order_id: str, user_id: str = Query(...)):
         "user_id": order.get("buyer_id"),
         "type": "order_pending",
         "title": "🎉 ACQUISTO CONFERMATO!",
-        "message": f"📚 {order.get('book_titolo')}\n\nSarai avvisato/a appena il venditore consegnerà il libro presso:\n🏪 {order.get('bookstore_name')}\n📍 {bookstore_address if bookstore_address else ''}",
+        "message": f"📚 {order.get('book_titolo')}\n\nRiceverai una notifica con i dettagli del ritiro appena il venditore consegnerà il testo presso la cartolibreria:\n🏪 {order.get('bookstore_name')}\n📍 {bookstore_address if bookstore_address else ''}",
         "order_id": order_id,
         "order_code": order.get("order_code"),
         "bookstore_name": order.get("bookstore_name"),
@@ -7406,9 +7406,9 @@ async def pay_orders_batch(user_id: str = Query(...), order_ids: str = Query(...
         # Notifica all'acquirente - UNA SOLA per tutto il gruppo
         # L'acquirente viene avvisato che sarà notificato quando il venditore consegnerà
         if len(group_orders) > 1:
-            buyer_message = f"ACQUISTO ANDATO A BUON FINE!\n\n📚 {len(group_orders)} LIBRI:\n{books_list}\n\nSarai avvisato/a appena il venditore consegnerà i libri presso:\n🏪 {group_orders[0].get('bookstore_name')}"
+            buyer_message = f"ACQUISTO ANDATO A BUON FINE!\n\n📚 {len(group_orders)} LIBRI:\n{books_list}\n\nRiceverai una notifica con i dettagli del ritiro appena il venditore consegnerà i testi presso la cartolibreria:\n🏪 {group_orders[0].get('bookstore_name')}"
         else:
-            buyer_message = f"ACQUISTO ANDATO A BUON FINE!\n\n📚 {book_titles[0]}\n\nSarai avvisato/a appena il venditore consegnerà il libro presso:\n🏪 {group_orders[0].get('bookstore_name')}"
+            buyer_message = f"ACQUISTO ANDATO A BUON FINE!\n\n📚 {book_titles[0]}\n\nRiceverai una notifica con i dettagli del ritiro appena il venditore consegnerà il testo presso la cartolibreria:\n🏪 {group_orders[0].get('bookstore_name')}"
         
         buyer_qr_notification = {
             "id": str(uuid.uuid4()),
