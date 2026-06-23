@@ -7568,21 +7568,26 @@ async def mark_ready_for_pickup(order_id: str, bookstore_id: str = Query(None)):
         if val <= 66: return "Diverse"
         return "Molte"
     
+    def get_usura_label(val):
+        if val == 0: return "Nessuna"
+        if val <= 33: return "Leggera"
+        if val <= 66: return "Moderata"
+        return "Elevata"
+    
+    def get_esercizi_label(val):
+        if val == 0: return "Nessuno"
+        if val <= 33: return "Pochi"
+        if val <= 66: return "Alcuni"
+        return "Molti"
+    
     conditions_text = ""
-    if cond.get("penna", 0) > 0:
-        conditions_text += f"• Scritte a penna: {get_label(cond.get('penna', 0))}\n"
-    else:
-        conditions_text += "• Scritte a penna: Nessuna\n"
-    if cond.get("matita", 0) > 0:
-        conditions_text += f"• Scritte a matita: {get_label(cond.get('matita', 0))}\n"
-    else:
-        conditions_text += "• Scritte a matita: Nessuna\n"
-    if cond.get("evidenziatore", 0) > 0:
-        conditions_text += f"• Evidenziature: {get_label(cond.get('evidenziatore', 0))}\n"
-    else:
-        conditions_text += "• Evidenziature: Nessuna\n"
+    conditions_text += f"• Scritte a penna: {get_label(cond.get('penna', 0))}\n"
+    conditions_text += f"• Scritte a matita: {get_label(cond.get('matita', 0))}\n"
+    conditions_text += f"• Evidenziature: {get_label(cond.get('evidenziatore', 0))}\n"
+    conditions_text += f"• Esercizi svolti: {get_esercizi_label(cond.get('esercizi', 0))}\n"
+    conditions_text += f"• Usura pagine: {get_usura_label(cond.get('usura_pagine', 0))}\n"
     if note:
-        conditions_text += f"• Note: {note}\n"
+        conditions_text += f"• Note venditore: {note}\n"
     
     # Notifica all'acquirente con QR code e condizioni
     notification = {
