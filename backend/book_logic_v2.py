@@ -183,22 +183,27 @@ async def get_isbn_vendibili_catanzaro(
 ) -> Dict[str, List[Dict]]:
     """
     Per ogni ISBN richiesto, verifica se è disponibile come "vendibile usato"
-    da qualche studente di QUALSIASI scuola di Catanzaro.
+    da qualche studente delle SCUOLE TARGET di Catanzaro (le 19/20 scuole nel DB).
     
     LOGICA:
     
     1. LIBRI ANNUALI (Vol. 1, Vol. 2, Vol. 3):
-       - Cerca in TUTTE le scuole di CZ nella classe corrispondente al volume
-       - Vol. 2 → cerca chi lo aveva in 2ª nel 2025/2026 in QUALSIASI scuola
+       - Cerca SOLO nelle scuole target nella classe corrispondente al volume
+       - Vol. 2 → cerca chi lo aveva in 2ª nel 2025/2026 nelle scuole target
     
     2. LIBRI TRIENNALI (Vol. U o senza volume):
-       - Cerca in TUTTE le scuole di CZ in classe 3
+       - Cerca SOLO nelle scuole target in classe 3
        - Solo chi ha finito le medie può venderli
     
     Returns:
         Dict[isbn_normalizzato] -> Lista di info venditori (scuola, classe, etc.)
     """
     vendibili = {}
+    
+    # Ottieni le scuole target dal database
+    schools = await db.schools.find({}).to_list(100)
+    codici_scuole_target = [s.get('codice_scuola', s.get('codice_meccanografico')) for s in schools]
+    codici_scuole_target = [c for c in codici_scuole_target if c]  # Rimuovi None
     
     for isbn in isbn_richiesti:
         venditori = []
@@ -238,12 +243,13 @@ async def get_isbn_vendibili_catanzaro(
         isbn_da_cercare = list(set([isbn, isbn_norm]))
         
         if is_libro_annuale and volume_number:
-            # LIBRO ANNUALE: cerca nella classe corrispondente al volume in TUTTE le scuole
+            # LIBRO ANNUALE: cerca nella classe corrispondente SOLO nelle scuole target
             classe_venditore = volume_number
             
             async for doc in db.books.find({
                 "isbn": {"$in": isbn_da_cercare},
-                "classe": classe_venditore
+                "classe": classe_venditore,
+                "codice_scuola": {"$in": codici_scuole_target}
             }):
                 venditori.append({
                     "codice_scuola": doc.get("codice_scuola", ""),
@@ -252,10 +258,11 @@ async def get_isbn_vendibili_catanzaro(
                     "tipo": "annuale"
                 })
         else:
-            # LIBRO TRIENNALE: cerca in classe 3 di TUTTE le scuole
+            # LIBRO TRIENNALE: cerca in classe 3 SOLO nelle scuole target
             async for doc in db.books.find({
                 "isbn": {"$in": isbn_da_cercare},
-                "classe": "3"
+                "classe": "3",
+                "codice_scuola": {"$in": codici_scuole_target}
             }):
                 venditori.append({
                     "codice_scuola": doc.get("codice_scuola", ""),
