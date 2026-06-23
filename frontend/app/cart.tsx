@@ -430,6 +430,16 @@ export default function CartScreen() {
                           <Text style={styles.foderazionePrice}>+€1.50</Text>
                         </TouchableOpacity>
                         
+                        {/* Messaggio informativo foderazione */}
+                        {order.include_foderazione && (
+                          <View style={styles.foderazioneNotice}>
+                            <Ionicons name="information-circle" size={16} color="#1a472a" />
+                            <Text style={styles.foderazioneNoticeText}>
+                              Richiedi la foderazione presso la Cartolibreria Ni.Ca. Qualora i testi siano composti da più volumi, sarà foderato il volume principale.
+                            </Text>
+                          </View>
+                        )}
+                        
                         <View style={[styles.priceBreakdownRow, styles.totalRowBreakdown]}>
                           <Text style={styles.priceLabel}>Totale</Text>
                           <Text style={styles.priceValue}>€{order.totale_acquirente.toFixed(2)}</Text>
@@ -1068,5 +1078,21 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: '#1a472a',
+  },
+  foderazioneNotice: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#e8f5e9',
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 4,
+    marginBottom: 8,
+    gap: 8,
+  },
+  foderazioneNoticeText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#1a472a',
+    lineHeight: 18,
   },
 });
