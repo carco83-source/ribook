@@ -7683,9 +7683,9 @@ async def pay_orders_batch(user_id: str = Query(...), order_ids: str = Query(...
         
         if len(group_orders) > 1:
             books_list = "\n".join([f"• {t}" for t in book_titles])
-            seller_message = f"COMPLIMENTI! {len(group_orders)} LIBRI VENDUTI!\n\n{books_list}\n\nAssicurati che i testi corrispondano alle condizioni descritte e consegnali a partire dal giorno successivo entro 2 giorni lavorativi presso:\n🏪 {group_orders[0].get('bookstore_name')}\n\n📋 CONDIZIONI DESCRITTE:{conditions_text}"
+            seller_message = f"COMPLIMENTI! {len(group_orders)} LIBRI VENDUTI!\n\n{books_list}\n\nAssicurati che i testi corrispondano alle condizioni descritte e consegnali a partire dal giorno successivo entro 2 giorni lavorativi presso:\n🏪 {group_orders[0].get('bookstore_name')}\n\n🔑 CODICE RITIRO: {batch_code}\n\n📋 CONDIZIONI DESCRITTE:{conditions_text}"
         else:
-            seller_message = f"COMPLIMENTI!\n📚 {book_titles[0]}\nÈ STATO VENDUTO!\n\nAssicurati che il testo corrisponda alle condizioni descritte e consegnalo a partire dal giorno successivo entro 2 giorni lavorativi presso:\n🏪 {group_orders[0].get('bookstore_name')}\n\n📋 CONDIZIONI DESCRITTE:{conditions_text}"
+            seller_message = f"COMPLIMENTI!\n📚 {book_titles[0]}\nÈ STATO VENDUTO!\n\nAssicurati che il testo corrisponda alle condizioni descritte e consegnalo a partire dal giorno successivo entro 2 giorni lavorativi presso:\n🏪 {group_orders[0].get('bookstore_name')}\n\n🔑 CODICE RITIRO: {batch_code}\n\n📋 CONDIZIONI DESCRITTE:{conditions_text}"
         
         seller_notification = {
             "id": str(uuid.uuid4()),
