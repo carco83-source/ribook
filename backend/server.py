@@ -5256,7 +5256,7 @@ async def get_lista_ufficiale(user_id: str, child_id: str):
     # Query per la classe/sezione
     adozioni_query = {
         "codice_scuola": child_codice_scuola,
-        "anno_corso": str(child_classe),
+        "classe": str(child_classe),
         "sezione": {"$regex": f"^{child_sezione}$", "$options": "i"}
     }
     
@@ -5266,7 +5266,7 @@ async def get_lista_ufficiale(user_id: str, child_id: str):
     if not books:
         fallback_query = {
             "codice_scuola": child_codice_scuola,
-            "anno_corso": str(child_classe)
+            "classe": str(child_classe)
         }
         all_books = await db.adozioni.find(fallback_query).to_list(length=200)
         if all_books:
