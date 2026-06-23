@@ -124,6 +124,25 @@ export default function RegisterScreen() {
       // Il backend ritorna { message, user_id, username }
       const { user_id, username } = response.data;
 
+      // Migra eventuali profili temporanei
+      const tempProfiles = await AsyncStorage.getItem('temp_profiles');
+      if (tempProfiles) {
+        try {
+          const profiles = JSON.parse(tempProfiles);
+          if (profiles && profiles.length > 0) {
+            await axios.post(`${API_URL}/api/auth/migrate-profiles/${user_id}`, {
+              profiles: profiles
+            });
+            // Rimuovi i profili temporanei dopo la migrazione
+            await AsyncStorage.removeItem('temp_profiles');
+            console.log(`Migrated ${profiles.length} temporary profiles to user ${user_id}`);
+          }
+        } catch (migrateError) {
+          console.log('Error migrating temp profiles:', migrateError);
+          // Non bloccare la registrazione se la migrazione fallisce
+        }
+      }
+
       // Salva i dati dell'utente
       await AsyncStorage.setItem('user_id', user_id);
       await AsyncStorage.setItem('username', username);

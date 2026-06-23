@@ -696,6 +696,82 @@ async def login_user(credentials: UserLogin):
         "profili_figli": user.get("profili_figli", [])
     }
 
+# ============== MIGRAZIONE PROFILI TEMPORANEI ==============
+
+class TempProfile(BaseModel):
+    id: str
+    nome_figlio: str
+    scuola: str
+    codice_scuola: str
+    classe: int
+    sezione: str
+    tipo_scuola: Optional[str] = "primo_grado"
+
+class MigrateProfilesRequest(BaseModel):
+    profiles: List[TempProfile]
+
+@api_router.post("/auth/migrate-profiles/{user_id}")
+async def migrate_temp_profiles(user_id: str, data: MigrateProfilesRequest):
+    """
+    Migra i profili temporanei (creati durante la navigazione anonima)
+    all'account utente appena registrato.
+    """
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+    
+    migrated_profiles = []
+    existing_profiles = user.get("profili_figli", [])
+    
+    for temp_profile in data.profiles:
+        # Verifica che non esista già un profilo con lo stesso nome e scuola
+        duplicate = False
+        for existing in existing_profiles:
+            if (existing.get("nome_figlio", "").lower() == temp_profile.nome_figlio.lower() and
+                existing.get("codice_scuola") == temp_profile.codice_scuola):
+                duplicate = True
+                break
+        
+        if duplicate:
+            continue
+        
+        # Normalizza i dati
+        try:
+            classe_int = int(temp_profile.classe)
+        except (ValueError, TypeError):
+            classe_int = 1
+        
+        sezione_upper = temp_profile.sezione.upper() if temp_profile.sezione else ""
+        
+        # Crea nuovo profilo con nuovo ID
+        new_profile = {
+            "id": str(uuid.uuid4()),
+            "nome_figlio": temp_profile.nome_figlio,
+            "scuola": temp_profile.scuola,
+            "codice_scuola": temp_profile.codice_scuola or "",
+            "classe": classe_int,
+            "sezione": sezione_upper,
+            "tipo_scuola": temp_profile.tipo_scuola or "primo_grado",
+            "classe_2025_2026": None,
+            "fine_ciclo": False
+        }
+        
+        existing_profiles.append(new_profile)
+        migrated_profiles.append(new_profile)
+    
+    # Salva i profili aggiornati
+    if migrated_profiles:
+        await db.users.update_one(
+            {"id": user_id},
+            {"$set": {"profili_figli": existing_profiles}}
+        )
+    
+    return {
+        "message": f"Migrati {len(migrated_profiles)} profili",
+        "migrated_count": len(migrated_profiles),
+        "profiles": migrated_profiles
+    }
+
 # ============== PASSWORD RECOVERY ==============
 
 class VerifyEmailRequest(BaseModel):

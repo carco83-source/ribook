@@ -36,6 +36,8 @@ interface EscrowOrder {
   netto_venditore: number;
   status: string;
   created_at: string;
+  include_foderazione?: boolean;
+  costo_foderazione?: number;
 }
 
 export default function CartScreen() {
@@ -242,6 +244,9 @@ export default function CartScreen() {
   };
 
   const totalAmount = pendingPaymentOrders.reduce((sum, o) => sum + o.totale_acquirente, 0);
+  const totalFoderazioni = pendingPaymentOrders.filter(o => o.include_foderazione).length;
+  const totalFoderazioneCost = pendingPaymentOrders.reduce((sum, o) => o.include_foderazione ? sum + (o.costo_foderazione || 1.50) : sum, 0);
+  const totalBooksOnly = totalAmount - totalFoderazioneCost;
   const allItems = [...pendingPaymentOrders, ...pendingConfirmationOrders];
 
   if (loading) {
@@ -346,8 +351,30 @@ export default function CartScreen() {
                     </View>
                     
                     <View style={styles.priceContainer}>
-                      <Text style={styles.priceLabel}>Totale</Text>
-                      <Text style={styles.priceValue}>€{order.totale_acquirente.toFixed(2)}</Text>
+                      {order.include_foderazione ? (
+                        <View style={styles.priceBreakdown}>
+                          <View style={styles.priceBreakdownRow}>
+                            <Text style={styles.priceBreakdownLabel}>Prezzo libro</Text>
+                            <Text style={styles.priceBreakdownValue}>€{order.prezzo_libro.toFixed(2)}</Text>
+                          </View>
+                          <View style={styles.priceBreakdownRow}>
+                            <View style={styles.foderaturaTag}>
+                              <Ionicons name="shield-checkmark" size={12} color="#1a472a" />
+                              <Text style={styles.foderaturaText}>Foderazione</Text>
+                            </View>
+                            <Text style={styles.priceBreakdownValue}>€{(order.costo_foderazione || 1.50).toFixed(2)}</Text>
+                          </View>
+                          <View style={[styles.priceBreakdownRow, styles.totalRowBreakdown]}>
+                            <Text style={styles.priceLabel}>Totale</Text>
+                            <Text style={styles.priceValue}>€{order.totale_acquirente.toFixed(2)}</Text>
+                          </View>
+                        </View>
+                      ) : (
+                        <View style={styles.priceSimple}>
+                          <Text style={styles.priceLabel}>Totale</Text>
+                          <Text style={styles.priceValue}>€{order.totale_acquirente.toFixed(2)}</Text>
+                        </View>
+                      )}
                     </View>
                     
                     <TouchableOpacity
@@ -413,8 +440,30 @@ export default function CartScreen() {
                     </View>
                     
                     <View style={styles.priceContainerPending}>
-                      <Text style={styles.priceLabelPending}>Totale previsto</Text>
-                      <Text style={styles.priceValuePending}>€{order.totale_acquirente.toFixed(2)}</Text>
+                      {order.include_foderazione ? (
+                        <View style={styles.priceBreakdown}>
+                          <View style={styles.priceBreakdownRow}>
+                            <Text style={styles.priceBreakdownLabelPending}>Prezzo libro</Text>
+                            <Text style={styles.priceBreakdownValuePending}>€{order.prezzo_libro.toFixed(2)}</Text>
+                          </View>
+                          <View style={styles.priceBreakdownRow}>
+                            <View style={styles.foderaturaTagPending}>
+                              <Ionicons name="shield-checkmark" size={12} color="#FF9800" />
+                              <Text style={styles.foderaturaTextPending}>Foderazione</Text>
+                            </View>
+                            <Text style={styles.priceBreakdownValuePending}>€{(order.costo_foderazione || 1.50).toFixed(2)}</Text>
+                          </View>
+                          <View style={[styles.priceBreakdownRow, styles.totalRowBreakdown]}>
+                            <Text style={styles.priceLabelPending}>Totale previsto</Text>
+                            <Text style={styles.priceValuePending}>€{order.totale_acquirente.toFixed(2)}</Text>
+                          </View>
+                        </View>
+                      ) : (
+                        <View style={styles.priceSimple}>
+                          <Text style={styles.priceLabelPending}>Totale previsto</Text>
+                          <Text style={styles.priceValuePending}>€{order.totale_acquirente.toFixed(2)}</Text>
+                        </View>
+                      )}
                     </View>
                     
                     <TouchableOpacity
@@ -444,10 +493,22 @@ export default function CartScreen() {
               
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>
-                  Subtotale ({pendingPaymentOrders.length} libri confermati)
+                  Libri ({pendingPaymentOrders.length})
                 </Text>
-                <Text style={styles.summaryValue}>€{totalAmount.toFixed(2)}</Text>
+                <Text style={styles.summaryValue}>€{totalBooksOnly.toFixed(2)}</Text>
               </View>
+              
+              {totalFoderazioni > 0 && (
+                <View style={styles.summaryRow}>
+                  <View style={styles.foderazioneSummaryTag}>
+                    <Ionicons name="shield-checkmark" size={14} color="#1a472a" />
+                    <Text style={styles.summaryLabelFoderazione}>
+                      Foderazioni ({totalFoderazioni})
+                    </Text>
+                  </View>
+                  <Text style={styles.summaryValue}>€{totalFoderazioneCost.toFixed(2)}</Text>
+                </View>
+              )}
               
               <View style={[styles.summaryRow, styles.totalRow]}>
                 <Text style={styles.totalLabel}>Totale da pagare</Text>
@@ -805,6 +866,85 @@ const styles = StyleSheet.create({
   removeButtonText: {
     color: '#f44336',
     fontSize: 13,
+    fontWeight: '500',
+  },
+  // Stili per il breakdown prezzo con foderazione
+  priceBreakdown: {
+    flex: 1,
+    marginBottom: 12,
+  },
+  priceBreakdownRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  priceBreakdownLabel: {
+    fontSize: 13,
+    color: '#666',
+  },
+  priceBreakdownLabelPending: {
+    fontSize: 13,
+    color: '#999',
+  },
+  priceBreakdownValue: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '500',
+  },
+  priceBreakdownValuePending: {
+    fontSize: 14,
+    color: '#FF9800',
+    fontWeight: '500',
+  },
+  totalRowBreakdown: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#e8f5e9',
+  },
+  priceSimple: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flex: 1,
+  },
+  foderaturaTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#e8f5e9',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+    gap: 4,
+  },
+  foderaturaText: {
+    fontSize: 12,
+    color: '#1a472a',
+    fontWeight: '600',
+  },
+  foderaturaTagPending: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff3e0',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+    gap: 4,
+  },
+  foderaturaTextPending: {
+    fontSize: 12,
+    color: '#FF9800',
+    fontWeight: '600',
+  },
+  foderazioneSummaryTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  summaryLabelFoderazione: {
+    fontSize: 14,
+    color: '#1a472a',
     fontWeight: '500',
   },
 });
