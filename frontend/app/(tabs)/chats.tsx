@@ -74,6 +74,7 @@ export default function MessaggiScreen() {
   const [userId, setUserId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('notifiche');
   const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [unreadMessages, setUnreadMessages] = useState(0);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [expandedNotifications, setExpandedNotifications] = useState<Set<string>>(new Set());
   const [isAnonymous, setIsAnonymous] = useState(false);
@@ -100,6 +101,9 @@ export default function MessaggiScreen() {
       if (convResponse.ok) {
         const data = await convResponse.json();
         setConversations(data.conversations || []);
+        // Calcola messaggi non letti
+        const totalUnread = (data.conversations || []).reduce((sum: number, conv: any) => sum + (conv.unread_count || 0), 0);
+        setUnreadMessages(totalUnread);
       }
 
       // Carica notifiche
@@ -566,11 +570,20 @@ export default function MessaggiScreen() {
           style={[styles.tab, activeTab === 'messaggi' && styles.tabActive]}
           onPress={() => setActiveTab('messaggi')}
         >
-          <Ionicons 
-            name="chatbubbles" 
-            size={20} 
-            color={activeTab === 'messaggi' ? '#1a472a' : '#888'} 
-          />
+          <View style={styles.tabIconContainer}>
+            <Ionicons 
+              name="chatbubbles" 
+              size={20} 
+              color={activeTab === 'messaggi' ? '#1a472a' : '#888'} 
+            />
+            {unreadMessages > 0 && (
+              <View style={styles.tabBadge}>
+                <Text style={styles.tabBadgeText}>
+                  {unreadMessages > 9 ? '9+' : unreadMessages}
+                </Text>
+              </View>
+            )}
+          </View>
           <Text style={[styles.tabText, activeTab === 'messaggi' && styles.tabTextActive]}>
             Messaggi
           </Text>
@@ -666,6 +679,9 @@ const styles = StyleSheet.create({
   tabTextActive: {
     color: '#1a472a',
     fontWeight: '600',
+  },
+  tabIconContainer: {
+    position: 'relative',
   },
   tabBadge: {
     position: 'absolute',
