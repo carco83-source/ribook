@@ -151,6 +151,28 @@ const calcolaCompensiCartolibreria = (prezzoLibro: number, includeFoderazione: b
   };
 };
 
+// Helper functions per le etichette delle condizioni
+const getConditionLabel = (val: number | undefined): string => {
+  if (!val || val === 0) return "Nessuna";
+  if (val <= 33) return "Poche";
+  if (val <= 66) return "Diverse";
+  return "Molte";
+};
+
+const getUsuraLabel = (val: number | undefined): string => {
+  if (!val || val === 0) return "Nessuna";
+  if (val <= 33) return "Leggera";
+  if (val <= 66) return "Moderata";
+  return "Elevata";
+};
+
+const getEserciziLabel = (val: number | undefined): string => {
+  if (!val || val === 0) return "Nessuno";
+  if (val <= 33) return "Pochi";
+  if (val <= 66) return "Alcuni";
+  return "Molti";
+};
+
 interface BookstoreNotification {
   id: string;
   type: string;
@@ -494,26 +516,28 @@ export default function BookstorePortalScreen() {
   };
 
   // Conferma ricezione libro dal venditore
-  const handleConfirmSellerDelivery = async (orderCode: string) => {
+  const handleConfirmSellerDelivery = async (orderCode: string, idoneo: boolean = true) => {
     setConfirmingAction(true);
     try {
       const response = await axios.post(
-        `${API_URL}/api/bookstore/${bookstoreId}/confirm-seller-delivery?order_code=${orderCode.toUpperCase()}`
+        `${API_URL}/api/bookstore/${bookstoreId}/confirm-seller-delivery?order_code=${orderCode.toUpperCase()}&idoneo=${idoneo}`
       );
       
-      const msg = `✅ Consegna confermata!\n\nOrdine: ${response.data.order_code}\n${response.data.book_titolo}\n\nL'acquirente è stato notificato.`;
+      const msg = idoneo 
+        ? `✅ Libro ACCETTATO!\n\nOrdine: ${response.data.order_code}\n${response.data.book_titolo}\n\nL'acquirente è stato notificato per il ritiro.`
+        : `❌ Libro RIFIUTATO!\n\nOrdine: ${response.data.order_code}\n${response.data.book_titolo}\n\nL'acquirente riceverà il rimborso.`;
       
       if (Platform.OS === 'web') {
         window.alert(msg);
       } else {
-        Alert.alert('Successo', msg);
+        Alert.alert(idoneo ? 'Libro Accettato' : 'Libro Rifiutato', msg);
       }
       
       setShowScanner(false);
       setManualCode('');
       await loadDashboardData(bookstoreId!);
     } catch (error: any) {
-      const errorMsg = error.response?.data?.detail || 'Errore durante la conferma';
+      const errorMsg = error.response?.data?.detail || 'Errore durante la verifica';
       if (Platform.OS === 'web') {
         window.alert('Errore: ' + errorMsg);
       } else {
@@ -1013,6 +1037,17 @@ export default function BookstorePortalScreen() {
                     </View>
                   </View>
                   
+                  {/* Foto del libro */}
+                  {order.book_photo && (
+                    <View style={styles.bookPhotoContainer}>
+                      <Image 
+                        source={{ uri: order.book_photo.startsWith('data:') ? order.book_photo : `data:image/jpeg;base64,${order.book_photo}` }} 
+                        style={styles.bookPhotoLarge}
+                        resizeMode="contain"
+                      />
+                    </View>
+                  )}
+                  
                   <Text style={styles.orderBookTitle}>{order.book_titolo}</Text>
                   {order.book_autore && <Text style={styles.orderBookAuthor}>{order.book_autore}</Text>}
                   
@@ -1025,6 +1060,24 @@ export default function BookstorePortalScreen() {
                       <Ionicons name="cart" size={14} color="#666" />
                       <Text style={styles.orderMetaText}>Acquirente: {order.buyer_name}</Text>
                     </View>
+                  </View>
+
+                  {/* Condizioni dichiarate dal venditore */}
+                  <View style={styles.conditionsBox}>
+                    <Text style={styles.conditionsBoxTitle}>📋 CONDIZIONI DICHIARATE</Text>
+                    {order.conditions_text ? (
+                      <Text style={styles.conditionsBoxText}>{order.conditions_text}</Text>
+                    ) : order.condition_details ? (
+                      <View>
+                        <Text style={styles.conditionsBoxText}>• Scritte a penna: {getConditionLabel(order.condition_details.penna)}</Text>
+                        <Text style={styles.conditionsBoxText}>• Scritte a matita: {getConditionLabel(order.condition_details.matita)}</Text>
+                        <Text style={styles.conditionsBoxText}>• Evidenziature: {getConditionLabel(order.condition_details.evidenziatore)}</Text>
+                        <Text style={styles.conditionsBoxText}>• Esercizi svolti: {getEserciziLabel(order.condition_details.esercizi)}</Text>
+                        <Text style={styles.conditionsBoxText}>• Usura pagine: {getUsuraLabel(order.condition_details.usura_pagine)}</Text>
+                      </View>
+                    ) : (
+                      <Text style={styles.conditionsBoxText}>Nessuna informazione disponibile</Text>
+                    )}
                   </View>
 
                   {/* Codice alfanumerico da verificare per consegna venditore */}
@@ -1047,11 +1100,33 @@ export default function BookstorePortalScreen() {
                         </TouchableOpacity>
                       )}
                       <TouchableOpacity
-                        style={styles.actionBtn}
-                        onPress={() => handleConfirmSellerDelivery(order.order_code)}
+                        style={[styles.actionBtn, styles.actionBtnReject]}
+                        onPress={() => {
+                          if (Platform.OS === 'web') {
+                            if (window.confirm(`Rifiutare il libro "${order.book_titolo}" perché non conforme alle condizioni dichiarate?\n\nL'acquirente riceverà il rimborso.`)) {
+                              handleConfirmSellerDelivery(order.order_code, false);
+                            }
+                          } else {
+                            Alert.alert(
+                              'Rifiuta Libro',
+                              `Rifiutare "${order.book_titolo}" perché non conforme alle condizioni dichiarate?\n\nL'acquirente riceverà il rimborso.`,
+                              [
+                                { text: 'Annulla', style: 'cancel' },
+                                { text: 'Rifiuta', style: 'destructive', onPress: () => handleConfirmSellerDelivery(order.order_code, false) }
+                              ]
+                            );
+                          }
+                        }}
+                      >
+                        <Ionicons name="close" size={18} color="#fff" />
+                        <Text style={styles.actionBtnText}>Rifiutato</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.actionBtn, styles.actionBtnAccept]}
+                        onPress={() => handleConfirmSellerDelivery(order.order_code, true)}
                       >
                         <Ionicons name="checkmark" size={18} color="#fff" />
-                        <Text style={styles.actionBtnText}>Ricevuto</Text>
+                        <Text style={styles.actionBtnText}>Accettato</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -2386,9 +2461,16 @@ const styles = StyleSheet.create({
   actionBtnScan: {
     backgroundColor: '#FF9800',
   },
+  actionBtnAccept: {
+    backgroundColor: '#4CAF50',
+  },
+  actionBtnReject: {
+    backgroundColor: '#f44336',
+  },
   actionBtnsRow: {
     flexDirection: 'row',
     gap: 8,
+    flexWrap: 'wrap',
   },
   actionBtnText: {
     color: '#fff',
@@ -2432,6 +2514,39 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   // Codice Alfanumerico Container
+  // Foto del libro per verifica
+  bookPhotoContainer: {
+    alignItems: 'center',
+    marginVertical: 12,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
+    padding: 8,
+  },
+  bookPhotoLarge: {
+    width: '100%',
+    height: 200,
+    borderRadius: 8,
+  },
+  // Box condizioni dichiarate
+  conditionsBox: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: '#FFF8E1',
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#FF9800',
+  },
+  conditionsBoxTitle: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#E65100',
+    marginBottom: 8,
+  },
+  conditionsBoxText: {
+    fontSize: 12,
+    color: '#5D4037',
+    lineHeight: 20,
+  },
   alphaCodeContainer: {
     alignItems: 'center',
     marginTop: 12,

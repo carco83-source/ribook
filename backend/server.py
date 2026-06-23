@@ -7440,6 +7440,8 @@ async def pay_order(order_id: str, user_id: str = Query(...)):
         "totale_acquirente": commissioni["totale_acquirente"],
         "netto_venditore": commissioni["netto_venditore"],
         "condition_details": condition_details,
+        "conditions_text": conditions_text.strip(),
+        "book_photo": listing_photo,
         "status_history": order.get("status_history", []) + [{
             "status": "pagato_attesa_consegna",
             "timestamp": now.isoformat(),
