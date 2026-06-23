@@ -7092,12 +7092,19 @@ async def pay_order(order_id: str, user_id: str = Query(...)):
         if val <= 66: return "Diverse"
         return "Molte"
     
+    def get_usura_label(val):
+        if val == 0: return "Nessuna"
+        if val <= 33: return "Leggera"
+        if val <= 66: return "Moderata"
+        return "Elevata"
+    
     conditions_text = ""
     conditions_text += f"• Scritte a penna: {get_label(condition_details.get('penna', 0))}\n"
     conditions_text += f"• Scritte a matita: {get_label(condition_details.get('matita', 0))}\n"
     conditions_text += f"• Evidenziature: {get_label(condition_details.get('evidenziatore', 0))}\n"
+    conditions_text += f"• Usura pagine: {get_usura_label(condition_details.get('usura_pagine', 0))}\n"
     if listing_note:
-        conditions_text += f"• Note: {listing_note}\n"
+        conditions_text += f"• Note venditore: {listing_note}\n"
     
     books_conditions = [{
         "title": order.get("book_titolo", ""),
