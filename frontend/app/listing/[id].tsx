@@ -892,27 +892,39 @@ export default function ListingDetailScreen() {
 
         {/* Opzione Foderazione - appare quando una cartolibreria è selezionata */}
         {selectedBookstore && (
-          <TouchableOpacity 
-            style={styles.foderaturaCard}
-            onPress={() => setRichiediFoderazione(!richiediFoderazione)}
-          >
-            <View style={styles.foderaturaContent}>
-              <View style={[
-                styles.foderaturaCheckbox,
-                richiediFoderazione && styles.foderaturaCheckboxChecked
-              ]}>
-                {richiediFoderazione && (
-                  <Ionicons name="checkmark" size={16} color="#fff" />
-                )}
+          <>
+            <TouchableOpacity 
+              style={styles.foderaturaCard}
+              onPress={() => setRichiediFoderazione(!richiediFoderazione)}
+            >
+              <View style={styles.foderaturaContent}>
+                <View style={[
+                  styles.foderaturaCheckbox,
+                  richiediFoderazione && styles.foderaturaCheckboxChecked
+                ]}>
+                  {richiediFoderazione && (
+                    <Ionicons name="checkmark" size={16} color="#fff" />
+                  )}
+                </View>
+                <View style={styles.foderaturaTextContainer}>
+                  <Text style={styles.foderaturaTitle}>Foderazione libro</Text>
+                  <Text style={styles.foderaturaSubtitle}>
+                    Richiedi la foderazione presso {selectedBookstore.nome}
+                  </Text>
+                </View>
               </View>
-              <View style={styles.foderaturaTextContainer}>
-                <Text style={styles.foderaturaTitle}>Foderazione libro</Text>
-                <Text style={styles.foderaturaSubtitle}>
-                  Richiedi la foderazione presso {selectedBookstore.nome}
+            </TouchableOpacity>
+            
+            {/* Messaggio informativo quando foderazione selezionata */}
+            {richiediFoderazione && (
+              <View style={styles.foderaturaNotice}>
+                <Ionicons name="information-circle" size={18} color="#1a472a" />
+                <Text style={styles.foderaturaNoticeText}>
+                  Richiedi la foderazione presso la Cartolibreria Ni.Ca. Qualora i testi siano composti da più volumi, sarà foderato il volume principale.
                 </Text>
               </View>
-            </View>
-          </TouchableOpacity>
+            )}
+          </>
         )}
 
         <View style={styles.sellerCard}>
@@ -1805,5 +1817,21 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#666',
     marginTop: 2,
+  },
+  foderaturaNotice: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#e8f5e9',
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 8,
+    marginHorizontal: 16,
+    gap: 10,
+  },
+  foderaturaNoticeText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#1a472a',
+    lineHeight: 20,
   },
 });
