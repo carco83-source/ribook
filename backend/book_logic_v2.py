@@ -135,32 +135,33 @@ async def get_libri_classe_2025_2026(
     sezione: str
 ) -> List[Dict]:
     """
-    Recupera libri dalla collezione 2025/2026.
-    NOTA: La struttura è diversa - documenti aggregati per classe con array 'libri'.
+    Recupera libri dalla collezione 'books' per l'anno 2025/2026.
+    Ogni documento è un singolo libro (non aggregato).
     """
-    collection = db.adozioni_2025_2026
-    classe_int = int(classe)
+    collection = db.books
+    classe_str = str(classe)
     sezione_upper = sezione.upper() if sezione else "A"
     
-    # Cerca documento aggregato
-    doc = await collection.find_one({
+    # Cerca libri per scuola/classe/sezione/anno
+    libri = await collection.find({
         "codice_scuola": codice_scuola,
-        "classe": classe_int,
-        "sezione": sezione_upper
-    })
+        "classe": classe_str,
+        "sezione": sezione_upper,
+        "anno_scolastico": "2025/2026"
+    }).to_list(None)
     
-    # Fallback senza sezione
-    if not doc:
-        doc = await collection.find_one({
+    # Fallback: qualsiasi sezione della stessa scuola/classe
+    if not libri:
+        libri = await collection.find({
             "codice_scuola": codice_scuola,
-            "classe": classe_int
-        })
-    
-    if not doc:
-        return []
-    
-    # Estrai libri dall'array
-    libri_raw = doc.get("libri", [])
+            "classe": classe_str,
+            "anno_scolastico": "2025/2026"
+        }).to_list(None)
+        
+        if libri:
+            # Prendi solo la prima sezione
+            prima_sezione = libri[0].get("sezione")
+            libri = [l for l in libri if l.get("sezione") == prima_sezione]
     
     return [{
         "isbn": l.get("isbn", ""),
@@ -173,7 +174,7 @@ async def get_libri_classe_2025_2026(
         "da_acquistare": l.get("da_acquistare", True),
         "nuova_adozione": l.get("nuova_adozione", False),
         "consigliato": l.get("consigliato", False),
-    } for l in libri_raw if l.get("isbn")]
+    } for l in libri if l.get("isbn")]
 
 
 async def get_isbn_vendibili_catanzaro(
@@ -185,49 +186,34 @@ async def get_isbn_vendibili_catanzaro(
     da qualche studente delle scuole di Catanzaro.
     
     Un ISBN è vendibile se:
-    - Era nella classe 2025/2026 di qualcuno
-    - NON è nella classe 2026/2027 di quella persona
+    - Era nella classe 3ª del 2025/2026 (chi ha finito le medie può vendere)
     
-    In pratica: cerca in adozioni_2025_2026 ma NON in adozioni per la classe successiva.
+    LOGICA SEMPLIFICATA:
+    Solo chi ha finito le medie (era in 3ª l'anno scorso) può vendere i libri.
     
     Returns:
         Dict[isbn] -> Lista di info venditori (scuola, classe, etc.)
     """
     vendibili = {}
     
-    # Per ogni scuola di Catanzaro, verifica quali ISBN sono vendibili
-    # Un libro è vendibile se era in uso l'anno scorso ma non quest'anno
-    
-    # Scuole di Catanzaro (codici che iniziano con CZ)
-    scuole_cz = await db.adozioni.distinct("codice_scuola")
-    scuole_cz = [s for s in scuole_cz if s and s.startswith("CZ")]
-    
     for isbn in isbn_richiesti:
         venditori = []
         
-        # Cerca in quali classi 2025/2026 c'era questo libro
-        async for doc in db.adozioni_2025_2026.find({"libri.isbn": isbn}):
+        # Cerca se questo ISBN era presente in classe 3 nel 2025/2026
+        # Chi era in 3ª l'anno scorso ha finito le medie e può vendere
+        async for doc in db.books.find({
+            "isbn": isbn,
+            "classe": "3",
+            "anno_scolastico": "2025/2026"
+        }):
             codice_scuola = doc.get("codice_scuola", "")
-            classe_passata = doc.get("classe", 0)
             sezione = doc.get("sezione", "")
             
-            # Calcola la classe successiva (2026/2027)
-            classe_attuale = classe_passata + 1
-            
-            # Verifica se lo stesso ISBN è ancora richiesto nella classe successiva
-            libro_ancora_in_uso = await db.adozioni.find_one({
+            venditori.append({
                 "codice_scuola": codice_scuola,
-                "anno_corso": str(classe_attuale),
-                "isbn": isbn
+                "classe_venditore": 3,  # Chi era in 3ª ora ha finito
+                "sezione": sezione,
             })
-            
-            if not libro_ancora_in_uso:
-                # Il libro NON serve più → è VENDIBILE
-                venditori.append({
-                    "codice_scuola": codice_scuola,
-                    "classe_venditore": classe_attuale,  # Chi era in classe_passata ora è in classe_attuale
-                    "sezione": sezione,
-                })
         
         if venditori:
             vendibili[isbn] = venditori
