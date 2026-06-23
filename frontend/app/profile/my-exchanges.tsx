@@ -159,28 +159,33 @@ export default function MyExchangesScreen() {
 
   // Acquirente paga
   const handlePayOrder = async (order: Order) => {
-    Alert.alert(
-      'Conferma pagamento',
-      `Stai per pagare €${order.totale_acquirente.toFixed(2)} per:\n📚 "${order.book_titolo}"`,
-      [
-        { text: 'Annulla', style: 'cancel' },
-        {
-          text: 'Paga ora',
-          onPress: async () => {
-            setActionLoading(true);
-            try {
-              await axios.post(`${API_URL}/api/orders/${order.id}/pay?user_id=${userId}`);
-              Alert.alert('Pagamento completato!', 'Il venditore ha 2 giorni lavorativi per consegnare.');
-              loadOrders();
-            } catch (error: any) {
-              Alert.alert('Errore', error.response?.data?.detail || 'Errore pagamento');
-            } finally {
-              setActionLoading(false);
-            }
-          },
-        },
-      ]
-    );
+    console.log('handlePayOrder called with order:', order.id, order.order_code);
+    
+    if (!order.id) {
+      Alert.alert('Errore', 'ID ordine non valido. Riprova più tardi.');
+      return;
+    }
+    
+    // Mostra loading
+    setActionLoading(true);
+    
+    try {
+      // Chiama direttamente l'API per pagare
+      const response = await axios.post(`${API_URL}/api/orders/${order.id}/pay?user_id=${userId}`);
+      console.log('Payment response:', response.data);
+      
+      Alert.alert(
+        '✅ Pagamento completato!', 
+        `Hai pagato €${order.totale_acquirente.toFixed(2)} per "${order.book_titolo}".\n\nIl venditore ha 2 giorni lavorativi per consegnare.`,
+        [{ text: 'OK', onPress: () => loadOrders() }]
+      );
+    } catch (error: any) {
+      console.error('Payment error:', error.response?.data || error.message);
+      const errorMsg = error.response?.data?.detail || 'Errore durante il pagamento. Riprova.';
+      Alert.alert('Errore pagamento', errorMsg);
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const getStatusConfig = (status: string) => {
@@ -302,12 +307,18 @@ export default function MyExchangesScreen() {
         {/* Azione pagamento acquirente */}
         {needsBuyerPayment && (
           <TouchableOpacity
-            style={styles.payButton}
+            style={[styles.payButton, actionLoading && styles.payButtonDisabled]}
             onPress={() => handlePayOrder(item)}
             disabled={actionLoading}
           >
-            <Ionicons name="card" size={20} color="#fff" />
-            <Text style={styles.payButtonText}>Paga €{item.totale_acquirente.toFixed(2)}</Text>
+            {actionLoading ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="card" size={20} color="#fff" />
+                <Text style={styles.payButtonText}>Paga €{item.totale_acquirente.toFixed(2)}</Text>
+              </>
+            )}
           </TouchableOpacity>
         )}
 
@@ -582,6 +593,9 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginTop: 12,
     gap: 8,
+  },
+  payButtonDisabled: {
+    backgroundColor: '#ccc',
   },
   payButtonText: {
     color: '#fff',
