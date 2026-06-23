@@ -1111,14 +1111,6 @@ export default function BookstorePortalScreen() {
                       <Ionicons name="close-circle" size={20} color="#fff" />
                       <Text style={styles.inArrivoBtnText}>Rifiutato</Text>
                     </TouchableOpacity>
-                    {Platform.OS !== 'web' && (
-                      <TouchableOpacity
-                        style={[styles.inArrivoBtn, styles.inArrivoBtnScan]}
-                        onPress={() => openScanner('delivery')}
-                      >
-                        <Ionicons name="qr-code" size={20} color="#fff" />
-                      </TouchableOpacity>
-                    )}
                     <TouchableOpacity
                       style={[styles.inArrivoBtn, styles.inArrivoBtnAccept]}
                       onPress={() => handleConfirmSellerDelivery(order.order_code, true)}
