@@ -25,6 +25,7 @@ interface Notification {
   message: string;
   data?: any;
   read: boolean;
+  used?: boolean;
   created_at: string;
   book_isbn?: string;
   book_titolo?: string;
@@ -117,6 +118,17 @@ export default function NotificationsScreen() {
 
   // Funzione per procedere al pagamento (acquirente)
   const handleProceedToPayment = async (notification: Notification) => {
+    // Segna la notifica come "usata" nel backend
+    try {
+      await axios.put(`${API_URL}/api/notifications/${notification.id}/mark-used`);
+      // Aggiorna lo stato locale - rimuovi la notifica dalla lista o marcala come usata
+      setNotifications(prev => prev.map(n => 
+        n.id === notification.id ? { ...n, used: true, read: true } : n
+      ));
+    } catch (error) {
+      console.error('Error marking notification as used:', error);
+    }
+    
     // Naviga direttamente al carrello
     router.push('/cart');
   };
@@ -291,7 +303,7 @@ export default function NotificationsScreen() {
           notifications.map((notification) => {
             const config = NOTIFICATION_CONFIG[notification.type] || NOTIFICATION_CONFIG.system;
             const isSellerConfirmation = notification.type === 'seller_confirmation_request';
-            const isReadyForPayment = notification.type === 'ready_for_payment';
+            const isReadyForPayment = notification.type === 'ready_for_payment' && !notification.used;
             const isOrderPending = notification.type === 'order_pending';
             
             return (

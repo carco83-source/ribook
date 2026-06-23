@@ -1868,6 +1868,15 @@ async def mark_notification_read(notification_id: str):
     )
     return {"success": result.modified_count > 0}
 
+@api_router.put("/notifications/{notification_id}/mark-used")
+async def mark_notification_used(notification_id: str):
+    """Segna una notifica come usata (il pulsante non apparirà più)"""
+    result = await db.notifications.update_one(
+        {"id": notification_id},
+        {"$set": {"used": True, "read": True}}
+    )
+    return {"success": result.modified_count > 0}
+
 
 @api_router.post("/notifications/process-expired")
 async def process_expired_notifications():
