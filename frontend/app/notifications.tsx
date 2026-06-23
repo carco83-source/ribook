@@ -201,6 +201,7 @@ export default function NotificationsScreen() {
       case 'order_pending':
       case 'ready_for_pickup':
       case 'book_at_bookstore':
+      case 'book_picked_up':
         router.push(`/orders${fromNotif}`);
         break;
       case 'chat':
@@ -209,6 +210,23 @@ export default function NotificationsScreen() {
         break;
       case 'confirmation_request':
         // Naviga agli ordini per confermare
+        router.push(`/orders${fromNotif}`);
+        break;
+      case 'cart_request':
+        // Acquirente ha inviato richiesta - vai al carrello
+        router.push(`/cart${fromNotif}`);
+        break;
+      case 'seller_confirmation_request':
+        // Venditore riceve richiesta - vai ai miei annunci
+        router.push(`/profile/my-listings${fromNotif}`);
+        break;
+      case 'order_paid_deliver':
+        // Venditore deve consegnare - vai agli ordini
+        router.push(`/orders${fromNotif}`);
+        break;
+      case 'book_verified':
+      case 'payment_released':
+        // Notifiche sul pagamento - vai agli ordini
         router.push(`/orders${fromNotif}`);
         break;
       // book_available e seller_confirmed mantengono il comportamento originale
