@@ -541,18 +541,40 @@ async def classifica_libri_studente(
         
         # Controlla se è nuova adozione (nessuno può averlo usato)
         if libro.get("nuova_adozione", False):
-            # CATEGORIA 4: DA ACQUISTARE NUOVO (nuova adozione)
-            result["da_acquistare_nuovi"].append({
-                **libro,
-                "categoria": "DA_ACQUISTARE_NUOVO",
-                "motivo": "Nuova adozione - non disponibile usato",
-                "is_strumento_musicale": is_strumento,
-                "escluso_dal_calcolo": is_strumento
-            })
-            # Aggiungi al costo SOLO se NON è strumento musicale
-            if not is_strumento:
-                result["riepilogo"]["costo_nuovi"] += prezzo
-                result["riepilogo"]["costo_testi_nuovi_totale"] += prezzo  # Prezzo copertina per confronto ministeriale
+            # Ma prima verifica se ci sono listings attivi (qualcuno ha cambiato scuola)
+            copie_eccezionali = copie_in_vendita.get(isbn, 0)
+            if copie_eccezionali > 0:
+                # ECCEZIONALE: Libro normalmente non disponibile, ma qualcuno lo vende!
+                prezzo_usato = round(prezzo * 0.5, 2)
+                result["da_acquistare_usati"].append({
+                    **libro,
+                    "categoria": "DA_ACQUISTARE_USATO",
+                    "prezzo_usato": prezzo_usato,
+                    "risparmio": round(prezzo - prezzo_usato, 2),
+                    "venditori_disponibili": copie_eccezionali,
+                    "potenziali_venditori": 0,
+                    "motivo": f"ECCEZIONALMENTE: {copie_eccezionali} {'copia' if copie_eccezionali == 1 else 'copie'} disponibile",
+                    "eccezionale": True,
+                    "is_strumento_musicale": is_strumento,
+                    "escluso_dal_calcolo": is_strumento
+                })
+                if not is_strumento:
+                    result["riepilogo"]["costo_usati"] += prezzo_usato
+                    result["riepilogo"]["costo_testi_nuovi_totale"] += prezzo
+                    result["riepilogo"]["risparmio_stimato"] += round(prezzo - prezzo_usato, 2)
+            else:
+                # CATEGORIA 4: DA ACQUISTARE NUOVO (nuova adozione)
+                result["da_acquistare_nuovi"].append({
+                    **libro,
+                    "categoria": "DA_ACQUISTARE_NUOVO",
+                    "motivo": "Nuova adozione - non disponibile usato",
+                    "is_strumento_musicale": is_strumento,
+                    "escluso_dal_calcolo": is_strumento
+                })
+                # Aggiungi al costo SOLO se NON è strumento musicale
+                if not is_strumento:
+                    result["riepilogo"]["costo_nuovi"] += prezzo
+                    result["riepilogo"]["costo_testi_nuovi_totale"] += prezzo  # Prezzo copertina per confronto ministeriale
         
         elif isbn in disponibilita_usato:
             # CATEGORIA 3: DA ACQUISTARE USATO
@@ -578,18 +600,40 @@ async def classifica_libri_studente(
                 result["riepilogo"]["risparmio_stimato"] += round(prezzo - prezzo_usato, 2)
         
         else:
-            # CATEGORIA 4: DA ACQUISTARE NUOVO (non disponibile usato)
-            result["da_acquistare_nuovi"].append({
-                **libro,
-                "categoria": "DA_ACQUISTARE_NUOVO",
-                "motivo": "Non disponibile usato nelle scuole di Catanzaro",
-                "is_strumento_musicale": is_strumento,
-                "escluso_dal_calcolo": is_strumento
-            })
-            # Aggiungi al costo SOLO se NON è strumento musicale
-            if not is_strumento:
-                result["riepilogo"]["costo_nuovi"] += prezzo
-                result["riepilogo"]["costo_testi_nuovi_totale"] += prezzo  # Prezzo copertina per confronto ministeriale
+            # Prima verifica se ci sono listings attivi (qualcuno ha cambiato scuola)
+            copie_eccezionali = copie_in_vendita.get(isbn, 0)
+            if copie_eccezionali > 0:
+                # ECCEZIONALE: Libro normalmente non disponibile, ma qualcuno lo vende!
+                prezzo_usato = round(prezzo * 0.5, 2)
+                result["da_acquistare_usati"].append({
+                    **libro,
+                    "categoria": "DA_ACQUISTARE_USATO",
+                    "prezzo_usato": prezzo_usato,
+                    "risparmio": round(prezzo - prezzo_usato, 2),
+                    "venditori_disponibili": copie_eccezionali,
+                    "potenziali_venditori": 0,
+                    "motivo": f"ECCEZIONALMENTE: {copie_eccezionali} {'copia' if copie_eccezionali == 1 else 'copie'} disponibile",
+                    "eccezionale": True,
+                    "is_strumento_musicale": is_strumento,
+                    "escluso_dal_calcolo": is_strumento
+                })
+                if not is_strumento:
+                    result["riepilogo"]["costo_usati"] += prezzo_usato
+                    result["riepilogo"]["costo_testi_nuovi_totale"] += prezzo
+                    result["riepilogo"]["risparmio_stimato"] += round(prezzo - prezzo_usato, 2)
+            else:
+                # CATEGORIA 4: DA ACQUISTARE NUOVO (non disponibile usato)
+                result["da_acquistare_nuovi"].append({
+                    **libro,
+                    "categoria": "DA_ACQUISTARE_NUOVO",
+                    "motivo": "Non disponibile usato nelle scuole di Catanzaro",
+                    "is_strumento_musicale": is_strumento,
+                    "escluso_dal_calcolo": is_strumento
+                })
+                # Aggiungi al costo SOLO se NON è strumento musicale
+                if not is_strumento:
+                    result["riepilogo"]["costo_nuovi"] += prezzo
+                    result["riepilogo"]["costo_testi_nuovi_totale"] += prezzo  # Prezzo copertina per confronto ministeriale
     
     # Aggiorna conteggi
     result["riepilogo"]["totale_ancora_in_uso"] = len(result["ancora_in_uso"])

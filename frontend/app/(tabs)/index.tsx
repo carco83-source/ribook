@@ -779,11 +779,17 @@ export default function RadarScreen() {
                             
                             {/* Riga inferiore: Copie + Prezzi */}
                             <View style={styles.priceRowBottom}>
-                              {/* Badge copie a sinistra */}
+                              {/* Badge copie a sinistra - con ECCEZIONALMENTE se applicabile */}
                               {isUsato && (
-                                <View style={[styles.copieInlineGreen, copieDisponibili === 0 && styles.copieInlineGray]}>
-                                  <Ionicons name="people" size={14} color="#fff" />
-                                  <Text style={styles.copieInlineText}>{copieDisponibili} {copieDisponibili === 1 ? 'copia' : 'copie'}</Text>
+                                <View style={[
+                                  styles.copieInlineGreen, 
+                                  copieDisponibili === 0 && styles.copieInlineGray,
+                                  book.eccezionale && styles.copieInlineOrange
+                                ]}>
+                                  <Ionicons name={book.eccezionale ? "star" : "people"} size={14} color="#fff" />
+                                  <Text style={styles.copieInlineText}>
+                                    {book.eccezionale ? 'ECCEZ. ' : ''}{copieDisponibili} {copieDisponibili === 1 ? 'copia' : 'copie'}
+                                  </Text>
                                 </View>
                               )}
                               {/* Spacer per spingere i prezzi a destra */}
@@ -1691,6 +1697,9 @@ const styles = StyleSheet.create({
   },
   copieInlineGray: {
     backgroundColor: '#999',
+  },
+  copieInlineOrange: {
+    backgroundColor: '#FF8C00',
   },
   copieInlineText: {
     color: '#fff',
