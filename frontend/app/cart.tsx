@@ -9,6 +9,7 @@ import {
   Alert,
   RefreshControl,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { useRouter, Stack, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -42,6 +43,9 @@ interface EscrowOrder {
 
 export default function CartScreen() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 768;
+  
   const [pendingPaymentOrders, setPendingPaymentOrders] = useState<EscrowOrder[]>([]);
   const [pendingConfirmationOrders, setPendingConfirmationOrders] = useState<EscrowOrder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,6 +54,7 @@ export default function CartScreen() {
   const [payingOrderId, setPayingOrderId] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [isPremium, setIsPremium] = useState(false);
+  const [updatingFoderazione, setUpdatingFoderazione] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -70,8 +75,12 @@ export default function CartScreen() {
         const orders = response.data?.orders || response.data || [];
         
         // Filtra ordini per stato
-        const paymentReady = orders.filter((o: EscrowOrder) => o.status === 'pending_payment');
-        const awaitingConfirmation = orders.filter((o: EscrowOrder) => o.status === 'pending_seller_confirmation');
+        const paymentReady = orders.filter((o: EscrowOrder) => 
+          o.status === 'pending_payment' || o.status === 'in_attesa_pagamento'
+        );
+        const awaitingConfirmation = orders.filter((o: EscrowOrder) => 
+          o.status === 'pending_seller_confirmation' || o.status === 'in_attesa_conferma_venditore'
+        );
         
         setPendingPaymentOrders(paymentReady);
         setPendingConfirmationOrders(awaitingConfirmation);
@@ -81,6 +90,42 @@ export default function CartScreen() {
     } finally {
       setLoading(false);
       setRefreshing(false);
+    }
+  };
+
+  // Toggle foderazione per un ordine
+  const handleToggleFoderazione = async (order: EscrowOrder) => {
+    if (!userId) return;
+    
+    setUpdatingFoderazione(order.id);
+    try {
+      const newValue = !order.include_foderazione;
+      const response = await axios.put(
+        `${API_URL}/api/orders/${order.id}/foderazione?buyer_id=${userId}&include_foderazione=${newValue}`
+      );
+      
+      if (response.data) {
+        // Aggiorna l'ordine nello state locale
+        const updateOrder = (o: EscrowOrder) => {
+          if (o.id === order.id) {
+            return {
+              ...o,
+              include_foderazione: response.data.include_foderazione,
+              costo_foderazione: response.data.costo_foderazione,
+              totale_acquirente: response.data.totale_acquirente
+            };
+          }
+          return o;
+        };
+        
+        setPendingPaymentOrders(prev => prev.map(updateOrder));
+        setPendingConfirmationOrders(prev => prev.map(updateOrder));
+      }
+    } catch (error: any) {
+      console.error('Error toggling foderazione:', error);
+      Alert.alert('Errore', error.response?.data?.detail || 'Impossibile aggiornare la foderazione');
+    } finally {
+      setUpdatingFoderazione(null);
     }
   };
 
@@ -299,17 +344,19 @@ export default function CartScreen() {
         <>
           <ScrollView 
             style={styles.scrollView}
+            contentContainerStyle={isDesktop ? styles.scrollViewContentDesktop : undefined}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
             }
           >
-            {/* Info Banner */}
-            <View style={styles.infoBanner}>
-              <Ionicons name="information-circle" size={20} color="#1a472a" />
-              <Text style={styles.infoBannerText}>
-                I fondi rimangono in escrow fino al ritiro del libro
-              </Text>
-            </View>
+            <View style={isDesktop ? styles.desktopContainer : undefined}>
+              {/* Info Banner */}
+              <View style={[styles.infoBanner, isDesktop && styles.infoBannerDesktop]}>
+                <Ionicons name="information-circle" size={20} color="#1a472a" />
+                <Text style={styles.infoBannerText}>
+                  I fondi rimangono in escrow fino al ritiro del libro
+                </Text>
+              </View>
 
             {/* SEZIONE: Pronti per il pagamento */}
             {pendingPaymentOrders.length > 0 && (
@@ -351,30 +398,43 @@ export default function CartScreen() {
                     </View>
                     
                     <View style={styles.priceContainer}>
-                      {order.include_foderazione ? (
-                        <View style={styles.priceBreakdown}>
-                          <View style={styles.priceBreakdownRow}>
-                            <Text style={styles.priceBreakdownLabel}>Prezzo libro</Text>
-                            <Text style={styles.priceBreakdownValue}>€{order.prezzo_libro.toFixed(2)}</Text>
-                          </View>
-                          <View style={styles.priceBreakdownRow}>
-                            <View style={styles.foderaturaTag}>
-                              <Ionicons name="shield-checkmark" size={12} color="#1a472a" />
-                              <Text style={styles.foderaturaText}>Foderazione</Text>
-                            </View>
-                            <Text style={styles.priceBreakdownValue}>€{(order.costo_foderazione || 1.50).toFixed(2)}</Text>
-                          </View>
-                          <View style={[styles.priceBreakdownRow, styles.totalRowBreakdown]}>
-                            <Text style={styles.priceLabel}>Totale</Text>
-                            <Text style={styles.priceValue}>€{order.totale_acquirente.toFixed(2)}</Text>
-                          </View>
+                      <View style={styles.priceBreakdown}>
+                        <View style={styles.priceBreakdownRow}>
+                          <Text style={styles.priceBreakdownLabel}>Prezzo libro</Text>
+                          <Text style={styles.priceBreakdownValue}>€{order.prezzo_libro.toFixed(2)}</Text>
                         </View>
-                      ) : (
-                        <View style={styles.priceSimple}>
+                        
+                        {/* Toggle Foderazione */}
+                        <TouchableOpacity 
+                          style={styles.foderazioneToggle}
+                          onPress={() => handleToggleFoderazione(order)}
+                          disabled={updatingFoderazione === order.id}
+                        >
+                          <View style={[
+                            styles.foderazioneCheckbox,
+                            order.include_foderazione && styles.foderazioneCheckboxChecked
+                          ]}>
+                            {updatingFoderazione === order.id ? (
+                              <ActivityIndicator size="small" color={order.include_foderazione ? "#fff" : "#1a472a"} />
+                            ) : order.include_foderazione ? (
+                              <Ionicons name="checkmark" size={14} color="#fff" />
+                            ) : null}
+                          </View>
+                          <View style={styles.foderazioneInfo}>
+                            <View style={styles.foderazioneHeader}>
+                              <Ionicons name="shield-checkmark" size={14} color="#1a472a" />
+                              <Text style={styles.foderazioneLabel}>Foderazione libro</Text>
+                            </View>
+                            <Text style={styles.foderazioneDesc}>Proteggi il libro con copertina</Text>
+                          </View>
+                          <Text style={styles.foderazionePrice}>+€1.50</Text>
+                        </TouchableOpacity>
+                        
+                        <View style={[styles.priceBreakdownRow, styles.totalRowBreakdown]}>
                           <Text style={styles.priceLabel}>Totale</Text>
                           <Text style={styles.priceValue}>€{order.totale_acquirente.toFixed(2)}</Text>
                         </View>
-                      )}
+                      </View>
                     </View>
                     
                     <TouchableOpacity
@@ -477,6 +537,7 @@ export default function CartScreen() {
                 ))}
               </View>
             )}
+            </View>
           </ScrollView>
 
           {/* Footer: Paga Tutto (solo se ci sono ordini pronti) */}
@@ -591,6 +652,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  // Desktop styles
+  scrollViewContentDesktop: {
+    alignItems: 'center',
+    paddingBottom: 24,
+  },
+  desktopContainer: {
+    width: '100%',
+    maxWidth: 600,
+    alignSelf: 'center',
+  },
   infoBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -600,6 +671,10 @@ const styles = StyleSheet.create({
     margin: 16,
     marginBottom: 0,
     borderRadius: 8,
+  },
+  infoBannerDesktop: {
+    marginHorizontal: 0,
+    marginTop: 16,
   },
   infoBannerText: {
     flex: 1,
@@ -946,5 +1021,52 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#1a472a',
     fontWeight: '500',
+  },
+  // Toggle Foderazione styles
+  foderazioneToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    borderRadius: 10,
+    padding: 12,
+    marginVertical: 8,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  foderazioneCheckbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#1a472a',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  foderazioneCheckboxChecked: {
+    backgroundColor: '#1a472a',
+  },
+  foderazioneInfo: {
+    flex: 1,
+  },
+  foderazioneHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  foderazioneLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1a472a',
+  },
+  foderazioneDesc: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
+  },
+  foderazionePrice: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1a472a',
   },
 });

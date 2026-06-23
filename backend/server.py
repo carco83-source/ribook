@@ -6701,6 +6701,58 @@ async def seller_confirm_cart_item(cart_item_id: str, seller_id: str):
     return {"message": "Libro confermato", "status": "confirmed"}
 
 
+@api_router.put("/orders/{order_id}/foderazione")
+async def update_order_foderazione(order_id: str, buyer_id: str, include_foderazione: bool):
+    """Aggiorna la foderazione di un ordine nel carrello (solo prima del pagamento)"""
+    
+    # Trova l'ordine
+    order = await db.orders.find_one({
+        "id": order_id,
+        "buyer_id": buyer_id,
+        "status": {"$in": ["in_attesa_conferma_venditore", "in_attesa_pagamento", "pending_seller_confirmation", "ready_for_payment"]}
+    })
+    
+    if not order:
+        raise HTTPException(status_code=404, detail="Ordine non trovato o già pagato")
+    
+    # Ricalcola le commissioni
+    prezzo_libro = order.get("prezzo_libro", 0)
+    commissioni = calcola_commissioni(prezzo_libro, include_foderazione)
+    
+    # Aggiorna l'ordine
+    update_data = {
+        "include_foderazione": include_foderazione,
+        "costo_foderazione": commissioni["costo_foderazione"],
+        "totale_acquirente": commissioni["totale_acquirente"],
+        "netto_venditore": commissioni["netto_venditore"],
+        "commissione_app": commissioni["commissione_piattaforma"],
+        "commissione_cartolibreria": commissioni["commissione_cartolibreria_totale"],
+        "commissione_piattaforma": commissioni["commissione_piattaforma"],
+        "commissione_cartolibreria_libro": commissioni["commissione_cartolibreria_libro"],
+        "commissione_cartolibreria_foderazione": commissioni["commissione_cartolibreria_foderazione"]
+    }
+    
+    await db.orders.update_one({"id": order_id}, {"$set": update_data})
+    
+    # Aggiorna anche cart_items se esiste
+    await db.cart_items.update_one(
+        {"id": order_id},
+        {"$set": {
+            "include_foderazione": include_foderazione,
+            "costo_foderazione": commissioni["costo_foderazione"],
+            "totale_acquirente": commissioni["totale_acquirente"]
+        }}
+    )
+    
+    return {
+        "message": "Foderazione aggiornata",
+        "include_foderazione": include_foderazione,
+        "prezzo_libro": prezzo_libro,
+        "costo_foderazione": commissioni["costo_foderazione"],
+        "totale_acquirente": commissioni["totale_acquirente"]
+    }
+
+
 @api_router.post("/cart/{cart_item_id}/reject")
 async def seller_reject_cart_item(cart_item_id: str, seller_id: str):
     """Il venditore rifiuta - libro non disponibile"""
