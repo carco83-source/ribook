@@ -21,3 +21,9 @@
 - Database: scambialibri
 - PDF generation endpoint: /api/profiles/{user_id}/children/{child_id}/books-pdf
 - Tutti i dati transazionali (listings, orders, notifications, messages) sono stati azzerati
+
+## Google OAuth (Emergent Auth)
+- Qualsiasi account Google può essere usato per il login
+- Non è richiesta whitelist per il testing
+- Utenti creati via Google OAuth NON hanno password locale
+- Il token viene salvato in SecureStore (mobile) o localStorage (web)

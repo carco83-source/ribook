@@ -9,7 +9,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import List, Optional
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 import random
 import string
 import hashlib
@@ -806,6 +806,195 @@ async def reset_password(data: ResetPasswordRequest):
     )
     
     return {"message": "Password reimpostata con successo"}
+
+# ============== GOOGLE OAUTH (Emergent Auth) ==============
+
+from datetime import timezone
+
+class GoogleAuthRequest(BaseModel):
+    session_id: str
+
+class GoogleAuthSessionRequest(BaseModel):
+    session_token: str
+    user_data: dict
+
+@api_router.post("/auth/google/callback")
+async def google_oauth_callback(data: GoogleAuthRequest):
+    """
+    Processa il session_id di Google OAuth da Emergent Auth.
+    Verifica con Emergent, crea/aggiorna utente e restituisce session_token.
+    """
+    try:
+        # Verifica session_id con Emergent Auth
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
+                headers={"X-Session-ID": data.session_id}
+            )
+            
+            if response.status_code != 200:
+                raise HTTPException(status_code=401, detail="Session ID non valido")
+            
+            google_data = response.json()
+        
+        # Estrai dati utente
+        email = google_data.get("email", "").lower()
+        name = google_data.get("name", "")
+        picture = google_data.get("picture", "")
+        session_token = google_data.get("session_token", "")
+        
+        if not email or not session_token:
+            raise HTTPException(status_code=400, detail="Dati Google incompleti")
+        
+        # Cerca utente esistente per email
+        existing_user = await db.users.find_one({"email": email})
+        
+        if existing_user:
+            # Aggiorna dati Google se necessario
+            user_id = existing_user["id"]
+            username = existing_user["username"]
+            update_data = {
+                "google_picture": picture,
+                "google_auth": True,
+                "last_login": datetime.now(timezone.utc).isoformat()
+            }
+            if not existing_user.get("nome") and name:
+                # Estrai nome e cognome dal nome completo
+                name_parts = name.split(" ", 1)
+                update_data["nome"] = name_parts[0]
+                if len(name_parts) > 1:
+                    update_data["cognome"] = name_parts[1]
+            
+            await db.users.update_one({"id": user_id}, {"$set": update_data})
+        else:
+            # Crea nuovo utente
+            user_id = f"user_{uuid.uuid4().hex[:12]}"
+            name_parts = name.split(" ", 1)
+            new_user = {
+                "id": user_id,
+                "username": email.split("@")[0],
+                "email": email,
+                "nome": name_parts[0] if name_parts else "",
+                "cognome": name_parts[1] if len(name_parts) > 1 else "",
+                "password_hash": "",  # Nessuna password per OAuth
+                "google_auth": True,
+                "google_picture": picture,
+                "iban": "",
+                "is_premium": False,
+                "is_admin": False,
+                "profili_figli": [],
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "last_login": datetime.now(timezone.utc).isoformat()
+            }
+            await db.users.insert_one(new_user)
+            username = new_user["username"]
+        
+        # Salva sessione
+        expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+        session_doc = {
+            "id": str(uuid.uuid4()),
+            "session_token": session_token,
+            "user_id": user_id,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "expires_at": expires_at.isoformat()
+        }
+        
+        # Rimuovi sessioni precedenti per questo utente
+        await db.user_sessions.delete_many({"user_id": user_id})
+        await db.user_sessions.insert_one(session_doc)
+        
+        # Recupera dati utente completi
+        user = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+        
+        return {
+            "success": True,
+            "session_token": session_token,
+            "user_id": user_id,
+            "username": username,
+            "nome": user.get("nome", ""),
+            "email": email,
+            "picture": picture,
+            "is_premium": user.get("is_premium", False),
+            "profili_figli": user.get("profili_figli", [])
+        }
+        
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=500, detail=f"Errore comunicazione Emergent Auth: {str(e)}")
+
+@api_router.get("/auth/me")
+async def get_current_user(authorization: str = None):
+    """
+    Verifica sessione e ritorna dati utente.
+    Header: Authorization: Bearer {session_token}
+    """
+    if not authorization:
+        # Prova a leggere dall'header manualmente
+        raise HTTPException(status_code=401, detail="Token mancante")
+    
+    # Estrai token dal Bearer
+    if authorization.startswith("Bearer "):
+        token = authorization[7:]
+    else:
+        token = authorization
+    
+    if not token:
+        raise HTTPException(status_code=401, detail="Token mancante")
+    
+    # Cerca sessione
+    session = await db.user_sessions.find_one({"session_token": token})
+    if not session:
+        raise HTTPException(status_code=401, detail="Sessione non valida")
+    
+    # Verifica scadenza
+    expires_at_str = session.get("expires_at", "")
+    if expires_at_str:
+        try:
+            # Gestisci sia stringhe ISO che datetime naive
+            if isinstance(expires_at_str, str):
+                expires_at = datetime.fromisoformat(expires_at_str.replace("Z", "+00:00"))
+            else:
+                expires_at = expires_at_str
+            
+            # Normalizza a timezone-aware
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+            
+            if datetime.now(timezone.utc) > expires_at:
+                await db.user_sessions.delete_one({"session_token": token})
+                raise HTTPException(status_code=401, detail="Sessione scaduta")
+        except (ValueError, TypeError):
+            pass  # Se c'è un errore nel parsing, continua
+    
+    # Recupera utente
+    user = await db.users.find_one({"id": session["user_id"]}, {"_id": 0, "password_hash": 0})
+    if not user:
+        raise HTTPException(status_code=401, detail="Utente non trovato")
+    
+    return {
+        "user_id": user["id"],
+        "username": user.get("username", ""),
+        "nome": user.get("nome", ""),
+        "email": user.get("email", ""),
+        "picture": user.get("google_picture", ""),
+        "is_premium": user.get("is_premium", False),
+        "profili_figli": user.get("profili_figli", [])
+    }
+
+@api_router.post("/auth/logout")
+async def logout_user(authorization: str = None):
+    """Logout: elimina la sessione"""
+    if not authorization:
+        return {"success": True}
+    
+    if authorization.startswith("Bearer "):
+        token = authorization[7:]
+    else:
+        token = authorization
+    
+    if token:
+        await db.user_sessions.delete_one({"session_token": token})
+    
+    return {"success": True, "message": "Logout effettuato"}
 
 @api_router.get("/users/{user_id}")
 async def get_user(user_id: str):
