@@ -7936,6 +7936,29 @@ async def mark_ready_for_pickup(order_id: str, bookstore_id: str = Query(None)):
     }
     await db.notifications.insert_one(notification)
     
+    # Notifica al venditore con QR code (stesso codice dell'acquirente)
+    seller_notification = {
+        "id": str(uuid.uuid4()),
+        "user_id": order.get("seller_id"),
+        "type": "order_qr_code",
+        "title": "✅ LIBRO CONSEGNATO!",
+        "message": f"📚 {order.get('book_titolo')}\n\nHai consegnato il libro presso:\n🏪 {order.get('bookstore_name')}\n\nL'acquirente può ritirarlo mostrando questo codice.\n\n🔑 CODICE: {order.get('order_code')}",
+        "order_id": order_id,
+        "order_code": order.get("order_code"),
+        "bookstore_name": order.get("bookstore_name"),
+        "data": {
+            "order_code": order.get("order_code"),
+            "books": [order.get("book_titolo")],
+            "bookstore_name": order.get("bookstore_name"),
+            "show_qr": True,
+            "role": "seller"
+        },
+        "read": False,
+        "persistent": True,
+        "created_at": now.isoformat()
+    }
+    await db.notifications.insert_one(seller_notification)
+    
     return {
         "success": True,
         "status": "ready_for_pickup",
