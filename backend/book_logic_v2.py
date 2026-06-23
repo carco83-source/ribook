@@ -183,30 +183,35 @@ async def get_isbn_vendibili_catanzaro(
 ) -> Dict[str, List[Dict]]:
     """
     Per ogni ISBN richiesto, verifica se è disponibile come "vendibile usato"
-    da qualche studente delle scuole di Catanzaro.
+    da qualche studente di QUALSIASI scuola di Catanzaro.
     
-    LOGICA CORRETTA:
+    LOGICA:
     
     1. LIBRI ANNUALI (Vol. 1, Vol. 2, Vol. 3):
-       - Chi era in classe X l'anno scorso ora è in classe X+1
-       - Può vendere il Vol. X che non gli serve più
-       - Esempio: Vol. 2 → cerca chi lo aveva in 2ª nel 2025/2026 → ora sono in 3ª
+       - Cerca in TUTTE le scuole di CZ nella classe corrispondente al volume
+       - Vol. 2 → cerca chi lo aveva in 2ª nel 2025/2026 in QUALSIASI scuola
     
-    2. LIBRI TRIENNALI (senza volume o Vol. U):
-       - Servono per tutti e 3 gli anni
-       - Solo chi ha FINITO le medie può venderli
-       - Cerca in classe 3 del 2025/2026
+    2. LIBRI TRIENNALI (Vol. U o senza volume):
+       - Cerca in TUTTE le scuole di CZ in classe 3
+       - Solo chi ha finito le medie può venderli
     
     Returns:
-        Dict[isbn] -> Lista di info venditori (scuola, classe, etc.)
+        Dict[isbn_normalizzato] -> Lista di info venditori (scuola, classe, etc.)
     """
     vendibili = {}
     
     for isbn in isbn_richiesti:
         venditori = []
         
-        # Cerca prima in adozioni (2026/2027) che ha il campo volume popolato
+        # Normalizza l'ISBN per la ricerca
+        isbn_norm = normalize_isbn(isbn)
+        
+        # Cerca info libro - prima in adozioni (ha volume), poi in books
         libro_info = await db.adozioni.find_one({"isbn": isbn})
+        if not libro_info:
+            libro_info = await db.adozioni.find_one({"isbn": isbn_norm})
+        if not libro_info:
+            libro_info = await db.books.find_one({"isbn": isbn_norm})
         if not libro_info:
             libro_info = await db.books.find_one({"isbn": isbn})
         
@@ -218,26 +223,27 @@ async def get_isbn_vendibili_catanzaro(
         
         # Determina se è un libro ANNUALE
         import re
-        volume_match = re.search(r'VOL\.?\s*([123])|VOLUME\s*([123])|\bV\.\s*([123])\b', titolo)
+        volume_match = re.search(r'VOL\.?\s*([123456])|VOLUME\s*([123456])|\bV\.\s*([123456])\b', titolo)
         is_libro_annuale = bool(volume_match)
         volume_number = None
         if volume_match:
             volume_number = volume_match.group(1) or volume_match.group(2) or volume_match.group(3)
         
         # Controlla anche il campo volume direttamente
-        if not is_libro_annuale and volume in ['1', '2', '3']:
+        if not is_libro_annuale and volume in ['1', '2', '3', '4', '5', '6']:
             is_libro_annuale = True
             volume_number = volume
         
+        # Lista di ISBN da cercare (originale e normalizzato)
+        isbn_da_cercare = list(set([isbn, isbn_norm]))
+        
         if is_libro_annuale and volume_number:
-            # LIBRO ANNUALE: cerca nella classe corrispondente al volume
-            # Vol. 1 → classe 1, Vol. 2 → classe 2, Vol. 3 → classe 3
+            # LIBRO ANNUALE: cerca nella classe corrispondente al volume in TUTTE le scuole
             classe_venditore = volume_number
             
             async for doc in db.books.find({
-                "isbn": isbn,
-                "classe": classe_venditore,
-                "anno_scolastico": "2025/2026"
+                "isbn": {"$in": isbn_da_cercare},
+                "classe": classe_venditore
             }):
                 venditori.append({
                     "codice_scuola": doc.get("codice_scuola", ""),
@@ -246,12 +252,10 @@ async def get_isbn_vendibili_catanzaro(
                     "tipo": "annuale"
                 })
         else:
-            # LIBRO TRIENNALE: cerca solo in classe 3
-            # Solo chi ha finito le medie può vendere libri triennali
+            # LIBRO TRIENNALE: cerca in classe 3 di TUTTE le scuole
             async for doc in db.books.find({
-                "isbn": isbn,
-                "classe": "3",
-                "anno_scolastico": "2025/2026"
+                "isbn": {"$in": isbn_da_cercare},
+                "classe": "3"
             }):
                 venditori.append({
                     "codice_scuola": doc.get("codice_scuola", ""),
@@ -261,7 +265,8 @@ async def get_isbn_vendibili_catanzaro(
                 })
         
         if venditori:
-            vendibili[isbn] = venditori
+            # Usa ISBN normalizzato come chiave
+            vendibili[isbn_norm] = venditori
     
     return vendibili
 
@@ -392,13 +397,22 @@ async def classifica_libri_studente(
     isbn_vendibili = isbn_2025 - isbn_2026
     
     # Verifica quali ISBN sono richiesti da almeno una scuola nel 2026/2027
+    # IMPORTANTE: Cerca sia con ISBN normalizzato che originale
     isbn_con_domanda = set()
     if isbn_vendibili:
-        # Query per trovare quali ISBN sono richiesti (usa adozioni 2026/2027)
         isbn_list = list(isbn_vendibili)
+        # Cerca con ISBN normalizzati
         cursor = db.adozioni.find({"isbn": {"$in": isbn_list}}, {"isbn": 1})
         async for doc in cursor:
-            isbn_con_domanda.add(doc.get("isbn"))
+            isbn_con_domanda.add(normalize_isbn(doc.get("isbn", "")))
+        
+        # Cerca anche gli ISBN originali (prima della normalizzazione)
+        # per catturare casi dove adozioni usa ISBN vecchio
+        isbn_originali = [mappa_2025[isbn].get("isbn_originale", isbn) for isbn in isbn_list if isbn in mappa_2025]
+        if isbn_originali:
+            cursor2 = db.adozioni.find({"isbn": {"$in": isbn_originali}}, {"isbn": 1})
+            async for doc in cursor2:
+                isbn_con_domanda.add(normalize_isbn(doc.get("isbn", "")))
     
     for isbn in isbn_vendibili:
         libro = mappa_2025[isbn]
