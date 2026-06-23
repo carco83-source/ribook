@@ -334,6 +334,22 @@ export default function MyExchangesScreen() {
           </TouchableOpacity>
         )}
 
+        {/* Info periodo reso per VENDITORE (mostra che l'acquirente può ancora richiedere reso) */}
+        {!isBuyer && item.status === 'picked_up' && item.return_deadline && (
+          <View style={styles.returnPeriodInfo}>
+            <Ionicons name="time-outline" size={18} color="#FF9800" />
+            <View style={{flex: 1, marginLeft: 8}}>
+              <Text style={styles.returnPeriodTitle}>Periodo verifica reso attivo</Text>
+              <Text style={styles.returnPeriodText}>
+                L'acquirente può richiedere reso entro il {new Date(item.return_deadline).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+              </Text>
+              <Text style={styles.returnPeriodNote}>
+                Il pagamento sarà rilasciato dopo questo periodo se non ci sono contestazioni.
+              </Text>
+            </View>
+          </View>
+        )}
+
         {/* Info pronto per ritiro */}
         {isReadyForPickup && (
           <View style={styles.pickupInfo}>
@@ -643,6 +659,33 @@ const styles = StyleSheet.create({
     color: '#FF9800',
     fontSize: 14,
     fontWeight: '600',
+  },
+  // Stili info periodo reso per venditore
+  returnPeriodInfo: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FFF8E1',
+    borderWidth: 1,
+    borderColor: '#FFE082',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 12,
+  },
+  returnPeriodTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#FF8F00',
+    marginBottom: 4,
+  },
+  returnPeriodText: {
+    fontSize: 12,
+    color: '#666',
+  },
+  returnPeriodNote: {
+    fontSize: 11,
+    color: '#888',
+    marginTop: 4,
+    fontStyle: 'italic',
   },
   // Stili modal reso
   modalOverlay: {
