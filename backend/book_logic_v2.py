@@ -75,6 +75,9 @@ async def get_libri_classe(
     """
     Recupera tutti i libri di una specifica classe/sezione.
     
+    NOTA: In assenza di dati separati per 2026/2027, usiamo i dati 2025/2026
+    dalla collezione 'books' come approssimazione (le adozioni raramente cambiano).
+    
     Args:
         db: Database MongoDB
         codice_scuola: Codice meccanografico scuola
@@ -85,11 +88,9 @@ async def get_libri_classe(
     Returns:
         Lista di libri con tutti i campi
     """
-    # Scegli collezione
-    if anno_scolastico == "2025/2026":
-        collection = db.adozioni_2025_2026
-    else:
-        collection = db.adozioni
+    # Usa sempre la collezione 'books' con dati 2025/2026
+    # (in assenza di dati 2026/2027 separati)
+    collection = db.books
     
     classe_str = str(classe)
     sezione_upper = sezione.upper() if sezione else "A"
@@ -97,15 +98,17 @@ async def get_libri_classe(
     # Prima prova con sezione esatta
     libri = await collection.find({
         "codice_scuola": codice_scuola,
-        "anno_corso": classe_str,
-        "sezione": sezione_upper
+        "classe": classe_str,
+        "sezione": sezione_upper,
+        "anno_scolastico": "2025/2026"
     }).to_list(None)
     
     # Fallback: qualsiasi sezione
     if not libri:
         libri = await collection.find({
             "codice_scuola": codice_scuola,
-            "anno_corso": classe_str
+            "classe": classe_str,
+            "anno_scolastico": "2025/2026"
         }).to_list(None)
         
         if libri:
@@ -345,9 +348,9 @@ async def classifica_libri_studente(
     # Verifica quali ISBN sono richiesti da almeno una scuola nel 2026/2027
     isbn_con_domanda = set()
     if isbn_vendibili:
-        # Query per trovare quali ISBN sono richiesti
+        # Query per trovare quali ISBN sono richiesti (usa books come approssimazione)
         isbn_list = list(isbn_vendibili)
-        cursor = db.adozioni.find({"isbn": {"$in": isbn_list}}, {"isbn": 1})
+        cursor = db.books.find({"isbn": {"$in": isbn_list}}, {"isbn": 1})
         async for doc in cursor:
             isbn_con_domanda.add(doc.get("isbn"))
     
@@ -359,9 +362,9 @@ async def classifica_libri_studente(
         # MA solo se sono ancora richiesti dalla stessa scuola/classe
         if volume == "U":
             # Verifica se il libro Volume U è ancora richiesto per questa classe
-            libro_ancora_richiesto = await db.adozioni.find_one({
+            libro_ancora_richiesto = await db.books.find_one({
                 "codice_scuola": codice_scuola,
-                "anno_corso": str(classe_2026_2027) if classe_2026_2027 else None,
+                "classe": str(classe_2026_2027) if classe_2026_2027 else None,
                 "isbn": isbn
             })
             
