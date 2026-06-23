@@ -185,11 +185,17 @@ async def get_isbn_vendibili_catanzaro(
     Per ogni ISBN richiesto, verifica se è disponibile come "vendibile usato"
     da qualche studente delle scuole di Catanzaro.
     
-    Un ISBN è vendibile se:
-    - Era nella classe 3ª del 2025/2026 (chi ha finito le medie può vendere)
+    LOGICA CORRETTA:
     
-    LOGICA SEMPLIFICATA:
-    Solo chi ha finito le medie (era in 3ª l'anno scorso) può vendere i libri.
+    1. LIBRI ANNUALI (Vol. 1, Vol. 2, Vol. 3):
+       - Chi era in classe X l'anno scorso ora è in classe X+1
+       - Può vendere il Vol. X che non gli serve più
+       - Esempio: Vol. 2 → cerca chi lo aveva in 2ª nel 2025/2026 → ora sono in 3ª
+    
+    2. LIBRI TRIENNALI (senza volume o Vol. U):
+       - Servono per tutti e 3 gli anni
+       - Solo chi ha FINITO le medie può venderli
+       - Cerca in classe 3 del 2025/2026
     
     Returns:
         Dict[isbn] -> Lista di info venditori (scuola, classe, etc.)
@@ -199,21 +205,60 @@ async def get_isbn_vendibili_catanzaro(
     for isbn in isbn_richiesti:
         venditori = []
         
-        # Cerca se questo ISBN era presente in classe 3 nel 2025/2026
-        # Chi era in 3ª l'anno scorso ha finito le medie e può vendere
-        async for doc in db.books.find({
-            "isbn": isbn,
-            "classe": "3",
-            "anno_scolastico": "2025/2026"
-        }):
-            codice_scuola = doc.get("codice_scuola", "")
-            sezione = doc.get("sezione", "")
+        # Cerca prima in adozioni (2026/2027) che ha il campo volume popolato
+        libro_info = await db.adozioni.find_one({"isbn": isbn})
+        if not libro_info:
+            libro_info = await db.books.find_one({"isbn": isbn})
+        
+        if not libro_info:
+            continue
+        
+        titolo = libro_info.get("titolo", "").upper()
+        volume = libro_info.get("volume", "")
+        
+        # Determina se è un libro ANNUALE
+        import re
+        volume_match = re.search(r'VOL\.?\s*([123])|VOLUME\s*([123])|\bV\.\s*([123])\b', titolo)
+        is_libro_annuale = bool(volume_match)
+        volume_number = None
+        if volume_match:
+            volume_number = volume_match.group(1) or volume_match.group(2) or volume_match.group(3)
+        
+        # Controlla anche il campo volume direttamente
+        if not is_libro_annuale and volume in ['1', '2', '3']:
+            is_libro_annuale = True
+            volume_number = volume
+        
+        if is_libro_annuale and volume_number:
+            # LIBRO ANNUALE: cerca nella classe corrispondente al volume
+            # Vol. 1 → classe 1, Vol. 2 → classe 2, Vol. 3 → classe 3
+            classe_venditore = volume_number
             
-            venditori.append({
-                "codice_scuola": codice_scuola,
-                "classe_venditore": 3,  # Chi era in 3ª ora ha finito
-                "sezione": sezione,
-            })
+            async for doc in db.books.find({
+                "isbn": isbn,
+                "classe": classe_venditore,
+                "anno_scolastico": "2025/2026"
+            }):
+                venditori.append({
+                    "codice_scuola": doc.get("codice_scuola", ""),
+                    "classe_venditore": int(classe_venditore),
+                    "sezione": doc.get("sezione", ""),
+                    "tipo": "annuale"
+                })
+        else:
+            # LIBRO TRIENNALE: cerca solo in classe 3
+            # Solo chi ha finito le medie può vendere libri triennali
+            async for doc in db.books.find({
+                "isbn": isbn,
+                "classe": "3",
+                "anno_scolastico": "2025/2026"
+            }):
+                venditori.append({
+                    "codice_scuola": doc.get("codice_scuola", ""),
+                    "classe_venditore": 3,
+                    "sezione": doc.get("sezione", ""),
+                    "tipo": "triennale"
+                })
         
         if venditori:
             vendibili[isbn] = venditori
