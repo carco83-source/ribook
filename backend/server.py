@@ -9262,7 +9262,7 @@ async def bookstore_confirm_seller_delivery(
             "user_id": order.get("seller_id"),
             "type": "book_verified_ok",
             "title": "Libro verificato!",
-            "message": f"Il testo:\n📚 {order.get('book_titolo')}\n\nè risultato idoneo.\nAl ritiro effettuato dall'acquirente verranno accreditati i fondi.\nGrazie.",
+            "message": f"Il testo:\n📚 {order.get('book_titolo')}\n\nè risultato idoneo.\nAl ritiro effettuato dall'acquirente verranno sbloccati i fondi.\nGrazie.",
             "order_id": order["id"],
             "order_code": order.get("order_code"),
             "read": False,
