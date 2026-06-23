@@ -198,7 +198,6 @@ export default function NotificationsScreen() {
         router.push(`/orders${fromNotif}`);
         break;
       case 'pickup':
-      case 'order_pending':
       case 'ready_for_pickup':
       case 'book_at_bookstore':
       case 'book_picked_up':
@@ -229,8 +228,20 @@ export default function NotificationsScreen() {
         // Notifiche sul pagamento - vai agli ordini
         router.push(`/orders${fromNotif}`);
         break;
-      // book_available e seller_confirmed mantengono il comportamento originale
-      // (gestiti dal pulsante "Tocca per andare al carrello")
+      
+      // ========================================
+      // NOTIFICHE CHE RESTANO SULLA PAGINA (NESSUNA NAVIGAZIONE)
+      // ========================================
+      case 'order_pending_seller':
+        // "Richiesta inviata" - resta nelle notifiche
+        break;
+      case 'order_pending':
+        // "Acquisto confermato" - resta nelle notifiche (info solo)
+        break;
+      case 'ready_for_payment':
+        // "Libro disponibile" - gestito dal pulsante, non dal click
+        break;
+      
       default:
         // Per tutte le altre notifiche, resta nella pagina notifiche
         break;
