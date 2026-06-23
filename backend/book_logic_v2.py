@@ -301,25 +301,47 @@ async def get_isbn_vendibili_catanzaro(
 async def get_listings_count_by_isbn(
     db: AsyncIOMotorDatabase,
     isbn_list: Set[str]
-) -> Dict[str, int]:
+) -> Dict[str, dict]:
     """
-    Conta quanti annunci ATTIVI (listings) esistono per ogni ISBN.
+    Conta quanti annunci ATTIVI (listings) esistono per ogni ISBN
+    e trova il prezzo minimo tra gli annunci.
     Solo i listings con stato 'disponibile' vengono contati.
     
     Returns:
-        Dict[isbn] -> numero di copie in vendita
+        Dict[isbn] -> {"count": numero_copie, "prezzo_minimo": prezzo_più_basso}
     """
-    listings_count = {}
+    listings_info = {}
     
     for isbn in isbn_list:
-        # Conta solo listings disponibili (non venduti, non in trattativa)
-        count = await db.listings.count_documents({
+        # Trova tutti i listings disponibili per questo ISBN
+        cursor = db.listings.find({
             "book_isbn": isbn,
             "stato": "disponibile"
-        })
-        listings_count[isbn] = count
+        }, {"prezzo": 1})
+        
+        listings = await cursor.to_list(length=100)
+        count = len(listings)
+        
+        # Trova il prezzo minimo
+        prezzo_minimo = None
+        if listings:
+            prezzi = []
+            for l in listings:
+                try:
+                    p = float(l.get("prezzo", 0))
+                    if p > 0:
+                        prezzi.append(p)
+                except (ValueError, TypeError):
+                    pass
+            if prezzi:
+                prezzo_minimo = min(prezzi)
+        
+        listings_info[isbn] = {
+            "count": count,
+            "prezzo_minimo": prezzo_minimo
+        }
     
-    return listings_count
+    return listings_info
 
 
 async def classifica_libri_studente(
@@ -546,8 +568,8 @@ async def classifica_libri_studente(
     # Verifica disponibilità usato nelle scuole di Catanzaro
     disponibilita_usato = await get_isbn_vendibili_catanzaro(db, isbn_da_acquistare)
     
-    # Conta le copie REALMENTE in vendita (listings attivi)
-    copie_in_vendita = await get_listings_count_by_isbn(db, isbn_da_acquistare)
+    # Conta le copie REALMENTE in vendita (listings attivi) e prezzi minimi
+    listings_info = await get_listings_count_by_isbn(db, isbn_da_acquistare)
     
     for isbn in isbn_da_acquistare:
         libro = mappa_2026[isbn]
@@ -559,21 +581,30 @@ async def classifica_libri_studente(
         except (ValueError, TypeError):
             prezzo = 0
         
+        # Ottieni info listings per questo ISBN
+        listing_data = listings_info.get(isbn, {"count": 0, "prezzo_minimo": None})
+        copie_in_vendita = listing_data["count"]
+        prezzo_listing_minimo = listing_data["prezzo_minimo"]
+        
+        # Calcola prezzo usato: se ci sono listings, usa il prezzo minimo; altrimenti 50%
+        if copie_in_vendita > 0 and prezzo_listing_minimo is not None:
+            prezzo_usato = round(prezzo_listing_minimo, 2)
+        else:
+            prezzo_usato = round(prezzo * 0.5, 2)
+        
         # Controlla se è nuova adozione (nessuno può averlo usato)
         if libro.get("nuova_adozione", False):
             # Ma prima verifica se ci sono listings attivi (qualcuno ha cambiato scuola)
-            copie_eccezionali = copie_in_vendita.get(isbn, 0)
-            if copie_eccezionali > 0:
+            if copie_in_vendita > 0:
                 # ECCEZIONALE: Libro normalmente non disponibile, ma qualcuno lo vende!
-                prezzo_usato = round(prezzo * 0.5, 2)
                 result["da_acquistare_usati"].append({
                     **libro,
                     "categoria": "DA_ACQUISTARE_USATO",
                     "prezzo_usato": prezzo_usato,
                     "risparmio": round(prezzo - prezzo_usato, 2),
-                    "venditori_disponibili": copie_eccezionali,
+                    "venditori_disponibili": copie_in_vendita,
                     "potenziali_venditori": 0,
-                    "motivo": f"ECCEZIONALMENTE: {copie_eccezionali} {'copia' if copie_eccezionali == 1 else 'copie'} disponibile",
+                    "motivo": f"ECCEZIONALMENTE: {copie_in_vendita} {'copia' if copie_in_vendita == 1 else 'copie'} disponibile",
                     "eccezionale": True,
                     "is_strumento_musicale": is_strumento,
                     "escluso_dal_calcolo": is_strumento
@@ -599,17 +630,14 @@ async def classifica_libri_studente(
         elif isbn in disponibilita_usato:
             # CATEGORIA 3: DA ACQUISTARE USATO
             venditori = disponibilita_usato[isbn]
-            prezzo_usato = round(prezzo * 0.5, 2)
-            # Usa il conteggio REALE delle copie in vendita (listings attivi)
-            copie_reali = copie_in_vendita.get(isbn, 0)
             result["da_acquistare_usati"].append({
                 **libro,
                 "categoria": "DA_ACQUISTARE_USATO",
                 "prezzo_usato": prezzo_usato,
                 "risparmio": round(prezzo - prezzo_usato, 2),
-                "venditori_disponibili": copie_reali,  # Copie REALMENTE in vendita
+                "venditori_disponibili": copie_in_vendita,  # Copie REALMENTE in vendita
                 "potenziali_venditori": len(venditori),  # Chi potrebbe vendere
-                "motivo": f"{copie_reali} {'copia' if copie_reali == 1 else 'copie'} in vendita" if copie_reali > 0 else "Nessuna copia in vendita",
+                "motivo": f"{copie_in_vendita} {'copia' if copie_in_vendita == 1 else 'copie'} in vendita" if copie_in_vendita > 0 else "Nessuna copia in vendita",
                 "is_strumento_musicale": is_strumento,
                 "escluso_dal_calcolo": is_strumento
             })
@@ -621,18 +649,16 @@ async def classifica_libri_studente(
         
         else:
             # Prima verifica se ci sono listings attivi (qualcuno ha cambiato scuola)
-            copie_eccezionali = copie_in_vendita.get(isbn, 0)
-            if copie_eccezionali > 0:
+            if copie_in_vendita > 0:
                 # ECCEZIONALE: Libro normalmente non disponibile, ma qualcuno lo vende!
-                prezzo_usato = round(prezzo * 0.5, 2)
                 result["da_acquistare_usati"].append({
                     **libro,
                     "categoria": "DA_ACQUISTARE_USATO",
                     "prezzo_usato": prezzo_usato,
                     "risparmio": round(prezzo - prezzo_usato, 2),
-                    "venditori_disponibili": copie_eccezionali,
+                    "venditori_disponibili": copie_in_vendita,
                     "potenziali_venditori": 0,
-                    "motivo": f"ECCEZIONALMENTE: {copie_eccezionali} {'copia' if copie_eccezionali == 1 else 'copie'} disponibile",
+                    "motivo": f"ECCEZIONALMENTE: {copie_in_vendita} {'copia' if copie_in_vendita == 1 else 'copie'} disponibile",
                     "eccezionale": True,
                     "is_strumento_musicale": is_strumento,
                     "escluso_dal_calcolo": is_strumento
