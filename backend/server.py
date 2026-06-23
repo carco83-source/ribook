@@ -5347,10 +5347,10 @@ async def generate_books_pdf(user_id: str, child_id: str):
     if not child_codice_scuola:
         raise HTTPException(status_code=400, detail="Codice scuola non configurato")
     
-    # Get books from adozioni collection - NUOVO SCHEMA (singoli documenti con anno_corso stringa)
+    # Get books from adozioni collection - campo classe è stringa
     adozioni_query = {
         "codice_scuola": child_codice_scuola,
-        "anno_corso": str(child_classe),  # anno_corso è una stringa nel nuovo schema
+        "classe": str(child_classe),  # classe è una stringa nel database
         "sezione": {"$regex": f"^{child_sezione}$", "$options": "i"}
     }
     
@@ -5360,7 +5360,7 @@ async def generate_books_pdf(user_id: str, child_id: str):
     if not books:
         fallback_query = {
             "codice_scuola": child_codice_scuola,
-            "anno_corso": str(child_classe)
+            "classe": str(child_classe)
         }
         all_books = await db.adozioni.find(fallback_query).to_list(length=200)
         if all_books:
