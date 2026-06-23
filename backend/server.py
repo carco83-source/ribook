@@ -3682,88 +3682,54 @@ async def get_child_compatibility(user_id: str, child_id: str):
     # ========================================
     async def can_buy_used_from_previous_year(libro: dict, codice_scuola: str, child_classe: int, tipo_scuola: str) -> tuple:
         """
-        LOGICA CORRETTA per determinare se un libro può essere comprato USATO.
+        LOGICA SEMPLIFICATA per determinare se un libro può essere comprato USATO.
         
         Per le SCUOLE MEDIE:
         
-        1. VOLUMI UNICI (triennali) - Vol. U:
-           - DEVE essere presente nelle 3ª dell'anno precedente (2025/2026)
-           - Chi era in 3ª l'anno scorso ha finito le medie e può vendere
-           - Se è presente solo nelle 1ª/2ª del 2025/2026, significa che è stato
-             adottato di recente e nessuno lo sta vendendo ancora
+        REGOLA UNICA: Un libro può essere comprato usato SOLO se era adottato 
+        in classe 3ª nell'anno precedente (2025/2026).
         
-        2. LIBRI ANNUALI (Vol. 1, 2, 3):
-           - Cerca nella STESSA CLASSE dell'anno precedente
-           - Es: Vol. 1 di antologia → cerca nelle 1ª del 2025/2026
-           - Chi era in 1ª l'anno scorso ora è in 2ª e può vendere il Vol. 1
+        Motivazione: Solo chi ha FINITO le medie (era in 3ª l'anno scorso) può vendere 
+        i propri libri. Chi è ancora alle medie (1ª o 2ª) ha bisogno dei libri.
+        
+        Esempi:
+        - "Artemondo" adottato in 1ª, 2ª, 3ª → chi era in 3ª può venderlo → USATO OK ✅
+        - "Infinito Tecnologico" adottato solo in 1ª, 2ª → nessuno può venderlo → SOLO NUOVO ❌
         
         Returns: (can_buy_used: bool, motivo: str)
         """
         isbn = libro.get("isbn", "")
-        volume = libro.get("volume", "").upper().strip()
-        is_volume_unico = volume == "U"
+        titolo = libro.get("titolo", "")
         
         if not isbn:
             return False, "ISBN mancante"
         
         if tipo_scuola == "primo_grado":  # Scuola Media
+            # REGOLA UNICA: Il libro DEVE essere stato adottato in 3ª l'anno scorso
+            # Solo chi ha finito le medie può vendere i propri libri
             
-            if is_volume_unico:
-                # VOLUMI UNICI: DEVE essere presente nelle 3ª dell'anno precedente
-                # Solo chi ha finito le medie può vendere i volumi unici triennali
-                
-                # Cerca nelle 3ª della stessa scuola
-                docs_3a = await db.adozioni_2025_2026.find({
-                    "codice_scuola": codice_scuola,
-                    "classe": 3
-                }).to_list(20)
-                
-                for doc in docs_3a:
-                    for l in doc.get("libri", []):
-                        if l.get("isbn") == isbn:
-                            return True, "Volume unico presente in 3ª 2025/2026 - disponibile usato"
-                
-                # Fallback: cerca in altre scuole medie di Catanzaro
-                docs_3a_altre = await db.adozioni_2025_2026.find({
-                    "codice_scuola": {"$regex": "^CZMM"},
-                    "classe": 3
-                }).to_list(200)
-                
-                for doc in docs_3a_altre:
-                    for l in doc.get("libri", []):
-                        if l.get("isbn") == isbn:
-                            return True, "Volume unico presente in altre 3ª 2025/2026 - disponibile usato"
-                
-                # NON trovato in 3ª - il libro è stato adottato di recente
-                # Chi ce l'ha (1ª o 2ª del 2025/2026) lo userà ancora
-                return False, "Volume unico triennale - adozione recente, non ancora disponibile usato"
+            found_in_3a = await db.books.find_one({
+                "isbn": isbn,
+                "classe": "3",
+                "anno_scolastico": "2025/2026"
+            })
             
-            else:
-                # LIBRI ANNUALI (Vol. 1, 2, 3): cerca nella STESSA CLASSE dell'anno precedente
-                # Es: se sono in 1ª e cerco Vol. 1, cerco nelle 1ª del 2025/2026
-                # Chi era in 1ª l'anno scorso ora è in 2ª e può vendere
-                docs_stessa_classe = await db.adozioni_2025_2026.find({
-                    "codice_scuola": codice_scuola,
-                    "classe": child_classe
-                }).to_list(20)
-                
-                for doc in docs_stessa_classe:
-                    for l in doc.get("libri", []):
-                        if l.get("isbn") == isbn:
-                            return True, f"Libro annuale presente in {child_classe}ª 2025/2026 - disponibile usato"
-                
-                # Fallback: cerca in altre scuole medie
-                docs_altre = await db.adozioni_2025_2026.find({
-                    "codice_scuola": {"$regex": "^CZMM"},
-                    "classe": child_classe
-                }).to_list(200)
-                
-                for doc in docs_altre:
-                    for l in doc.get("libri", []):
-                        if l.get("isbn") == isbn:
-                            return True, f"Libro annuale presente in altre {child_classe}ª 2025/2026 - disponibile usato"
-                
-                return False, f"Libro annuale NON presente in {child_classe}ª 2025/2026 - nuova adozione"
+            if found_in_3a:
+                return True, "Presente in 3ª 2025/2026 - disponibile usato"
+            
+            # Fallback: cerca in altre scuole medie di Catanzaro
+            found_in_3a_altre = await db.books.find_one({
+                "isbn": isbn,
+                "classe": "3",
+                "codice_scuola": {"$regex": "^CZMM"},
+                "anno_scolastico": "2025/2026"
+            })
+            
+            if found_in_3a_altre:
+                return True, "Presente in altre 3ª 2025/2026 - disponibile usato"
+            
+            # NON trovato in 3ª - nessuno può venderlo perché chi ce l'ha ne ha ancora bisogno
+            return False, "Non adottato in 3ª 2025/2026 - nessun venditore disponibile"
         
         # Per SUPERIORI: logica esistente
         return True, "Superiori - logica standard"
