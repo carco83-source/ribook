@@ -303,11 +303,21 @@ export default function NotificationsScreen() {
               <Ionicons name="arrow-back" size={24} color="#fff" />
             </TouchableOpacity>
           ),
-          headerRight: () => unreadCount > 0 ? (
-            <View style={styles.headerBadge}>
-              <Text style={styles.headerBadgeText}>{unreadCount}</Text>
+          headerRight: () => (
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 12, gap: 12 }}>
+              {unreadCount > 0 && (
+                <View style={styles.headerBadge}>
+                  <Text style={styles.headerBadgeText}>{unreadCount}</Text>
+                </View>
+              )}
+              <TouchableOpacity 
+                onPress={() => router.replace('/(tabs)')} 
+                style={{ padding: 8 }}
+              >
+                <Ionicons name="home" size={22} color="#fff" />
+              </TouchableOpacity>
             </View>
-          ) : null,
+          ),
         }}
       />
 
