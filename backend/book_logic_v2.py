@@ -355,6 +355,10 @@ async def classifica_libri_studente(
         libri_2026 = await get_libri_classe(
             db, codice_scuola, classe_2026_2027, sezione, "2026/2027"
         )
+        # Normalizza anche gli ISBN del 2026/2027 applicando la mappatura
+        for libro in libri_2026:
+            libro["isbn_originale"] = libro["isbn"]  # Salva l'originale
+            libro["isbn"] = normalize_isbn(libro["isbn"])  # Applica mappatura
         isbn_2026 = {l["isbn"] for l in libri_2026}
     
     # Mappa ISBN -> libro per accesso rapido (usa ISBN normalizzati)
