@@ -11323,14 +11323,26 @@ async def get_all_bookstores_credits():
 
 @api_router.post("/admin/clear-all-data")
 async def admin_clear_all_data(admin_id: str = Query(...)):
-    """Admin: Svuota TUTTI i dati dal database (notifiche, ordini, messaggi, annunci, ecc.)"""
+    """
+    Admin: Svuota dati transazionali dal database.
+    
+    ⚠️ PROTEZIONE: Le seguenti collezioni NON vengono MAI cancellate:
+    - books (dati MIUR 2025/2026)
+    - adozioni (dati MIUR 2026/2027)
+    - schools (19 scuole target)
+    - users (utenti registrati)
+    - bookstores (cartolibrerie)
+    """
     
     # Verifica admin
     admin = await db.users.find_one({"id": admin_id, "is_admin": True})
     if not admin:
         raise HTTPException(status_code=403, detail="Non autorizzato")
     
-    # Collezioni da svuotare
+    # COLLEZIONI PROTETTE - MAI CANCELLARE
+    PROTECTED = {'books', 'adozioni', 'schools', 'users', 'bookstores'}
+    
+    # Collezioni da svuotare (solo dati transazionali)
     collections_to_clear = [
         "notifications",
         "bookstore_notifications",
@@ -11347,6 +11359,9 @@ async def admin_clear_all_data(admin_id: str = Query(...)):
         "radar_alerts",
         "wishlists"
     ]
+    
+    # Doppia verifica: rimuovi qualsiasi collezione protetta dalla lista
+    collections_to_clear = [c for c in collections_to_clear if c not in PROTECTED]
     
     deleted_counts = {}
     for coll in collections_to_clear:

@@ -1,16 +1,33 @@
 """
-LOGICA LIBRI v2 - Classificazione Automatica
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                    LOGICA SCAMBIO LIBRI - RIBOOK                             ║
+║                                                                              ║
+║  ⚠️  VERSIONE STABILE - 23 GIUGNO 2026                                       ║
+║  ⚠️  NON MODIFICARE SENZA AUTORIZZAZIONE                                     ║
+║                                                                              ║
+║  Documentazione completa: /app/memory/LOGICA_SCAMBIO_LIBRI.md                ║
+╚══════════════════════════════════════════════════════════════════════════════╝
 
-4 CATEGORIE:
-1. ANCORA IN USO - ISBN in 2025/2026 E in 2026/2027
-2. VENDIBILI USATI - ISBN in 2025/2026 MA NON in 2026/2027  
-3. DA ACQUISTARE USATI - ISBN richiesto 2026/2027 E disponibile da altri studenti
-4. DA ACQUISTARE NUOVI - ISBN richiesto 2026/2027 MA NON disponibile usato
+5 CATEGORIE DI LIBRI:
+1. ANCORA IN USO     - ISBN che avevi E ti servono ancora
+2. VENDIBILI USATI   - ISBN che avevi MA NON ti servono più (con domanda)
+3. DA ACQUISTARE USATI - ISBN che ti servono E sono disponibili usati
+4. DA ACQUISTARE NUOVI - ISBN che ti servono MA NON disponibili usati
+5. FUORI CORSO       - ISBN che avevi MA nessuno li richiede più
+
+LOGICA DISPONIBILITÀ USATO:
+- Vol. 1, 2, 3 (annuali): cerca nella classe corrispondente del 2025/2026
+- Vol. U (triennali): cerca in classe 3 del 2025/2026
+- Solo nelle 19 scuole target di Catanzaro città
+
+FUNZIONALITÀ ECCEZIONALE:
+- Se un libro normalmente "Nuovo" ha listings attivi → diventa "Usato ECCEZIONALMENTE"
+- Badge arancione con dicitura "ECCEZ. X copie"
 
 CASI PARTICOLARI:
-- Prima classe (1ª media, 1ª superiore): niente 2025/2026 → solo cat. 3 e 4
-- Ultima classe (3ª media, 5ª superiore): niente 2026/2027 → solo cat. 2
-- LIBRI STRUMENTO MUSICALE: esclusi dal calcolo costi (chitarra, flauto, violino, pianoforte)
+- Prima classe: niente 2025/2026 → solo categorie 3 e 4
+- Ultima classe: niente 2026/2027 → solo categoria 2
+- Strumenti musicali: esclusi dal calcolo costi
 """
 
 from typing import List, Dict, Tuple, Optional, Set
