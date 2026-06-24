@@ -1635,48 +1635,26 @@ async def get_usato_prediction_route(isbn: str):
 
 
 @api_router.get("/books/search")
-async def search_books_generic(q: str = Query(..., min_length=3), limit: int = Query(20)):
+async def search_books_generic(q: str = Query(..., min_length=3), limit: int = Query(30)):
     """
     Ricerca generica libri per titolo o ISBN nei libri delle scuole di Catanzaro.
+    Restituisce anche info sulle copie disponibili.
     """
     # Cerca per ISBN esatto
     if q.isdigit() and len(q) >= 10:
-        books = await db.adozioni.aggregate([
-            {"$unwind": "$libri"},
-            {"$match": {"libri.isbn": {"$regex": q, "$options": "i"}}},
-            {"$limit": limit},
-            {"$project": {
-                "_id": 0,
-                "id": "$libri.isbn",
-                "isbn": "$libri.isbn",
-                "titolo": "$libri.titolo",
-                "autori": "$libri.autori",
-                "disciplina": "$libri.disciplina",
-                "editore": "$libri.editore",
-                "prezzo_copertina": "$libri.prezzo_copertina",
-                "classe": "$classe",
-                "scuola": "$nome_scuola"
-            }}
-        ]).to_list(limit)
+        books = await db.adozioni.find(
+            {"isbn": {"$regex": q, "$options": "i"}},
+            {"_id": 0}
+        ).limit(limit).to_list(limit)
     else:
-        # Cerca per titolo
-        books = await db.adozioni.aggregate([
-            {"$unwind": "$libri"},
-            {"$match": {"libri.titolo": {"$regex": q, "$options": "i"}}},
-            {"$limit": limit},
-            {"$project": {
-                "_id": 0,
-                "id": "$libri.isbn",
-                "isbn": "$libri.isbn",
-                "titolo": "$libri.titolo",
-                "autori": "$libri.autori",
-                "disciplina": "$libri.disciplina",
-                "editore": "$libri.editore",
-                "prezzo_copertina": "$libri.prezzo_copertina",
-                "classe": "$classe",
-                "scuola": "$nome_scuola"
-            }}
-        ]).to_list(limit)
+        # Cerca per titolo - case insensitive, parole parziali
+        search_words = q.strip().split()
+        regex_pattern = ".*" + ".*".join(search_words) + ".*"
+        
+        books = await db.adozioni.find(
+            {"titolo": {"$regex": regex_pattern, "$options": "i"}},
+            {"_id": 0}
+        ).limit(limit * 2).to_list(limit * 2)
     
     # Rimuovi duplicati per ISBN
     seen = set()
@@ -1687,7 +1665,42 @@ async def search_books_generic(q: str = Query(..., min_length=3), limit: int = Q
             seen.add(isbn)
             unique_books.append(book)
     
-    return {"books": unique_books, "total": len(unique_books)}
+    # Per ogni libro, cerca copie disponibili
+    enriched_books = []
+    for book in unique_books[:limit]:
+        isbn = book.get("isbn", "")
+        
+        # Conta copie in vendita
+        listings_count = await db.listings.count_documents({
+            "isbn": isbn,
+            "status": "available"
+        })
+        
+        # Trova prezzo minimo se ci sono copie
+        prezzo_minimo = None
+        if listings_count > 0:
+            min_listing = await db.listings.find_one(
+                {"isbn": isbn, "status": "available"},
+                sort=[("prezzo_vendita", 1)]
+            )
+            if min_listing:
+                prezzo_minimo = min_listing.get("prezzo_vendita")
+        
+        enriched_books.append({
+            "id": book.get("id", book.get("isbn")),
+            "isbn": isbn,
+            "titolo": book.get("titolo"),
+            "autori": book.get("autori"),
+            "editore": book.get("editore"),
+            "disciplina": book.get("disciplina"),
+            "prezzo_copertina": book.get("prezzo_copertina"),
+            "classe": book.get("classe"),
+            "copie_disponibili": listings_count,
+            "prezzo_minimo": prezzo_minimo,
+            "da_comprare_nuovo": listings_count == 0
+        })
+    
+    return {"books": enriched_books, "total": len(enriched_books)}
 
 # ============== POPULAR BOOKS API ==============
 

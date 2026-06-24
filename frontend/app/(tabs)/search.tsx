@@ -402,27 +402,8 @@ export default function SearchSellScreen() {
     }
     
     Keyboard.dismiss();
-    setCercaLoading(true);
-    setTitoloResults([]);
-    setCercaResults([]);
-    setCercaBook(null);
-    
-    try {
-      const response = await axios.get(`${API_URL}/api/books/search`, {
-        params: { q: cercaTitolo, limit: 20 }
-      });
-      
-      if (response.data?.books && response.data.books.length > 0) {
-        setTitoloResults(response.data.books);
-      } else {
-        showAlert('Nessun risultato', `Nessun libro trovato per "${cercaTitolo}"`);
-      }
-    } catch (error) {
-      console.error('Search by title error:', error);
-      showAlert('Errore', 'Errore durante la ricerca. Riprova.');
-    } finally {
-      setCercaLoading(false);
-    }
+    // Naviga alla pagina dei risultati
+    router.push(`/search-results?q=${encodeURIComponent(cercaTitolo)}`);
   };
 
   const selectBookFromTitolo = (book: Book) => {
@@ -691,12 +672,7 @@ export default function SearchSellScreen() {
             placeholder="Cerca per titolo..."
             placeholderTextColor="#999"
             value={cercaTitolo}
-            onChangeText={(text) => {
-              setCercaTitolo(text);
-              if (text.length === 0) {
-                setTitoloResults([]);
-              }
-            }}
+            onChangeText={setCercaTitolo}
             autoCapitalize="words"
             returnKeyType="search"
             onSubmitEditing={handleCercaTitolo}
@@ -713,36 +689,6 @@ export default function SearchSellScreen() {
             )}
           </TouchableOpacity>
         </View>
-
-        {/* Risultati ricerca per titolo */}
-        {titolResults.length > 0 && (
-          <View style={styles.titoloResultsContainer}>
-            <Text style={styles.titoloResultsTitle}>
-              {titolResults.length} {titolResults.length === 1 ? 'risultato' : 'risultati'} trovati:
-            </Text>
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              style={styles.titoloResultsScroll}
-            >
-              {titolResults.map((book, index) => (
-                <TouchableOpacity
-                  key={`${book.isbn}-${index}`}
-                  style={styles.titoloResultCard}
-                  onPress={() => selectBookFromTitolo(book)}
-                >
-                  <Image
-                    source={{ uri: `https://www.ibs.it/images/${book.isbn}_0_0_0_536_0.jpg` }}
-                    style={styles.titoloResultCover}
-                    resizeMode="cover"
-                  />
-                  <Text style={styles.titoloResultTitle} numberOfLines={2}>{book.titolo}</Text>
-                  <Text style={styles.titoloResultIsbn}>ISBN: {book.isbn}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        )}
 
         {cercaBook && (
           <View style={styles.resultCard}>
