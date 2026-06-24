@@ -999,6 +999,18 @@ metadata:
         agent: "testing"
         comment: "Complete purchase → delivery → pickup flow tested successfully after bug fixes! All 26 test cases passed (100% success rate). ✅ BUG FIX 1: Status mismatch - Backend now correctly accepts both 'paid_escrow' and 'pagato_attesa_consegna' status in deliver-to-bookstore endpoint. ✅ BUG FIX 2: Buyer show_qr=False - Buyer notification after payment correctly has show_qr=False (no QR until delivery). ✅ BUG FIX 3: Bookstore show_qr=False - Bookstore notification correctly has show_qr=False (only alphanumeric order code). ✅ BUG FIX 4: Price removed from book_details - All notifications (seller, buyer, bookstore) have book_details without price field. ✅ Complete flow verified: 1) Create order (status: in_attesa_conferma_venditore), 2) Seller confirm (status: in_attesa_pagamento), 3) Payment (status: pagato_attesa_consegna), 4) Deliver to bookstore (status: delivering_to_bookstore), 5) Ready for pickup (status: ready_for_pickup), 6) Complete pickup (status: completed). ✅ Notification verification: Seller gets QR+conditions+NO price, Buyer gets NO QR initially then QR+conditions+NO price after ready, Bookstore gets NO QR+conditions+NO price. All endpoints working correctly: POST /api/orders/create, POST /api/orders/{id}/seller-confirm, POST /api/orders/{id}/pay, POST /api/orders/{id}/deliver-to-bookstore, POST /api/orders/{id}/ready-for-pickup, POST /api/bookstore/{id}/confirm-pickup/{order_id}, GET /api/orders/{id}."
 
+  - task: "Book Search API Endpoint - GET /api/books/search"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "Book Search API endpoint tested successfully! All 18 test cases passed (100% success rate). ✅ Endpoint: GET /api/books/search?q={query}&limit={limit}. ✅ Test Case 1 - Search 'matematica': Found 5 math books with all required fields. Sample: LINEAMENTI DI MATEMATICA (ISBN: 9788808651082), €33.3, 0 copies available, adopted by IPSCT Sorace Maresca in classes 3AART, 5AART, 5B. ✅ Test Case 2 - Search 'storia': Found 5 history books. Sample: EVENTI, NARRAZIONE, STORIA VOLUME 3 (ISBN: 9788869645150), €28.3, adopted by Convitto Nazionale Galluppi in classes 3E, 3F. ✅ Test Case 3 - Search 'inglese': Found 1 English book. Sample: DIZIONARIO DI INGLESE (ISBN: AIE5), adopted by IM Giovanna De Nobili in 15 classes (1BS, 1CSE, 2BL, 2CSE, 2ESE, etc.). ✅ All Required Fields Present: isbn, titolo, autori, prezzo_copertina, copie_disponibili, da_comprare_nuovo, scuole (array with 'nome' and 'codice'), classi (array of class identifiers). ✅ Scuole Array Verification: Contains school names like 'IPSCT Sorace Maresca', 'Convitto Nazionale Galluppi', 'IM Giovanna De Nobili' with proper structure (nome + codice). ✅ Classi Array Verification: Contains class identifiers like '3AART', '5AART', '5B', '3E', '3F', '1BS', '1CSE', '2BL', '2CSE', '2ESE'. The API correctly searches books by title or ISBN, groups results by ISBN, aggregates schools and classes, and includes availability information (copie_disponibili, da_comprare_nuovo)."
+
 test_plan:
   current_focus: []
   stuck_tasks:
@@ -1685,3 +1697,65 @@ agent_communication:
       
       After these fixes are applied, please re-run the test to verify the complete flow.
 
+
+  - agent: "testing"
+    message: |
+      ## BOOK SEARCH API ENDPOINT TESTING COMPLETED ✅ (2026-06-24)
+      
+      ### Test Results: 100% SUCCESS RATE (18/18 tests passed)
+      
+      #### Endpoint Tested:
+      GET /api/books/search?q={query}&limit={limit}
+      
+      #### Test Cases Executed:
+      1. ✅ **Search "matematica"** - Found 5 math books
+         - Sample: LINEAMENTI DI MATEMATICA (ISBN: 9788808651082)
+         - Price: €33.3, 0 copies available, da_comprare_nuovo: true
+         - Adopted by: IPSCT Sorace Maresca
+         - Classes: 3AART, 5AART, 5B
+      
+      2. ✅ **Search "storia"** - Found 5 history books
+         - Sample: EVENTI, NARRAZIONE, STORIA VOLUME 3 (ISBN: 9788869645150)
+         - Price: €28.3, 0 copies available
+         - Adopted by: Convitto Nazionale Galluppi
+         - Classes: 3E, 3F
+      
+      3. ✅ **Search "inglese"** - Found 1 English book
+         - Sample: DIZIONARIO DI INGLESE (ISBN: AIE5)
+         - Price: €0.0, 0 copies available
+         - Adopted by: IM Giovanna De Nobili
+         - Classes: 1BS, 1CSE, 2BL, 2CSE, 2ESE (15 classes total)
+      
+      #### All Required Fields Verified:
+      ✅ **isbn** - Unique book identifier present
+      ✅ **titolo** - Book title present
+      ✅ **autori** - Authors information present
+      ✅ **prezzo_copertina** - Cover price present
+      ✅ **copie_disponibili** - Number of used copies available
+      ✅ **da_comprare_nuovo** - Boolean flag (true if no used copies)
+      ✅ **scuole** - Array of schools with "nome" and "codice" fields
+      ✅ **classi** - Array of class identifiers (e.g., "1A", "3AART")
+      
+      #### Scuole Array Verification:
+      ✅ Contains school names like:
+      - "IPSCT Sorace Maresca" (CZRC02401N)
+      - "Convitto Nazionale Galluppi"
+      - "IM Giovanna De Nobili"
+      ✅ Each school object has "nome" and "codice" fields
+      
+      #### Classi Array Verification:
+      ✅ Contains class identifiers like:
+      - "3AART", "5AART", "5B"
+      - "3E", "3F"
+      - "1BS", "1CSE", "2BL", "2CSE", "2ESE"
+      
+      #### API Functionality Verified:
+      - ✅ Search by title (case-insensitive, partial matching)
+      - ✅ Search by ISBN (exact matching for 10+ digit queries)
+      - ✅ Results grouped by ISBN
+      - ✅ Schools and classes aggregated per book
+      - ✅ Availability information included (copie_disponibili, da_comprare_nuovo)
+      - ✅ Response structure: {"books": [...], "total": N}
+      
+      ### Conclusion:
+      The Book Search API endpoint is fully functional and meets all requirements specified in the review request. All test cases passed successfully with proper data structure and field validation.

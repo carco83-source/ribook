@@ -77,6 +77,33 @@ CONDITION_PRICING = {
     "molto_usato": 0.30      # 30% - Very used
 }
 
+# Mapping codici scuola Catanzaro ai nomi (dati ufficiali MIUR)
+SCUOLE_CATANZARO = {
+    # Secondaria I Grado (Medie)
+    "CZMM00300E": "Convitto Nazionale Galluppi",
+    "CZMM85201Q": "Sec. I Grado G. Patari",
+    "CZMM856013": "Sec. I Grado Don Milani",
+    "CZMM85801P": "Sec. I Grado P. Lampasi",
+    "CZMM86001P": "Sec. I Grado Casalinuovo",
+    "CZMM86701D": "Sec. I Grado V. Vivaldi",
+    # Licei
+    "CZPC09000X": "Liceo P. Galluppi",
+    "CZPM00101D": "Cassiodoro",
+    "CZPM02201E": "IM Giovanna De Nobili",
+    "CZPS00101C": "Liceo E. Fermi",
+    "CZPS02201D": "Liceo L. Siciliani",
+    "CZSL02201A": "I.S. De Nobili Catanzaro",
+    # Istituti Professionali
+    "CZRC02401N": "IPSCT Sorace Maresca",
+    "CZRI02401A": "Ist. Prof. G. Ferraris",
+    # Istituti Tecnici
+    "CZTA021035": "Ist. Tecn. Vittorio Emanuele II",
+    "CZTD024011": "ITE Grimaldi - Pacioli",
+    "CZTE021011": "Ist. Tecn. B. Chimirri",
+    "CZTF010008": "ITT E. Scalfaro",
+    "CZTL02401B": "ITT Catanzaro"
+}
+
 def calculate_condition_from_answers(sottolineature: int, copertina: int, pagine: int, esercizi: int) -> str:
     """Calculate book condition based on 4 questions (0=none, 1=some, 2=many)"""
     total_score = sottolineature + copertina + pagine + esercizi
@@ -1638,14 +1665,14 @@ async def get_usato_prediction_route(isbn: str):
 async def search_books_generic(q: str = Query(..., min_length=3), limit: int = Query(30)):
     """
     Ricerca generica libri per titolo o ISBN nei libri delle scuole di Catanzaro.
-    Restituisce anche info sulle copie disponibili.
+    Restituisce anche info sulle copie disponibili e scuole che lo adottano.
     """
     # Cerca per ISBN esatto
     if q.isdigit() and len(q) >= 10:
         books = await db.adozioni.find(
             {"isbn": {"$regex": q, "$options": "i"}},
             {"_id": 0}
-        ).limit(limit).to_list(limit)
+        ).limit(limit * 3).to_list(limit * 3)
     else:
         # Cerca per titolo - case insensitive, parole parziali
         search_words = q.strip().split()
@@ -1654,22 +1681,50 @@ async def search_books_generic(q: str = Query(..., min_length=3), limit: int = Q
         books = await db.adozioni.find(
             {"titolo": {"$regex": regex_pattern, "$options": "i"}},
             {"_id": 0}
-        ).limit(limit * 2).to_list(limit * 2)
+        ).limit(limit * 3).to_list(limit * 3)
     
-    # Rimuovi duplicati per ISBN
-    seen = set()
-    unique_books = []
+    # Raggruppa per ISBN e raccogli scuole/classi
+    books_by_isbn = {}
     for book in books:
         isbn = book.get("isbn", "")
-        if isbn and isbn not in seen:
-            seen.add(isbn)
-            unique_books.append(book)
-    
-    # Per ogni libro, cerca copie disponibili
-    enriched_books = []
-    for book in unique_books[:limit]:
-        isbn = book.get("isbn", "")
+        if not isbn:
+            continue
+            
+        if isbn not in books_by_isbn:
+            books_by_isbn[isbn] = {
+                "id": book.get("id", isbn),
+                "isbn": isbn,
+                "titolo": book.get("titolo"),
+                "autori": book.get("autori"),
+                "editore": book.get("editore"),
+                "disciplina": book.get("disciplina"),
+                "prezzo_copertina": book.get("prezzo_copertina"),
+                "scuole": [],
+                "classi": set()
+            }
         
+        # Aggiungi scuola (dal codice scuola, cerchiamo il nome)
+        codice_scuola = book.get("codice_scuola", "")
+        classe = book.get("classe")
+        sezione = book.get("sezione", "")
+        
+        # Cerca nome scuola dal mapping
+        scuola_nome = SCUOLE_CATANZARO.get(codice_scuola, codice_scuola)
+        
+        if scuola_nome and scuola_nome not in [s["nome"] for s in books_by_isbn[isbn]["scuole"]]:
+            books_by_isbn[isbn]["scuole"].append({
+                "nome": scuola_nome,
+                "codice": codice_scuola
+            })
+        
+        # Aggiungi classe
+        if classe:
+            classe_str = f"{classe}{sezione}" if sezione else str(classe)
+            books_by_isbn[isbn]["classi"].add(classe_str)
+    
+    # Converti set in lista e aggiungi info listings
+    enriched_books = []
+    for isbn, book_data in list(books_by_isbn.items())[:limit]:
         # Conta copie in vendita
         listings_count = await db.listings.count_documents({
             "isbn": isbn,
@@ -1686,15 +1741,19 @@ async def search_books_generic(q: str = Query(..., min_length=3), limit: int = Q
             if min_listing:
                 prezzo_minimo = min_listing.get("prezzo_vendita")
         
+        # Converti classi da set a lista ordinata
+        classi_list = sorted(list(book_data["classi"]), key=lambda x: (int(''.join(filter(str.isdigit, x)) or 0), x))
+        
         enriched_books.append({
-            "id": book.get("id", book.get("isbn")),
-            "isbn": isbn,
-            "titolo": book.get("titolo"),
-            "autori": book.get("autori"),
-            "editore": book.get("editore"),
-            "disciplina": book.get("disciplina"),
-            "prezzo_copertina": book.get("prezzo_copertina"),
-            "classe": book.get("classe"),
+            "id": book_data["id"],
+            "isbn": book_data["isbn"],
+            "titolo": book_data["titolo"],
+            "autori": book_data["autori"],
+            "editore": book_data["editore"],
+            "disciplina": book_data["disciplina"],
+            "prezzo_copertina": book_data["prezzo_copertina"],
+            "scuole": book_data["scuole"],
+            "classi": classi_list,
             "copie_disponibili": listings_count,
             "prezzo_minimo": prezzo_minimo,
             "da_comprare_nuovo": listings_count == 0

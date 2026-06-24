@@ -23,7 +23,8 @@ interface BookResult {
   editore?: string;
   disciplina?: string;
   prezzo_copertina?: number;
-  classe?: string;
+  scuole?: { nome: string; codice: string }[];
+  classi?: string[];
   copie_disponibili: number;
   prezzo_minimo?: number;
   da_comprare_nuovo: boolean;
@@ -152,6 +153,24 @@ export default function SearchResultsScreen() {
                   <Text style={styles.bookAuthor} numberOfLines={1}>{book.autori}</Text>
                 )}
                 <Text style={styles.bookIsbn}>ISBN: {book.isbn}</Text>
+                
+                {/* Scuole e Classi */}
+                {book.scuole && book.scuole.length > 0 && (
+                  <View style={styles.schoolInfo}>
+                    <Ionicons name="school-outline" size={12} color="#666" />
+                    <Text style={styles.schoolText} numberOfLines={1}>
+                      {book.scuole.map(s => s.nome).join(', ')}
+                    </Text>
+                  </View>
+                )}
+                {book.classi && book.classi.length > 0 && (
+                  <View style={styles.classInfo}>
+                    <Ionicons name="people-outline" size={12} color="#666" />
+                    <Text style={styles.classText}>
+                      Classi: {book.classi.slice(0, 5).join(', ')}{book.classi.length > 5 ? '...' : ''}
+                    </Text>
+                  </View>
+                )}
                 
                 {/* Prezzo nuovo */}
                 <View style={styles.priceRow}>
@@ -286,7 +305,28 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#999',
     fontFamily: 'monospace',
+    marginBottom: 4,
+  },
+  schoolInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 2,
+  },
+  schoolText: {
+    fontSize: 11,
+    color: '#666',
+    flex: 1,
+  },
+  classInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     marginBottom: 6,
+  },
+  classText: {
+    fontSize: 11,
+    color: '#666',
   },
   priceRow: {
     flexDirection: 'row',
