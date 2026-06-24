@@ -951,7 +951,7 @@ export default function CreateListingScreen() {
                       <Text style={styles.photoButtonText}>Galleria</Text>
                     </TouchableOpacity>
                   </View>
-                  <Text style={styles.photoPlaceholderText}>Proporzione copertina libro (3:4)</Text>
+                  <Text style={styles.photoPlaceholderText}>Proporzione libro aperto (3:5)</Text>
                 </View>
               )}
             </View>
@@ -1362,14 +1362,16 @@ const styles = StyleSheet.create({
   photoPreview: {
     position: 'relative',
     alignSelf: 'center',
-    width: '60%',
-    maxWidth: 220,
-    aspectRatio: 3/4,
+    width: '50%',
+    maxWidth: 180,
+    aspectRatio: 3/5,  // Proporzione libro aperto 30x50
   },
   photoImage: {
     width: '100%',
     height: '100%',
-    borderRadius: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#ddd',
   },
   photoZoomHint: {
     position: 'absolute',
