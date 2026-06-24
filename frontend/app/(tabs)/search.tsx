@@ -68,9 +68,11 @@ export default function SearchSellScreen() {
   
   // Cerca states
   const [cercaIsbn, setCercaIsbn] = useState('');
+  const [cercaTitolo, setCercaTitolo] = useState('');
   const [cercaLoading, setCercaLoading] = useState(false);
   const [cercaResults, setCercaResults] = useState<SearchResult[]>([]);
   const [cercaBook, setCercaBook] = useState<Book | null>(null);
+  const [titolResults, setTitoloResults] = useState<Book[]>([]);
   
   // Libri popolari states
   const [popularBooks, setPopularBooks] = useState<PopularBook[]>([]);
@@ -392,6 +394,68 @@ export default function SearchSellScreen() {
     }
   };
 
+  // Cerca per titolo
+  const handleCercaTitolo = async () => {
+    if (!cercaTitolo || cercaTitolo.length < 3) {
+      showAlert('Errore', 'Inserisci almeno 3 caratteri per la ricerca');
+      return;
+    }
+    
+    Keyboard.dismiss();
+    setCercaLoading(true);
+    setTitoloResults([]);
+    setCercaResults([]);
+    setCercaBook(null);
+    
+    try {
+      const response = await axios.get(`${API_URL}/api/books/search`, {
+        params: { q: cercaTitolo, limit: 20 }
+      });
+      
+      if (response.data?.books && response.data.books.length > 0) {
+        setTitoloResults(response.data.books);
+      } else {
+        showAlert('Nessun risultato', `Nessun libro trovato per "${cercaTitolo}"`);
+      }
+    } catch (error) {
+      console.error('Search by title error:', error);
+      showAlert('Errore', 'Errore durante la ricerca. Riprova.');
+    } finally {
+      setCercaLoading(false);
+    }
+  };
+
+  const selectBookFromTitolo = (book: Book) => {
+    setCercaTitolo('');
+    setTitoloResults([]);
+    setCercaIsbn(book.isbn);
+    setCercaBook(book);
+    // Cerca automaticamente le copie disponibili
+    handleCercaSearchWithIsbn(book.isbn);
+  };
+
+  const handleCercaSearchWithIsbn = async (isbn: string) => {
+    setCercaLoading(true);
+    setCercaResults([]);
+    
+    try {
+      const listingsResponse = await axios.get(`${API_URL}/api/listings/isbn/${isbn}`);
+      if (listingsResponse.data?.listings && listingsResponse.data.listings.length > 0) {
+        const listings = listingsResponse.data.listings;
+        const minPrice = Math.min(...listings.map((l: any) => l.prezzo_vendita));
+        setCercaResults([{
+          book: cercaBook || { id: '', isbn: isbn, titolo: '' },
+          copie_disponibili: listings.length,
+          prezzo_minimo: minPrice
+        }]);
+      }
+    } catch (error) {
+      console.log('No listings found');
+    } finally {
+      setCercaLoading(false);
+    }
+  };
+
   // ==================== RENDER ====================
 
   if (showScanner) {
@@ -600,10 +664,11 @@ export default function SearchSellScreen() {
           <Text style={[styles.sectionTitle, { color: '#4CAF50' }]}>CERCA UN LIBRO</Text>
         </View>
         
+        {/* Ricerca per ISBN */}
         <View style={styles.inputRow}>
           <TextInput
             style={styles.isbnInput}
-            placeholder="Inserisci ISBN del libro"
+            placeholder="Cerca per ISBN"
             placeholderTextColor="#999"
             value={cercaIsbn}
             onChangeText={setCercaIsbn}
@@ -611,13 +676,73 @@ export default function SearchSellScreen() {
             maxLength={13}
           />
           <TouchableOpacity style={[styles.searchButton, { backgroundColor: '#4CAF50' }]} onPress={handleCercaSearch}>
-            {cercaLoading ? (
+            {cercaLoading && !cercaTitolo ? (
               <ActivityIndicator size="small" color="#fff" />
             ) : (
               <Ionicons name="search" size={20} color="#fff" />
             )}
           </TouchableOpacity>
         </View>
+
+        {/* Ricerca per Titolo */}
+        <View style={[styles.inputRow, { marginTop: 10 }]}>
+          <TextInput
+            style={styles.isbnInput}
+            placeholder="Cerca per titolo..."
+            placeholderTextColor="#999"
+            value={cercaTitolo}
+            onChangeText={(text) => {
+              setCercaTitolo(text);
+              if (text.length === 0) {
+                setTitoloResults([]);
+              }
+            }}
+            autoCapitalize="words"
+            returnKeyType="search"
+            onSubmitEditing={handleCercaTitolo}
+          />
+          <TouchableOpacity 
+            style={[styles.searchButton, { backgroundColor: '#4CAF50' }]} 
+            onPress={handleCercaTitolo}
+            disabled={cercaTitolo.length < 3}
+          >
+            {cercaLoading && cercaTitolo ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Ionicons name="search" size={20} color="#fff" />
+            )}
+          </TouchableOpacity>
+        </View>
+
+        {/* Risultati ricerca per titolo */}
+        {titolResults.length > 0 && (
+          <View style={styles.titoloResultsContainer}>
+            <Text style={styles.titoloResultsTitle}>
+              {titolResults.length} {titolResults.length === 1 ? 'risultato' : 'risultati'} trovati:
+            </Text>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              style={styles.titoloResultsScroll}
+            >
+              {titolResults.map((book, index) => (
+                <TouchableOpacity
+                  key={`${book.isbn}-${index}`}
+                  style={styles.titoloResultCard}
+                  onPress={() => selectBookFromTitolo(book)}
+                >
+                  <Image
+                    source={{ uri: `https://www.ibs.it/images/${book.isbn}_0_0_0_536_0.jpg` }}
+                    style={styles.titoloResultCover}
+                    resizeMode="cover"
+                  />
+                  <Text style={styles.titoloResultTitle} numberOfLines={2}>{book.titolo}</Text>
+                  <Text style={styles.titoloResultIsbn}>ISBN: {book.isbn}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
 
         {cercaBook && (
           <View style={styles.resultCard}>
@@ -871,6 +996,45 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '600',
     fontSize: 14,
+  },
+  // Ricerca per titolo
+  titoloResultsContainer: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+  },
+  titoloResultsTitle: {
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 10,
+  },
+  titoloResultsScroll: {
+    flexGrow: 0,
+  },
+  titoloResultCard: {
+    width: 100,
+    marginRight: 12,
+    alignItems: 'center',
+  },
+  titoloResultCover: {
+    width: 80,
+    height: 110,
+    borderRadius: 6,
+    backgroundColor: '#f0f0f0',
+    marginBottom: 6,
+  },
+  titoloResultTitle: {
+    fontSize: 11,
+    color: '#333',
+    textAlign: 'center',
+    lineHeight: 14,
+  },
+  titoloResultIsbn: {
+    fontSize: 9,
+    color: '#888',
+    fontFamily: 'monospace',
+    marginTop: 2,
   },
   // Scanner styles
   scannerContainer: {
