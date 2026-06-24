@@ -23,8 +23,7 @@ interface BookResult {
   editore?: string;
   disciplina?: string;
   prezzo_copertina?: number;
-  scuole?: { nome: string; codice: string }[];
-  classi?: string[];
+  scuole?: { nome: string; codice: string; classi: string[] }[];
   copie_disponibili: number;
   prezzo_minimo?: number;
   da_comprare_nuovo: boolean;
@@ -154,21 +153,27 @@ export default function SearchResultsScreen() {
                 )}
                 <Text style={styles.bookIsbn}>ISBN: {book.isbn}</Text>
                 
-                {/* Scuole e Classi */}
+                {/* Scuole con Classi raggruppate */}
                 {book.scuole && book.scuole.length > 0 && (
-                  <View style={styles.schoolInfo}>
-                    <Ionicons name="school-outline" size={12} color="#666" />
-                    <Text style={styles.schoolText} numberOfLines={1}>
-                      {book.scuole.map(s => s.nome).join(', ')}
-                    </Text>
-                  </View>
-                )}
-                {book.classi && book.classi.length > 0 && (
-                  <View style={styles.classInfo}>
-                    <Ionicons name="people-outline" size={12} color="#666" />
-                    <Text style={styles.classText}>
-                      Classi: {book.classi.slice(0, 5).join(', ')}{book.classi.length > 5 ? '...' : ''}
-                    </Text>
+                  <View style={styles.schoolsContainer}>
+                    {book.scuole.map((scuola, idx) => (
+                      <View key={idx} style={styles.schoolItem}>
+                        <View style={styles.schoolHeader}>
+                          <Ionicons name="school" size={14} color="#1a472a" />
+                          <Text style={styles.schoolName}>{scuola.nome}</Text>
+                        </View>
+                        <View style={styles.classesRow}>
+                          {scuola.classi.slice(0, 6).map((classe, cIdx) => (
+                            <View key={cIdx} style={styles.classBadge}>
+                              <Text style={styles.classText}>{classe}</Text>
+                            </View>
+                          ))}
+                          {scuola.classi.length > 6 && (
+                            <Text style={styles.moreClasses}>+{scuola.classi.length - 6}</Text>
+                          )}
+                        </View>
+                      </View>
+                    ))}
                   </View>
                 )}
                 
@@ -185,13 +190,12 @@ export default function SearchResultsScreen() {
                     <Text style={styles.newBadgeText}>DA ACQUISTARE NUOVO</Text>
                   </View>
                 ) : (
-                  <View style={styles.availableBadge}>
-                    <Text style={styles.availableText}>
-                      {book.copie_disponibili} {book.copie_disponibili === 1 ? 'copia' : 'copie'} usate
+                  <View style={styles.usedBadge}>
+                    <Ionicons name="checkmark-circle" size={14} color="#fff" />
+                    <Text style={styles.usedBadgeText}>REPERIBILE USATO</Text>
+                    <Text style={styles.usedBadgeCount}>
+                      {book.copie_disponibili} {book.copie_disponibili === 1 ? 'copia' : 'copie'} da €{book.prezzo_minimo?.toFixed(2)}
                     </Text>
-                    {book.prezzo_minimo && (
-                      <Text style={styles.minPriceText}>da €{book.prezzo_minimo.toFixed(2)}</Text>
-                    )}
                   </View>
                 )}
               </View>
@@ -269,111 +273,134 @@ const styles = StyleSheet.create({
   bookCard: {
     flexDirection: 'row',
     backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 4,
   },
   bookCover: {
-    width: 70,
-    height: 100,
-    borderRadius: 6,
+    width: 90,
+    height: 130,
+    borderRadius: 8,
     backgroundColor: '#f0f0f0',
   },
   bookInfo: {
     flex: 1,
-    marginLeft: 12,
-    justifyContent: 'center',
+    marginLeft: 14,
+    justifyContent: 'flex-start',
   },
   bookTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#333',
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#222',
     marginBottom: 4,
-    lineHeight: 20,
+    lineHeight: 22,
   },
   bookAuthor: {
     fontSize: 13,
-    color: '#666',
-    marginBottom: 2,
+    color: '#555',
+    marginBottom: 4,
   },
   bookIsbn: {
     fontSize: 11,
-    color: '#999',
+    color: '#888',
     fontFamily: 'monospace',
+    marginBottom: 10,
+  },
+  // Scuole con classi
+  schoolsContainer: {
+    marginBottom: 10,
+  },
+  schoolItem: {
+    marginBottom: 8,
+  },
+  schoolHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     marginBottom: 4,
   },
-  schoolInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: 2,
-  },
-  schoolText: {
-    fontSize: 11,
-    color: '#666',
+  schoolName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1a472a',
     flex: 1,
   },
-  classInfo: {
+  classesRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 4,
-    marginBottom: 6,
+    marginLeft: 20,
+  },
+  classBadge: {
+    backgroundColor: '#e8f5e9',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
   },
   classText: {
     fontSize: 11,
-    color: '#666',
+    color: '#2E7D32',
+    fontWeight: '600',
+  },
+  moreClasses: {
+    fontSize: 11,
+    color: '#888',
+    alignSelf: 'center',
   },
   priceRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: 10,
   },
   priceLabel: {
-    fontSize: 12,
+    fontSize: 13,
     color: '#666',
-    marginRight: 4,
+    marginRight: 6,
   },
   priceValue: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
     color: '#1a472a',
   },
   newBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FF9800',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
     alignSelf: 'flex-start',
-    gap: 4,
+    gap: 6,
   },
   newBadgeText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
     color: '#fff',
   },
-  availableBadge: {
-    backgroundColor: '#e8f5e9',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+  usedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
     alignSelf: 'flex-start',
+    gap: 6,
+    flexWrap: 'wrap',
   },
-  availableText: {
+  usedBadgeText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#2E7D32',
+    fontWeight: '700',
+    color: '#fff',
   },
-  minPriceText: {
+  usedBadgeCount: {
     fontSize: 11,
-    color: '#388E3C',
-    marginTop: 2,
+    color: 'rgba(255,255,255,0.9)',
   },
   arrowContainer: {
     justifyContent: 'center',

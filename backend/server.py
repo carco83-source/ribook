@@ -1699,8 +1699,7 @@ async def search_books_generic(q: str = Query(..., min_length=3), limit: int = Q
                 "editore": book.get("editore"),
                 "disciplina": book.get("disciplina"),
                 "prezzo_copertina": book.get("prezzo_copertina"),
-                "scuole": [],
-                "classi": set()
+                "scuole_classi": {}  # Dizionario: codice_scuola -> {nome, classi: set()}
             }
         
         # Aggiungi scuola (dal codice scuola, cerchiamo il nome)
@@ -1711,18 +1710,20 @@ async def search_books_generic(q: str = Query(..., min_length=3), limit: int = Q
         # Cerca nome scuola dal mapping
         scuola_nome = SCUOLE_CATANZARO.get(codice_scuola, codice_scuola)
         
-        if scuola_nome and scuola_nome not in [s["nome"] for s in books_by_isbn[isbn]["scuole"]]:
-            books_by_isbn[isbn]["scuole"].append({
+        # Inizializza scuola se non esiste
+        if codice_scuola and codice_scuola not in books_by_isbn[isbn]["scuole_classi"]:
+            books_by_isbn[isbn]["scuole_classi"][codice_scuola] = {
                 "nome": scuola_nome,
-                "codice": codice_scuola
-            })
+                "codice": codice_scuola,
+                "classi": set()
+            }
         
-        # Aggiungi classe
-        if classe:
+        # Aggiungi classe alla scuola
+        if classe and codice_scuola:
             classe_str = f"{classe}{sezione}" if sezione else str(classe)
-            books_by_isbn[isbn]["classi"].add(classe_str)
+            books_by_isbn[isbn]["scuole_classi"][codice_scuola]["classi"].add(classe_str)
     
-    # Converti set in lista e aggiungi info listings
+    # Converti struttura e aggiungi info listings
     enriched_books = []
     for isbn, book_data in list(books_by_isbn.items())[:limit]:
         # Conta copie in vendita
@@ -1741,8 +1742,15 @@ async def search_books_generic(q: str = Query(..., min_length=3), limit: int = Q
             if min_listing:
                 prezzo_minimo = min_listing.get("prezzo_vendita")
         
-        # Converti classi da set a lista ordinata
-        classi_list = sorted(list(book_data["classi"]), key=lambda x: (int(''.join(filter(str.isdigit, x)) or 0), x))
+        # Costruisci lista scuole con classi raggruppate
+        scuole_con_classi = []
+        for codice, scuola_data in book_data["scuole_classi"].items():
+            classi_list = sorted(list(scuola_data["classi"]), key=lambda x: (int(''.join(filter(str.isdigit, x)) or 0), x))
+            scuole_con_classi.append({
+                "nome": scuola_data["nome"],
+                "codice": scuola_data["codice"],
+                "classi": classi_list
+            })
         
         enriched_books.append({
             "id": book_data["id"],
@@ -1752,8 +1760,7 @@ async def search_books_generic(q: str = Query(..., min_length=3), limit: int = Q
             "editore": book_data["editore"],
             "disciplina": book_data["disciplina"],
             "prezzo_copertina": book_data["prezzo_copertina"],
-            "scuole": book_data["scuole"],
-            "classi": classi_list,
+            "scuole": scuole_con_classi,
             "copie_disponibili": listings_count,
             "prezzo_minimo": prezzo_minimo,
             "da_comprare_nuovo": listings_count == 0
