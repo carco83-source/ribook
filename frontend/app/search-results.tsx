@@ -133,10 +133,9 @@ export default function SearchResultsScreen() {
           )}
           
           {results.map((book, index) => (
-            <TouchableOpacity
+            <View
               key={`${book.isbn}-${index}`}
               style={styles.bookCard}
-              onPress={() => goToBookDetail(book)}
             >
               {/* Copertina */}
               <Image
@@ -177,34 +176,29 @@ export default function SearchResultsScreen() {
                   </View>
                 )}
                 
-                {/* Prezzo nuovo */}
-                <View style={styles.priceRow}>
-                  <Text style={styles.priceLabel}>Prezzo nuovo:</Text>
-                  <Text style={styles.priceValue}>€{book.prezzo_copertina?.toFixed(2) || 'N/D'}</Text>
+                {/* Prezzo nuovo - sempre visibile */}
+                <View style={styles.newPriceContainer}>
+                  <Ionicons name="pricetag" size={14} color="#FF9800" />
+                  <Text style={styles.newPriceLabel}>Nuovo:</Text>
+                  <Text style={styles.newPriceValue}>€{book.prezzo_copertina?.toFixed(2) || 'N/D'}</Text>
                 </View>
                 
-                {/* Disponibilità */}
-                {book.da_comprare_nuovo ? (
-                  <View style={styles.newBadge}>
-                    <Ionicons name="pricetag" size={14} color="#fff" />
-                    <Text style={styles.newBadgeText}>DA ACQUISTARE NUOVO</Text>
-                  </View>
-                ) : (
-                  <View style={styles.usedBadge}>
-                    <Ionicons name="checkmark-circle" size={14} color="#fff" />
+                {/* Badge REPERIBILE USATO - solo se ci sono copie */}
+                {!book.da_comprare_nuovo && book.copie_disponibili > 0 && (
+                  <TouchableOpacity 
+                    style={styles.usedBadge}
+                    onPress={() => goToBookDetail(book)}
+                  >
+                    <Ionicons name="checkmark-circle" size={16} color="#fff" />
                     <Text style={styles.usedBadgeText}>REPERIBILE USATO</Text>
                     <Text style={styles.usedBadgeCount}>
                       {book.copie_disponibili} {book.copie_disponibili === 1 ? 'copia' : 'copie'} da €{book.prezzo_minimo?.toFixed(2)}
                     </Text>
-                  </View>
+                    <Ionicons name="chevron-forward" size={16} color="#fff" />
+                  </TouchableOpacity>
                 )}
               </View>
-              
-              {/* Freccia */}
-              <View style={styles.arrowContainer}>
-                <Ionicons name="chevron-forward" size={24} color="#ccc" />
-              </View>
-            </TouchableOpacity>
+            </View>
           ))}
           
           {hasSearched && results.length === 0 && (
@@ -352,42 +346,28 @@ const styles = StyleSheet.create({
     color: '#888',
     alignSelf: 'center',
   },
-  priceRow: {
+  // Prezzo nuovo - sempre visibile
+  newPriceContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 10,
-  },
-  priceLabel: {
-    fontSize: 13,
-    color: '#666',
-    marginRight: 6,
-  },
-  priceValue: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1a472a',
-  },
-  newBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FF9800',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 14,
-    alignSelf: 'flex-start',
     gap: 6,
   },
-  newBadgeText: {
-    fontSize: 12,
+  newPriceLabel: {
+    fontSize: 13,
+    color: '#666',
+  },
+  newPriceValue: {
+    fontSize: 16,
     fontWeight: '700',
-    color: '#fff',
+    color: '#FF9800',
   },
   usedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#4CAF50',
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 8,
     borderRadius: 14,
     alignSelf: 'flex-start',
     gap: 6,
