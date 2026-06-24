@@ -516,6 +516,7 @@ export default function ListingDetailScreen() {
   }
 
   return (
+    <>
     <ScrollView style={styles.container}>
       <Stack.Screen
         options={{
@@ -1078,6 +1079,7 @@ export default function ListingDetailScreen() {
         )}
       </View>
     </Modal>
+    </>
   );
 }
 
