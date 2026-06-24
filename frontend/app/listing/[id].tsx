@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,8 @@ import {
   Linking,
   Modal,
   TextInput,
+  FlatList,
+  Dimensions,
 } from 'react-native';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -204,9 +206,54 @@ export default function ListingDetailScreen() {
   // Opzione foderazione libro
   const [richiediFoderazione, setRichiediFoderazione] = useState(false);
   
-  // Modal foto ingrandita
+  // Modal foto ingrandita - galleria swipeable
   const [showPhotoModal, setShowPhotoModal] = useState(false);
-  const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
+  const [allPhotos, setAllPhotos] = useState<string[]>([]);
+  const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
+  const flatListRef = useRef<FlatList>(null);
+  const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+
+  // Funzione per aprire la galleria partendo da una foto specifica
+  const openPhotoGallery = (photoUri: string, allPhotosList: string[]) => {
+    const index = allPhotosList.findIndex(p => p === photoUri);
+    setAllPhotos(allPhotosList);
+    setCurrentPhotoIndex(index >= 0 ? index : 0);
+    setShowPhotoModal(true);
+    
+    // Scroll alla foto selezionata dopo un breve delay
+    setTimeout(() => {
+      flatListRef.current?.scrollToIndex({ index: index >= 0 ? index : 0, animated: false });
+    }, 100);
+  };
+
+  // Costruisce la lista di tutte le foto disponibili
+  const getAllPhotos = (): string[] => {
+    if (!listing) return [];
+    const photos: string[] = [];
+    
+    // Foto principale
+    if (listing.foto_base64) {
+      photos.push(listing.foto_base64.startsWith('data:') ? listing.foto_base64 : `data:image/jpeg;base64,${listing.foto_base64}`);
+    }
+    
+    // Array photos
+    if (listing.photos && listing.photos.length > 0) {
+      listing.photos.forEach(photo => {
+        const uri = photo.startsWith('data:') ? photo : `data:image/jpeg;base64,${photo}`;
+        if (!photos.includes(uri)) photos.push(uri);
+      });
+    }
+    
+    // Photo 1, 2, 3
+    [listing.photo_1, listing.photo_2, listing.photo_3].forEach(photo => {
+      if (photo) {
+        const uri = photo.startsWith('data:') ? photo : `data:image/jpeg;base64,${photo}`;
+        if (!photos.includes(uri)) photos.push(uri);
+      }
+    });
+    
+    return photos;
+  };
 
   const handleGoBack = () => {
     if (router.canGoBack()) {
@@ -535,8 +582,8 @@ export default function ListingDetailScreen() {
       {listing.foto_base64 ? (
         <TouchableOpacity 
           onPress={() => {
-            setSelectedPhoto(`data:image/jpeg;base64,${listing.foto_base64}`);
-            setShowPhotoModal(true);
+            const mainPhoto = listing.foto_base64!.startsWith('data:') ? listing.foto_base64! : `data:image/jpeg;base64,${listing.foto_base64}`;
+            openPhotoGallery(mainPhoto, getAllPhotos());
           }}
           activeOpacity={0.9}
         >
@@ -545,8 +592,10 @@ export default function ListingDetailScreen() {
             style={styles.bookImage}
           />
           <View style={styles.photoZoomHint}>
-            <Ionicons name="expand" size={16} color="#fff" />
-            <Text style={styles.photoZoomHintText}>Tocca per ingrandire</Text>
+            <Ionicons name="images" size={16} color="#fff" />
+            <Text style={styles.photoZoomHintText}>
+              {getAllPhotos().length > 1 ? `${getAllPhotos().length} foto - Tocca per sfogliare` : 'Tocca per ingrandire'}
+            </Text>
           </View>
         </TouchableOpacity>
       ) : (
@@ -732,17 +781,14 @@ export default function ListingDetailScreen() {
         {(listing.photos && listing.photos.length > 0) || listing.photo_1 || listing.photo_2 || listing.photo_3 ? (
           <View style={styles.photosCard}>
             <Text style={styles.photosTitle}>Foto del libro</Text>
-            <Text style={styles.photosSubtitle}>Tocca per ingrandire</Text>
+            <Text style={styles.photosSubtitle}>Tocca per sfogliare la galleria</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photosScroll}>
               {listing.photos?.map((photo, index) => {
                 const photoUri = photo.startsWith('data:') ? photo : `data:image/jpeg;base64,${photo}`;
                 return (
                   <TouchableOpacity 
                     key={index} 
-                    onPress={() => {
-                      setSelectedPhoto(photoUri);
-                      setShowPhotoModal(true);
-                    }}
+                    onPress={() => openPhotoGallery(photoUri, getAllPhotos())}
                   >
                     <Image 
                       source={{ uri: photoUri }} 
@@ -754,9 +800,8 @@ export default function ListingDetailScreen() {
               {listing.photo_1 && (
                 <TouchableOpacity 
                   onPress={() => {
-                    const uri = listing.photo_1!.startsWith('data:') ? listing.photo_1 : `data:image/jpeg;base64,${listing.photo_1}`;
-                    setSelectedPhoto(uri);
-                    setShowPhotoModal(true);
+                    const uri = listing.photo_1!.startsWith('data:') ? listing.photo_1! : `data:image/jpeg;base64,${listing.photo_1}`;
+                    openPhotoGallery(uri, getAllPhotos());
                   }}
                 >
                   <Image 
@@ -768,9 +813,8 @@ export default function ListingDetailScreen() {
               {listing.photo_2 && (
                 <TouchableOpacity 
                   onPress={() => {
-                    const uri = listing.photo_2!.startsWith('data:') ? listing.photo_2 : `data:image/jpeg;base64,${listing.photo_2}`;
-                    setSelectedPhoto(uri);
-                    setShowPhotoModal(true);
+                    const uri = listing.photo_2!.startsWith('data:') ? listing.photo_2! : `data:image/jpeg;base64,${listing.photo_2}`;
+                    openPhotoGallery(uri, getAllPhotos());
                   }}
                 >
                   <Image 
@@ -782,9 +826,8 @@ export default function ListingDetailScreen() {
               {listing.photo_3 && (
                 <TouchableOpacity 
                   onPress={() => {
-                    const uri = listing.photo_3!.startsWith('data:') ? listing.photo_3 : `data:image/jpeg;base64,${listing.photo_3}`;
-                    setSelectedPhoto(uri);
-                    setShowPhotoModal(true);
+                    const uri = listing.photo_3!.startsWith('data:') ? listing.photo_3! : `data:image/jpeg;base64,${listing.photo_3}`;
+                    openPhotoGallery(uri, getAllPhotos());
                   }}
                 >
                   <Image 
@@ -1056,7 +1099,7 @@ export default function ListingDetailScreen() {
       </View>
     </ScrollView>
     
-    {/* Modal per foto ingrandita */}
+    {/* Modal Galleria Foto - Swipeable */}
     <Modal
       visible={showPhotoModal}
       transparent={true}
@@ -1064,18 +1107,69 @@ export default function ListingDetailScreen() {
       onRequestClose={() => setShowPhotoModal(false)}
     >
       <View style={styles.photoModalOverlay}>
-        <TouchableOpacity 
-          style={styles.photoModalClose}
-          onPress={() => setShowPhotoModal(false)}
-        >
-          <Ionicons name="close-circle" size={44} color="#fff" />
-        </TouchableOpacity>
-        {selectedPhoto && (
-          <Image
-            source={{ uri: selectedPhoto }}
-            style={styles.photoModalImage}
-            resizeMode="contain"
-          />
+        {/* Header con pulsante chiusura e indicatore */}
+        <View style={styles.photoModalHeader}>
+          <TouchableOpacity 
+            style={styles.photoModalClose}
+            onPress={() => setShowPhotoModal(false)}
+          >
+            <Ionicons name="close-circle" size={40} color="#fff" />
+          </TouchableOpacity>
+          {allPhotos.length > 1 && (
+            <View style={styles.photoCounter}>
+              <Text style={styles.photoCounterText}>
+                {currentPhotoIndex + 1} / {allPhotos.length}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* Galleria Swipeable */}
+        <FlatList
+          ref={flatListRef}
+          data={allPhotos}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          keyExtractor={(item, index) => `photo-${index}`}
+          getItemLayout={(data, index) => ({
+            length: screenWidth,
+            offset: screenWidth * index,
+            index,
+          })}
+          onMomentumScrollEnd={(event) => {
+            const newIndex = Math.round(event.nativeEvent.contentOffset.x / screenWidth);
+            setCurrentPhotoIndex(newIndex);
+          }}
+          renderItem={({ item }) => (
+            <View style={{ width: screenWidth, height: screenHeight * 0.8, justifyContent: 'center', alignItems: 'center' }}>
+              <Image
+                source={{ uri: item }}
+                style={styles.photoModalImage}
+                resizeMode="contain"
+              />
+            </View>
+          )}
+        />
+
+        {/* Indicatori pallini */}
+        {allPhotos.length > 1 && (
+          <View style={styles.photoIndicators}>
+            {allPhotos.map((_, index) => (
+              <View
+                key={index}
+                style={[
+                  styles.photoIndicatorDot,
+                  index === currentPhotoIndex && styles.photoIndicatorDotActive
+                ]}
+              />
+            ))}
+          </View>
+        )}
+
+        {/* Hint swipe */}
+        {allPhotos.length > 1 && (
+          <Text style={styles.swipeHint}>Scorri per vedere altre foto</Text>
         )}
       </View>
     </Modal>
@@ -1114,9 +1208,9 @@ const styles = StyleSheet.create({
   },
   bookImage: {
     width: '100%',
-    height: 280,
+    height: 320,
     resizeMode: 'contain',
-    backgroundColor: '#f0f0f0',
+    backgroundColor: '#f5f5f5',
   },
   photoZoomHint: {
     position: 'absolute',
@@ -1880,22 +1974,68 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#ddd',
   },
-  // Modal foto ingrandita
+  // Modal Galleria Foto
   photoModalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.95)',
+    backgroundColor: 'rgba(0,0,0,0.97)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  photoModalClose: {
+  photoModalHeader: {
     position: 'absolute',
-    top: 50,
-    right: 20,
+    top: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 50,
+    paddingHorizontal: 16,
     zIndex: 10,
   },
+  photoModalClose: {
+    padding: 8,
+  },
+  photoCounter: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  photoCounterText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
   photoModalImage: {
-    width: '95%',
-    height: '80%',
+    width: '100%',
+    height: '100%',
+  },
+  photoIndicators: {
+    position: 'absolute',
+    bottom: 100,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+  },
+  photoIndicatorDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.4)',
+  },
+  photoIndicatorDotActive: {
+    backgroundColor: '#fff',
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  swipeHint: {
+    position: 'absolute',
+    bottom: 60,
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 12,
   },
   // Foderazione libro
   foderaturaCard: {
