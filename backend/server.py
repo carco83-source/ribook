@@ -431,7 +431,7 @@ ORDER_STATES = {
 # Timer automatici
 SELLER_CONFIRMATION_HOURS = 24  # 24h per conferma venditore
 DELIVERY_BUSINESS_DAYS = 2      # 2 giorni lavorativi per consegna
-RETURN_WINDOW_HOURS = 0.017     # ~1 minuto per TEST (normalmente 72 ore = 3 giorni)
+RETURN_WINDOW_HOURS = 72        # 72 ore (3 giorni) per reso
 
 # Costanti commissioni - NUOVA LOGICA
 COSTO_FODERAZIONE = 1.50  # €1,50 per foderazione

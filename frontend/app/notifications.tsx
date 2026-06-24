@@ -173,6 +173,31 @@ export default function NotificationsScreen() {
   useFocusEffect(
     useCallback(() => {
       loadNotifications();
+      
+      // Auto-marca come lette le notifiche di tipo "informativo" dopo 2 secondi
+      const autoReadTimer = setTimeout(async () => {
+        const storedUserId = await AsyncStorage.getItem('user_id');
+        if (storedUserId) {
+          // Tipi di notifiche che dovrebbero essere marcate come lette automaticamente
+          const autoReadTypes = ['ready_for_payment', 'order_pending', 'order_pending_seller', 'cart_request'];
+          
+          setNotifications(prev => {
+            const toMarkRead = prev.filter(n => !n.read && autoReadTypes.includes(n.type));
+            
+            // Marca come lette sul server
+            toMarkRead.forEach(n => {
+              axios.put(`${API_URL}/api/notifications/${n.id}/read`).catch(console.error);
+            });
+            
+            // Aggiorna stato locale
+            return prev.map(n => 
+              autoReadTypes.includes(n.type) ? { ...n, read: true } : n
+            );
+          });
+        }
+      }, 2000);
+      
+      return () => clearTimeout(autoReadTimer);
     }, [])
   );
 
