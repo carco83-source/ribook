@@ -16,7 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import CustomPicker from '../../src/components/CustomPicker';
-import { SCUOLE_PRIMO_GRADO, SCUOLE_SECONDO_GRADO, getClassiByType } from '../../src/constants/schools';
+import { SCUOLE_PRIMO_GRADO, SCUOLE_SECONDO_GRADO, getClassiByType, SEZIONI } from '../../src/constants/schools';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -461,7 +461,7 @@ export default function ManageProfilesScreen() {
                     sezione: '',
                   });
                   // Aggiorna sezioni disponibili per questa classe
-                  const sezioniPerClasse = sectionsByClass[value] || [];
+                  const sezioniPerClasse = sectionsByClass[value] || SEZIONI;
                   setAvailableSections(sezioniPerClasse);
                 }}
                 enabled={!!newProfile.codice_scuola}
@@ -479,17 +479,17 @@ export default function ManageProfilesScreen() {
               <CustomPicker
                 selectedValue={newProfile.sezione}
                 onValueChange={(value) => setNewProfile({ ...newProfile, sezione: value })}
-                enabled={!loadingSections && availableSections.length > 0}
+                enabled={!loadingSections && !!newProfile.classe}
                 loading={loadingSections}
-                options={availableSections.map((s) => ({
+                options={(availableSections.length > 0 ? availableSections : SEZIONI).map((s) => ({
                   label: s,
                   value: s
                 }))}
                 placeholder={
                   loadingSections 
                     ? "Caricamento..." 
-                    : availableSections.length === 0 
-                      ? (newProfile.classe ? "Nessuna sezione disponibile" : "Seleziona prima la classe")
+                    : !newProfile.classe
+                      ? "Seleziona prima la classe"
                       : "Seleziona sezione..."
                 }
               />
