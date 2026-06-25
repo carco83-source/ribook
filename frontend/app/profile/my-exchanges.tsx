@@ -324,14 +324,27 @@ export default function MyExchangesScreen() {
 
         {/* Opzione reso per acquirente (solo dopo ritiro, entro 72h) */}
         {canRequestReturn && isReturnPeriodValid && (
-          <TouchableOpacity
-            style={styles.returnButton}
-            onPress={() => handleRequestReturn(item)}
-            disabled={actionLoading}
-          >
-            <Ionicons name="refresh" size={18} color="#FF9800" />
-            <Text style={styles.returnButtonText}>Richiedi reso (incongruenza)</Text>
-          </TouchableOpacity>
+          <View style={styles.returnContainer}>
+            {/* Info timer */}
+            <View style={styles.returnTimerInfo}>
+              <Ionicons name="time-outline" size={18} color="#FF9800" />
+              <View style={{flex: 1, marginLeft: 8}}>
+                <Text style={styles.returnPeriodTitle}>Hai tempo fino al {new Date(item.return_deadline).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</Text>
+                <Text style={styles.returnPeriodNote}>
+                  Puoi richiedere il reso se il libro non corrisponde alla descrizione. Dopo questa scadenza il pagamento sarà rilasciato al venditore.
+                </Text>
+              </View>
+            </View>
+            {/* Bottone reso */}
+            <TouchableOpacity
+              style={styles.returnButton}
+              onPress={() => handleRequestReturn(item)}
+              disabled={actionLoading}
+            >
+              <Ionicons name="refresh" size={18} color="#FF9800" />
+              <Text style={styles.returnButtonText}>Richiedi reso (incongruenza)</Text>
+            </TouchableOpacity>
+          </View>
         )}
 
         {/* Info periodo reso per VENDITORE (mostra che l'acquirente può ancora richiedere reso) */}
@@ -670,6 +683,20 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     marginTop: 12,
+  },
+  // Container reso acquirente con timer + bottone
+  returnContainer: {
+    marginTop: 12,
+    backgroundColor: '#FFF8E1',
+    borderWidth: 1,
+    borderColor: '#FFE082',
+    borderRadius: 12,
+    padding: 14,
+  },
+  returnTimerInfo: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 12,
   },
   returnPeriodTitle: {
     fontSize: 13,
