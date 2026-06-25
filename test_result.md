@@ -579,6 +579,9 @@ agent_communication:
       - working: true
         agent: "testing"
         comment: "Escrow Cart Integration and Seller Confirmation Flow tested successfully! All 9 test steps passed (100% success rate): 1) ✅ Order creation with pending_seller_confirmation status, 2) ✅ Seller confirmation changes status to pending_payment, 3) ✅ Order appears correctly in buyer's orders, 4) ✅ Payment changes status to paid_escrow, 5) ✅ Notifications created for both buyer and seller, 6) ✅ Complete escrow cart integration flow working correctly. Backend API endpoints tested: POST /api/orders/create, POST /api/orders/{id}/seller-confirm, POST /api/orders/{id}/pay, GET /api/orders/user/{user_id}?role=buyer. All state transitions working perfectly: pending_seller_confirmation → pending_payment → paid_escrow. Commission calculations, notification system, and order tracking all functioning as expected."
+      - working: true
+        agent: "testing"
+        comment: "Cart 'Cerca libri' button navigation tested successfully (2026-06-25)! ✅ Bug fix verified: Button now correctly navigates to search page (/search) instead of home page. Test performed on mobile viewport (390x844 - iPhone 12/13/14). ✅ Empty cart state displays correctly with 'Il carrello è vuoto' message and green 'Cerca libri' button. ✅ Button click navigates from http://localhost:3000/cart to http://localhost:3000/search (correct behavior). ✅ Destination page shows 'Cerca/Vendi' title with RiBook logo and 'Accedi per cercare e vendere' message. ✅ Navigation does NOT go to home page (bug fixed). The Link component with href='/(tabs)/search' is working as expected."
 
   - task: "Seller Action Buttons in Notifications"
     implemented: true
@@ -1023,6 +1026,35 @@ test_plan:
 
 agent_communication:
   - agent: "main"
+  - agent: "testing"
+    message: |
+      ## CART "CERCA LIBRI" BUTTON NAVIGATION TESTING COMPLETED ✅ (2026-06-25)
+      
+      ### Test Results: 100% SUCCESS RATE
+      
+      #### Bug Fix Verified:
+      ✅ **Navigation Bug Fixed**: The "Cerca libri" button in the empty cart state now correctly navigates to the search page (`/search`) instead of the home page.
+      
+      #### Test Details:
+      - **Test URL**: http://localhost:3000/cart
+      - **Mobile Viewport**: 390x844 (iPhone 12/13/14)
+      - **Empty Cart State**: Displays correctly with "Il carrello è vuoto" message and green "Cerca libri" button
+      - **Button Implementation**: Uses `<Link href="/(tabs)/search">` component (lines 339-343 in cart.tsx)
+      
+      #### Navigation Flow Verified:
+      1. ✅ Cart page loads at `/cart` with empty state
+      2. ✅ "Cerca libri" button is visible and clickable
+      3. ✅ Button click navigates from `http://localhost:3000/cart` to `http://localhost:3000/search`
+      4. ✅ Destination page shows "Cerca/Vendi" title with RiBook logo
+      5. ✅ Search page displays "Accedi per cercare e vendere" message
+      6. ✅ Navigation does NOT go to home page (bug fixed)
+      
+      #### Screenshots:
+      - cart_empty_state.png: Shows empty cart with "Cerca libri" button
+      - cart_after_cerca_libri_click.png: Shows search/sell page after navigation
+      
+      ### Conclusion:
+      The cart "Cerca libri" button navigation is working correctly. The reported bug (button navigating to home page) has been fixed and the button now properly navigates to the search/sell page as expected.
   - agent: "testing"
     message: |
       ## COMPLETE PURCHASE → DELIVERY → PICKUP FLOW TESTING COMPLETED ✅ (2026-12-17)

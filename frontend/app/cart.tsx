@@ -11,7 +11,7 @@ import {
   Platform,
   useWindowDimensions,
 } from 'react-native';
-import { useRouter, Stack, useFocusEffect } from 'expo-router';
+import { useRouter, Stack, useFocusEffect, Link } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
@@ -336,14 +336,11 @@ export default function CartScreen() {
           <Text style={styles.emptySubtext}>
             Quando clicchi "Acquista ora" su un libro e il venditore conferma la disponibilità, lo troverai qui pronto per il pagamento.
           </Text>
-          <TouchableOpacity style={styles.browseButton} onPress={() => {
-            // Naviga direttamente alla schermata di ricerca
-            router.push({
-              pathname: '/(tabs)/search'
-            });
-          }}>
-            <Text style={styles.browseButtonText}>Cerca libri</Text>
-          </TouchableOpacity>
+          <Link href="/(tabs)/search" asChild>
+            <TouchableOpacity style={styles.browseButton}>
+              <Text style={styles.browseButtonText}>Cerca libri</Text>
+            </TouchableOpacity>
+          </Link>
         </View>
       ) : (
         <>
