@@ -27,11 +27,6 @@ interface BookResult {
   scuole?: { nome: string; codice: string; classi: string[] }[];
   copie_disponibili: number;
   prezzo_minimo?: number;
-  da_comprare_nuovo: boolean;
-  solo_nuovo?: boolean;
-  is_reperibile_usato?: boolean;
-  nuova_adozione?: boolean;
-  da_acquistare?: boolean;
 }
 
 export default function SearchResultsScreen() {
@@ -79,14 +74,9 @@ export default function SearchResultsScreen() {
     }
   };
 
-  const goToBookDetail = (book: BookResult) => {
-    if (book.copie_disponibili > 0) {
-      // Vai ai venditori
-      router.push(`/book-sellers/${book.isbn}`);
-    } else {
-      // Libro da comprare nuovo - mostra alert o vai a pagina info
-      router.push(`/book-sellers/${book.isbn}`);
-    }
+  const goToBookSellers = (book: BookResult) => {
+    // Naviga sempre alla pagina venditori (mostrerà "nessuna copia" se vuota)
+    router.push(`/book-sellers/${book.isbn}`);
   };
 
   return (
@@ -138,9 +128,11 @@ export default function SearchResultsScreen() {
           )}
           
           {results.map((book, index) => (
-            <View
+            <TouchableOpacity
               key={`${book.isbn}-${index}`}
               style={styles.bookCard}
+              onPress={() => goToBookSellers(book)}
+              activeOpacity={0.7}
             >
               {/* Copertina */}
               <Image
@@ -173,7 +165,7 @@ export default function SearchResultsScreen() {
                       <View key={idx} style={styles.schoolItem}>
                         <View style={styles.schoolHeader}>
                           <Ionicons name="school" size={14} color="#1a472a" />
-                          <Text style={styles.schoolName}>{scuola.nome}</Text>
+                          <Text style={styles.schoolName} numberOfLines={1}>{scuola.nome}</Text>
                         </View>
                         <View style={styles.classesRow}>
                           {scuola.classi.slice(0, 6).map((classe, cIdx) => (
@@ -190,50 +182,30 @@ export default function SearchResultsScreen() {
                   </View>
                 )}
                 
-                {/* Prezzo nuovo - sempre visibile */}
-                <View style={styles.newPriceContainer}>
-                  <Ionicons name="pricetag" size={14} color="#FF9800" />
-                  <Text style={styles.newPriceLabel}>Nuovo:</Text>
-                  <Text style={styles.newPriceValue}>€{book.prezzo_copertina?.toFixed(2) || 'N/D'}</Text>
-                </View>
-                
-                {/* Badge: REPERIBILE USATO o DA ACQUISTARE NUOVO */}
-                {book.solo_nuovo || book.da_comprare_nuovo ? (
-                  // Libro che DEVE essere comprato nuovo
-                  <View style={styles.newOnlyBadge}>
-                    <Ionicons name="alert-circle" size={16} color="#fff" />
-                    <Text style={styles.newOnlyBadgeText}>DA ACQUISTARE NUOVO</Text>
-                    <Text style={styles.newOnlyBadgeDesc}>
-                      {book.nuova_adozione ? 'Nuova adozione' : 'Adottato da meno di 4 anni'}
-                    </Text>
+                {/* Prezzo nuovo */}
+                <View style={styles.priceRow}>
+                  <View style={styles.newPriceContainer}>
+                    <Ionicons name="pricetag" size={14} color="#FF9800" />
+                    <Text style={styles.newPriceLabel}>Nuovo:</Text>
+                    <Text style={styles.newPriceValue}>€{book.prezzo_copertina?.toFixed(2) || 'N/D'}</Text>
                   </View>
-                ) : (
-                  // Libro REPERIBILE USATO
-                  <TouchableOpacity 
-                    style={[
-                      styles.usedBadge,
-                      book.copie_disponibili === 0 && styles.usedBadgeEmpty
-                    ]}
-                    onPress={() => goToBookDetail(book)}
-                  >
-                    <Ionicons 
-                      name={book.copie_disponibili > 0 ? "checkmark-circle" : "search"} 
-                      size={16} 
-                      color="#fff" 
-                    />
-                    <Text style={styles.usedBadgeText}>REPERIBILE USATO</Text>
-                    {book.copie_disponibili > 0 ? (
-                      <Text style={styles.usedBadgeCount}>
-                        {book.copie_disponibili} {book.copie_disponibili === 1 ? 'copia' : 'copie'} da €{book.prezzo_minimo?.toFixed(2)}
+                  
+                  {/* Indicatore copie disponibili */}
+                  {book.copie_disponibili > 0 && (
+                    <View style={styles.availableBadge}>
+                      <Text style={styles.availableText}>
+                        {book.copie_disponibili} {book.copie_disponibili === 1 ? 'usato' : 'usati'}
                       </Text>
-                    ) : (
-                      <Text style={styles.usedBadgeCount}>Cerca copie</Text>
-                    )}
-                    <Ionicons name="chevron-forward" size={16} color="#fff" />
-                  </TouchableOpacity>
-                )}
+                    </View>
+                  )}
+                </View>
               </View>
-            </View>
+              
+              {/* Freccia */}
+              <View style={styles.arrowContainer}>
+                <Ionicons name="chevron-forward" size={20} color="#999" />
+              </View>
+            </TouchableOpacity>
           ))}
           
           {hasSearched && results.length === 0 && (
@@ -303,58 +275,73 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     backgroundColor: '#fff',
     borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
+    padding: 14,
+    marginBottom: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.12,
-    shadowRadius: 6,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 3,
+    alignItems: 'center',
   },
   bookCover: {
-    width: 90,
-    height: 130,
-    borderRadius: 8,
+    width: 70,
+    height: 100,
+    borderRadius: 6,
     backgroundColor: '#f0f0f0',
   },
   bookInfo: {
     flex: 1,
-    marginLeft: 14,
+    marginLeft: 12,
     justifyContent: 'flex-start',
   },
   bookTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: '#222',
-    marginBottom: 4,
-    lineHeight: 22,
+    marginBottom: 3,
+    lineHeight: 20,
   },
   bookAuthor: {
-    fontSize: 13,
-    color: '#555',
+    fontSize: 12,
+    color: '#666',
     marginBottom: 4,
   },
-  bookIsbn: {
-    fontSize: 11,
-    color: '#888',
-    fontFamily: 'monospace',
-    marginBottom: 10,
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
   },
-  // Scuole con classi
+  volumeBadge: {
+    backgroundColor: '#E3F2FD',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  volumeText: {
+    fontSize: 11,
+    color: '#1565C0',
+    fontWeight: '600',
+  },
+  bookIsbn: {
+    fontSize: 10,
+    color: '#999',
+    fontFamily: 'monospace',
+  },
   schoolsContainer: {
-    marginBottom: 10,
+    marginBottom: 8,
   },
   schoolItem: {
-    marginBottom: 8,
+    marginBottom: 4,
   },
   schoolHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 4,
+    gap: 4,
   },
   schoolName: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     color: '#1a472a',
     flex: 1,
@@ -363,83 +350,54 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 4,
-    marginLeft: 20,
+    marginLeft: 18,
+    marginTop: 2,
   },
   classBadge: {
     backgroundColor: '#e8f5e9',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
   },
   classText: {
-    fontSize: 11,
+    fontSize: 10,
     color: '#2E7D32',
     fontWeight: '600',
   },
   moreClasses: {
-    fontSize: 11,
+    fontSize: 10,
     color: '#888',
     alignSelf: 'center',
   },
-  // Prezzo nuovo - sempre visibile
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   newPriceContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
-    gap: 6,
+    gap: 4,
   },
   newPriceLabel: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#666',
   },
   newPriceValue: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
     color: '#FF9800',
   },
-  usedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  availableBadge: {
     backgroundColor: '#4CAF50',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 14,
-    alignSelf: 'flex-start',
-    gap: 6,
-    flexWrap: 'wrap',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
   },
-  usedBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#fff',
-  },
-  usedBadgeCount: {
+  availableText: {
     fontSize: 11,
-    color: 'rgba(255,255,255,0.9)',
-  },
-  usedBadgeEmpty: {
-    backgroundColor: '#78909C',
-  },
-  // Badge DA ACQUISTARE NUOVO (rosso/arancione)
-  newOnlyBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#E65100',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 14,
-    alignSelf: 'flex-start',
-    gap: 6,
-    flexWrap: 'wrap',
-  },
-  newOnlyBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
     color: '#fff',
-  },
-  newOnlyBadgeDesc: {
-    fontSize: 10,
-    color: 'rgba(255,255,255,0.85)',
+    fontWeight: '600',
   },
   arrowContainer: {
     justifyContent: 'center',
