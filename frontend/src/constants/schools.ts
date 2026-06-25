@@ -48,7 +48,7 @@ export const SCUOLE_SECONDO_GRADO: School[] = [
   // Istituti Professionali
   { id: 'sg_10', codice: 'CZRI02401A', nome: 'IPSIA G. Ferraris', tipo: 'secondo_grado' },
   { id: 'sg_11', codice: 'CZRC02401N', nome: 'IPSCT Sorace Maresca', tipo: 'secondo_grado' },
-  { id: 'sg_12', codice: 'CZTL02401B', nome: 'IIS Petrucci-Ferraris-Maresca', tipo: 'secondo_grado' },
+  { id: 'sg_12', codice: 'CZTL02401B', nome: 'Petrucci', tipo: 'secondo_grado' },
 ];
 
 export const getSchoolsByType = (tipo: SchoolType): School[] => {

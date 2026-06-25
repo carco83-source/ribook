@@ -101,7 +101,7 @@ SCUOLE_CATANZARO = {
     "CZTD024011": "ITE Grimaldi - Pacioli",
     "CZTE021011": "Ist. Tecn. B. Chimirri",
     "CZTF010008": "ITT E. Scalfaro",
-    "CZTL02401B": "ITT Catanzaro"
+    "CZTL02401B": "Petrucci"
 }
 
 def calculate_condition_from_answers(sottolineature: int, copertina: int, pagine: int, esercizi: int) -> str:
@@ -11584,7 +11584,7 @@ async def genera_pdf_2025_2026():
             "CZPS02201D": "Liceo_Siciliani",
             "CZRC02401N": "Ipssar_Catanzaro",
             "CZRI02401A": "IPSIA_Catanzaro",
-            "CZTL02401B": "ITI_Catanzaro",
+            "CZTL02401B": "Petrucci",
         }
         
         # Directory output
