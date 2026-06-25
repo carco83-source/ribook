@@ -130,8 +130,9 @@ export default function CreateListingScreen() {
     esercizi: 0,
   });
   const [note, setNote] = useState('');
-  const [photo, setPhoto] = useState<string | null>(null);
+  const [photos, setPhotos] = useState<string[]>([]);
   const [showPhotoModal, setShowPhotoModal] = useState(false);
+  const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
   const [userId, setUserId] = useState<string | null>(null);
   
   // Scanner ISBN state - NUOVO API expo-camera
@@ -338,6 +339,15 @@ export default function CreateListingScreen() {
   };
 
   const pickImage = async () => {
+    if (photos.length >= 5) {
+      if (Platform.OS === 'web') {
+        window.alert('Massimo 5 foto consentite');
+      } else {
+        Alert.alert('Limite raggiunto', 'Puoi caricare massimo 5 foto');
+      }
+      return;
+    }
+    
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
       if (Platform.OS === 'web') {
@@ -357,11 +367,20 @@ export default function CreateListingScreen() {
     });
 
     if (!result.canceled && result.assets[0].base64) {
-      setPhoto(result.assets[0].base64);
+      setPhotos([...photos, result.assets[0].base64]);
     }
   };
 
   const takePhoto = async () => {
+    if (photos.length >= 5) {
+      if (Platform.OS === 'web') {
+        window.alert('Massimo 5 foto consentite');
+      } else {
+        Alert.alert('Limite raggiunto', 'Puoi caricare massimo 5 foto');
+      }
+      return;
+    }
+    
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
       if (Platform.OS === 'web') {
@@ -380,8 +399,12 @@ export default function CreateListingScreen() {
     });
 
     if (!result.canceled && result.assets[0].base64) {
-      setPhoto(result.assets[0].base64);
+      setPhotos([...photos, result.assets[0].base64]);
     }
+  };
+
+  const removePhoto = (index: number) => {
+    setPhotos(photos.filter((_, i) => i !== index));
   };
 
   const calculatePrice = () => {
@@ -463,7 +486,8 @@ export default function CreateListingScreen() {
         fascicoli_presenti: fascicoliPresenti,
         bookstore_ids: selectedBookstores,
         note: note || null,
-        foto_base64: photo || null,
+        foto_base64: photos.length > 0 ? photos[0] : null,
+        photos: photos.length > 1 ? photos.slice(1) : [],
       });
 
       if (Platform.OS === 'web') {
@@ -981,47 +1005,55 @@ export default function CreateListingScreen() {
         {/* Step 5: Photo */}
         {selectedBook && (
           <>
-            <Text style={styles.sectionTitle}>5. Foto copertina (obbligatoria)</Text>
+            <Text style={styles.sectionTitle}>5. Foto del libro (max 5)</Text>
             <Text style={styles.sectionSubtitle}>
-              📸 Scatta una foto della copertina del libro
+              📸 Aggiungi fino a 5 foto del libro
             </Text>
             
             <View style={styles.photoSection}>
-              {photo ? (
-                <View style={styles.photoPreview}>
-                  <TouchableOpacity onPress={() => setShowPhotoModal(true)}>
-                    <Image
-                      source={{ uri: `data:image/jpeg;base64,${photo}` }}
-                      style={styles.photoImage}
-                      resizeMode="cover"
-                    />
-                    <View style={styles.photoZoomHint}>
-                      <Ionicons name="expand" size={20} color="#fff" />
-                      <Text style={styles.photoZoomHintText}>Tocca per ingrandire</Text>
-                    </View>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.removePhotoButton}
-                    onPress={() => setPhoto(null)}
-                  >
-                    <Ionicons name="close-circle" size={28} color="#ff4444" />
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                <View style={styles.photoPlaceholder}>
-                  <View style={styles.photoButtons}>
-                    <TouchableOpacity style={styles.photoButton} onPress={takePhoto}>
-                      <Ionicons name="camera" size={32} color="#1a472a" />
-                      <Text style={styles.photoButtonText}>Scatta foto</Text>
+              {/* Griglia foto esistenti */}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photosScrollView}>
+                {photos.map((photo, index) => (
+                  <View key={index} style={styles.photoThumbnailContainer}>
+                    <TouchableOpacity onPress={() => { setSelectedPhotoIndex(index); setShowPhotoModal(true); }}>
+                      <Image
+                        source={{ uri: `data:image/jpeg;base64,${photo}` }}
+                        style={styles.photoThumbnail}
+                        resizeMode="cover"
+                      />
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.photoButton} onPress={pickImage}>
-                      <Ionicons name="images" size={32} color="#1a472a" />
-                      <Text style={styles.photoButtonText}>Galleria</Text>
+                    <TouchableOpacity
+                      style={styles.removePhotoButton}
+                      onPress={() => removePhoto(index)}
+                    >
+                      <Ionicons name="close-circle" size={24} color="#ff4444" />
+                    </TouchableOpacity>
+                    {index === 0 && (
+                      <View style={styles.mainPhotoBadge}>
+                        <Text style={styles.mainPhotoBadgeText}>Principale</Text>
+                      </View>
+                    )}
+                  </View>
+                ))}
+                
+                {/* Bottone aggiungi foto */}
+                {photos.length < 5 && (
+                  <View style={styles.addPhotoContainer}>
+                    <TouchableOpacity style={styles.addPhotoButton} onPress={takePhoto}>
+                      <Ionicons name="camera" size={28} color="#1a472a" />
+                      <Text style={styles.addPhotoText}>Scatta</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.addPhotoButton} onPress={pickImage}>
+                      <Ionicons name="images" size={28} color="#1a472a" />
+                      <Text style={styles.addPhotoText}>Galleria</Text>
                     </TouchableOpacity>
                   </View>
-                  <Text style={styles.photoPlaceholderText}>Proporzione libro aperto (3:5)</Text>
-                </View>
-              )}
+                )}
+              </ScrollView>
+              
+              <Text style={styles.photoCountText}>
+                {photos.length}/5 foto caricate
+              </Text>
             </View>
             
             {/* Modal per visualizzare foto a schermo intero */}
@@ -1038,9 +1070,9 @@ export default function CreateListingScreen() {
                 >
                   <Ionicons name="close-circle" size={40} color="#fff" />
                 </TouchableOpacity>
-                {photo && (
+                {photos[selectedPhotoIndex] && (
                   <Image
-                    source={{ uri: `data:image/jpeg;base64,${photo}` }}
+                    source={{ uri: `data:image/jpeg;base64,${photos[selectedPhotoIndex]}` }}
                     style={styles.photoModalImage}
                     resizeMode="contain"
                   />
@@ -1530,6 +1562,60 @@ const styles = StyleSheet.create({
   photoModalImage: {
     width: '90%',
     height: '80%',
+  },
+  // Stili foto multiple
+  photosScrollView: {
+    marginVertical: 8,
+  },
+  photoThumbnailContainer: {
+    marginRight: 12,
+    position: 'relative',
+  },
+  photoThumbnail: {
+    width: 100,
+    height: 133,
+    borderRadius: 8,
+    backgroundColor: '#f0f0f0',
+  },
+  mainPhotoBadge: {
+    position: 'absolute',
+    bottom: 4,
+    left: 4,
+    backgroundColor: '#1a472a',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  mainPhotoBadgeText: {
+    fontSize: 10,
+    color: '#fff',
+    fontWeight: '600',
+  },
+  addPhotoContainer: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  addPhotoButton: {
+    width: 80,
+    height: 133,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#ddd',
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addPhotoText: {
+    fontSize: 12,
+    color: '#1a472a',
+    marginTop: 4,
+  },
+  photoCountText: {
+    fontSize: 12,
+    color: '#888',
+    textAlign: 'center',
+    marginTop: 8,
   },
   noteInput: {
     backgroundColor: '#fff',

@@ -281,6 +281,7 @@ class BookListingCreate(BaseModel):
     condition_details: Optional[dict] = None  # {penna, matita, evidenziatore, usura_libro, esercizi_penna, esercizi_matita}
     note: Optional[str] = None
     foto_base64: Optional[str] = None
+    photos: Optional[List[str]] = None  # Array di foto aggiuntive
     # Fascicoli (workbook supplements)
     ha_fascicoli: bool = True  # Default assumes book comes with supplements
     fascicoli_totali: int = 0  # How many supplements the book should have
@@ -332,6 +333,7 @@ class BookListing(BaseModel):
     bookstore_addresses: List[str] = []  # List of bookstore addresses for display
     note: Optional[str] = None
     foto_base64: Optional[str] = None
+    photos: Optional[List[str]] = None  # Array di foto aggiuntive
     # Stati: disponibile -> venduto -> in_consegna -> consegnato -> ritirato
     stato: str = "disponibile"
     status: str = "available"  # Per compatibilità con le query del Radar
@@ -2187,7 +2189,8 @@ async def create_listing(listing_data: BookListingCreate, user_id: str = Query(.
         bookstore_names=bookstore_names,
         bookstore_addresses=bookstore_addresses,
         note=listing_data.note,
-        foto_base64=listing_data.foto_base64
+        foto_base64=listing_data.foto_base64,
+        photos=listing_data.photos
     )
     
     await db.listings.insert_one(listing.dict())
