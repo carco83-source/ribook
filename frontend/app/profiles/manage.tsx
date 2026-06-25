@@ -362,20 +362,20 @@ export default function ManageProfilesScreen() {
       {/* Add Profile Modal */}
       <Modal
         animationType="slide"
-        transparent={true}
+        transparent={false}
         visible={modalVisible}
         onRequestClose={() => setModalVisible(false)}
+        presentationStyle="pageSheet"
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Nuovo profilo</Text>
-              <TouchableOpacity onPress={() => { setModalVisible(false); resetForm(); }}>
-                <Ionicons name="close" size={24} color="#666" />
-              </TouchableOpacity>
-            </View>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Nuovo profilo</Text>
+            <TouchableOpacity onPress={() => { setModalVisible(false); resetForm(); }}>
+              <Ionicons name="close" size={28} color="#666" />
+            </TouchableOpacity>
+          </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
+          <ScrollView style={styles.modalScrollView} showsVerticalScrollIndicator={false}>
               {/* Nome figlio */}
               <Text style={styles.inputLabel}>Nome del figlio *</Text>
               <TextInput
@@ -518,7 +518,6 @@ export default function ManageProfilesScreen() {
               <View style={{ height: 40 }} />
             </ScrollView>
           </View>
-        </View>
       </Modal>
     </View>
   );
@@ -660,6 +659,14 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
   },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  modalScrollView: {
+    flex: 1,
+    padding: 20,
+  },
   modalContent: {
     backgroundColor: '#fff',
     borderTopLeftRadius: 24,
@@ -671,7 +678,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
+    padding: 16,
+    paddingTop: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+    backgroundColor: '#fff',
   },
   modalTitle: {
     fontSize: 20,
