@@ -1125,22 +1125,22 @@ export default function SellFormScreen() {
             ) : (
               <View style={styles.coverPhotoContent}>
                 <View style={styles.coverPhotoIcons}>
-                  <Ionicons name="camera" size={28} color="#FF9800" />
-                  <Ionicons name="book-outline" size={28} color="#FF9800" style={{ marginLeft: 8 }} />
+                  <Ionicons name="phone-landscape" size={28} color="#FF9800" />
+                  <Ionicons name="camera" size={28} color="#FF9800" style={{ marginLeft: 8 }} />
                 </View>
-                <Text style={styles.coverPhotoText}>Apri il libro e scatta una foto che mostri contemporaneamente la copertina davanti e quella dietro.</Text>
+                <Text style={styles.coverPhotoText}>Scatta la foto in ORIZZONTALE. Apri il libro e mostra copertina davanti e dietro insieme.</Text>
                 <Text style={styles.coverPhotoHint}>Obbligatoria</Text>
               </View>
             )}
           </TouchableOpacity>
 
           {/* Foto aggiuntive - OPZIONALI */}
-          <Text style={[styles.photoLabel, { marginTop: 16 }]}>Foto aggiuntive (opzionali)</Text>
+          <Text style={[styles.photoLabel, { marginTop: 16 }]}>Foto aggiuntive (opzionali) - Scatta in orizzontale</Text>
           <View style={styles.photoGrid}>
             {[1, 2].map((idx) => (
               <TouchableOpacity
                 key={idx}
-                style={[styles.photoSlot, listingPhotos[idx] && styles.photoSlotFilled]}
+                style={[styles.photoSlotLandscape, listingPhotos[idx] && styles.photoSlotFilled]}
                 onPress={() => !listingPhotos[idx] && takePhotoAtIndex(idx)}
                 disabled={loadingPhoto}
               >
@@ -1148,7 +1148,7 @@ export default function SellFormScreen() {
                   <>
                     <Image 
                       source={{ uri: `data:image/jpeg;base64,${listingPhotos[idx]}` }} 
-                      style={styles.photoPreview} 
+                      style={styles.photoPreviewLandscape} 
                     />
                     <TouchableOpacity 
                       style={styles.removePhotoBtn}
@@ -1159,7 +1159,7 @@ export default function SellFormScreen() {
                   </>
                 ) : (
                   <>
-                    <Ionicons name="camera" size={28} color="#999" />
+                    <Ionicons name="phone-landscape" size={24} color="#999" />
                     <Text style={styles.photoSlotText}>Foto {idx + 1}</Text>
                   </>
                 )}
@@ -1738,6 +1738,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  photoSlotLandscape: {
+    flex: 1,
+    aspectRatio: 1.5,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#e0e0e0',
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   photoSlotFilled: {
     borderStyle: 'solid',
     borderColor: '#4CAF50',
@@ -1751,6 +1762,12 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     borderRadius: 8,
+  },
+  photoPreviewLandscape: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 8,
+    resizeMode: 'cover',
   },
   removePhotoBtn: {
     position: 'absolute',

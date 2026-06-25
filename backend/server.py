@@ -2195,7 +2195,7 @@ async def create_listing(listing_data: BookListingCreate, user_id: str = Query(.
         bookstore_addresses=bookstore_addresses,
         note=listing_data.note,
         foto_base64=listing_data.foto_base64,
-        photos=listing_data.photos
+        photos=listing_data.photos or listing_data.foto_aggiuntive
     )
     
     await db.listings.insert_one(listing.dict())

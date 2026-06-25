@@ -1967,8 +1967,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   photoThumbnail: {
-    width: 90,
-    height: 150,
+    width: 150,
+    height: 100,
     borderRadius: 8,
     marginRight: 10,
     borderWidth: 1,
