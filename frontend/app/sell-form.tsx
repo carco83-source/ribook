@@ -631,12 +631,18 @@ export default function SellFormScreen() {
     }
 
     try {
-      await axios.put(`${API_URL}/api/users/${userId}`, { iban: cleanIban });
+      console.log('Saving IBAN for user:', userId);
+      console.log('IBAN to save:', cleanIban);
+      const response = await axios.put(`${API_URL}/api/users/${userId}`, { iban: cleanIban });
+      console.log('IBAN saved successfully:', response.data);
       setShowIbanModal(false);
       await doCreateListing();
     } catch (error: any) {
       console.error('Error saving IBAN:', error);
-      showAlert('Errore', 'Impossibile salvare l\'IBAN');
+      console.error('Error response:', error.response?.data);
+      console.error('Error status:', error.response?.status);
+      const errorMsg = error.response?.data?.detail || error.message || 'Errore sconosciuto';
+      showAlert('Errore', `Impossibile salvare l'IBAN: ${errorMsg}`);
     }
   };
 

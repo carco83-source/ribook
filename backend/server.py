@@ -205,9 +205,9 @@ class Review(BaseModel):
 class UserPublic(BaseModel):
     id: str
     username: str
-    scuola: str
-    classe: str
-    sezione: str
+    scuola: Optional[str] = None
+    classe: Optional[str] = None
+    sezione: Optional[str] = None
     is_premium: bool
     tipo_scuola: Optional[str] = None
 
