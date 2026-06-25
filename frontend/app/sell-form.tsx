@@ -1246,11 +1246,11 @@ export default function SellFormScreen() {
               value={ibanInput}
               onChangeText={(text) => setIbanInput(formatIBAN(text))}
               autoCapitalize="characters"
-              maxLength={31}
+              maxLength={33}
             />
             
             <Text style={styles.ibanHint}>
-              L'IBAN italiano inizia con "IT" seguito da 25 caratteri
+              L'IBAN italiano inizia con "IT" seguito da 25 caratteri (27 totali)
             </Text>
             
             <TouchableOpacity
