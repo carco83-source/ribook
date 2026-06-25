@@ -6,10 +6,13 @@ import {
   TouchableOpacity,
   Modal,
   FlatList,
+  Dimensions,
+  StatusBar,
   Platform,
-  SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface PickerOption {
   label: string;
@@ -54,6 +57,7 @@ export default function CustomPicker({
         ]}
         onPress={() => enabled && !loading && setModalVisible(true)}
         disabled={!enabled || loading}
+        activeOpacity={0.7}
       >
         <Text 
           style={[
@@ -76,51 +80,72 @@ export default function CustomPicker({
         animationType="slide"
         transparent={true}
         onRequestClose={() => setModalVisible(false)}
+        statusBarTranslucent={true}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <SafeAreaView style={styles.safeArea}>
-              <View style={styles.modalHeader}>
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setModalVisible(false)}
+        >
+          <TouchableOpacity 
+            activeOpacity={1} 
+            style={styles.modalContent}
+            onPress={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <View style={styles.modalHeader}>
+              <View style={styles.handleBar} />
+              <View style={styles.headerRow}>
                 <Text style={styles.modalTitle}>Seleziona</Text>
                 <TouchableOpacity 
                   onPress={() => setModalVisible(false)}
                   style={styles.closeButton}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                  <Ionicons name="close" size={28} color="#333" />
+                  <Ionicons name="close-circle" size={32} color="#999" />
                 </TouchableOpacity>
               </View>
-              
-              <FlatList
-                data={options}
-                keyExtractor={(item) => item.value}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
+            </View>
+            
+            {/* Options List */}
+            <FlatList
+              data={options}
+              keyExtractor={(item, index) => `${item.value}-${index}`}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[
+                    styles.optionItem,
+                    item.value === selectedValue && styles.optionItemSelected
+                  ]}
+                  onPress={() => handleSelect(item.value)}
+                  activeOpacity={0.6}
+                >
+                  <Text 
                     style={[
-                      styles.optionItem,
-                      item.value === selectedValue && styles.optionItemSelected
+                      styles.optionText,
+                      item.value === selectedValue && styles.optionTextSelected
                     ]}
-                    onPress={() => handleSelect(item.value)}
+                    numberOfLines={2}
                   >
-                    <Text 
-                      style={[
-                        styles.optionText,
-                        item.value === selectedValue && styles.optionTextSelected
-                      ]}
-                    >
-                      {item.label}
-                    </Text>
-                    {item.value === selectedValue && (
-                      <Ionicons name="checkmark" size={24} color="#1a472a" />
-                    )}
-                  </TouchableOpacity>
-                )}
-                ItemSeparatorComponent={() => <View style={styles.separator} />}
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={styles.listContent}
-              />
-            </SafeAreaView>
-          </View>
-        </View>
+                    {item.label}
+                  </Text>
+                  {item.value === selectedValue && (
+                    <Ionicons name="checkmark-circle" size={24} color="#1a472a" />
+                  )}
+                </TouchableOpacity>
+              )}
+              ItemSeparatorComponent={() => <View style={styles.separator} />}
+              showsVerticalScrollIndicator={true}
+              style={styles.flatList}
+              contentContainerStyle={styles.listContent}
+              ListEmptyComponent={
+                <View style={styles.emptyContainer}>
+                  <Text style={styles.emptyText}>Nessuna opzione disponibile</Text>
+                </View>
+              }
+            />
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
     </>
   );
@@ -135,9 +160,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 16,
     borderRadius: 12,
+    marginBottom: 16,
   },
   pickerButtonDisabled: {
-    opacity: 0.6,
+    opacity: 0.5,
   },
   pickerButtonText: {
     fontSize: 16,
@@ -153,32 +179,49 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: '#fff',
+    backgroundColor: '#ffffff',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    maxHeight: '70%',
-  },
-  safeArea: {
-    flex: 1,
+    minHeight: 300,
+    maxHeight: SCREEN_HEIGHT * 0.7,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
   },
   modalHeader: {
+    paddingTop: 12,
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eeeeee',
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+  },
+  handleBar: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#dddddd',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
   },
   modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#333333',
   },
   closeButton: {
     padding: 4,
   },
+  flatList: {
+    backgroundColor: '#ffffff',
+  },
   listContent: {
-    paddingBottom: 40,
+    paddingBottom: 20,
   },
   optionItem: {
     flexDirection: 'row',
@@ -186,14 +229,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 16,
     paddingHorizontal: 20,
+    backgroundColor: '#ffffff',
+    minHeight: 56,
   },
   optionItemSelected: {
     backgroundColor: '#e8f5e9',
   },
   optionText: {
     fontSize: 16,
-    color: '#333',
+    color: '#333333',
     flex: 1,
+    marginRight: 12,
   },
   optionTextSelected: {
     color: '#1a472a',
@@ -202,6 +248,14 @@ const styles = StyleSheet.create({
   separator: {
     height: 1,
     backgroundColor: '#f0f0f0',
-    marginHorizontal: 20,
+    marginLeft: 20,
+  },
+  emptyContainer: {
+    padding: 40,
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#999999',
   },
 });
