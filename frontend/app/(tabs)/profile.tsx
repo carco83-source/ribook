@@ -627,7 +627,7 @@ export default function ProfileScreen() {
             <Ionicons name="people" size={20} color="#FF9800" />
           </View>
           <View style={styles.menuItemContent}>
-            <Text style={styles.menuItemTitle}>Gestisci profili figli</Text>
+            <Text style={styles.menuItemTitle}>Gestisci profili</Text>
             <Text style={styles.menuItemSubtitle}>Aggiungi profili per più figli/classi</Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color="#999" />
