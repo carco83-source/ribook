@@ -99,6 +99,24 @@ export default function SellFormScreen() {
   const [creatingListing, setCreatingListing] = useState(false);
   const [foderare, setFoderare] = useState(false);
   const [originalPrice, setOriginalPrice] = useState<number | null>(null); // Prezzo originale per modalità modifica
+  
+  // IBAN validation
+  const [showIbanModal, setShowIbanModal] = useState(false);
+  const [ibanInput, setIbanInput] = useState('');
+
+  // Funzione per validare IBAN italiano
+  const validateIBAN = (iban: string): boolean => {
+    if (!iban) return false;
+    const cleanIban = iban.replace(/\s/g, '').toUpperCase();
+    // IBAN italiano: IT + 2 cifre controllo + 1 lettera + 5 cifre ABI + 5 cifre CAB + 12 caratteri conto
+    const ibanRegex = /^IT\d{2}[A-Z]\d{5}\d{5}[A-Z0-9]{12}$/;
+    return ibanRegex.test(cleanIban);
+  };
+
+  const formatIBAN = (value: string): string => {
+    const clean = value.replace(/\s/g, '').toUpperCase();
+    return clean.match(/.{1,4}/g)?.join(' ') || clean;
+  };
 
   useEffect(() => {
     loadData();
@@ -581,6 +599,45 @@ export default function SellFormScreen() {
       return;
     }
 
+    // VERIFICA IBAN OBBLIGATORIA
+    try {
+      const userRes = await axios.get(`${API_URL}/api/users/${userId}`);
+      const userIban = userRes.data?.iban;
+      const hasValidIban = !!userIban && userIban.length > 0 && validateIBAN(userIban);
+      
+      if (!hasValidIban) {
+        setShowIbanModal(true);
+        return;
+      }
+    } catch (error) {
+      console.error('Error checking IBAN:', error);
+      setShowIbanModal(true);
+      return;
+    }
+
+    await doCreateListing();
+  };
+
+  // Salva IBAN e poi pubblica
+  const handleSaveIbanAndPublish = async () => {
+    const cleanIban = ibanInput.replace(/\s/g, '').toUpperCase();
+    
+    if (!validateIBAN(cleanIban)) {
+      showAlert('IBAN non valido', 'Formato richiesto: IT + 25 caratteri alfanumerici');
+      return;
+    }
+
+    try {
+      await axios.put(`${API_URL}/api/users/${userId}`, { iban: cleanIban });
+      setShowIbanModal(false);
+      await doCreateListing();
+    } catch (error: any) {
+      console.error('Error saving IBAN:', error);
+      showAlert('Errore', 'Impossibile salvare l\'IBAN');
+    }
+  };
+
+  const doCreateListing = async () => {
     setCreatingListing(true);
     try {
       const selectedShopsDetails = bookshopsData.filter(b => selectedBookshops.includes(b.id));
@@ -597,15 +654,15 @@ export default function SellFormScreen() {
       };
       
       const currentPriceCalc = calcolaPrezzoLibro();
-      const guadagnoUtente = selectedPriceOption * 0.83 - 0.25;
+      const guadagnoUtente = selectedPriceOption! * 0.83 - 0.25;
       
       await axios.post(`${API_URL}/api/listings?user_id=${userId}`, {
-        book_id: selectedBook.isbn || selectedBook.id,
-        book_isbn: selectedBook.isbn,
-        book_titolo: selectedBook.titolo,
-        book_autori: selectedBook.autori,
-        book_disciplina: selectedBook.disciplina,
-        prezzo_copertina: selectedBook.prezzo_copertina,
+        book_id: selectedBook!.isbn || selectedBook!.id,
+        book_isbn: selectedBook!.isbn,
+        book_titolo: selectedBook!.titolo,
+        book_autori: selectedBook!.autori,
+        book_disciplina: selectedBook!.disciplina,
+        prezzo_copertina: selectedBook!.prezzo_copertina,
         condizione: currentPriceCalc.condition,
         prezzo_vendita: selectedPriceOption,
         foto_base64: listingPhotos.length > 0 ? listingPhotos[0] : null,
@@ -1157,6 +1214,56 @@ export default function SellFormScreen() {
 
         <View style={{ height: 40 }} />
       </ScrollView>
+      
+      {/* Modal IBAN */}
+      <Modal
+        visible={showIbanModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowIbanModal(false)}
+      >
+        <View style={styles.ibanModalOverlay}>
+          <View style={styles.ibanModalContent}>
+            <View style={styles.ibanModalHeader}>
+              <Text style={styles.ibanModalTitle}>IBAN richiesto</Text>
+              <TouchableOpacity onPress={() => setShowIbanModal(false)}>
+                <Ionicons name="close" size={28} color="#666" />
+              </TouchableOpacity>
+            </View>
+            
+            <Text style={styles.ibanModalDescription}>
+              Per ricevere i pagamenti delle tue vendite, inserisci il tuo IBAN italiano.
+            </Text>
+            
+            <Text style={styles.ibanInputLabel}>IBAN</Text>
+            <TextInput
+              style={styles.ibanInput}
+              placeholder="IT00 A000 0000 0000 0000 0000 000"
+              placeholderTextColor="#999"
+              value={ibanInput}
+              onChangeText={(text) => setIbanInput(formatIBAN(text))}
+              autoCapitalize="characters"
+              maxLength={31}
+            />
+            
+            <Text style={styles.ibanHint}>
+              L'IBAN italiano inizia con "IT" seguito da 25 caratteri
+            </Text>
+            
+            <TouchableOpacity
+              style={styles.ibanSaveButton}
+              onPress={handleSaveIbanAndPublish}
+              disabled={creatingListing}
+            >
+              {creatingListing ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.ibanSaveButtonText}>Salva e Pubblica</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1741,5 +1848,69 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#888',
     marginTop: 2,
+  },
+  // IBAN Modal styles
+  ibanModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  ibanModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+  },
+  ibanModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  ibanModalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#333',
+  },
+  ibanModalDescription: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  ibanInputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  ibanInput: {
+    backgroundColor: '#f5f5f5',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    letterSpacing: 1,
+  },
+  ibanHint: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 8,
+    marginBottom: 24,
+  },
+  ibanSaveButton: {
+    backgroundColor: '#1a472a',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  ibanSaveButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
