@@ -425,7 +425,6 @@ export default function BookSellersScreen() {
             <Text style={styles.emptyTitle}>Nessuna copia disponibile</Text>
             <Text style={styles.emptySubtitle}>
               Al momento nessuno sta vendendo questo libro.
-              Torna più tardi o attiva le notifiche.
             </Text>
           </View>
         )}

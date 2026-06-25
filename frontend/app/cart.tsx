@@ -11,7 +11,8 @@ import {
   Platform,
   useWindowDimensions,
 } from 'react-native';
-import { useRouter, Stack, useFocusEffect, Link } from 'expo-router';
+import { useRouter, Stack, useFocusEffect } from 'expo-router';
+import * as Linking from 'expo-linking';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
@@ -334,18 +335,8 @@ export default function CartScreen() {
           <Ionicons name="cart-outline" size={64} color="#ccc" />
           <Text style={styles.emptyText}>Il carrello è vuoto</Text>
           <Text style={styles.emptySubtext}>
-            Quando clicchi "Acquista ora" su un libro e il venditore conferma la disponibilità, lo troverai qui pronto per il pagamento.
+            Quando clicchi "Acquista ora" su un libro e il venditore confermerà la disponibilità, lo troverai qui pronto per il pagamento.
           </Text>
-          <TouchableOpacity 
-            style={styles.browseButton}
-            onPress={() => {
-              // Naviga alla tab Cerca/Vendi
-              router.dismissAll();
-              router.replace('/(tabs)/search');
-            }}
-          >
-            <Text style={styles.browseButtonText}>Cerca libri</Text>
-          </TouchableOpacity>
         </View>
       ) : (
         <>
@@ -646,18 +637,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: 'center',
     lineHeight: 20,
-  },
-  browseButton: {
-    marginTop: 24,
-    backgroundColor: '#1a472a',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  browseButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
   },
   // Desktop styles
   scrollViewContentDesktop: {
