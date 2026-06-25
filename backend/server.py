@@ -1699,8 +1699,18 @@ async def search_books_generic(q: str = Query(..., min_length=3), limit: int = Q
                 "editore": book.get("editore"),
                 "disciplina": book.get("disciplina"),
                 "prezzo_copertina": book.get("prezzo_copertina"),
+                "volume": book.get("volume"),
+                "nuova_adozione": book.get("nuova_adozione", False),
+                "da_acquistare": book.get("da_acquistare", True),  # Default True per sicurezza
                 "scuole_classi": {}  # Dizionario: codice_scuola -> {nome, classi: set()}
             }
+        else:
+            # Se almeno una scuola ha nuova_adozione=True, il libro è nuova adozione
+            if book.get("nuova_adozione", False):
+                books_by_isbn[isbn]["nuova_adozione"] = True
+            # Se almeno una scuola ha da_acquistare=True, il libro è da acquistare
+            if book.get("da_acquistare", True):
+                books_by_isbn[isbn]["da_acquistare"] = True
         
         # Aggiungi scuola (dal codice scuola, cerchiamo il nome)
         codice_scuola = book.get("codice_scuola", "")
@@ -1752,6 +1762,21 @@ async def search_books_generic(q: str = Query(..., min_length=3), limit: int = Q
                 "classi": classi_list
             })
         
+        # Determina se il libro DEVE essere comprato NUOVO o se è REPERIBILE USATO
+        # LOGICA RiBook (come lo scambio libri):
+        # - "DA ACQUISTARE NUOVO" se: nuova_adozione=True OPPURE da_acquistare=True (adottato da meno di 4 anni)
+        # - "REPERIBILE USATO" se: nuova_adozione=False E da_acquistare=False (adottato da 4+ anni)
+        nuova_adozione = book_data.get("nuova_adozione", False)
+        da_acquistare = book_data.get("da_acquistare", True)  # Default True per sicurezza
+        
+        # Il libro è "solo nuovo" (DA ACQUISTARE NUOVO) se:
+        # - È nuova adozione (appena introdotto quest'anno)
+        # - OPPURE da_acquistare=True (adottato da meno di 4 anni, quindi nessun usato sul mercato)
+        solo_nuovo = nuova_adozione or da_acquistare
+        
+        # "REPERIBILE USATO" se non è solo_nuovo (anche se copie_disponibili=0, perché potrebbero arrivare)
+        is_reperibile_usato = not solo_nuovo
+        
         enriched_books.append({
             "id": book_data["id"],
             "isbn": book_data["isbn"],
@@ -1760,10 +1785,15 @@ async def search_books_generic(q: str = Query(..., min_length=3), limit: int = Q
             "editore": book_data["editore"],
             "disciplina": book_data["disciplina"],
             "prezzo_copertina": book_data["prezzo_copertina"],
+            "volume": book_data.get("volume"),
+            "nuova_adozione": nuova_adozione,
+            "da_acquistare": da_acquistare,
+            "solo_nuovo": solo_nuovo,  # True = deve essere comprato nuovo, False = può essere usato
+            "is_reperibile_usato": is_reperibile_usato,  # True = può essere trovato usato (anche se 0 copie ora)
             "scuole": scuole_con_classi,
             "copie_disponibili": listings_count,
             "prezzo_minimo": prezzo_minimo,
-            "da_comprare_nuovo": listings_count == 0
+            "da_comprare_nuovo": solo_nuovo  # Deprecato, usa solo_nuovo
         })
     
     return {"books": enriched_books, "total": len(enriched_books)}

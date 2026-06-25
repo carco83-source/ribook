@@ -1010,6 +1010,9 @@ metadata:
       - working: true
         agent: "testing"
         comment: "Book Search API endpoint tested successfully! All 18 test cases passed (100% success rate). ✅ Endpoint: GET /api/books/search?q={query}&limit={limit}. ✅ Test Case 1 - Search 'matematica': Found 5 math books with all required fields. Sample: LINEAMENTI DI MATEMATICA (ISBN: 9788808651082), €33.3, 0 copies available, adopted by IPSCT Sorace Maresca in classes 3AART, 5AART, 5B. ✅ Test Case 2 - Search 'storia': Found 5 history books. Sample: EVENTI, NARRAZIONE, STORIA VOLUME 3 (ISBN: 9788869645150), €28.3, adopted by Convitto Nazionale Galluppi in classes 3E, 3F. ✅ Test Case 3 - Search 'inglese': Found 1 English book. Sample: DIZIONARIO DI INGLESE (ISBN: AIE5), adopted by IM Giovanna De Nobili in 15 classes (1BS, 1CSE, 2BL, 2CSE, 2ESE, etc.). ✅ All Required Fields Present: isbn, titolo, autori, prezzo_copertina, copie_disponibili, da_comprare_nuovo, scuole (array with 'nome' and 'codice'), classi (array of class identifiers). ✅ Scuole Array Verification: Contains school names like 'IPSCT Sorace Maresca', 'Convitto Nazionale Galluppi', 'IM Giovanna De Nobili' with proper structure (nome + codice). ✅ Classi Array Verification: Contains class identifiers like '3AART', '5AART', '5B', '3E', '3F', '1BS', '1CSE', '2BL', '2CSE', '2ESE'. The API correctly searches books by title or ISBN, groups results by ISBN, aggregates schools and classes, and includes availability information (copie_disponibili, da_comprare_nuovo)."
+      - working: true
+        agent: "testing"
+        comment: "RiBook Search Badge Logic tested successfully! All 11 test cases passed (100% success rate). ✅ Badge Logic Verification: Tested endpoint GET /api/books/search with queries 'matematica' and 'inglese'. ✅ All required fields present: isbn, titolo, nuova_adozione, da_acquistare, solo_nuovo, is_reperibile_usato, copie_disponibili, scuole. ✅ Badge Logic Correct: solo_nuovo = nuova_adozione OR da_acquistare, is_reperibile_usato = NOT solo_nuovo. ✅ Data Consistency Verified: All books follow the rules: (1) If nuova_adozione=True then solo_nuovo=True, (2) If da_acquistare=True then solo_nuovo=True, (3) If solo_nuovo=True then is_reperibile_usato=False, (4) If solo_nuovo=False then is_reperibile_usato=True. ✅ Example Results: LINEAMENTI DI MATEMATICA (nuova_adozione=False, da_acquistare=False → solo_nuovo=False, is_reperibile_usato=True, Badge: REPERIBILE USATO), MATEMATICA IN CHIARO (nuova_adozione=True, da_acquistare=True → solo_nuovo=True, is_reperibile_usato=False, Badge: DA ACQUISTARE NUOVO), DIZIONARIO DI INGLESE (nuova_adozione=False, da_acquistare=True → solo_nuovo=True, is_reperibile_usato=False, Badge: DA ACQUISTARE NUOVO). The badge logic is working perfectly according to RiBook requirements."
 
 test_plan:
   current_focus: []
@@ -1759,3 +1762,66 @@ agent_communication:
       
       ### Conclusion:
       The Book Search API endpoint is fully functional and meets all requirements specified in the review request. All test cases passed successfully with proper data structure and field validation.
+
+  - agent: "testing"
+    message: |
+      ## RIBOOK SEARCH BADGE LOGIC TESTING COMPLETED ✅ (2026-12-18)
+      
+      ### Test Results: 100% SUCCESS RATE (11/11 tests passed)
+      
+      #### What Was Tested:
+      - Endpoint: GET /api/books/search?q={query}&limit={limit}
+      - Badge logic for book adoption status
+      - Data consistency rules
+      
+      #### Test Cases Executed:
+      1. ✅ Search with query "matematica" - Found 10 books, all with correct badge logic
+      2. ✅ Search with query "inglese" - Found 1 book, badge logic correct
+      3. ✅ Verified specific badge scenarios with query "storia"
+      
+      #### Badge Logic Verified:
+      ✅ **Formula Correct**: 
+      - `solo_nuovo = nuova_adozione OR da_acquistare`
+      - `is_reperibile_usato = NOT solo_nuovo`
+      
+      ✅ **Data Consistency Rules Verified**:
+      - If nuova_adozione=True, then solo_nuovo MUST be True ✅
+      - If da_acquistare=True, then solo_nuovo MUST be True ✅
+      - If solo_nuovo=True, then is_reperibile_usato MUST be False ✅
+      - If solo_nuovo=False, then is_reperibile_usato MUST be True ✅
+      
+      #### Example Results:
+      
+      **Example 1 - REPERIBILE USATO:**
+      - Book: LINEAMENTI DI MATEMATICA - VOL. U (LDM)
+      - ISBN: 9788808651082
+      - nuova_adozione=False, da_acquistare=False
+      - Result: solo_nuovo=False, is_reperibile_usato=True
+      - Badge: 📌 REPERIBILE USATO ✅
+      
+      **Example 2 - DA ACQUISTARE NUOVO (nuova_adozione):**
+      - Book: MATEMATICA IN CHIARO! + EB
+      - ISBN: 9788861812444
+      - nuova_adozione=True, da_acquistare=True
+      - Result: solo_nuovo=True, is_reperibile_usato=False
+      - Badge: 📌 DA ACQUISTARE NUOVO ✅
+      
+      **Example 3 - DA ACQUISTARE NUOVO (da_acquistare only):**
+      - Book: DIZIONARIO DI INGLESE
+      - ISBN: AIE5
+      - nuova_adozione=False, da_acquistare=True
+      - Result: solo_nuovo=True, is_reperibile_usato=False
+      - Badge: 📌 DA ACQUISTARE NUOVO ✅
+      
+      #### All Required Fields Present:
+      - ✅ isbn
+      - ✅ titolo
+      - ✅ nuova_adozione
+      - ✅ da_acquistare
+      - ✅ solo_nuovo
+      - ✅ is_reperibile_usato
+      - ✅ copie_disponibili
+      - ✅ scuole (array with nome and codice)
+      
+      ### Conclusion:
+      The RiBook search badge logic is working perfectly. All books correctly display either "DA ACQUISTARE NUOVO" or "REPERIBILE USATO" based on the adoption status flags. The backend API correctly implements the business logic as specified in the review request.

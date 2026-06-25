@@ -23,10 +23,15 @@ interface BookResult {
   editore?: string;
   disciplina?: string;
   prezzo_copertina?: number;
+  volume?: number | string;
   scuole?: { nome: string; codice: string; classi: string[] }[];
   copie_disponibili: number;
   prezzo_minimo?: number;
   da_comprare_nuovo: boolean;
+  solo_nuovo?: boolean;
+  is_reperibile_usato?: boolean;
+  nuova_adozione?: boolean;
+  da_acquistare?: boolean;
 }
 
 export default function SearchResultsScreen() {
@@ -150,7 +155,16 @@ export default function SearchResultsScreen() {
                 {book.autori && (
                   <Text style={styles.bookAuthor} numberOfLines={1}>{book.autori}</Text>
                 )}
-                <Text style={styles.bookIsbn}>ISBN: {book.isbn}</Text>
+                
+                {/* Volume e ISBN */}
+                <View style={styles.metaRow}>
+                  {book.volume && (
+                    <View style={styles.volumeBadge}>
+                      <Text style={styles.volumeText}>Vol. {book.volume}</Text>
+                    </View>
+                  )}
+                  <Text style={styles.bookIsbn}>ISBN: {book.isbn}</Text>
+                </View>
                 
                 {/* Scuole con Classi raggruppate */}
                 {book.scuole && book.scuole.length > 0 && (
@@ -183,17 +197,38 @@ export default function SearchResultsScreen() {
                   <Text style={styles.newPriceValue}>€{book.prezzo_copertina?.toFixed(2) || 'N/D'}</Text>
                 </View>
                 
-                {/* Badge REPERIBILE USATO - solo se ci sono copie */}
-                {!book.da_comprare_nuovo && book.copie_disponibili > 0 && (
+                {/* Badge: REPERIBILE USATO o DA ACQUISTARE NUOVO */}
+                {book.solo_nuovo || book.da_comprare_nuovo ? (
+                  // Libro che DEVE essere comprato nuovo
+                  <View style={styles.newOnlyBadge}>
+                    <Ionicons name="alert-circle" size={16} color="#fff" />
+                    <Text style={styles.newOnlyBadgeText}>DA ACQUISTARE NUOVO</Text>
+                    <Text style={styles.newOnlyBadgeDesc}>
+                      {book.nuova_adozione ? 'Nuova adozione' : 'Adottato da meno di 4 anni'}
+                    </Text>
+                  </View>
+                ) : (
+                  // Libro REPERIBILE USATO
                   <TouchableOpacity 
-                    style={styles.usedBadge}
+                    style={[
+                      styles.usedBadge,
+                      book.copie_disponibili === 0 && styles.usedBadgeEmpty
+                    ]}
                     onPress={() => goToBookDetail(book)}
                   >
-                    <Ionicons name="checkmark-circle" size={16} color="#fff" />
+                    <Ionicons 
+                      name={book.copie_disponibili > 0 ? "checkmark-circle" : "search"} 
+                      size={16} 
+                      color="#fff" 
+                    />
                     <Text style={styles.usedBadgeText}>REPERIBILE USATO</Text>
-                    <Text style={styles.usedBadgeCount}>
-                      {book.copie_disponibili} {book.copie_disponibili === 1 ? 'copia' : 'copie'} da €{book.prezzo_minimo?.toFixed(2)}
-                    </Text>
+                    {book.copie_disponibili > 0 ? (
+                      <Text style={styles.usedBadgeCount}>
+                        {book.copie_disponibili} {book.copie_disponibili === 1 ? 'copia' : 'copie'} da €{book.prezzo_minimo?.toFixed(2)}
+                      </Text>
+                    ) : (
+                      <Text style={styles.usedBadgeCount}>Cerca copie</Text>
+                    )}
                     <Ionicons name="chevron-forward" size={16} color="#fff" />
                   </TouchableOpacity>
                 )}
@@ -381,6 +416,30 @@ const styles = StyleSheet.create({
   usedBadgeCount: {
     fontSize: 11,
     color: 'rgba(255,255,255,0.9)',
+  },
+  usedBadgeEmpty: {
+    backgroundColor: '#78909C',
+  },
+  // Badge DA ACQUISTARE NUOVO (rosso/arancione)
+  newOnlyBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E65100',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 14,
+    alignSelf: 'flex-start',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  newOnlyBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  newOnlyBadgeDesc: {
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.85)',
   },
   arrowContainer: {
     justifyContent: 'center',
