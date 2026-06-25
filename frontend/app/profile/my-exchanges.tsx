@@ -39,6 +39,8 @@ interface Order {
   seller_confirmation_deadline?: string;
   delivery_deadline?: string;
   return_deadline?: string;
+  is_buyer?: boolean;
+  is_seller?: boolean;
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: string; bgColor: string }> = {
@@ -232,8 +234,9 @@ export default function MyExchangesScreen() {
 
   const renderOrder = ({ item }: { item: Order }) => {
     const statusConfig = getStatusConfig(item.status);
-    const isSeller = item.seller_id === userId;
-    const isBuyer = item.buyer_id === userId;
+    // Usa i flag dal backend che sono già calcolati correttamente
+    const isSeller = item.is_seller === true;
+    const isBuyer = item.is_buyer === true;
     const needsSellerAction = isSeller && (item.status === 'in_attesa_conferma_venditore' || item.status === 'pending_seller_confirmation');
     const needsBuyerPayment = isBuyer && (item.status === 'in_attesa_pagamento' || item.status === 'pending_payment');
     
@@ -348,7 +351,7 @@ export default function MyExchangesScreen() {
         )}
 
         {/* Info periodo reso per VENDITORE (mostra che l'acquirente può ancora richiedere reso) */}
-        {!isBuyer && item.status === 'picked_up' && item.return_deadline && (
+        {!isBuyer && (item.status === 'picked_up' || item.status === 'ritirato') && item.return_deadline && (
           <View style={styles.returnPeriodInfo}>
             <Ionicons name="time-outline" size={18} color="#FF9800" />
             <View style={{flex: 1, marginLeft: 8}}>
