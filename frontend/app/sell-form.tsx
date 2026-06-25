@@ -543,6 +543,34 @@ export default function SellFormScreen() {
   };
 
   const takePhotoAtIndex = async (index: number) => {
+    // Mostra opzioni: Fotocamera o Galleria
+    if (Platform.OS === 'web') {
+      // Su web usa direttamente la galleria
+      await pickPhotoFromGallery(index);
+      return;
+    }
+    
+    Alert.alert(
+      'Aggiungi foto',
+      'Gira il telefono in ORIZZONTALE prima di scattare per fotografare il libro aperto',
+      [
+        {
+          text: 'Scatta foto',
+          onPress: () => launchCamera(index),
+        },
+        {
+          text: 'Scegli dalla galleria',
+          onPress: () => pickPhotoFromGallery(index),
+        },
+        {
+          text: 'Annulla',
+          style: 'cancel',
+        },
+      ]
+    );
+  };
+
+  const launchCamera = async (index: number) => {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!permission.granted) {
       showAlert('Permesso negato', 'Serve il permesso per usare la fotocamera');
@@ -552,6 +580,42 @@ export default function SellFormScreen() {
     setLoadingPhoto(true);
     try {
       const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: false,
+        quality: 0.7,
+        exif: true,
+      });
+
+      if (!result.canceled && result.assets[0].uri) {
+        const compressedBase64 = await compressImage(result.assets[0].uri);
+        if (compressedBase64) {
+          const newPhotos = [...listingPhotos];
+          while (newPhotos.length < index) {
+            newPhotos.push('');
+          }
+          if (newPhotos.length === index) {
+            newPhotos.push(compressedBase64);
+          } else {
+            newPhotos[index] = compressedBase64;
+          }
+          setListingPhotos(newPhotos.filter(p => p !== ''));
+        }
+      }
+    } finally {
+      setLoadingPhoto(false);
+    }
+  };
+
+  const pickPhotoFromGallery = async (index: number) => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      showAlert('Permesso negato', 'Serve il permesso per accedere alla galleria');
+      return;
+    }
+
+    setLoadingPhoto(true);
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: false,
         quality: 0.7,
       });

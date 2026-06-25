@@ -11,7 +11,8 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSCameraUsageDescription": "Scansiona il codice a barre dei libri"
+        "NSCameraUsageDescription": "Scatta foto dei libri da vendere",
+        "NSPhotoLibraryUsageDescription": "Seleziona foto dei libri dalla galleria"
       }
     },
     "android": {
@@ -21,7 +22,9 @@
       },
       "edgeToEdgeEnabled": true,
       "permissions": [
-        "CAMERA"
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "READ_MEDIA_IMAGES"
       ]
     },
     "web": {
