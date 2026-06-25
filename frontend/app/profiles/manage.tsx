@@ -219,6 +219,49 @@ export default function ManageProfilesScreen() {
     );
   }
 
+  // Se l'utente non è loggato, mostra messaggio
+  if (!userId) {
+    return (
+      <View style={styles.container}>
+        <Stack.Screen
+          options={{
+            title: 'Gestisci Profili',
+            headerStyle: { backgroundColor: '#1a472a' },
+            headerTintColor: '#fff',
+            headerLeft: () => (
+              <TouchableOpacity 
+                onPress={() => router.canGoBack() ? router.back() : router.push('/(tabs)/profile')} 
+                style={{ marginLeft: 16, padding: 8 }}
+              >
+                <Ionicons name="arrow-back" size={24} color="#fff" />
+              </TouchableOpacity>
+            ),
+          }}
+        />
+        <View style={styles.notLoggedContainer}>
+          <Ionicons name="person-circle-outline" size={80} color="#ccc" />
+          <Text style={styles.notLoggedTitle}>Accedi per gestire i profili</Text>
+          <Text style={styles.notLoggedText}>
+            Per creare e gestire i profili dei tuoi figli devi prima accedere al tuo account.
+          </Text>
+          <TouchableOpacity 
+            style={styles.loginButton}
+            onPress={() => router.push('/(auth)/login')}
+          >
+            <Ionicons name="log-in-outline" size={20} color="#fff" />
+            <Text style={styles.loginButtonText}>Accedi</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.registerButton}
+            onPress={() => router.push('/(auth)/register')}
+          >
+            <Text style={styles.registerButtonText}>Non hai un account? Registrati</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <Stack.Screen
@@ -695,5 +738,49 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  // Stili per utente non loggato
+  notLoggedContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+  },
+  notLoggedTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#333',
+    marginTop: 20,
+    marginBottom: 12,
+  },
+  notLoggedText: {
+    fontSize: 15,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 32,
+  },
+  loginButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1a472a',
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+    gap: 10,
+    marginBottom: 16,
+  },
+  loginButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  registerButton: {
+    padding: 12,
+  },
+  registerButtonText: {
+    color: '#1a472a',
+    fontSize: 14,
+    fontWeight: '500',
   },
 });

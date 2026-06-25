@@ -89,7 +89,7 @@ SCUOLE_CATANZARO = {
     # Licei
     "CZPC09000X": "Liceo P. Galluppi",
     "CZPM00101D": "Cassiodoro",
-    "CZPM02201E": "IM Giovanna De Nobili",
+    "CZPM02201E": "LICEO LINGUISTICO - LICEO DELLE SCIENZE UMANE E.Fermi",
     "CZPS00101C": "Liceo E. Fermi",
     "CZPS02201D": "Liceo L. Siciliani",
     "CZSL02201A": "I.S. De Nobili Catanzaro",
@@ -1469,9 +1469,9 @@ async def get_active_profile(user_id: str):
     return {
         "id": "main",
         "nome_figlio": "Profilo principale",
-        "scuola": user["scuola"],
-        "classe": user["classe"],
-        "sezione": user["sezione"],
+        "scuola": user.get("scuola", ""),
+        "classe": user.get("classe", ""),
+        "sezione": user.get("sezione", ""),
         "tipo_scuola": user.get("tipo_scuola", "")
     }
 
@@ -11574,7 +11574,7 @@ async def genera_pdf_2025_2026():
             "CZ1MBR5002": "Convitto_Nazionale_Galluppi",
             "CZPS00101C": "Liceo_Scientifico_Fermi",
             "CZPM00101D": "Liceo_Classico_Galluppi",
-            "CZPM02201E": "Liceo_Scienze_Umane_De_Nobili",
+            "CZPM02201E": "Liceo_Linguistico_Scienze_Umane_Fermi",
             "CZPC09000X": "Liceo_Classico_Cicala",
             "CZSL02201A": "Liceo_Artistico_Catanzaro",
             "CZTF010008": "ITIS_Scalfaro",
