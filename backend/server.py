@@ -210,6 +210,11 @@ class UserPublic(BaseModel):
     sezione: Optional[str] = None
     is_premium: bool
     tipo_scuola: Optional[str] = None
+    iban: Optional[str] = None
+    nome: Optional[str] = None
+    cognome: Optional[str] = None
+    email: Optional[str] = None
+    telefono: Optional[str] = None
 
 # Book Models
 class BookBase(BaseModel):

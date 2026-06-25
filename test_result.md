@@ -1857,3 +1857,57 @@ agent_communication:
       
       ### Conclusion:
       The RiBook search badge logic is working perfectly. All books correctly display either "DA ACQUISTARE NUOVO" or "REPERIBILE USATO" based on the adoption status flags. The backend API correctly implements the business logic as specified in the review request.
+
+  - task: "User IBAN Saving via PUT /api/users/{user_id}"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "IBAN saving functionality tested successfully! All 3 test cases passed (100% success rate). ✅ Bug Fix Verified: UserPublic model now correctly includes iban, nome, cognome, email, telefono fields. ✅ Test Flow: 1) GET /api/users/3b633bd5-12ae-4050-9393-9e842df662c5 - User exists with current IBAN IT09K0306904440100000004380. 2) PUT /api/users/3b633bd5-12ae-4050-9393-9e842df662c5 with body {\"iban\": \"IT60X0542811101000000123456\"} - Status 200, response contains all required fields (id, username, is_premium, scuola, classe, sezione, tipo_scuola) AND the additional fields (iban, nome, cognome, email, telefono). 3) GET /api/users/3b633bd5-12ae-4050-9393-9e842df662c5 - IBAN correctly persisted as IT60X0542811101000000123456. ✅ No Pydantic validation errors - the previous error where UserPublic model was missing iban field has been fixed. ✅ Response structure correct - PUT endpoint returns UserPublic model with all fields. ✅ Database persistence working - IBAN value is correctly saved and retrieved. The reported bug 'Impossibile salvare l'IBAN' has been resolved by adding the missing fields to UserPublic model."
+
+  - agent: "testing"
+    message: |
+      ## USER IBAN SAVING FUNCTIONALITY TESTING COMPLETED ✅ (2026-12-18)
+      
+      ### Test Results: 100% SUCCESS RATE (3/3 tests passed)
+      
+      #### Bug Reported:
+      User reported "Impossibile salvare l'IBAN" error even though IBAN was being saved. The issue was that UserPublic model was missing the iban field, causing Pydantic validation errors when the PUT endpoint tried to return the updated user data.
+      
+      #### Fix Applied:
+      Added iban, nome, cognome, email, telefono fields to UserPublic model in /app/backend/server.py (lines 205-217).
+      
+      #### Test Flow Executed:
+      1. ✅ **GET /api/users/3b633bd5-12ae-4050-9393-9e842df662c5**
+         - Status: 200 OK
+         - User exists with current IBAN: IT09K0306904440100000004380
+         - User: Giuseppe Carchidi (nica.cartolibreria@gmail.com)
+      
+      2. ✅ **PUT /api/users/3b633bd5-12ae-4050-9393-9e842df662c5**
+         - Payload: {"iban": "IT60X0542811101000000123456"}
+         - Status: 200 OK
+         - Response contains ALL required fields:
+           - Core fields: id, username, is_premium, scuola, classe, sezione, tipo_scuola
+           - Additional fields: iban, nome, cognome, email, telefono ✅
+         - IBAN value in response: IT60X0542811101000000123456 ✅
+         - No Pydantic validation errors ✅
+      
+      3. ✅ **GET /api/users/3b633bd5-12ae-4050-9393-9e842df662c5** (Verify Persistence)
+         - Status: 200 OK
+         - IBAN correctly persisted: IT60X0542811101000000123456 ✅
+         - Database update successful ✅
+      
+      #### Key Verifications:
+      - ✅ UserPublic model includes iban field (no more Pydantic errors)
+      - ✅ PUT endpoint returns complete user data with iban
+      - ✅ IBAN value is correctly saved to MongoDB
+      - ✅ IBAN value persists across requests
+      - ✅ Response includes all additional fields (nome, cognome, email, telefono)
+      
+      ### Conclusion:
+      The reported bug "Impossibile salvare l'IBAN" has been successfully fixed. The UserPublic model now includes all necessary fields, and the PUT /api/users/{user_id} endpoint correctly saves and returns the IBAN without any validation errors. Users can now save their IBAN for receiving payments.
