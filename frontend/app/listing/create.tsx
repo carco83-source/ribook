@@ -444,8 +444,26 @@ export default function CreateListingScreen() {
       return;
     }
 
-    // Verifica se l'utente ha un IBAN valido
-    if (!userHasIban) {
+    // Verifica IBAN in tempo reale prima di pubblicare
+    try {
+      if (userId) {
+        const userRes = await axios.get(`${API_URL}/api/users/${userId}`);
+        const userIban = userRes.data?.iban;
+        const hasValidIban = !!userIban && userIban.length > 0 && validateIBAN(userIban);
+        
+        if (!hasValidIban) {
+          console.log('IBAN mancante o non valido, mostrando modal');
+          setShowIbanModal(true);
+          return;
+        }
+      } else {
+        // Nessun userId, mostra modal
+        setShowIbanModal(true);
+        return;
+      }
+    } catch (error) {
+      console.error('Error checking IBAN:', error);
+      // In caso di errore, mostra comunque il modal per sicurezza
       setShowIbanModal(true);
       return;
     }
