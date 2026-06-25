@@ -184,21 +184,30 @@ export default function SearchResultsScreen() {
                 
                 {/* Prezzo nuovo */}
                 <View style={styles.priceRow}>
-                  <View style={styles.newPriceContainer}>
-                    <Ionicons name="pricetag" size={14} color="#FF9800" />
-                    <Text style={styles.newPriceLabel}>Nuovo:</Text>
-                    <Text style={styles.newPriceValue}>€{book.prezzo_copertina?.toFixed(2) || 'N/D'}</Text>
-                  </View>
-                  
-                  {/* Indicatore copie disponibili */}
-                  {book.copie_disponibili > 0 && (
-                    <View style={styles.availableBadge}>
-                      <Text style={styles.availableText}>
-                        {book.copie_disponibili} {book.copie_disponibili === 1 ? 'usato' : 'usati'}
+                  <Ionicons name="pricetag-outline" size={14} color="#888" />
+                  <Text style={styles.newPriceLabel}>Nuovo:</Text>
+                  <Text style={styles.newPriceValue}>€{book.prezzo_copertina?.toFixed(2) || 'N/D'}</Text>
+                </View>
+                
+                {/* Copie usate disponibili - ben visibile */}
+                {book.copie_disponibili > 0 ? (
+                  <View style={styles.usedAvailableBox}>
+                    <Ionicons name="checkmark-circle" size={18} color="#4CAF50" />
+                    <View style={styles.usedAvailableInfo}>
+                      <Text style={styles.usedAvailableLabel}>
+                        {book.copie_disponibili} {book.copie_disponibili === 1 ? 'copia usata' : 'copie usate'} disponibili
+                      </Text>
+                      <Text style={styles.usedAvailablePrice}>
+                        da €{book.prezzo_minimo?.toFixed(2) || '---'}
                       </Text>
                     </View>
-                  )}
-                </View>
+                  </View>
+                ) : (
+                  <View style={styles.noUsedBox}>
+                    <Ionicons name="search-outline" size={16} color="#999" />
+                    <Text style={styles.noUsedText}>Nessuna copia usata al momento</Text>
+                  </View>
+                )}
               </View>
               
               {/* Freccia */}
@@ -372,32 +381,57 @@ const styles = StyleSheet.create({
   priceRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  newPriceContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
+    gap: 6,
+    marginBottom: 8,
   },
   newPriceLabel: {
     fontSize: 12,
-    color: '#666',
+    color: '#888',
   },
   newPriceValue: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#FF9800',
-  },
-  availableBadge: {
-    backgroundColor: '#4CAF50',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
-  },
-  availableText: {
-    fontSize: 11,
-    color: '#fff',
+    fontSize: 13,
     fontWeight: '600',
+    color: '#888',
+    textDecorationLine: 'line-through',
+  },
+  // Box copie usate disponibili
+  usedAvailableBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E8F5E9',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 10,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#4CAF50',
+  },
+  usedAvailableInfo: {
+    flex: 1,
+  },
+  usedAvailableLabel: {
+    fontSize: 12,
+    color: '#2E7D32',
+    fontWeight: '600',
+  },
+  usedAvailablePrice: {
+    fontSize: 16,
+    color: '#1B5E20',
+    fontWeight: '700',
+  },
+  // Box nessuna copia usata
+  noUsedBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 10,
+    gap: 6,
+  },
+  noUsedText: {
+    fontSize: 12,
+    color: '#999',
   },
   arrowContainer: {
     justifyContent: 'center',

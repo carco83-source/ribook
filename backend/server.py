@@ -88,8 +88,8 @@ SCUOLE_CATANZARO = {
     "CZMM86701D": "Sec. I Grado V. Vivaldi",
     # Licei
     "CZPC09000X": "Liceo P. Galluppi",
-    "CZPM00101D": "Cassiodoro",
-    "CZPM02201E": "LICEO LINGUISTICO - LICEO DELLE SCIENZE UMANE E.Fermi",
+    "CZPM00101D": "Liceo Linguistico e delle Scienze Umane E.Fermi",
+    "CZPM02201E": "IM Giovanna De Nobili",
     "CZPS00101C": "Liceo E. Fermi",
     "CZPS02201D": "Liceo L. Siciliani",
     "CZSL02201A": "I.S. De Nobili Catanzaro",
@@ -1738,7 +1738,7 @@ async def search_books_generic(q: str = Query(..., min_length=3), limit: int = Q
     for isbn, book_data in list(books_by_isbn.items())[:limit]:
         # Conta copie in vendita
         listings_count = await db.listings.count_documents({
-            "isbn": isbn,
+            "$or": [{"isbn": isbn}, {"book_isbn": isbn}],
             "status": "available"
         })
         
@@ -1746,7 +1746,7 @@ async def search_books_generic(q: str = Query(..., min_length=3), limit: int = Q
         prezzo_minimo = None
         if listings_count > 0:
             min_listing = await db.listings.find_one(
-                {"isbn": isbn, "status": "available"},
+                {"$or": [{"isbn": isbn}, {"book_isbn": isbn}], "status": "available"},
                 sort=[("prezzo_vendita", 1)]
             )
             if min_listing:
@@ -11573,8 +11573,8 @@ async def genera_pdf_2025_2026():
             "CZMM83903B": "IC_Pascoli_Aldisio",
             "CZ1MBR5002": "Convitto_Nazionale_Galluppi",
             "CZPS00101C": "Liceo_Scientifico_Fermi",
-            "CZPM00101D": "Liceo_Classico_Galluppi",
-            "CZPM02201E": "Liceo_Linguistico_Scienze_Umane_Fermi",
+            "CZPM00101D": "Liceo_Linguistico_Scienze_Umane_Fermi",
+            "CZPM02201E": "Liceo_Scienze_Umane_De_Nobili",
             "CZPC09000X": "Liceo_Classico_Cicala",
             "CZSL02201A": "Liceo_Artistico_Catanzaro",
             "CZTF010008": "ITIS_Scalfaro",
