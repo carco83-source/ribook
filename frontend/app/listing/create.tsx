@@ -188,12 +188,23 @@ export default function CreateListingScreen() {
       
       // Check if user has IBAN
       if (storedUserId) {
-        const userRes = await axios.get(`${API_URL}/api/users/${storedUserId}`);
-        const userIban = userRes.data?.iban;
-        setUserHasIban(!!userIban && validateIBAN(userIban));
+        try {
+          const userRes = await axios.get(`${API_URL}/api/users/${storedUserId}`);
+          const userIban = userRes.data?.iban;
+          console.log('User IBAN check:', userIban ? 'has IBAN' : 'no IBAN');
+          const hasValidIban = !!userIban && userIban.length > 0 && validateIBAN(userIban);
+          setUserHasIban(hasValidIban);
+          console.log('userHasIban set to:', hasValidIban);
+        } catch (userErr) {
+          console.error('Error fetching user IBAN:', userErr);
+          setUserHasIban(false);
+        }
+      } else {
+        setUserHasIban(false);
       }
     } catch (error) {
       console.error('Error loading data:', error);
+      setUserHasIban(false);
     }
   };
 
@@ -339,11 +350,11 @@ export default function CreateListingScreen() {
   };
 
   const pickImage = async () => {
-    if (photos.length >= 5) {
+    if (photos.length >= 3) {
       if (Platform.OS === 'web') {
-        window.alert('Massimo 5 foto consentite');
+        window.alert('Massimo 3 foto consentite');
       } else {
-        Alert.alert('Limite raggiunto', 'Puoi caricare massimo 5 foto');
+        Alert.alert('Limite raggiunto', 'Puoi caricare massimo 3 foto');
       }
       return;
     }
@@ -372,11 +383,11 @@ export default function CreateListingScreen() {
   };
 
   const takePhoto = async () => {
-    if (photos.length >= 5) {
+    if (photos.length >= 3) {
       if (Platform.OS === 'web') {
-        window.alert('Massimo 5 foto consentite');
+        window.alert('Massimo 3 foto consentite');
       } else {
-        Alert.alert('Limite raggiunto', 'Puoi caricare massimo 5 foto');
+        Alert.alert('Limite raggiunto', 'Puoi caricare massimo 3 foto');
       }
       return;
     }
@@ -1005,7 +1016,7 @@ export default function CreateListingScreen() {
         {/* Step 5: Photo */}
         {selectedBook && (
           <>
-            <Text style={styles.sectionTitle}>5. Foto del libro (max 5)</Text>
+            <Text style={styles.sectionTitle}>5. Foto del libro (max 3)</Text>
             <Text style={styles.sectionSubtitle}>
               📸 Aggiungi fino a 5 foto del libro
             </Text>
@@ -1037,7 +1048,7 @@ export default function CreateListingScreen() {
                 ))}
                 
                 {/* Bottone aggiungi foto */}
-                {photos.length < 5 && (
+                {photos.length < 3 && (
                   <View style={styles.addPhotoContainer}>
                     <TouchableOpacity style={styles.addPhotoButton} onPress={takePhoto}>
                       <Ionicons name="camera" size={28} color="#1a472a" />
@@ -1052,7 +1063,7 @@ export default function CreateListingScreen() {
               </ScrollView>
               
               <Text style={styles.photoCountText}>
-                {photos.length}/5 foto caricate
+                {photos.length}/3 foto caricate
               </Text>
             </View>
             
