@@ -336,11 +336,16 @@ export default function CartScreen() {
           <Text style={styles.emptySubtext}>
             Quando clicchi "Acquista ora" su un libro e il venditore conferma la disponibilità, lo troverai qui pronto per il pagamento.
           </Text>
-          <Link href="/(tabs)/search" asChild>
-            <TouchableOpacity style={styles.browseButton}>
-              <Text style={styles.browseButtonText}>Cerca libri</Text>
-            </TouchableOpacity>
-          </Link>
+          <TouchableOpacity 
+            style={styles.browseButton}
+            onPress={() => {
+              // Naviga alla tab Cerca/Vendi
+              router.dismissAll();
+              router.replace('/(tabs)/search');
+            }}
+          >
+            <Text style={styles.browseButtonText}>Cerca libri</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         <>
