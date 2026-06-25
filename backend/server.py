@@ -1223,13 +1223,13 @@ async def get_school_sections_by_code(codice: str, classe: Optional[int] = None)
     """
     match_stage = {"codice_scuola": codice}
     if classe:
-        # Supporta sia stringa che intero per anno_corso
-        match_stage["anno_corso"] = str(classe)
+        # Supporta sia stringa che intero per classe
+        match_stage["classe"] = classe
     
     pipeline = [
         {"$match": match_stage},
         {"$group": {
-            "_id": "$anno_corso",
+            "_id": "$classe",
             "sezioni": {"$addToSet": "$sezione"}
         }},
         {"$sort": {"_id": 1}}
@@ -1243,9 +1243,10 @@ async def get_school_sections_by_code(codice: str, classe: Optional[int] = None)
     
     for r in results:
         classe_num = r["_id"]
-        if classe_num:  # Ignora None
-            sections_by_class[str(classe_num)] = sorted(r["sezioni"])
-            all_sections.update(r["sezioni"])
+        if classe_num is not None:  # Ignora None
+            sezioni = [s for s in r["sezioni"] if s]  # Rimuovi sezioni vuote
+            sections_by_class[str(classe_num)] = sorted(sezioni)
+            all_sections.update(sezioni)
     
     return {
         "codice_scuola": codice,
