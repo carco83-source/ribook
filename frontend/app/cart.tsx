@@ -337,8 +337,10 @@ export default function CartScreen() {
             Quando clicchi "Acquista ora" su un libro e il venditore conferma la disponibilità, lo troverai qui pronto per il pagamento.
           </Text>
           <TouchableOpacity style={styles.browseButton} onPress={() => {
-            // Naviga alla tab Cerca/Vendi
-            router.navigate('/(tabs)/search');
+            // Naviga direttamente alla schermata di ricerca
+            router.push({
+              pathname: '/(tabs)/search'
+            });
           }}>
             <Text style={styles.browseButtonText}>Cerca libri</Text>
           </TouchableOpacity>

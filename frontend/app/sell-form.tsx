@@ -603,12 +603,15 @@ export default function SellFormScreen() {
     try {
       const userRes = await axios.get(`${API_URL}/api/users/${userId}`);
       const userIban = userRes.data?.iban;
-      const hasValidIban = !!userIban && userIban.length > 0 && validateIBAN(userIban);
+      console.log('IBAN check - userIban:', userIban);
       
-      if (!hasValidIban) {
+      // Verifica che l'IBAN esista, non sia null/undefined/vuoto, e sia valido
+      if (!userIban || userIban === null || userIban === '' || !validateIBAN(userIban)) {
+        console.log('IBAN mancante o non valido, mostrando modal');
         setShowIbanModal(true);
         return;
       }
+      console.log('IBAN valido, procedo con pubblicazione');
     } catch (error) {
       console.error('Error checking IBAN:', error);
       setShowIbanModal(true);
