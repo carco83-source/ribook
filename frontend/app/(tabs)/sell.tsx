@@ -373,15 +373,8 @@ export default function CartScreen() {
           <Ionicons name="cart-outline" size={80} color="#ccc" />
           <Text style={styles.emptyTitle}>Il carrello è vuoto</Text>
           <Text style={styles.emptySubtitle}>
-            Quando un venditore conferma la disponibilità di un libro, lo troverai qui pronto per l'acquisto
+            Quando clicchi "Acquista ora" su un libro e il venditore confermerà la disponibilità, lo troverai qui pronto per il pagamento.
           </Text>
-          <TouchableOpacity 
-            style={styles.exploreButton}
-            onPress={() => router.push('/(tabs)')}
-          >
-            <Ionicons name="search" size={20} color="#fff" />
-            <Text style={styles.exploreButtonText}>Cerca libri</Text>
-          </TouchableOpacity>
         </View>
       ) : (
         <>
