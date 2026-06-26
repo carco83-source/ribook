@@ -534,6 +534,9 @@ export default function ListingDetailScreen() {
 
   const { commission, total, foderazione } = calculateCommission();
   
+  // Debug foderazione
+  console.log('[DEBUG] richiediFoderazione:', richiediFoderazione, 'foderazione:', foderazione);
+  
   // Verifica se l'utente corrente è il venditore
   const isOwner = userId && listing?.seller_id === userId;
   
@@ -1036,7 +1039,7 @@ export default function ListingDetailScreen() {
         ) : null}
 
         {/* Price Display - Diverso per venditore e acquirente */}
-        <View style={styles.priceBreakdown}>
+        <View style={styles.priceBreakdown} key={`price-${richiediFoderazione}`}>
           {isOwner ? (
             // VENDITORE: vede solo il prezzo annuncio e quanto riceverà
             <>
