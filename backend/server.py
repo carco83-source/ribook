@@ -9,7 +9,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import List, Optional
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import random
 import string
 import hashlib
@@ -18,6 +18,27 @@ import io
 import requests
 import re
 import httpx
+
+# Fuso orario Roma (CET/CEST)
+try:
+    from zoneinfo import ZoneInfo
+    ROME_TZ = ZoneInfo("Europe/Rome")
+except ImportError:
+    # Fallback per Python < 3.9
+    import pytz
+    ROME_TZ = pytz.timezone("Europe/Rome")
+
+def get_rome_time():
+    """Restituisce l'ora corrente nel fuso orario di Roma"""
+    return datetime.now(ROME_TZ)
+
+def utc_to_rome(dt):
+    """Converte datetime UTC a Roma"""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(ROME_TZ)
 
 # Book logic module for complex classification
 from book_logic import (
@@ -189,7 +210,7 @@ class User(BaseModel):
     total_purchases: int = 0  # Total books purchased
     rating: float = 0.0  # Average rating (0-5)
     rating_count: int = 0  # Number of ratings received
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=get_rome_time)
 
 # Review model
 class Review(BaseModel):
@@ -200,7 +221,7 @@ class Review(BaseModel):
     rating: int  # 1-5 stars
     comment: Optional[str] = None
     type: str  # "seller" or "buyer"
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=get_rome_time)
 
 class UserPublic(BaseModel):
     id: str
@@ -352,7 +373,7 @@ class BookListing(BaseModel):
     bookstore_ritiro_nome: Optional[str] = None
     # Codice transazione per ritiro
     codice_ritiro: Optional[str] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=get_rome_time)
 
 # Book Request (user looking for a book)
 class BookRequestCreate(BaseModel):
@@ -369,7 +390,7 @@ class BookRequest(BaseModel):
     book_materia: str
     book_classe: str
     stato: str = "cercando"  # cercando, trovato
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=get_rome_time)
 
 # Bookstore Models
 class BookstoreCreate(BaseModel):
@@ -390,7 +411,7 @@ class Bookstore(BaseModel):
     password_hash: str
     affiliazione_attiva: bool = True
     affiliazione_scadenza: Optional[datetime] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=get_rome_time)
     # Sistema credito cartolibreria
     credito_commissioni: float = 0.0  # Credito da commissioni libro
     credito_foderazione: float = 0.0  # Credito da foderazione
@@ -424,7 +445,7 @@ class Transaction(BaseModel):
     importo_venditore: float
     stato: str = "in_attesa_consegna"  # in_attesa_consegna, in_custodia, completato, annullato
     buyer_is_premium: bool
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=get_rome_time)
     consegnato_il: Optional[datetime] = None
     ritirato_il: Optional[datetime] = None
 
@@ -548,7 +569,7 @@ class PaymentIntent(BaseModel):
     amount: int  # in centesimi
     currency: str = "eur"
     status: str = "requires_payment_method"  # requires_payment_method, succeeded, canceled
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=get_rome_time)
 
 class Order(BaseModel):
     """Ordine con sistema escrow"""
@@ -595,7 +616,7 @@ class Order(BaseModel):
     status_history: List[dict] = Field(default_factory=list)
     
     # Date
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=get_rome_time)
     
     # Timer 1: Conferma venditore (24h)
     seller_confirmation_deadline: Optional[datetime] = None
@@ -643,7 +664,7 @@ class SellerBankAccount(BaseModel):
     account_holder_name: str
     iban: str
     is_verified: bool = False
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=get_rome_time)
     # In produzione: stripe_account_id per Stripe Connect
 
 # ============== BOOKSTORE REGISTRATION SYSTEM ==============
@@ -659,7 +680,7 @@ class BookstoreRegistrationRequest(BaseModel):
     telefono: Optional[str] = ""
     status: str = "pending"  # pending, approved, rejected
     generated_password: Optional[str] = None  # Password generata dall'admin
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=get_rome_time)
     approved_at: Optional[datetime] = None
     approved_by: Optional[str] = None  # admin user_id
 
@@ -10747,7 +10768,7 @@ class ChatMessage(BaseModel):
     message: Optional[str] = None
     foto_base64: Optional[str] = None
     read: bool = False
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=get_rome_time)
 
 class ChatConversation(BaseModel):
     listing_id: str
