@@ -14,6 +14,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import { authApi } from '../../src/utils/api';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:8001';
@@ -65,9 +66,9 @@ export default function CartScreen() {
       }
       setIsAnonymous(false);
 
-      // Carica ordini dell'utente
-      const response = await axios.get(`${API_URL}/api/user-orders/${storedUserId}`);
-      const allOrders = response.data.orders || [];
+      // Carica ordini dell'utente (usando API autenticata)
+      const response = await authApi.get(`/api/user-orders/${storedUserId}`);
+      const allOrders = response.orders || [];
       
       // Filtra solo ordini in attesa di pagamento DOVE L'UTENTE È L'ACQUIRENTE
       const ordersToPay = allOrders.filter((o: any) => 

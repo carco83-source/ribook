@@ -15,6 +15,7 @@ import { useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import { authApi } from '../../src/utils/api';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
@@ -84,9 +85,9 @@ export default function MyExchangesScreen() {
         return;
       }
 
-      const response = await axios.get(`${API_URL}/api/user-orders/${storedUserId}`);
-      console.log('[MyExchanges] API response:', JSON.stringify(response.data, null, 2));
-      const ordersData = response.data.orders || [];
+      const response = await authApi.get(`/api/user-orders/${storedUserId}`);
+      console.log('[MyExchanges] API response:', JSON.stringify(response, null, 2));
+      const ordersData = response.orders || [];
       console.log('[MyExchanges] Orders count:', ordersData.length);
       setOrders(ordersData);
     } catch (error) {

@@ -16,6 +16,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import { authApi } from '../../src/utils/api';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -101,10 +102,10 @@ export default function ProfileScreen() {
       const statsRes = await axios.get(`${API_URL}/api/users/${userId}/stats`);
       setStats(statsRes.data);
 
-      // Get user orders (I Miei Scambi) - usa il nuovo endpoint
+      // Get user orders (I Miei Scambi) - usa l'API autenticata
       try {
-        const ordersRes = await axios.get(`${API_URL}/api/user-orders/${userId}`);
-        const orders = ordersRes.data.orders || [];
+        const ordersRes = await authApi.get(`/api/user-orders/${userId}`);
+        const orders = ordersRes.orders || [];
         // Converti gli ordini nel formato transactions per compatibilità
         setTransactions({
           acquisti: orders.filter((o: any) => o.buyer_id === userId),

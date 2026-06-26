@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form, Query
+from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form, Query, Depends, Header
 from fastapi.responses import StreamingResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -82,6 +82,124 @@ app = FastAPI(title="ScambiaLibri API")
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
+
+# ============== FUNZIONE DI AUTENTICAZIONE (SECURITY FIX) ==============
+
+async def verify_user_auth(
+    path_user_id: str,
+    authorization: Optional[str] = Header(None, alias="Authorization")
+) -> str:
+    """
+    Verifica che l'utente autenticato sia autorizzato ad accedere ai dati di path_user_id.
+    Usata come dipendenza negli endpoint che richiedono autenticazione.
+    
+    Raises:
+        HTTPException 401: Token mancante o non valido
+        HTTPException 403: Utente non autorizzato ad accedere a questi dati
+    """
+    if not authorization:
+        raise HTTPException(
+            status_code=401, 
+            detail="Autenticazione richiesta. Effettua il login."
+        )
+    
+    # Estrai token dal Bearer
+    if authorization.startswith("Bearer "):
+        token = authorization[7:]
+    else:
+        token = authorization
+    
+    if not token or token == "null" or token == "undefined":
+        raise HTTPException(
+            status_code=401, 
+            detail="Token non valido. Effettua nuovamente il login."
+        )
+    
+    # Cerca sessione nel database
+    session = await db.user_sessions.find_one({"session_token": token})
+    if not session:
+        raise HTTPException(
+            status_code=401, 
+            detail="Sessione non valida o scaduta. Effettua nuovamente il login."
+        )
+    
+    # Verifica scadenza
+    expires_at_str = session.get("expires_at", "")
+    if expires_at_str:
+        try:
+            if isinstance(expires_at_str, str):
+                expires_at = datetime.fromisoformat(expires_at_str.replace("Z", "+00:00"))
+            else:
+                expires_at = expires_at_str
+            
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+            
+            if datetime.now(timezone.utc) > expires_at:
+                await db.user_sessions.delete_one({"session_token": token})
+                raise HTTPException(
+                    status_code=401, 
+                    detail="Sessione scaduta. Effettua nuovamente il login."
+                )
+        except (ValueError, TypeError):
+            pass
+    
+    # Verifica che l'utente autenticato corrisponda a quello richiesto
+    authenticated_user_id = session.get("user_id")
+    if authenticated_user_id != path_user_id:
+        raise HTTPException(
+            status_code=403, 
+            detail="Non sei autorizzato ad accedere a questi dati."
+        )
+    
+    return authenticated_user_id
+
+
+async def get_authenticated_user(
+    authorization: Optional[str] = Header(None, alias="Authorization")
+) -> dict:
+    """
+    Ottiene l'utente autenticato dal token.
+    Usata quando non c'è user_id nel path ma serve comunque autenticazione.
+    """
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Autenticazione richiesta")
+    
+    if authorization.startswith("Bearer "):
+        token = authorization[7:]
+    else:
+        token = authorization
+    
+    if not token or token == "null" or token == "undefined":
+        raise HTTPException(status_code=401, detail="Token non valido")
+    
+    session = await db.user_sessions.find_one({"session_token": token})
+    if not session:
+        raise HTTPException(status_code=401, detail="Sessione non valida")
+    
+    # Verifica scadenza
+    expires_at_str = session.get("expires_at", "")
+    if expires_at_str:
+        try:
+            if isinstance(expires_at_str, str):
+                expires_at = datetime.fromisoformat(expires_at_str.replace("Z", "+00:00"))
+            else:
+                expires_at = expires_at_str
+            
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+            
+            if datetime.now(timezone.utc) > expires_at:
+                await db.user_sessions.delete_one({"session_token": token})
+                raise HTTPException(status_code=401, detail="Sessione scaduta")
+        except (ValueError, TypeError):
+            pass
+    
+    user = await db.users.find_one({"id": session["user_id"]}, {"_id": 0, "password_hash": 0})
+    if not user:
+        raise HTTPException(status_code=401, detail="Utente non trovato")
+    
+    return {"user_id": user["id"], "user": user}
 
 # ============== MODELS ==============
 
@@ -2257,8 +2375,15 @@ async def create_listing(listing_data: BookListingCreate, user_id: str = Query(.
 
 # Endpoint per le notifiche
 @api_router.get("/notifications/{user_id}")
-async def get_notifications(user_id: str, limit: int = 50):
-    """Recupera le notifiche per un utente"""
+async def get_notifications(
+    user_id: str, 
+    limit: int = 50,
+    authorization: Optional[str] = Header(None, alias="Authorization")
+):
+    """Recupera le notifiche per un utente - RICHIEDE AUTENTICAZIONE"""
+    # Verifica autenticazione
+    await verify_user_auth(user_id, authorization)
+    
     notifications = await db.notifications.find(
         {"user_id": user_id}
     ).sort("created_at", -1).limit(limit).to_list(limit)
@@ -2506,11 +2631,18 @@ async def process_completed_orders():
 
 
 @api_router.get("/notifications/check-expired/{user_id}")
-async def check_expired_for_user(user_id: str):
+async def check_expired_for_user(
+    user_id: str,
+    authorization: Optional[str] = Header(None, alias="Authorization")
+):
     """
     Controlla e processa le notifiche scadute per un utente specifico.
     Chiamato quando l'utente apre l'app per aggiornare lo stato.
+    RICHIEDE AUTENTICAZIONE
     """
+    # Verifica autenticazione
+    await verify_user_auth(user_id, authorization)
+    
     from datetime import datetime
     
     now = datetime.utcnow()
@@ -6900,8 +7032,14 @@ async def add_to_cart(listing_id: str, bookstore_id: str, buyer_id: str, include
 
 
 @api_router.get("/cart/{user_id}")
-async def get_cart(user_id: str):
-    """Ottiene il carrello dell'utente con lo stato di ogni libro"""
+async def get_cart(
+    user_id: str,
+    authorization: Optional[str] = Header(None, alias="Authorization")
+):
+    """Ottiene il carrello dell'utente con lo stato di ogni libro - RICHIEDE AUTENTICAZIONE"""
+    # Verifica autenticazione
+    await verify_user_auth(user_id, authorization)
+    
     from datetime import timedelta
     
     now = datetime.utcnow()
@@ -8463,8 +8601,13 @@ async def confirm_pickup(order_id: str, user_id: str = Query(...)):
     }
 
 @api_router.get("/user-orders/{user_id}")
-async def get_user_orders(user_id: str):
-    """Ottieni tutti gli ordini di un utente (come acquirente o venditore)"""
+async def get_user_orders(
+    user_id: str,
+    authorization: Optional[str] = Header(None, alias="Authorization")
+):
+    """Ottieni tutti gli ordini di un utente (come acquirente o venditore) - RICHIEDE AUTENTICAZIONE"""
+    # Verifica autenticazione
+    await verify_user_auth(user_id, authorization)
     
     orders = await db.orders.find({
         "$or": [{"buyer_id": user_id}, {"seller_id": user_id}]
@@ -11255,8 +11398,14 @@ async def create_or_get_conversation(data: ConversationCreate):
 
 
 @api_router.get("/conversations/{user_id}")
-async def get_user_conversations(user_id: str):
-    """Get all conversations for a user (as buyer or seller)"""
+async def get_user_conversations(
+    user_id: str,
+    authorization: Optional[str] = Header(None, alias="Authorization")
+):
+    """Get all conversations for a user (as buyer or seller) - RICHIEDE AUTENTICAZIONE"""
+    # Verifica autenticazione
+    await verify_user_auth(user_id, authorization)
+    
     conversations = await db.conversations.find({
         "$or": [
             {"buyer_id": user_id},

@@ -13,7 +13,7 @@ import {
 import { useRouter, Stack, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import axios from 'axios';
+import { authApi } from '../src/utils/api';
 import QRCode from 'react-native-qrcode-svg';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
@@ -120,7 +120,7 @@ export default function NotificationsScreen() {
   const handleProceedToPayment = async (notification: Notification) => {
     // Segna la notifica come "usata" nel backend
     try {
-      await axios.put(`${API_URL}/api/notifications/${notification.id}/mark-used`);
+      await authApi.put(`/api/notifications/${notification.id}/mark-used`);
       // Aggiorna lo stato locale - rimuovi la notifica dalla lista o marcala come usata
       setNotifications(prev => prev.map(n => 
         n.id === notification.id ? { ...n, used: true, read: true } : n
@@ -141,9 +141,9 @@ export default function NotificationsScreen() {
       if (storedUserId) {
         // Try to load from API, fall back to generated notifications
         try {
-          const response = await axios.get(`${API_URL}/api/notifications/${storedUserId}`);
+          const response = await authApi.get(`/api/notifications/${storedUserId}`);
           // API returns { notifications: [...], unread_count: N }
-          const apiNotifications = response.data.notifications || response.data || [];
+          const apiNotifications = response.notifications || response || [];
           // Ordina per data decrescente (più recenti prima)
           const sortedNotifications = apiNotifications.sort((a: Notification, b: Notification) => {
             const dateA = new Date(a.created_at).getTime();
@@ -184,9 +184,9 @@ export default function NotificationsScreen() {
           setNotifications(prev => {
             const toMarkRead = prev.filter(n => !n.read && autoReadTypes.includes(n.type));
             
-            // Marca come lette sul server
+            // Marca come lette sul server (usando API autenticata)
             toMarkRead.forEach(n => {
-              axios.put(`${API_URL}/api/notifications/${n.id}/read`).catch(console.error);
+              authApi.put(`/api/notifications/${n.id}/read`).catch(console.error);
             });
             
             // Aggiorna stato locale
@@ -204,7 +204,7 @@ export default function NotificationsScreen() {
   const handleNotificationPress = (notification: Notification) => {
     // Segna la notifica come letta
     if (!notification.read && userId) {
-      axios.put(`${API_URL}/api/notifications/${notification.id}/read`).catch(console.error);
+      authApi.put(`/api/notifications/${notification.id}/read`).catch(console.error);
       // Aggiorna lo stato locale
       setNotifications(prev => prev.map(n => 
         n.id === notification.id ? { ...n, read: true } : n
