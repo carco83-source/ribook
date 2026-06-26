@@ -9907,7 +9907,7 @@ async def get_bookstore_dashboard(bookstore_id: str):
             "da_ritirare": len(orders_da_ritirare),
             "completati_oggi": len(completati_oggi),
             "completati_mese": len(completati_mese),
-            "resi_in_attesa": len([o for o in orders_resi if o.get("status") in ["return_requested", "reso_richiesto"]]),
+            "resi_in_attesa": len([o for o in orders_resi if o.get("status") in ["return_requested", "reso_richiesto", "in_verifica_reso"]]),
             "ordini_scaduti": ordini_scaduti,
             "guadagno_oggi": round(guadagno_libri_oggi + guadagno_foderazione_oggi, 2),
             "guadagno_mese": round(guadagno_libri_mese + guadagno_foderazione_mese, 2),
