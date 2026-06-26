@@ -62,6 +62,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: string
   reso_accettato: { label: 'Reso accettato', color: '#4CAF50', icon: 'checkmark-done-outline', bgColor: '#E8F5E9' },
   reso_rifiutato: { label: 'Reso rifiutato', color: '#f44336', icon: 'close-outline', bgColor: '#FFEBEE' },
   cancelled: { label: 'Annullato', color: '#f44336', icon: 'close-circle-outline', bgColor: '#FFEBEE' },
+  annullato_acquirente: { label: 'Annullato', color: '#f44336', icon: 'close-circle-outline', bgColor: '#FFEBEE' },
   refunded: { label: 'Rimborsato', color: '#f44336', icon: 'refresh-outline', bgColor: '#FFEBEE' },
 };
 
@@ -191,6 +192,39 @@ export default function MyExchangesScreen() {
     }
   };
 
+  // Acquirente annulla ordine
+  const handleBuyerCancel = async (order: Order) => {
+    Alert.alert(
+      '❌ Annulla ordine',
+      `Sei sicuro di voler annullare l'ordine per "${order.book_titolo}"?\n\nIl libro tornerà disponibile nel marketplace.`,
+      [
+        { text: 'No, mantieni', style: 'cancel' },
+        {
+          text: 'Sì, annulla',
+          style: 'destructive',
+          onPress: async () => {
+            setActionLoading(true);
+            try {
+              const response = await authApi.post(
+                `/api/orders/${order.id}/buyer-cancel?user_id=${userId}&reason=Annullato dall'acquirente`
+              );
+              Alert.alert(
+                '✅ Ordine annullato',
+                'L\'ordine è stato annullato. Il libro è tornato disponibile.',
+                [{ text: 'OK', onPress: () => loadOrders() }]
+              );
+            } catch (error: any) {
+              console.error('Cancel error:', error.response?.data || error.message);
+              Alert.alert('Errore', error.response?.data?.detail || 'Impossibile annullare l\'ordine');
+            } finally {
+              setActionLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const getStatusConfig = (status: string) => {
     return STATUS_CONFIG[status] || { label: status, color: '#888', icon: 'help-outline', bgColor: '#f5f5f5' };
   };
@@ -243,6 +277,14 @@ export default function MyExchangesScreen() {
     
     // Pronto per ritiro - mostra info all'acquirente
     const isReadyForPickup = isBuyer && (item.status === 'pronto_per_ritiro' || item.status === 'ready_for_pickup');
+    
+    // L'acquirente può annullare l'ordine PRIMA della consegna
+    const canBuyerCancel = isBuyer && [
+      'in_attesa_conferma_venditore',
+      'pending_seller_confirmation',
+      'in_attesa_pagamento',
+      'pending_payment'
+    ].includes(item.status);
     
     // L'acquirente può richiedere reso per ordini ritirato O pronto_per_ritiro (per test)
     const canRequestReturn = isBuyer && (
@@ -310,19 +352,42 @@ export default function MyExchangesScreen() {
 
         {/* Azione pagamento acquirente */}
         {needsBuyerPayment && (
+          <View>
+            <TouchableOpacity
+              style={[styles.payButton, actionLoading && styles.payButtonDisabled]}
+              onPress={() => handlePayOrder(item)}
+              disabled={actionLoading}
+            >
+              {actionLoading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="card" size={20} color="#fff" />
+                  <Text style={styles.payButtonText}>Paga €{item.totale_acquirente.toFixed(2)}</Text>
+                </>
+              )}
+            </TouchableOpacity>
+            {/* Pulsante Annulla per acquirente */}
+            <TouchableOpacity
+              style={styles.cancelOrderButton}
+              onPress={() => handleBuyerCancel(item)}
+              disabled={actionLoading}
+            >
+              <Ionicons name="close-circle-outline" size={18} color="#f44336" />
+              <Text style={styles.cancelOrderButtonText}>Annulla ordine</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Pulsante Annulla per ordini in attesa conferma venditore */}
+        {canBuyerCancel && !needsBuyerPayment && (
           <TouchableOpacity
-            style={[styles.payButton, actionLoading && styles.payButtonDisabled]}
-            onPress={() => handlePayOrder(item)}
+            style={styles.cancelOrderButton}
+            onPress={() => handleBuyerCancel(item)}
             disabled={actionLoading}
           >
-            {actionLoading ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <>
-                <Ionicons name="card" size={20} color="#fff" />
-                <Text style={styles.payButtonText}>Paga €{item.totale_acquirente.toFixed(2)}</Text>
-              </>
-            )}
+            <Ionicons name="close-circle-outline" size={18} color="#f44336" />
+            <Text style={styles.cancelOrderButtonText}>Annulla ordine</Text>
           </TouchableOpacity>
         )}
 
@@ -823,5 +888,23 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#666',
     fontStyle: 'italic',
+  },
+  // Pulsante annulla ordine
+  cancelOrderButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    marginTop: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#f44336',
+    backgroundColor: '#fff',
+    gap: 6,
+  },
+  cancelOrderButtonText: {
+    color: '#f44336',
+    fontSize: 14,
+    fontWeight: '500',
   },
 });

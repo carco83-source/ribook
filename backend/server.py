@@ -793,7 +793,8 @@ ORDER_STATES = {
     
     # Altri stati
     "cancelled": "Annullato",
-    "refunded": "Rimborsato"
+    "refunded": "Rimborsato",
+    "annullato_acquirente": "Annullato dall'acquirente",
 }
 
 # Timer automatici
@@ -8034,6 +8035,86 @@ async def seller_reject_order(order_id: str, user_id: str = Query(...), reason: 
         "success": True,
         "status": "annullato_non_disponibile",
         "message": "Ordine rifiutato. Il libro è tornato disponibile nel marketplace."
+    }
+
+@api_router.post("/orders/{order_id}/buyer-cancel")
+async def buyer_cancel_order(order_id: str, user_id: str = Query(...), reason: str = Query(default="")):
+    """
+    Annulla un ordine da parte dell'acquirente.
+    Possibile solo PRIMA della consegna alla cartolibreria:
+    - in_attesa_conferma_venditore
+    - in_attesa_pagamento
+    """
+    
+    order = await db.orders.find_one({"id": order_id, "buyer_id": user_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="Ordine non trovato")
+    
+    current_status = order.get("status")
+    
+    # Stati in cui l'acquirente può annullare
+    cancellable_states = [
+        "in_attesa_conferma_venditore",
+        "in_attesa_pagamento", 
+        "pending_payment",
+        "pending_seller_confirmation"
+    ]
+    
+    if current_status not in cancellable_states:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Non puoi annullare questo ordine. Stato attuale: {ORDER_STATES.get(current_status, current_status)}"
+        )
+    
+    now = get_rome_time()
+    
+    # Aggiorna stato ordine
+    update_data = {
+        "status": "annullato_acquirente",
+        "cancelled_at": now.isoformat(),
+        "cancelled_by": "buyer",
+        "cancel_reason": reason or "Annullato dall'acquirente",
+        "status_history": order.get("status_history", []) + [{
+            "status": "annullato_acquirente",
+            "timestamp": now.isoformat(),
+            "note": f"Annullato dall'acquirente: {reason or 'Nessun motivo specificato'}"
+        }]
+    }
+    
+    await db.orders.update_one({"id": order_id}, {"$set": update_data})
+    
+    # Rimetti il listing come disponibile
+    await db.listings.update_one(
+        {"id": order.get("listing_id")},
+        {"$set": {"status": "available", "stato": "disponibile"}, "$unset": {"reserved_by": "", "order_id": ""}}
+    )
+    
+    # Elimina le notifiche relative a questo ordine
+    await db.notifications.delete_many({
+        "order_id": order_id,
+        "type": {"$in": ["seller_confirmation_request", "ready_for_payment", "order_pending"]}
+    })
+    
+    # Genera codice anonimo per l'acquirente
+    buyer_code = f"Utente_{order.get('buyer_id', '')[:5].upper()}"
+    
+    # Notifica al venditore
+    notification = {
+        "id": str(uuid.uuid4()),
+        "user_id": order.get("seller_id"),
+        "type": "order_cancelled_by_buyer",
+        "title": "Ordine annullato",
+        "message": f"L'acquirente {buyer_code} ha annullato l'ordine per:\n📚 {order.get('book_titolo')}\n\nIl libro è tornato disponibile nel marketplace.",
+        "order_id": order_id,
+        "read": False,
+        "created_at": now.isoformat()
+    }
+    await db.notifications.insert_one(notification)
+    
+    return {
+        "success": True,
+        "status": "annullato_acquirente",
+        "message": "Ordine annullato con successo. Il libro è tornato disponibile nel marketplace."
     }
 
 # ============== STRIPE PAYMENT ENDPOINTS ==============
