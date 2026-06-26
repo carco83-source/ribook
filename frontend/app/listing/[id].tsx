@@ -330,9 +330,10 @@ export default function ListingDetailScreen() {
   };
 
   const getPercentageLabel = (percentage: number): string => {
+    // Valori salvati: 0=Nessuna, 33.33=Poche, 66.66=Diverse, 100=Molte
     if (percentage === 0) return 'Nessuna';
-    if (percentage <= 33) return 'Poche';
-    if (percentage <= 66) return 'Diverse';
+    if (percentage <= 35) return 'Poche';
+    if (percentage <= 70) return 'Diverse';
     return 'Molte';
   };
 

@@ -616,15 +616,15 @@ export default function SearchSellScreen() {
                   }}
                 />
                 <View style={styles.bookInfo}>
-                  <Text style={styles.bookTitle} numberOfLines={2}>{vendiBook.titolo}</Text>
-                  {vendiBook.autori && <Text style={styles.bookAuthor}>{vendiBook.autori}</Text>}
-                  <Text style={styles.bookIsbn}>ISBN: {vendiBook.isbn}</Text>
-                  {vendiBook.prezzo_copertina && vendiBook.prezzo_copertina > 0 && (
+                  <Text style={styles.bookTitle} numberOfLines={2}>{vendiBook.titolo || ''}</Text>
+                  {vendiBook.autori ? <Text style={styles.bookAuthor}>{vendiBook.autori}</Text> : null}
+                  <Text style={styles.bookIsbn}>ISBN: {vendiBook.isbn || ''}</Text>
+                  {vendiBook.prezzo_copertina && vendiBook.prezzo_copertina > 0 ? (
                     <View style={styles.bookPriceRow}>
                       <Text style={styles.bookPriceLabel}>Prezzo copertina: </Text>
                       <Text style={styles.bookPriceValue}>€{vendiBook.prezzo_copertina.toFixed(2)}</Text>
                     </View>
-                  )}
+                  ) : null}
                 </View>
                 <TouchableOpacity style={styles.actionButton} onPress={goToSellBook}>
                   <Text style={styles.actionButtonText}>Vendi</Text>
