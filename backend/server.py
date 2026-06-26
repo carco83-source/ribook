@@ -7717,6 +7717,53 @@ async def confirm_payment(order_id: str, user_id: str = Query(...)):
     except stripe.error.StripeError as e:
         raise HTTPException(status_code=400, detail=f"Errore Stripe: {str(e)}")
 
+class StripePaymentRequest(BaseModel):
+    payment_intent_id: str
+    card_number: str
+    exp_month: int
+    exp_year: int
+    cvc: str
+
+@api_router.post("/orders/{order_id}/confirm-stripe-payment")
+async def confirm_stripe_payment(order_id: str, payment_data: StripePaymentRequest, user_id: str = Query(...)):
+    """Conferma il pagamento Stripe con i dati della carta"""
+    
+    order = await db.orders.find_one({"id": order_id, "buyer_id": user_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="Ordine non trovato")
+    
+    try:
+        # Crea un PaymentMethod con i dati della carta
+        payment_method = stripe.PaymentMethod.create(
+            type="card",
+            card={
+                "number": payment_data.card_number,
+                "exp_month": payment_data.exp_month,
+                "exp_year": payment_data.exp_year,
+                "cvc": payment_data.cvc,
+            },
+        )
+        
+        # Conferma il PaymentIntent con il PaymentMethod
+        intent = stripe.PaymentIntent.confirm(
+            payment_data.payment_intent_id,
+            payment_method=payment_method.id,
+        )
+        
+        # Verifica lo stato
+        if intent.status in ["requires_capture", "succeeded"]:
+            # Pagamento riuscito! Procedi con l'ordine
+            result = await _process_paid_order(order_id, user_id, order, payment_data.payment_intent_id)
+            return {"success": True, "message": "Pagamento completato", **result}
+        else:
+            return {"success": False, "message": f"Pagamento non completato. Stato: {intent.status}"}
+            
+    except stripe.error.CardError as e:
+        # Errore della carta (es. fondi insufficienti, carta scaduta)
+        return {"success": False, "message": f"Errore carta: {e.user_message}"}
+    except stripe.error.StripeError as e:
+        raise HTTPException(status_code=400, detail=f"Errore Stripe: {str(e)}")
+
 @api_router.post("/orders/{order_id}/pay")
 async def pay_order(order_id: str, user_id: str = Query(...)):
     """Fallback: Simula il pagamento (per test/dev) o conferma pagamento Stripe"""
