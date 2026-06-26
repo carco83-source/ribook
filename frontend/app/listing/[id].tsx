@@ -543,6 +543,9 @@ export default function ListingDetailScreen() {
   // Verifica se l'utente corrente è il venditore
   const isOwner = userId && listing?.seller_id === userId;
   
+  // Debug isOwner
+  console.log('[DEBUG] userId:', userId, 'seller_id:', listing?.seller_id, 'isOwner:', isOwner);
+  
   // Prezzo da mostrare: venditore vede il suo prezzo, acquirente vede il totale
   const displayPrice = isOwner ? total : getListingBuyerPrice(listing, richiediFoderazione);
 
@@ -992,8 +995,8 @@ export default function ListingDetailScreen() {
           </View>
         )}
 
-        {/* Opzione Foderazione - appare quando una cartolibreria è selezionata */}
-        {selectedBookstore && (
+        {/* Opzione Foderazione - appare solo per ACQUIRENTI quando una cartolibreria è selezionata */}
+        {selectedBookstore && !isOwner && (
           <>
             <TouchableOpacity 
               style={styles.foderaturaCard}
