@@ -133,6 +133,9 @@ export default function BookstorePanelScreen() {
         axios.get(`${API_URL}/api/bookstore/${bsId}/returns`),
       ]);
       
+      console.log('[Bookstore] Stats loaded:', statsRes.data);
+      console.log('[Bookstore] Returns loaded:', returnsRes.data);
+      
       setStats(statsRes.data);
       setPendingDeliveries(pendingRes.data || []);
       setDeliveredOrders(deliveredRes.data || []);
@@ -587,7 +590,9 @@ export default function BookstorePanelScreen() {
                     </View>
                   </View>
                   <Text style={styles.orderTitle} numberOfLines={2}>{order.book_titolo}</Text>
-                  <Text style={styles.orderPrice}>€{order.prezzo_acquirente?.toFixed(2)}</Text>
+                  {order.prezzo_acquirente != null && (
+                    <Text style={styles.orderPrice}>€{order.prezzo_acquirente.toFixed(2)}</Text>
+                  )}
                   
                   {/* Motivazione reso */}
                   {order.return_reason && (
