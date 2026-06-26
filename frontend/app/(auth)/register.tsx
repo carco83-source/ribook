@@ -15,6 +15,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import { secureSet, STORAGE_KEYS } from '../../src/utils/secureStorage';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -143,8 +144,10 @@ export default function RegisterScreen() {
         }
       }
 
-      // Salva i dati dell'utente
-      await AsyncStorage.setItem('user_id', user_id);
+      // Salva i dati dell'utente in modo sicuro
+      await secureSet(STORAGE_KEYS.USER_ID, user_id);
+      
+      // Dati non sensibili in AsyncStorage
       await AsyncStorage.setItem('username', username);
       await AsyncStorage.setItem('user_nome', nome.trim());
       await AsyncStorage.setItem('is_premium', 'false');

@@ -83,6 +83,37 @@ app = FastAPI(title="ScambiaLibri API")
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
+# ============== HELPER FUNCTIONS (PRIVACY & SECURITY) ==============
+
+def mask_iban(iban: str) -> str:
+    """
+    Maschera un IBAN per la privacy.
+    Esempio: IT60X0542811101000000127339 -> IT60****7339
+    """
+    if not iban or len(iban) < 8:
+        return iban or ""
+    # Mostra i primi 4 caratteri (codice paese + check digits) e gli ultimi 4
+    return f"{iban[:4]}****{iban[-4:]}"
+
+def sanitize_user_response(user: dict, show_full_iban: bool = False) -> dict:
+    """
+    Rimuove/maschera i dati sensibili da una risposta utente.
+    - Rimuove password_hash
+    - Maschera IBAN (a meno che show_full_iban=True)
+    """
+    if not user:
+        return user
+    
+    user.pop("_id", None)
+    user.pop("password_hash", None)
+    
+    # Maschera IBAN se presente
+    if "iban" in user and user["iban"] and not show_full_iban:
+        user["iban_masked"] = mask_iban(user["iban"])
+        user["iban"] = ""  # Non esporre l'IBAN completo
+    
+    return user
+
 # ============== FUNZIONE DI AUTENTICAZIONE (SECURITY FIX) ==============
 
 async def verify_user_auth(
@@ -1179,10 +1210,8 @@ async def get_user(user_id: str):
     user = await db.users.find_one({"id": user_id})
     if not user:
         raise HTTPException(status_code=404, detail="Utente non trovato")
-    # Return full user data including profili_figli
-    user.pop("_id", None)
-    user.pop("password_hash", None)
-    return user
+    # Applica sanitizzazione per proteggere i dati sensibili (IBAN mascherato)
+    return sanitize_user_response(dict(user))
 
 
 class UpdateUserRequest(BaseModel):

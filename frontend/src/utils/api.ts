@@ -3,26 +3,15 @@
  * Tutte le chiamate API a endpoint protetti devono usare queste funzioni
  */
 import axios, { AxiosRequestConfig } from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as SecureStore from 'expo-secure-store';
-import { Platform } from 'react-native';
+import { secureGet, STORAGE_KEYS } from './secureStorage';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
 /**
- * Recupera il token di sessione dallo storage
+ * Recupera il token di sessione dallo storage sicuro
  */
 export const getSessionToken = async (): Promise<string | null> => {
-  try {
-    if (Platform.OS === 'web') {
-      return localStorage.getItem('session_token');
-    } else {
-      return await SecureStore.getItemAsync('session_token');
-    }
-  } catch (error) {
-    console.error('Errore recupero token:', error);
-    return null;
-  }
+  return await secureGet(STORAGE_KEYS.SESSION_TOKEN);
 };
 
 /**

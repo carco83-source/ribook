@@ -19,7 +19,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
-import * as SecureStore from 'expo-secure-store';
+import { secureSet, STORAGE_KEYS } from '../../src/utils/secureStorage';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
@@ -144,15 +144,11 @@ export default function LoginScreen() {
       console.log('[Google OAuth] Backend response:', data);
       
       if (data.success) {
-        // Salva token in SecureStore (mobile) o localStorage (web)
-        if (Platform.OS === 'web') {
-          localStorage.setItem('session_token', data.session_token);
-        } else {
-          await SecureStore.setItemAsync('session_token', data.session_token);
-        }
+        // Salva token e user_id in modo sicuro (SecureStore su mobile, localStorage su web)
+        await secureSet(STORAGE_KEYS.SESSION_TOKEN, data.session_token);
+        await secureSet(STORAGE_KEYS.USER_ID, data.user_id);
         
-        // Salva dati utente in AsyncStorage per compatibilità
-        await AsyncStorage.setItem('user_id', data.user_id);
+        // Salva dati utente non sensibili in AsyncStorage per compatibilità
         await AsyncStorage.setItem('username', data.username);
         await AsyncStorage.setItem('user_nome', data.nome || data.username);
         await AsyncStorage.setItem('is_premium', data.is_premium ? 'true' : 'false');
@@ -219,7 +215,11 @@ export default function LoginScreen() {
       });
 
       console.log('[Login] Response:', response.data);
-      await AsyncStorage.setItem('user_id', response.data.user_id);
+      // Salva dati sensibili in modo sicuro
+      await secureSet(STORAGE_KEYS.USER_ID, response.data.user_id);
+      await secureSet(STORAGE_KEYS.SESSION_TOKEN, response.data.session_token || '');
+      
+      // Dati non sensibili in AsyncStorage
       await AsyncStorage.setItem('username', response.data.username);
       await AsyncStorage.setItem('user_nome', response.data.nome);
       await AsyncStorage.setItem('is_premium', response.data.is_premium.toString());
