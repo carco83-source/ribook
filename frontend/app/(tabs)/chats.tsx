@@ -16,6 +16,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { useNotifications } from '../../context/NotificationContext';
 import QRCode from 'react-native-qrcode-svg';
+import { authApi } from '../../src/utils/api';
+import { secureGet, STORAGE_KEYS } from '../../src/utils/secureStorage';
 
 const API_BASE = process.env.EXPO_PUBLIC_BACKEND_URL 
   ? `${process.env.EXPO_PUBLIC_BACKEND_URL}/api`
@@ -80,46 +82,41 @@ export default function MessaggiScreen() {
   const [isAnonymous, setIsAnonymous] = useState(false);
 
   const loadData = async () => {
-    const storedUserId = await AsyncStorage.getItem('user_id');
+    const storedUserId = await secureGet(STORAGE_KEYS.USER_ID);
+    console.log('[Chats] Loading data for user:', storedUserId);
+    
     if (!storedUserId) {
       setIsAnonymous(true);
       setLoading(false);
       return;
     }
     setIsAnonymous(false);
+    setUserId(storedUserId);
+    
     try {
-      const storedUserId = await AsyncStorage.getItem('user_id');
-      setUserId(storedUserId);
-
-      if (!storedUserId) {
-        setLoading(false);
-        return;
-      }
-
-      // Carica conversazioni
-      const convResponse = await fetch(`${API_BASE}/conversations/${storedUserId}`);
-      if (convResponse.ok) {
-        const data = await convResponse.json();
-        setConversations(data.conversations || []);
-        // Calcola messaggi non letti
-        const totalUnread = (data.conversations || []).reduce((sum: number, conv: any) => sum + (conv.unread_count || 0), 0);
-        setUnreadMessages(totalUnread);
-      }
-
-      // Carica notifiche
+      // Carica conversazioni (usando API autenticata)
       try {
-        const notifResponse = await fetch(`${API_BASE}/notifications/${storedUserId}`);
-        if (notifResponse.ok) {
-          const notifData = await notifResponse.json();
-          setNotifications(notifData.notifications || []);
-          setUnreadNotifications(notifData.unread_count || 0);
-        }
-      } catch (error) {
-        // Endpoint notifiche potrebbe non esistere ancora
-        console.log('Notifications endpoint not available');
+        const convData = await authApi.get(`/api/conversations/${storedUserId}`);
+        console.log('[Chats] Conversations loaded:', convData.conversations?.length || 0);
+        setConversations(convData.conversations || []);
+        // Calcola messaggi non letti
+        const totalUnread = (convData.conversations || []).reduce((sum: number, conv: any) => sum + (conv.unread_count || 0), 0);
+        setUnreadMessages(totalUnread);
+      } catch (error: any) {
+        console.log('[Chats] Error loading conversations:', error.message);
+      }
+
+      // Carica notifiche (usando API autenticata)
+      try {
+        const notifData = await authApi.get(`/api/notifications/${storedUserId}`);
+        console.log('[Chats] Notifications loaded:', notifData.notifications?.length || 0);
+        setNotifications(notifData.notifications || []);
+        setUnreadNotifications(notifData.unread_count || 0);
+      } catch (error: any) {
+        console.log('[Chats] Error loading notifications:', error.message);
       }
     } catch (error) {
-      console.error('Error loading data:', error);
+      console.error('[Chats] Error loading data:', error);
     } finally {
       setLoading(false);
       setRefreshing(false);
