@@ -2,11 +2,10 @@
  * Secure Storage Utility
  * Gestisce lo storage sicuro per token e dati sensibili
  * 
- * - Web: Usa localStorage (con fallback)
- * - Mobile: Usa expo-secure-store (crittografato)
+ * NOTA: Per massima compatibilità con Expo Go, usiamo AsyncStorage
+ * con fallback a localStorage su web.
  */
 import { Platform } from 'react-native';
-import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Chiavi per lo storage
@@ -18,101 +17,49 @@ export const STORAGE_KEYS = {
 
 /**
  * Salva un valore in modo sicuro
- * @param key - Chiave di storage
- * @param value - Valore da salvare
  */
 export const secureSet = async (key: string, value: string): Promise<void> => {
   try {
     if (Platform.OS === 'web') {
-      // Web: usa localStorage
       localStorage.setItem(key, value);
     } else {
-      // Mobile: usa SecureStore (crittografato)
-      await SecureStore.setItemAsync(key, value);
-    }
-  } catch (error) {
-    console.error(`Errore salvataggio sicuro per ${key}:`, error);
-    // Fallback ad AsyncStorage se SecureStore fallisce
-    try {
       await AsyncStorage.setItem(key, value);
-    } catch (fallbackError) {
-      console.error(`Anche fallback AsyncStorage fallito per ${key}:`, fallbackError);
-      throw fallbackError;
     }
+    console.log(`[SecureStorage] Saved ${key}`);
+  } catch (error) {
+    console.error(`[SecureStorage] Error saving ${key}:`, error);
+    throw error;
   }
 };
 
 /**
- * Recupera un valore dallo storage sicuro
- * @param key - Chiave di storage
- * @returns Valore recuperato o null
+ * Recupera un valore dallo storage
  */
 export const secureGet = async (key: string): Promise<string | null> => {
   try {
     if (Platform.OS === 'web') {
-      // Web: prova prima localStorage
-      const localValue = localStorage.getItem(key);
-      if (localValue) return localValue;
-      
-      // Fallback: prova anche AsyncStorage per compatibilità retroattiva
-      try {
-        const asyncValue = await AsyncStorage.getItem(key);
-        if (asyncValue) {
-          // Migra a localStorage
-          localStorage.setItem(key, asyncValue);
-          console.log(`[SecureStorage] Migrato ${key} da AsyncStorage a localStorage`);
-          return asyncValue;
-        }
-      } catch (e) {
-        // AsyncStorage non disponibile su web, ignora
-      }
-      
-      return null;
+      return localStorage.getItem(key);
     } else {
-      // Prima prova SecureStore
-      const secureValue = await SecureStore.getItemAsync(key);
-      if (secureValue) return secureValue;
-      
-      // Se non trovato in SecureStore, prova AsyncStorage (migrazione)
-      const asyncValue = await AsyncStorage.getItem(key);
-      if (asyncValue) {
-        // Migra il valore a SecureStore
-        await SecureStore.setItemAsync(key, asyncValue);
-        // Rimuovi da AsyncStorage
-        await AsyncStorage.removeItem(key);
-        console.log(`Migrato ${key} da AsyncStorage a SecureStore`);
-        return asyncValue;
-      }
-      
-      return null;
+      return await AsyncStorage.getItem(key);
     }
   } catch (error) {
-    console.error(`Errore lettura sicura per ${key}:`, error);
-    // Fallback ad AsyncStorage
-    try {
-      return await AsyncStorage.getItem(key);
-    } catch (fallbackError) {
-      console.error(`Anche fallback AsyncStorage fallito per ${key}:`, fallbackError);
-      return null;
-    }
+    console.error(`[SecureStorage] Error getting ${key}:`, error);
+    return null;
   }
 };
 
 /**
- * Rimuove un valore dallo storage sicuro
- * @param key - Chiave di storage
+ * Rimuove un valore dallo storage
  */
 export const secureRemove = async (key: string): Promise<void> => {
   try {
     if (Platform.OS === 'web') {
       localStorage.removeItem(key);
     } else {
-      await SecureStore.deleteItemAsync(key);
-      // Rimuovi anche da AsyncStorage se presente
       await AsyncStorage.removeItem(key);
     }
   } catch (error) {
-    console.error(`Errore rimozione sicura per ${key}:`, error);
+    console.error(`[SecureStorage] Error removing ${key}:`, error);
   }
 };
 

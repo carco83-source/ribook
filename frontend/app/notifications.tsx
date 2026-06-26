@@ -136,31 +136,40 @@ export default function NotificationsScreen() {
   };
 
   const loadNotifications = async () => {
+    console.log('[Notifications] Starting loadNotifications...');
     try {
       const storedUserId = await secureGet(STORAGE_KEYS.USER_ID);
+      console.log('[Notifications] User ID:', storedUserId);
       setUserId(storedUserId);
       
       if (storedUserId) {
         // Try to load from API, fall back to generated notifications
         try {
+          console.log('[Notifications] Calling API...');
           const response = await authApi.get(`/api/notifications/${storedUserId}`);
+          console.log('[Notifications] API Response:', JSON.stringify(response).substring(0, 200));
           // API returns { notifications: [...], unread_count: N }
           const apiNotifications = response.notifications || response || [];
+          console.log('[Notifications] Got notifications count:', apiNotifications.length);
           // Ordina per data decrescente (più recenti prima)
           const sortedNotifications = apiNotifications.sort((a: Notification, b: Notification) => {
             const dateA = new Date(a.created_at).getTime();
             const dateB = new Date(b.created_at).getTime();
             return dateB - dateA;
           });
+          console.log('[Notifications] Setting state with', sortedNotifications.length, 'notifications');
           setNotifications(sortedNotifications);
-        } catch (error) {
+        } catch (error: any) {
+          console.error('[Notifications] API Error:', error.message, error.response?.status);
           // Generate mock notifications based on user activity
           const mockNotifications = await generateNotifications(storedUserId);
           setNotifications(mockNotifications);
         }
+      } else {
+        console.log('[Notifications] No user ID found');
       }
     } catch (error) {
-      console.error('Error loading notifications:', error);
+      console.error('[Notifications] Error loading notifications:', error);
     } finally {
       setLoading(false);
       setRefreshing(false);
