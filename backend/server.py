@@ -67,6 +67,11 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
+# Stripe initialization
+import stripe
+stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
+STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY")
+
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
@@ -7631,9 +7636,11 @@ async def seller_reject_order(order_id: str, user_id: str = Query(...), reason: 
         "message": "Ordine rifiutato. Il libro è tornato disponibile nel marketplace."
     }
 
-@api_router.post("/orders/{order_id}/pay")
-async def pay_order(order_id: str, user_id: str = Query(...)):
-    """Simula il pagamento e mette i fondi in escrow"""
+# ============== STRIPE PAYMENT ENDPOINTS ==============
+
+@api_router.post("/orders/{order_id}/create-payment-intent")
+async def create_payment_intent(order_id: str, user_id: str = Query(...)):
+    """Crea un PaymentIntent Stripe per l'ordine"""
     
     order = await db.orders.find_one({"id": order_id, "buyer_id": user_id})
     if not order:
@@ -7642,6 +7649,96 @@ async def pay_order(order_id: str, user_id: str = Query(...)):
     current_status = order.get("status")
     if current_status not in ["pending_payment", "in_attesa_pagamento"]:
         raise HTTPException(status_code=400, detail=f"Ordine non in attesa di pagamento. Stato: {current_status}")
+    
+    # Calcola commissioni
+    include_foderazione = order.get("include_foderazione", False)
+    prezzo_libro = order.get("prezzo_libro", 0)
+    commissioni = calcola_commissioni(prezzo_libro, include_foderazione)
+    totale_centesimi = int(commissioni["totale_acquirente"] * 100)  # Stripe vuole centesimi
+    
+    try:
+        # Crea PaymentIntent con capture manuale (escrow-like)
+        intent = stripe.PaymentIntent.create(
+            amount=totale_centesimi,
+            currency="eur",
+            capture_method="manual",  # Fondi in hold fino a capture
+            metadata={
+                "order_id": order_id,
+                "user_id": user_id,
+                "book_title": order.get("book_titolo", "")[:100]
+            },
+            description=f"RiBook - {order.get('book_titolo', '')[:50]}"
+        )
+        
+        # Salva il payment_intent_id nell'ordine
+        await db.orders.update_one(
+            {"id": order_id},
+            {"$set": {
+                "payment_intent_id": intent.id,
+                "payment_status": "requires_payment_method"
+            }}
+        )
+        
+        return {
+            "clientSecret": intent.client_secret,
+            "paymentIntentId": intent.id,
+            "amount": commissioni["totale_acquirente"],
+            "publishableKey": STRIPE_PUBLISHABLE_KEY
+        }
+    except stripe.error.StripeError as e:
+        raise HTTPException(status_code=400, detail=f"Errore Stripe: {str(e)}")
+
+@api_router.post("/orders/{order_id}/confirm-payment")
+async def confirm_payment(order_id: str, user_id: str = Query(...)):
+    """Conferma che il pagamento è stato completato e aggiorna l'ordine"""
+    
+    order = await db.orders.find_one({"id": order_id, "buyer_id": user_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="Ordine non trovato")
+    
+    payment_intent_id = order.get("payment_intent_id")
+    if not payment_intent_id:
+        raise HTTPException(status_code=400, detail="Nessun PaymentIntent associato")
+    
+    try:
+        # Verifica lo stato del PaymentIntent
+        intent = stripe.PaymentIntent.retrieve(payment_intent_id)
+        
+        # requires_capture significa che i fondi sono stati autorizzati e tenuti in hold
+        if intent.status not in ["requires_capture", "succeeded"]:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Pagamento non completato. Stato: {intent.status}"
+            )
+        
+        # Procedi con l'aggiornamento dell'ordine (come faceva /pay prima)
+        return await _process_paid_order(order_id, user_id, order, payment_intent_id)
+        
+    except stripe.error.StripeError as e:
+        raise HTTPException(status_code=400, detail=f"Errore Stripe: {str(e)}")
+
+@api_router.post("/orders/{order_id}/pay")
+async def pay_order(order_id: str, user_id: str = Query(...)):
+    """Fallback: Simula il pagamento (per test/dev) o conferma pagamento Stripe"""
+    
+    order = await db.orders.find_one({"id": order_id, "buyer_id": user_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="Ordine non trovato")
+    
+    current_status = order.get("status")
+    if current_status not in ["pending_payment", "in_attesa_pagamento"]:
+        raise HTTPException(status_code=400, detail=f"Ordine non in attesa di pagamento. Stato: {current_status}")
+    
+    payment_intent_id = order.get("payment_intent_id")
+    
+    # Se non c'è un payment_intent, creane uno mock (per backwards compatibility)
+    if not payment_intent_id or payment_intent_id.startswith("pi_mock_"):
+        payment_intent_id = f"pi_mock_{uuid.uuid4().hex[:16]}"
+    
+    return await _process_paid_order(order_id, user_id, order, payment_intent_id)
+
+async def _process_paid_order(order_id: str, user_id: str, order: dict, payment_intent_id: str):
+    """Logica comune per processare un ordine pagato"""
     
     # Recupera indirizzo cartolibreria
     bookstore = await db.bookstores.find_one({"id": order.get("bookstore_id")})
@@ -7653,9 +7750,6 @@ async def pay_order(order_id: str, user_id: str = Query(...)):
             bookstore_address = f"{indirizzo}, {citta}"
         elif indirizzo:
             bookstore_address = indirizzo
-    
-    # Simula PaymentIntent di Stripe
-    payment_intent_id = f"pi_mock_{uuid.uuid4().hex[:16]}"
     
     # Calcola deadline consegna (2 giorni lavorativi)
     from datetime import timedelta
