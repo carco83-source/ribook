@@ -742,7 +742,7 @@ export default function RadarScreen() {
                             styles.sampleBookItem, 
                             isDesktop && styles.sampleBookItemDesktop,
                             (isVendibile || isUsato) && styles.sampleBookItemClickable,
-                            (isInUso || isFuoriCorso) && { opacity: 0.7 }
+                            (isInUso || isFuoriCorso) && { opacity: 0.9 }
                           ]}
                           onPress={handlePress}
                           disabled={isNuovo || isInUso || isFuoriCorso}
