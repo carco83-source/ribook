@@ -32,6 +32,7 @@ interface OrderItem {
   seller_delivery_deadline?: string;
   delivered_to_bookstore_at?: string;
   bookstore_verified_at?: string;
+  return_reason?: string;
 }
 
 export default function BookstorePanelScreen() {
@@ -258,6 +259,50 @@ export default function BookstorePanelScreen() {
       } else {
         Alert.alert('Errore', msg);
       }
+    }
+  };
+
+  // Verifica reso (accetta o rifiuta)
+  const handleVerifyReturn = async (orderId: string, accepted: boolean) => {
+    const action = accepted ? 'accettare' : 'rifiutare';
+    const confirmMessage = accepted 
+      ? 'Accettare il reso? L\'acquirente verrà rimborsato e il libro tornerà disponibile per il venditore.'
+      : 'Rifiutare il reso? L\'acquirente non riceverà il rimborso.';
+    
+    const doVerify = async () => {
+      try {
+        await axios.post(
+          `${API_URL}/api/orders/${orderId}/verify-return?bookstore_id=${bookstoreId}&accepted=${accepted}&notes=`
+        );
+        if (Platform.OS === 'web') {
+          window.alert(accepted ? 'Reso accettato!' : 'Reso rifiutato!');
+        } else {
+          Alert.alert('Successo', accepted ? 'Reso accettato!' : 'Reso rifiutato!');
+        }
+        loadDashboard(bookstoreId!);
+      } catch (error: any) {
+        const msg = error.response?.data?.detail || `Errore durante ${action} il reso`;
+        if (Platform.OS === 'web') {
+          window.alert(msg);
+        } else {
+          Alert.alert('Errore', msg);
+        }
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (window.confirm(confirmMessage)) {
+        doVerify();
+      }
+    } else {
+      Alert.alert(
+        `Conferma ${action} reso`,
+        confirmMessage,
+        [
+          { text: 'Annulla', style: 'cancel' },
+          { text: accepted ? 'Accetta' : 'Rifiuta', style: accepted ? 'default' : 'destructive', onPress: doVerify }
+        ]
+      );
     }
   };
 
@@ -526,21 +571,49 @@ export default function BookstorePanelScreen() {
         {activeTab === 'returns' && (
           <View style={styles.ordersList}>
             <Text style={styles.sectionTitle}>
-              <Ionicons name="refresh-outline" size={20} color="#C2185B" /> Resi ({returns.length})
+              <Ionicons name="refresh-outline" size={20} color="#C2185B" /> Resi da Verificare ({returns.length})
             </Text>
             {returns.length === 0 ? (
-              <Text style={styles.emptyText}>Nessun reso</Text>
+              <Text style={styles.emptyText}>Nessun reso in attesa di verifica</Text>
             ) : (
               returns.map((order) => (
                 <View key={order.id} style={[styles.orderCard, { borderLeftColor: '#f44336' }]}>
                   <View style={styles.orderHeader}>
                     <Text style={styles.orderCode}>{order.order_code}</Text>
                     <View style={[styles.statusBadge, { backgroundColor: '#FFEBEE' }]}>
-                      <Text style={[styles.statusText, { color: '#C2185B' }]}>Reso</Text>
+                      <Text style={[styles.statusText, { color: '#C2185B' }]}>
+                        {order.status === 'in_verifica_reso' ? 'Da Verificare' : 'Reso'}
+                      </Text>
                     </View>
                   </View>
-                  <Text style={styles.orderTitle} numberOfLines={1}>{order.book_titolo}</Text>
+                  <Text style={styles.orderTitle} numberOfLines={2}>{order.book_titolo}</Text>
                   <Text style={styles.orderPrice}>€{order.prezzo_acquirente?.toFixed(2)}</Text>
+                  
+                  {/* Motivazione reso */}
+                  {order.return_reason && (
+                    <View style={{ backgroundColor: '#FFF3E0', padding: 10, borderRadius: 8, marginTop: 8 }}>
+                      <Text style={{ fontSize: 12, color: '#E65100', fontWeight: '600' }}>Motivazione:</Text>
+                      <Text style={{ fontSize: 13, color: '#333', marginTop: 4 }}>{order.return_reason}</Text>
+                    </View>
+                  )}
+                  
+                  {/* Pulsanti Accetta/Rifiuta */}
+                  {order.status === 'in_verifica_reso' && (
+                    <View style={{ flexDirection: 'row', marginTop: 12, gap: 10 }}>
+                      <TouchableOpacity 
+                        style={{ flex: 1, backgroundColor: '#4CAF50', padding: 12, borderRadius: 8, alignItems: 'center' }}
+                        onPress={() => handleVerifyReturn(order.id, true)}
+                      >
+                        <Text style={{ color: '#fff', fontWeight: '600' }}>✓ Accetta Reso</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        style={{ flex: 1, backgroundColor: '#f44336', padding: 12, borderRadius: 8, alignItems: 'center' }}
+                        onPress={() => handleVerifyReturn(order.id, false)}
+                      >
+                        <Text style={{ color: '#fff', fontWeight: '600' }}>✗ Rifiuta Reso</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
                 </View>
               ))
             )}
