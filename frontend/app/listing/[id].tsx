@@ -996,6 +996,7 @@ export default function ListingDetailScreen() {
         )}
 
         {/* Opzione Foderazione - appare solo per ACQUIRENTI quando una cartolibreria è selezionata */}
+        {/* Debug: selectedBookstore={JSON.stringify(!!selectedBookstore)}, isOwner={JSON.stringify(isOwner)} */}
         {selectedBookstore && !isOwner && (
           <>
             <TouchableOpacity 
