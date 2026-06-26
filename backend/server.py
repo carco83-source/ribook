@@ -7772,9 +7772,23 @@ async def create_order(
     # ==========================================
     # CHECK ORDINI DUPLICATI - Evita doppi ordini
     # ==========================================
+    # Stati terminati che permettono un nuovo ordine
+    terminated_statuses = [
+        "cancelled", 
+        "refunded", 
+        "rejected", 
+        "completed",
+        "rifiutato_condizioni",
+        "rifiutato",
+        "annullato",
+        "annullato_acquirente",
+        "annullato_non_disponibile",
+        "expired"
+    ]
+    
     existing_order = await db.orders.find_one({
         "listing_id": actual_listing_id,
-        "status": {"$nin": ["cancelled", "refunded", "rejected", "completed"]}
+        "status": {"$nin": terminated_statuses}
     })
     if existing_order:
         # Se l'ordine esistente è dello stesso acquirente, restituisci info
