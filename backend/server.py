@@ -11847,7 +11847,7 @@ async def get_bookstore_stats(bookstore_id: str):
     # Resi in attesa
     returns_pending = await db.orders.count_documents({
         "bookstore_id": bookstore_id,
-        "status": "return_requested"
+        "status": {"$in": ["return_requested", "in_verifica_reso", "reso_richiesto"]}
     })
     
     # Guadagni del mese (dalla collezione ordini)
@@ -11955,7 +11955,7 @@ async def get_bookstore_returns(bookstore_id: str):
     """Resi"""
     orders = await db.orders.find({
         "bookstore_id": bookstore_id,
-        "status": {"$in": ["return_requested", "returned"]}
+        "status": {"$in": ["return_requested", "returned", "in_verifica_reso", "reso_richiesto"]}
     }).sort("created_at", -1).to_list(100)
     
     result = []
