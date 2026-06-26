@@ -350,9 +350,10 @@ export default function SearchSellScreen() {
       // Cerca le copie disponibili
       try {
         const listingsResponse = await axios.get(`${API_URL}/api/listings/isbn/${cercaIsbn}`);
-        if (listingsResponse.data && listingsResponse.data.length > 0) {
-          const copie = listingsResponse.data.length;
-          const prezzoMinimo = Math.min(...listingsResponse.data.map((l: any) => l.prezzo_vendita || l.price || 999));
+        const listings = listingsResponse.data?.listings || [];
+        if (listings.length > 0) {
+          const copie = listings.length;
+          const prezzoMinimo = Math.min(...listings.map((l: any) => l.prezzo_vendita || l.price || 999));
           setCercaResults([{
             book: bookData || { id: cercaIsbn, isbn: cercaIsbn, titolo: 'Libro' },
             copie_disponibili: copie,
