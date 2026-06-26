@@ -13,6 +13,7 @@ import {
 import { useRouter, Stack, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import axios from 'axios';
 import { authApi } from '../src/utils/api';
 import QRCode from 'react-native-qrcode-svg';
 

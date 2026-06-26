@@ -1111,7 +1111,22 @@ async def login_user(credentials: UserLogin):
     if not user or user["password_hash"] != hash_password(credentials.password):
         raise HTTPException(status_code=401, detail="Credenziali non valide")
     
+    # Genera token di sessione
+    session_token = str(uuid.uuid4()) + "-" + str(uuid.uuid4())
+    expires_at = datetime.now(timezone.utc) + timedelta(days=30)  # 30 giorni
+    
+    # Salva sessione nel database
+    session = {
+        "id": str(uuid.uuid4()),
+        "user_id": user["id"],
+        "session_token": session_token,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "expires_at": expires_at.isoformat(),
+    }
+    await db.user_sessions.insert_one(session)
+    
     return {
+        "success": True,
         "user_id": user["id"],
         "username": user["username"],
         "nome": user.get("nome", ""),
@@ -1119,7 +1134,8 @@ async def login_user(credentials: UserLogin):
         "scuola": user.get("scuola"),
         "classe": user.get("classe"),
         "sezione": user.get("sezione"),
-        "profili_figli": user.get("profili_figli", [])
+        "profili_figli": user.get("profili_figli", []),
+        "session_token": session_token
     }
 
 # ============== MIGRAZIONE PROFILI TEMPORANEI ==============

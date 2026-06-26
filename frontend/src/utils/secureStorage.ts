@@ -50,7 +50,24 @@ export const secureSet = async (key: string, value: string): Promise<void> => {
 export const secureGet = async (key: string): Promise<string | null> => {
   try {
     if (Platform.OS === 'web') {
-      return localStorage.getItem(key);
+      // Web: prova prima localStorage
+      const localValue = localStorage.getItem(key);
+      if (localValue) return localValue;
+      
+      // Fallback: prova anche AsyncStorage per compatibilità retroattiva
+      try {
+        const asyncValue = await AsyncStorage.getItem(key);
+        if (asyncValue) {
+          // Migra a localStorage
+          localStorage.setItem(key, asyncValue);
+          console.log(`[SecureStorage] Migrato ${key} da AsyncStorage a localStorage`);
+          return asyncValue;
+        }
+      } catch (e) {
+        // AsyncStorage non disponibile su web, ignora
+      }
+      
+      return null;
     } else {
       // Prima prova SecureStore
       const secureValue = await SecureStore.getItemAsync(key);
