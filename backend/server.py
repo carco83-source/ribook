@@ -7857,50 +7857,195 @@ async def confirm_payment(order_id: str, user_id: str = Query(...)):
 
 class StripePaymentRequest(BaseModel):
     payment_intent_id: str
-    card_number: str
-    exp_month: int
-    exp_year: int
-    cvc: str
+    # RIMOSSI i campi card_number, exp_month, exp_year, cvc per compliance PCI
+    # Il pagamento viene completato tramite Stripe Checkout o Payment Sheet
 
-@api_router.post("/orders/{order_id}/confirm-stripe-payment")
-async def confirm_stripe_payment(order_id: str, payment_data: StripePaymentRequest, user_id: str = Query(...)):
-    """Conferma il pagamento Stripe con i dati della carta"""
+# Modello per checkout session
+class CheckoutSessionRequest(BaseModel):
+    platform: str = "web"  # 'web' o 'mobile'
+
+@api_router.post("/orders/{order_id}/create-checkout-session")
+async def create_checkout_session(
+    order_id: str, 
+    request: CheckoutSessionRequest,
+    user_id: str = Query(...)
+):
+    """
+    Crea una Stripe Checkout Session (PCI-Compliant).
+    - Web: Restituisce URL per redirect alla pagina Stripe
+    - Mobile: Restituisce dati per Payment Sheet
+    """
+    
+    order = await db.orders.find_one({"id": order_id, "buyer_id": user_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="Ordine non trovato")
+    
+    current_status = order.get("status")
+    if current_status not in ["pending_payment", "in_attesa_pagamento"]:
+        raise HTTPException(status_code=400, detail=f"Ordine non in attesa di pagamento. Stato: {current_status}")
+    
+    # Calcola commissioni
+    include_foderazione = order.get("include_foderazione", False)
+    prezzo_libro = order.get("prezzo_libro", 0)
+    commissioni = calcola_commissioni(prezzo_libro, include_foderazione)
+    totale_centesimi = int(commissioni["totale_acquirente"] * 100)  # Stripe vuole centesimi
+    
+    book_title = order.get("book_titolo", "Libro")[:100]
+    
+    try:
+        if request.platform == "web":
+            # WEB: Crea Checkout Session con redirect
+            # Usa URL assoluto del frontend per success/cancel
+            base_url = os.getenv("FRONTEND_URL", "https://language-check-10.preview.emergentagent.com")
+            
+            session = stripe.checkout.Session.create(
+                payment_method_types=["card"],
+                line_items=[{
+                    "price_data": {
+                        "currency": "eur",
+                        "product_data": {
+                            "name": f"RiBook - {book_title}",
+                            "description": f"Ordine #{order.get('order_code', order_id[:8])}",
+                        },
+                        "unit_amount": totale_centesimi,
+                    },
+                    "quantity": 1,
+                }],
+                mode="payment",
+                success_url=f"{base_url}/stripe-success?order_id={order_id}&session_id={{CHECKOUT_SESSION_ID}}",
+                cancel_url=f"{base_url}/stripe-payment?orderId={order_id}&canceled=true",
+                metadata={
+                    "order_id": order_id,
+                    "user_id": user_id,
+                },
+                payment_intent_data={
+                    "capture_method": "manual",  # Escrow: fondi in hold
+                    "metadata": {
+                        "order_id": order_id,
+                        "user_id": user_id,
+                    }
+                },
+                locale="it",  # Interfaccia in italiano
+            )
+            
+            # Salva session_id nell'ordine
+            await db.orders.update_one(
+                {"id": order_id},
+                {"$set": {
+                    "stripe_checkout_session_id": session.id,
+                    "payment_status": "checkout_pending"
+                }}
+            )
+            
+            return {
+                "checkout_url": session.url,
+                "session_id": session.id,
+                "platform": "web"
+            }
+        
+        else:
+            # MOBILE: Crea setup per Payment Sheet
+            customer = stripe.Customer.create()
+            ephemeral_key = stripe.EphemeralKey.create(
+                customer=customer.id,
+                stripe_version='2023-10-16'
+            )
+            
+            payment_intent = stripe.PaymentIntent.create(
+                amount=totale_centesimi,
+                currency="eur",
+                customer=customer.id,
+                capture_method="manual",  # Escrow
+                metadata={
+                    "order_id": order_id,
+                    "user_id": user_id,
+                },
+                description=f"RiBook - {book_title}"
+            )
+            
+            # Salva payment_intent_id nell'ordine
+            await db.orders.update_one(
+                {"id": order_id},
+                {"$set": {
+                    "payment_intent_id": payment_intent.id,
+                    "payment_status": "requires_payment_method"
+                }}
+            )
+            
+            return {
+                "paymentIntent": payment_intent.client_secret,
+                "ephemeralKey": ephemeral_key.secret,
+                "customer": customer.id,
+                "publishableKey": STRIPE_PUBLISHABLE_KEY,
+                "platform": "mobile"
+            }
+            
+    except stripe.error.StripeError as e:
+        raise HTTPException(status_code=400, detail=f"Errore Stripe: {str(e)}")
+
+@api_router.get("/orders/{order_id}/verify-checkout")
+async def verify_checkout_session(
+    order_id: str,
+    session_id: str = Query(...),
+    user_id: str = Query(...)
+):
+    """
+    Verifica che il Checkout Session sia stato completato con successo.
+    Chiamato dalla pagina di successo dopo il redirect da Stripe.
+    """
     
     order = await db.orders.find_one({"id": order_id, "buyer_id": user_id})
     if not order:
         raise HTTPException(status_code=404, detail="Ordine non trovato")
     
     try:
-        # Crea un PaymentMethod con i dati della carta
-        payment_method = stripe.PaymentMethod.create(
-            type="card",
-            card={
-                "number": payment_data.card_number,
-                "exp_month": payment_data.exp_month,
-                "exp_year": payment_data.exp_year,
-                "cvc": payment_data.cvc,
-            },
+        # Recupera la session da Stripe
+        session = stripe.checkout.Session.retrieve(session_id)
+        
+        if session.payment_status != "paid":
+            return {
+                "success": False,
+                "message": f"Pagamento non completato. Stato: {session.payment_status}"
+            }
+        
+        # Recupera il PaymentIntent dalla session
+        payment_intent_id = session.payment_intent
+        
+        # Aggiorna l'ordine e processa
+        await db.orders.update_one(
+            {"id": order_id},
+            {"$set": {
+                "payment_intent_id": payment_intent_id,
+                "stripe_checkout_session_id": session_id,
+            }}
         )
         
-        # Conferma il PaymentIntent con il PaymentMethod
-        intent = stripe.PaymentIntent.confirm(
-            payment_data.payment_intent_id,
-            payment_method=payment_method.id,
-        )
+        # Processa l'ordine come pagato
+        result = await _process_paid_order(order_id, user_id, order, payment_intent_id)
         
-        # Verifica lo stato
-        if intent.status in ["requires_capture", "succeeded"]:
-            # Pagamento riuscito! Procedi con l'ordine
-            result = await _process_paid_order(order_id, user_id, order, payment_data.payment_intent_id)
-            return {"success": True, "message": "Pagamento completato", **result}
-        else:
-            return {"success": False, "message": f"Pagamento non completato. Stato: {intent.status}"}
-            
-    except stripe.error.CardError as e:
-        # Errore della carta (es. fondi insufficienti, carta scaduta)
-        return {"success": False, "message": f"Errore carta: {e.user_message}"}
+        return {
+            "success": True,
+            "message": "Pagamento completato con successo!",
+            **result
+        }
+        
     except stripe.error.StripeError as e:
-        raise HTTPException(status_code=400, detail=f"Errore Stripe: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Errore verifica Stripe: {str(e)}")
+
+# DEPRECATED - Endpoint non PCI-compliant, mantenuto solo per backwards compatibility
+# In produzione questo endpoint dovrebbe essere RIMOSSO
+@api_router.post("/orders/{order_id}/confirm-stripe-payment")
+async def confirm_stripe_payment_deprecated(order_id: str, payment_data: StripePaymentRequest, user_id: str = Query(...)):
+    """
+    DEPRECATO - NON USARE IN PRODUZIONE
+    Questo endpoint viola la compliance PCI-DSS.
+    Usare /create-checkout-session invece.
+    """
+    raise HTTPException(
+        status_code=410,  # Gone
+        detail="Questo endpoint è stato deprecato per motivi di sicurezza PCI-DSS. "
+               "Usa /api/orders/{order_id}/create-checkout-session invece."
+    )
 
 @api_router.post("/orders/{order_id}/pay")
 async def pay_order(order_id: str, user_id: str = Query(...)):
