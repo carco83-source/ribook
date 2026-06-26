@@ -532,7 +532,10 @@ export default function ListingDetailScreen() {
     }
   };
 
-  const { commission, total, foderazione } = calculateCommission();
+  const { commission, total, foderazione } = React.useMemo(() => {
+    console.log('[DEBUG useMemo] Calculating with richiediFoderazione:', richiediFoderazione);
+    return calculateCommission();
+  }, [listing, richiediFoderazione]);
   
   // Debug foderazione
   console.log('[DEBUG] richiediFoderazione:', richiediFoderazione, 'foderazione:', foderazione);
