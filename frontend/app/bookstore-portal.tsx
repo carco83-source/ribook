@@ -227,6 +227,8 @@ export default function BookstorePortalScreen() {
   const [ordersDaRitirare, setOrdersDaRitirare] = useState<Order[]>([]);
   const [ordersCompletati, setOrdersCompletati] = useState<Order[]>([]);
   const [ordersResi, setOrdersResi] = useState<Order[]>([]);
+  const [newCompletedCount, setNewCompletedCount] = useState(0);
+  const [lastSeenCompletedIds, setLastSeenCompletedIds] = useState<Set<string>>(new Set());
   
   // Notifiche cartolibreria
   const [notifications, setNotifications] = useState<BookstoreNotification[]>([]);
@@ -257,6 +259,13 @@ export default function BookstorePortalScreen() {
     // Se si va sulla tab notifiche, marca tutte come lette
     if (newTab === 'notifiche') {
       markAllNotificationsAsRead();
+    }
+    // Se si va sulla tab completati, azzera il contatore nuovi completati
+    if (newTab === 'completati') {
+      setNewCompletedCount(0);
+      // Salva gli ID degli ordini completati come "visti"
+      const completedIds = new Set(ordersCompletati.map(o => o.id));
+      setLastSeenCompletedIds(completedIds);
     }
   }, [markAllNotificationsAsRead]);
   
@@ -353,7 +362,20 @@ export default function BookstorePortalScreen() {
       setBookstoreName(data.bookstore_name || '');
       setOrdersInArrivo(data.orders_in_arrivo || []);
       setOrdersDaRitirare(data.orders_da_ritirare || []);
-      setOrdersCompletati(data.orders_completati || []);
+      
+      const completati = data.orders_completati || [];
+      setOrdersCompletati(completati);
+      
+      // Calcola nuovi completati non ancora visti
+      if (lastSeenCompletedIds.size > 0) {
+        const newCount = completati.filter((o: Order) => !lastSeenCompletedIds.has(o.id)).length;
+        setNewCompletedCount(newCount);
+      } else {
+        // Prima volta, nessun badge (o mostra tutti come nuovi se preferito)
+        setNewCompletedCount(0);
+        setLastSeenCompletedIds(new Set(completati.map((o: Order) => o.id)));
+      }
+      
       setOrdersResi(data.orders_resi || []);
       
       // Carica notifiche
@@ -870,7 +892,7 @@ export default function BookstorePortalScreen() {
               {tab.key !== 'dashboard' && (() => {
                 const count = tab.key === 'in_arrivo' ? stats.in_arrivo
                   : tab.key === 'da_ritirare' ? stats.da_ritirare
-                  : tab.key === 'completati' ? stats.completati_mese
+                  : tab.key === 'completati' ? newCompletedCount
                   : tab.key === 'resi' ? stats.resi_in_attesa
                   : tab.key === 'notifiche' ? unreadCount : 0;
                 return count > 0 ? (
