@@ -1108,7 +1108,7 @@ async def register_user(user_data: UserCreate):
 @api_router.post("/auth/login")
 async def login_user(credentials: UserLogin):
     user = await db.users.find_one({"email": credentials.email})
-    if not user or user["password_hash"] != hash_password(credentials.password):
+    if not user or user.get("password_hash") != hash_password(credentials.password):
         raise HTTPException(status_code=401, detail="Credenziali non valide")
     
     # Genera token di sessione
@@ -1128,7 +1128,7 @@ async def login_user(credentials: UserLogin):
     return {
         "success": True,
         "user_id": user["id"],
-        "username": user["username"],
+        "username": user.get("username", f"Utente_{user['id'][:5].upper()}"),
         "nome": user.get("nome", ""),
         "is_premium": user.get("is_premium", False),
         "scuola": user.get("scuola"),

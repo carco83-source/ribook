@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { authApi } from '../src/utils/api';
+import { secureGet, STORAGE_KEYS } from '../src/utils/secureStorage';
 import QRCode from 'react-native-qrcode-svg';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
@@ -136,7 +137,7 @@ export default function NotificationsScreen() {
 
   const loadNotifications = async () => {
     try {
-      const storedUserId = await AsyncStorage.getItem('user_id');
+      const storedUserId = await secureGet(STORAGE_KEYS.USER_ID);
       setUserId(storedUserId);
       
       if (storedUserId) {
@@ -177,7 +178,7 @@ export default function NotificationsScreen() {
       
       // Auto-marca come lette le notifiche di tipo "informativo" dopo 2 secondi
       const autoReadTimer = setTimeout(async () => {
-        const storedUserId = await AsyncStorage.getItem('user_id');
+        const storedUserId = await secureGet(STORAGE_KEYS.USER_ID);
         if (storedUserId) {
           // Tipi di notifiche che dovrebbero essere marcate come lette automaticamente
           const autoReadTypes = ['ready_for_payment', 'order_pending', 'order_pending_seller', 'cart_request'];
