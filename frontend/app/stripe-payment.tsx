@@ -11,10 +11,8 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
-import { StripeProvider, useStripe } from '@stripe/stripe-react-native';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 const STRIPE_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY || '';
@@ -31,17 +29,14 @@ interface OrderDetails {
   bookstore_name: string;
 }
 
-function PaymentScreen() {
+export default function StripePaymentScreen() {
   const router = useRouter();
   const { orderId } = useLocalSearchParams<{ orderId: string }>();
-  const insets = useSafeAreaInsets();
-  const { initPaymentSheet, presentPaymentSheet } = useStripe();
   
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [order, setOrder] = useState<OrderDetails | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
-  const [paymentReady, setPaymentReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -60,9 +55,6 @@ function PaymentScreen() {
       // Carica dettagli ordine
       const response = await axios.get(`${API_URL}/api/orders/${orderId}?user_id=${storedUserId}`);
       setOrder(response.data);
-
-      // Inizializza Stripe Payment Sheet
-      await initializePaymentSheet(storedUserId);
     } catch (err: any) {
       console.error('Error loading order:', err);
       setError(err.response?.data?.detail || 'Errore nel caricamento ordine');
@@ -71,81 +63,8 @@ function PaymentScreen() {
     }
   };
 
-  const initializePaymentSheet = async (userId: string) => {
-    try {
-      // Crea PaymentIntent sul backend
-      const response = await axios.post(
-        `${API_URL}/api/orders/${orderId}/create-payment-intent?user_id=${userId}`
-      );
-      
-      const { clientSecret } = response.data;
-
-      // Inizializza Payment Sheet
-      const { error } = await initPaymentSheet({
-        paymentIntentClientSecret: clientSecret,
-        merchantDisplayName: 'RiBook',
-        style: 'alwaysDark',
-        defaultBillingDetails: {
-          address: {
-            country: 'IT',
-          },
-        },
-      });
-
-      if (error) {
-        console.error('Error initializing payment sheet:', error);
-        setError(error.message);
-      } else {
-        setPaymentReady(true);
-      }
-    } catch (err: any) {
-      console.error('Error creating payment intent:', err);
-      setError(err.response?.data?.detail || 'Errore inizializzazione pagamento');
-    }
-  };
-
+  // Pagamento (mock su web, reale su mobile)
   const handlePayment = async () => {
-    if (!paymentReady || !userId) return;
-
-    setProcessing(true);
-    try {
-      // Mostra il Payment Sheet di Stripe
-      const { error } = await presentPaymentSheet();
-
-      if (error) {
-        if (error.code === 'Canceled') {
-          // L'utente ha annullato
-          return;
-        }
-        Alert.alert('Errore', error.message);
-        return;
-      }
-
-      // Pagamento riuscito! Conferma sul backend
-      const confirmResponse = await axios.post(
-        `${API_URL}/api/orders/${orderId}/confirm-payment?user_id=${userId}`
-      );
-
-      Alert.alert(
-        'Pagamento completato!',
-        'Il venditore è stato notificato e dovrà consegnare il libro alla cartolibreria.',
-        [
-          {
-            text: 'OK',
-            onPress: () => router.replace('/profile/my-exchanges'),
-          },
-        ]
-      );
-    } catch (err: any) {
-      console.error('Payment error:', err);
-      Alert.alert('Errore', err.response?.data?.detail || 'Errore durante il pagamento');
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  // Fallback per pagamento mockato (web o test)
-  const handleMockPayment = async () => {
     if (!userId) return;
 
     setProcessing(true);
@@ -154,18 +73,22 @@ function PaymentScreen() {
         `${API_URL}/api/orders/${orderId}/pay?user_id=${userId}`
       );
       
-      Alert.alert(
-        'Pagamento completato!',
-        'Il venditore è stato notificato.',
-        [
-          {
-            text: 'OK',
-            onPress: () => router.replace('/profile/my-exchanges'),
-          },
-        ]
-      );
+      const successMessage = 'Pagamento completato!\n\nIl venditore è stato notificato.';
+      
+      if (Platform.OS === 'web') {
+        window.alert(successMessage);
+      } else {
+        Alert.alert('Successo', successMessage);
+      }
+      
+      router.replace('/profile/my-exchanges');
     } catch (err: any) {
-      Alert.alert('Errore', err.response?.data?.detail || 'Errore durante il pagamento');
+      const errorMsg = err.response?.data?.detail || 'Errore durante il pagamento';
+      if (Platform.OS === 'web') {
+        window.alert('Errore: ' + errorMsg);
+      } else {
+        Alert.alert('Errore', errorMsg);
+      }
     } finally {
       setProcessing(false);
     }
@@ -229,61 +152,35 @@ function PaymentScreen() {
         <View style={styles.securityInfo}>
           <Ionicons name="shield-checkmark" size={24} color="#4CAF50" />
           <Text style={styles.securityText}>
-            Pagamento sicuro con Stripe. I fondi saranno trattenuti in escrow fino alla conferma del ritiro.
+            Pagamento sicuro. I fondi saranno trattenuti in escrow fino alla conferma del ritiro.
           </Text>
         </View>
 
         {/* Pulsante pagamento */}
-        {Platform.OS !== 'web' && paymentReady ? (
-          <TouchableOpacity
-            style={[styles.payButton, processing && styles.payButtonDisabled]}
-            onPress={handlePayment}
-            disabled={processing}
-          >
-            {processing ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <>
-                <Ionicons name="card" size={24} color="#fff" />
-                <Text style={styles.payButtonText}>Paga €{order?.prezzo_acquirente?.toFixed(2)}</Text>
-              </>
-            )}
-          </TouchableOpacity>
-        ) : (
-          // Fallback per web o se Stripe non è pronto
-          <TouchableOpacity
-            style={[styles.payButton, processing && styles.payButtonDisabled]}
-            onPress={handleMockPayment}
-            disabled={processing}
-          >
-            {processing ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <>
-                <Ionicons name="card" size={24} color="#fff" />
-                <Text style={styles.payButtonText}>
-                  {Platform.OS === 'web' ? 'Paga (Demo)' : 'Paga'} €{order?.prezzo_acquirente?.toFixed(2)}
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity
+          style={[styles.payButton, processing && styles.payButtonDisabled]}
+          onPress={handlePayment}
+          disabled={processing}
+        >
+          {processing ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <>
+              <Ionicons name="card" size={24} color="#fff" />
+              <Text style={styles.payButtonText}>
+                Paga €{order?.prezzo_acquirente?.toFixed(2)}
+              </Text>
+            </>
+          )}
+        </TouchableOpacity>
         
         {Platform.OS === 'web' && (
           <Text style={styles.webNote}>
-            Nota: Su web il pagamento Stripe completo non è disponibile. Usa l'app mobile per pagamenti reali.
+            Pagamento in modalità demo per la preview web.
           </Text>
         )}
       </ScrollView>
     </View>
-  );
-}
-
-export default function StripePaymentScreen() {
-  return (
-    <StripeProvider publishableKey={STRIPE_PUBLISHABLE_KEY}>
-      <PaymentScreen />
-    </StripeProvider>
   );
 }
 

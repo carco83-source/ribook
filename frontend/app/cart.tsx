@@ -144,56 +144,38 @@ export default function CartScreen() {
   };
 
   const handlePayOrder = async (order: EscrowOrder) => {
-    const proceedWithPayment = async () => {
-      setPayingOrderId(order.id);
-      setPurchasing(true);
-      
-      try {
-        // Effettua il pagamento simulato
-        const response = await axios.post(`${API_URL}/api/orders/${order.id}/pay?user_id=${userId}`);
-        
-        const successMessage = `Pagamento completato!\n\n` +
-          `Libro: ${order.book_titolo}\n` +
-          `Codice Ordine: ${order.order_code}\n` +
-          `Totale: €${order.totale_acquirente.toFixed(2)}\n\n` +
-          `Il venditore è stato notificato.\n` +
-          `Ritirerai il libro presso: ${order.bookstore_name}`;
-        
-        if (Platform.OS === 'web') {
-          window.alert(successMessage);
-        } else {
-          Alert.alert('Pagamento completato!', successMessage, [{ text: 'OK' }]);
-        }
-        
-        // Ricarica il carrello
-        loadCart();
-        
-      } catch (error: any) {
-        console.error('Error paying order:', error);
-        const errorMsg = error.response?.data?.detail || 'Errore durante il pagamento';
-        if (Platform.OS === 'web') {
-          window.alert('Errore: ' + errorMsg);
-        } else {
-          Alert.alert('Errore', errorMsg);
-        }
-      } finally {
-        setPayingOrderId(null);
-        setPurchasing(false);
-      }
-    };
-    
-    // Su web procedi direttamente, su mobile mostra conferma
+    // Reindirizza alla schermata di pagamento Stripe
     if (Platform.OS === 'web') {
+      // Su web usa il pagamento mockato (Stripe non supportato completamente)
+      const proceedWithPayment = async () => {
+        setPayingOrderId(order.id);
+        setPurchasing(true);
+        
+        try {
+          const response = await axios.post(`${API_URL}/api/orders/${order.id}/pay?user_id=${userId}`);
+          
+          const successMessage = `Pagamento completato!\n\n` +
+            `Libro: ${order.book_titolo}\n` +
+            `Codice Ordine: ${order.order_code}\n` +
+            `Totale: €${order.totale_acquirente.toFixed(2)}\n\n` +
+            `Il venditore è stato notificato.\n` +
+            `Ritirerai il libro presso: ${order.bookstore_name}`;
+          
+          window.alert(successMessage);
+          loadCart();
+          
+        } catch (error: any) {
+          console.error('Error paying order:', error);
+          window.alert('Errore: ' + (error.response?.data?.detail || 'Errore durante il pagamento'));
+        } finally {
+          setPayingOrderId(null);
+          setPurchasing(false);
+        }
+      };
       await proceedWithPayment();
     } else {
-      Alert.alert(
-        'Conferma pagamento',
-        `Stai per pagare €${order.totale_acquirente.toFixed(2)} per:\n\n"${order.book_titolo}"\n\nI fondi rimarranno in escrow fino al ritiro.`,
-        [
-          { text: 'Annulla', style: 'cancel' },
-          { text: 'Paga ora', onPress: proceedWithPayment }
-        ]
-      );
+      // Su mobile, vai alla schermata Stripe
+      router.push(`/stripe-payment?orderId=${order.id}`);
     }
   };
 
