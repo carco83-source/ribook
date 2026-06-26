@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,7 @@ import {
   Platform,
   RefreshControl,
 } from 'react-native';
-import { useRouter, Stack } from 'expo-router';
+import { useRouter, Stack, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
@@ -63,6 +63,16 @@ export default function BookstorePanelScreen() {
   useEffect(() => {
     checkAuth();
   }, []);
+
+  // Ricarica i dati quando la schermata torna in focus
+  useFocusEffect(
+    useCallback(() => {
+      if (bookstoreId && isLoggedIn) {
+        console.log('[Bookstore] Screen focused, reloading data...');
+        loadDashboard(bookstoreId);
+      }
+    }, [bookstoreId, isLoggedIn])
+  );
 
   const checkAuth = async () => {
     try {
@@ -125,6 +135,7 @@ export default function BookstorePanelScreen() {
 
   const loadDashboard = async (bsId: string) => {
     try {
+      console.log('[Bookstore] Loading dashboard for:', bsId);
       const [statsRes, pendingRes, deliveredRes, completedRes, returnsRes] = await Promise.all([
         axios.get(`${API_URL}/api/bookstore/${bsId}/stats`),
         axios.get(`${API_URL}/api/bookstore/${bsId}/orders/pending`),
@@ -133,8 +144,9 @@ export default function BookstorePanelScreen() {
         axios.get(`${API_URL}/api/bookstore/${bsId}/returns`),
       ]);
       
-      console.log('[Bookstore] Stats loaded:', statsRes.data);
-      console.log('[Bookstore] Returns loaded:', returnsRes.data);
+      console.log('[Bookstore] Stats loaded:', JSON.stringify(statsRes.data));
+      console.log('[Bookstore] Returns loaded:', JSON.stringify(returnsRes.data));
+      console.log('[Bookstore] Returns count:', returnsRes.data?.length || 0);
       
       setStats(statsRes.data);
       setPendingDeliveries(pendingRes.data || []);
@@ -145,8 +157,8 @@ export default function BookstorePanelScreen() {
       // Carica info cartolibreria
       const infoRes = await axios.get(`${API_URL}/api/bookstore/${bsId}`);
       setBookstoreInfo(infoRes.data);
-    } catch (error) {
-      console.error('Error loading dashboard:', error);
+    } catch (error: any) {
+      console.error('[Bookstore] Error loading dashboard:', error?.message || error);
     }
   };
 
