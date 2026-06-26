@@ -673,7 +673,7 @@ export default function SearchSellScreen() {
             placeholderTextColor="#999"
             value={cercaTitolo}
             onChangeText={setCercaTitolo}
-            autoCapitalize="words"
+            autoCapitalize="sentences"
             returnKeyType="search"
             onSubmitEditing={handleCercaTitolo}
           />

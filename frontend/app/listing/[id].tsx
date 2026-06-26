@@ -751,25 +751,25 @@ export default function ListingDetailScreen() {
                 <View style={styles.conditionItem}>
                   <Text style={styles.conditionItemLabel}>Scritte/evidenziature</Text>
                   <Text style={styles.conditionItemValue}>
-                    {['✨ Nessuna', '✏️ Poche', '🖊️ Molte'][listing.condition_details.sottolineature || 0]}
+                    {['✨ Nessuna', '✏️ Poche', '🖊️ Molte'][listing.condition_details?.sottolineature ?? 0] || '✨ Nessuna'}
                   </Text>
                 </View>
                 <View style={styles.conditionItem}>
                   <Text style={styles.conditionItemLabel}>Copertina</Text>
                   <Text style={styles.conditionItemValue}>
-                    {['✨ Integra', '⚠️ Un po\' rovinata', '📉 Molto rovinata'][listing.condition_details.copertina || 0]}
+                    {['✨ Integra', '⚠️ Un po\' rovinata', '📉 Molto rovinata'][listing.condition_details?.copertina ?? 0] || '✨ Integra'}
                   </Text>
                 </View>
                 <View style={styles.conditionItem}>
                   <Text style={styles.conditionItemLabel}>Pagine</Text>
                   <Text style={styles.conditionItemValue}>
-                    {['✨ Perfette', '📄 Qualche piega', '📚 Molte pieghe'][listing.condition_details.pagine || 0]}
+                    {['✨ Perfette', '📄 Qualche piega', '📚 Molte pieghe'][listing.condition_details?.pagine ?? 0] || '✨ Perfette'}
                   </Text>
                 </View>
                 <View style={styles.conditionItem}>
                   <Text style={styles.conditionItemLabel}>Esercizi compilati</Text>
                   <Text style={styles.conditionItemValue}>
-                    {['✨ Nessuno', '📝 Alcuni', '📋 Molti'][listing.condition_details.esercizi || 0]}
+                    {['✨ Nessuno', '📝 Alcuni', '📋 Molti'][listing.condition_details?.esercizi ?? 0] || '✨ Nessuno'}
                   </Text>
                 </View>
               </View>
