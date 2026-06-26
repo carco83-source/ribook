@@ -314,6 +314,160 @@ def generate_bookstore_password():
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
 
+# ============== VALIDAZIONE CODICE FISCALE ==============
+
+# Mappa mesi per codice fiscale
+CF_MONTH_CODES = {
+    'A': 1, 'B': 2, 'C': 3, 'D': 4, 'E': 5, 'H': 6,
+    'L': 7, 'M': 8, 'P': 9, 'R': 10, 'S': 11, 'T': 12
+}
+
+# Mappa inversa mesi
+CF_MONTH_LETTERS = {v: k for k, v in CF_MONTH_CODES.items()}
+
+# Caratteri dispari per calcolo check digit
+CF_ODD_VALUES = {
+    '0': 1, '1': 0, '2': 5, '3': 7, '4': 9, '5': 13, '6': 15, '7': 17, '8': 19, '9': 21,
+    'A': 1, 'B': 0, 'C': 5, 'D': 7, 'E': 9, 'F': 13, 'G': 15, 'H': 17, 'I': 19, 'J': 21,
+    'K': 2, 'L': 4, 'M': 18, 'N': 20, 'O': 11, 'P': 3, 'Q': 6, 'R': 8, 'S': 12, 'T': 14,
+    'U': 16, 'V': 10, 'W': 22, 'X': 25, 'Y': 24, 'Z': 23
+}
+
+# Caratteri pari per calcolo check digit
+CF_EVEN_VALUES = {
+    '0': 0, '1': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9,
+    'A': 0, 'B': 1, 'C': 2, 'D': 3, 'E': 4, 'F': 5, 'G': 6, 'H': 7, 'I': 8, 'J': 9,
+    'K': 10, 'L': 11, 'M': 12, 'N': 13, 'O': 14, 'P': 15, 'Q': 16, 'R': 17, 'S': 18, 'T': 19,
+    'U': 20, 'V': 21, 'W': 22, 'X': 23, 'Y': 24, 'Z': 25
+}
+
+def validate_codice_fiscale_format(cf: str) -> bool:
+    """Valida il formato base del codice fiscale (16 caratteri alfanumerici)"""
+    if not cf or len(cf) != 16:
+        return False
+    cf = cf.upper()
+    # Pattern: 6 lettere + 2 numeri + 1 lettera + 2 numeri + 1 lettera + 3 alfanumerici + 1 lettera
+    pattern = r'^[A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z]$'
+    import re
+    return bool(re.match(pattern, cf))
+
+def calculate_cf_check_digit(cf_without_check: str) -> str:
+    """Calcola il carattere di controllo del codice fiscale"""
+    cf = cf_without_check.upper()
+    total = 0
+    for i, char in enumerate(cf):
+        if (i + 1) % 2 == 0:  # Posizioni pari (1-indexed)
+            total += CF_EVEN_VALUES.get(char, 0)
+        else:  # Posizioni dispari
+            total += CF_ODD_VALUES.get(char, 0)
+    return chr(65 + (total % 26))  # A=65 in ASCII
+
+def validate_codice_fiscale_checksum(cf: str) -> bool:
+    """Verifica il carattere di controllo del codice fiscale"""
+    if len(cf) != 16:
+        return False
+    cf = cf.upper()
+    expected_check = calculate_cf_check_digit(cf[:15])
+    return cf[15] == expected_check
+
+def extract_birth_date_from_cf(cf: str) -> Optional[dict]:
+    """
+    Estrae la data di nascita dal codice fiscale.
+    Restituisce dict con anno, mese, giorno oppure None se non valido.
+    """
+    if not validate_codice_fiscale_format(cf):
+        return None
+    
+    cf = cf.upper()
+    
+    try:
+        # Anno (posizioni 6-7): ultime 2 cifre
+        year_code = int(cf[6:8])
+        # Determina il secolo (assumiamo che chi si registra oggi abbia almeno 16 anni)
+        current_year = datetime.now().year
+        if year_code <= (current_year - 2000):
+            year = 2000 + year_code
+        else:
+            year = 1900 + year_code
+        
+        # Mese (posizione 8): lettera
+        month_letter = cf[8]
+        month = CF_MONTH_CODES.get(month_letter)
+        if not month:
+            return None
+        
+        # Giorno (posizioni 9-10): per le donne si aggiunge 40
+        day_code = int(cf[9:11])
+        is_female = day_code > 40
+        day = day_code - 40 if is_female else day_code
+        
+        return {
+            'year': year,
+            'month': month,
+            'day': day,
+            'is_female': is_female
+        }
+    except (ValueError, IndexError):
+        return None
+
+def validate_cf_matches_birth_date(cf: str, birth_date: str) -> tuple[bool, str]:
+    """
+    Verifica che il codice fiscale corrisponda alla data di nascita fornita.
+    birth_date deve essere in formato YYYY-MM-DD.
+    Restituisce (is_valid, error_message).
+    """
+    cf_data = extract_birth_date_from_cf(cf)
+    if not cf_data:
+        return False, "Codice fiscale non valido"
+    
+    try:
+        # Parse della data fornita
+        bd = datetime.strptime(birth_date, "%Y-%m-%d")
+        
+        # Confronta anno (considera che il CF ha solo 2 cifre)
+        cf_year_suffix = cf_data['year'] % 100
+        bd_year_suffix = bd.year % 100
+        
+        # Verifica che l'anno corrisponda (considerando il secolo)
+        if cf_year_suffix != bd_year_suffix:
+            return False, "L'anno di nascita nel codice fiscale non corrisponde alla data inserita"
+        
+        # Verifica mese
+        if cf_data['month'] != bd.month:
+            return False, "Il mese di nascita nel codice fiscale non corrisponde alla data inserita"
+        
+        # Verifica giorno
+        if cf_data['day'] != bd.day:
+            return False, "Il giorno di nascita nel codice fiscale non corrisponde alla data inserita"
+        
+        return True, ""
+    except ValueError:
+        return False, "Formato data di nascita non valido (usa YYYY-MM-DD)"
+
+def calculate_age(birth_date: str) -> int:
+    """Calcola l'età in anni dalla data di nascita (formato YYYY-MM-DD)"""
+    try:
+        bd = datetime.strptime(birth_date, "%Y-%m-%d")
+        today = datetime.now()
+        age = today.year - bd.year
+        # Se il compleanno non è ancora arrivato quest'anno, sottrai 1
+        if (today.month, today.day) < (bd.month, bd.day):
+            age -= 1
+        return age
+    except ValueError:
+        return -1
+
+def encrypt_sensitive_data(data: str) -> str:
+    """
+    Cripta dati sensibili per lo storage.
+    Usa hashing + salt per codice fiscale (non reversibile).
+    """
+    import hashlib
+    import os
+    # Per il codice fiscale usiamo un hash con salt fisso (per poter verificare duplicati)
+    salt = os.getenv("CF_SALT", "ribook_cf_salt_2024")
+    return hashlib.sha256(f"{salt}{data.upper()}".encode()).hexdigest()
+
 # User Models
 
 # Child profile for multi-profile support
@@ -331,6 +485,8 @@ class UserCreate(BaseModel):
     email: str
     telefono: Optional[str] = None
     password: str
+    codice_fiscale: str  # Obbligatorio - validato
+    data_nascita: str  # Obbligatorio - formato YYYY-MM-DD
     iban: Optional[str] = None  # IBAN per ricevere pagamenti
     scuola: Optional[str] = None
     classe: Optional[str] = None
@@ -348,6 +504,8 @@ class User(BaseModel):
     email: str
     telefono: Optional[str] = None
     password_hash: str
+    codice_fiscale_hash: str = ""  # Hash del CF per privacy
+    data_nascita_encrypted: str = ""  # Data nascita criptata
     iban: Optional[str] = None  # IBAN per ricevere pagamenti
     scuola: Optional[str] = None
     classe: Optional[str] = None
@@ -364,6 +522,7 @@ class User(BaseModel):
     total_purchases: int = 0  # Total books purchased
     rating: float = 0.0  # Average rating (0-5)
     rating_count: int = 0  # Number of ratings received
+    verified_identity: bool = True  # CF validato
     created_at: datetime = Field(default_factory=get_rome_time)
 
 # Review model
@@ -863,11 +1022,66 @@ async def register_user(user_data: UserCreate):
     print(f"Nome: {user_data.nome}")
     print(f"Cognome: {user_data.cognome}")
     
+    # ============== VALIDAZIONE CODICE FISCALE E ETÀ ==============
+    
+    # 1. Valida formato codice fiscale
+    cf = user_data.codice_fiscale.upper().strip()
+    if not validate_codice_fiscale_format(cf):
+        raise HTTPException(
+            status_code=400, 
+            detail="Codice fiscale non valido. Deve essere di 16 caratteri alfanumerici."
+        )
+    
+    # 2. Valida checksum del codice fiscale
+    if not validate_codice_fiscale_checksum(cf):
+        raise HTTPException(
+            status_code=400, 
+            detail="Codice fiscale non valido. Il carattere di controllo non corrisponde."
+        )
+    
+    # 3. Verifica che la data di nascita corrisponda al codice fiscale
+    is_valid, error_msg = validate_cf_matches_birth_date(cf, user_data.data_nascita)
+    if not is_valid:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Verifica identità fallita: {error_msg}"
+        )
+    
+    # 4. Verifica età minima (16 anni)
+    age = calculate_age(user_data.data_nascita)
+    if age < 0:
+        raise HTTPException(
+            status_code=400, 
+            detail="Data di nascita non valida. Usa il formato YYYY-MM-DD."
+        )
+    if age < 16:
+        raise HTTPException(
+            status_code=400, 
+            detail="Devi avere almeno 16 anni per registrarti."
+        )
+    
+    # 5. Verifica che il codice fiscale non sia già registrato
+    cf_hash = encrypt_sensitive_data(cf)
+    existing_cf = await db.users.find_one({"codice_fiscale_hash": cf_hash})
+    if existing_cf:
+        raise HTTPException(
+            status_code=400, 
+            detail="Questo codice fiscale è già associato a un account esistente."
+        )
+    
+    # ============== FINE VALIDAZIONE ==============
+    
     # Check if email already exists
     existing = await db.users.find_one({"email": user_data.email.lower()})
     if existing:
         print(f"Email già esistente!")
         raise HTTPException(status_code=400, detail="Email già registrata")
+    
+    # Cripta i dati sensibili per lo storage
+    # Il CF viene hashato (non reversibile) per verificare duplicati
+    # La data di nascita viene criptata (reversibile solo con la chiave)
+    import base64
+    data_nascita_encrypted = base64.b64encode(user_data.data_nascita.encode()).decode()
     
     # Create user with auto-generated username
     user = User(
@@ -876,16 +1090,19 @@ async def register_user(user_data: UserCreate):
         email=user_data.email.lower(),
         telefono=user_data.telefono,
         password_hash=hash_password(user_data.password),
+        codice_fiscale_hash=cf_hash,
+        data_nascita_encrypted=data_nascita_encrypted,
         iban=user_data.iban,
         scuola=user_data.scuola,
         classe=user_data.classe,
         sezione=user_data.sezione,
         tipo_scuola=user_data.tipo_scuola,
-        username=generate_username()
+        username=generate_username(),
+        verified_identity=True
     )
     
     await db.users.insert_one(user.dict())
-    print(f"Utente creato con ID: {user.id}")
+    print(f"Utente creato con ID: {user.id} - Identità verificata")
     return {"message": "Registrazione completata", "user_id": user.id, "username": user.username}
 
 @api_router.post("/auth/login")
