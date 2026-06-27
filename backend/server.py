@@ -8296,6 +8296,172 @@ class StripePaymentRequest(BaseModel):
 class CheckoutSessionRequest(BaseModel):
     platform: str = "web"  # 'web' o 'mobile'
 
+class BatchCheckoutRequest(BaseModel):
+    platform: str = "web"
+    order_ids: list[str]
+
+@api_router.post("/orders/create-batch-checkout")
+async def create_batch_checkout_session(
+    request: BatchCheckoutRequest,
+    user_id: str = Query(...)
+):
+    """
+    Crea una Stripe Checkout Session per più ordini (carrello).
+    Tutti gli ordini vengono pagati in un'unica transazione.
+    """
+    
+    if not request.order_ids:
+        raise HTTPException(status_code=400, detail="Nessun ordine specificato")
+    
+    # Carica tutti gli ordini
+    orders = await db.orders.find({
+        "id": {"$in": request.order_ids},
+        "buyer_id": user_id,
+        "status": {"$in": ["pending_payment", "in_attesa_pagamento"]}
+    }).to_list(50)
+    
+    if len(orders) != len(request.order_ids):
+        found_ids = [o.get("id") for o in orders]
+        missing = [i for i in request.order_ids if i not in found_ids]
+        raise HTTPException(status_code=400, detail=f"Alcuni ordini non trovati o non pagabili: {missing}")
+    
+    # Calcola totale e crea line_items per Stripe
+    line_items = []
+    total_cents = 0
+    order_metadata = []
+    
+    for order in orders:
+        include_foderazione = order.get("include_foderazione", False)
+        prezzo_libro = order.get("prezzo_libro", 0)
+        commissioni = calcola_commissioni(prezzo_libro, include_foderazione)
+        amount_cents = int(commissioni["totale_acquirente"] * 100)
+        total_cents += amount_cents
+        
+        book_title = order.get("book_titolo", "Libro")[:50]
+        order_code = order.get("order_code", order.get("id")[:8])
+        
+        line_items.append({
+            "price_data": {
+                "currency": "eur",
+                "product_data": {
+                    "name": f"📚 {book_title}",
+                    "description": f"Ordine #{order_code}",
+                },
+                "unit_amount": amount_cents,
+            },
+            "quantity": 1,
+        })
+        order_metadata.append(order.get("id"))
+    
+    try:
+        base_url = os.getenv("FRONTEND_URL", "https://language-check-10.preview.emergentagent.com")
+        
+        # Crea una sessione Stripe con tutti gli ordini
+        session = stripe.checkout.Session.create(
+            payment_method_types=["card"],
+            line_items=line_items,
+            mode="payment",
+            success_url=f"{base_url}/stripe-batch-success?session_id={{CHECKOUT_SESSION_ID}}&order_ids={','.join(request.order_ids)}",
+            cancel_url=f"{base_url}/sell?canceled=true",
+            metadata={
+                "order_ids": ",".join(request.order_ids),
+                "user_id": user_id,
+                "batch_payment": "true",
+            },
+            payment_intent_data={
+                "capture_method": "manual",  # Escrow: fondi in hold
+                "metadata": {
+                    "order_ids": ",".join(request.order_ids),
+                    "user_id": user_id,
+                    "batch_payment": "true",
+                }
+            },
+        )
+        
+        # Salva il session ID su tutti gli ordini
+        for order in orders:
+            await db.orders.update_one(
+                {"id": order.get("id")},
+                {"$set": {
+                    "stripe_checkout_session_id": session.id,
+                    "stripe_checkout_created_at": datetime.utcnow().isoformat(),
+                }}
+            )
+        
+        return {
+            "success": True,
+            "checkout_url": session.url,
+            "session_id": session.id,
+            "total_amount": total_cents / 100,
+            "order_count": len(orders),
+        }
+        
+    except stripe.error.StripeError as e:
+        raise HTTPException(status_code=400, detail=f"Errore Stripe: {str(e)}")
+
+@api_router.get("/orders/verify-batch-checkout")
+async def verify_batch_checkout(
+    session_id: str = Query(...),
+    order_ids: str = Query(...),
+    user_id: str = Query(...)
+):
+    """
+    Verifica il pagamento batch e aggiorna tutti gli ordini.
+    """
+    try:
+        session = stripe.checkout.Session.retrieve(session_id)
+        
+        if session.payment_status != "paid":
+            return {"success": False, "message": "Pagamento non completato"}
+        
+        ids = [x.strip() for x in order_ids.split(",") if x.strip()]
+        orders = await db.orders.find({
+            "id": {"$in": ids},
+            "buyer_id": user_id,
+        }).to_list(50)
+        
+        now = datetime.utcnow()
+        paid_orders = []
+        
+        for order in orders:
+            if order.get("status") not in ["pending_payment", "in_attesa_pagamento"]:
+                continue
+                
+            # Aggiorna ordine
+            delivery_deadline = now + timedelta(days=2)
+            await db.orders.update_one(
+                {"id": order.get("id")},
+                {"$set": {
+                    "status": "pagato_attesa_consegna",
+                    "paid_at": now.isoformat(),
+                    "payment_intent_id": session.payment_intent,
+                    "delivery_deadline": delivery_deadline.isoformat(),
+                }}
+            )
+            
+            # Notifica venditore
+            await db.notifications.insert_one({
+                "id": str(uuid.uuid4()),
+                "user_id": order.get("seller_id"),
+                "type": "order_paid",
+                "title": "Pagamento ricevuto!",
+                "message": f"L'acquirente ha pagato per il libro:\n📚 \"{order.get('book_titolo')}\"\n\n⏰ Hai 2 giorni lavorativi per consegnare il libro alla cartolibreria.",
+                "data": {"order_id": order.get("id")},
+                "read": False,
+                "created_at": now.isoformat(),
+            })
+            
+            paid_orders.append(order.get("order_code"))
+        
+        return {
+            "success": True,
+            "message": f"{len(paid_orders)} ordini confermati",
+            "order_codes": paid_orders,
+        }
+        
+    except stripe.error.StripeError as e:
+        raise HTTPException(status_code=400, detail=f"Errore verifica: {str(e)}")
+
 @api_router.post("/orders/{order_id}/create-checkout-session")
 async def create_checkout_session(
     order_id: str, 

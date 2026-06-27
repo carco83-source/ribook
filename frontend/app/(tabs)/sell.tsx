@@ -9,6 +9,7 @@ import {
   RefreshControl,
   Alert,
   Platform,
+  Linking,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,6 +18,7 @@ import axios from 'axios';
 import { authApi } from '../../src/utils/api';
 import { secureGet, STORAGE_KEYS } from '../../src/utils/secureStorage';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as WebBrowser from 'expo-web-browser';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:8001';
 
@@ -179,27 +181,57 @@ export default function CartScreen() {
     const total = calculateTotal();
     const booksList = orders.map(o => `• ${o.book_titolo}`).join('\n');
     
+    // Funzione per procedere con il pagamento Stripe
+    const proceedWithStripeCheckout = async () => {
+      setPayingAll(true);
+      try {
+        // Crea Stripe Checkout Session per tutti gli ordini
+        const orderIds = orders.map(o => o.id);
+        const response = await authApi.post(
+          `/api/orders/create-batch-checkout?user_id=${userId}`,
+          { platform: 'web', order_ids: orderIds }
+        );
+        
+        console.log('Batch checkout response:', response);
+        
+        if (response.checkout_url) {
+          // Apri la pagina di pagamento Stripe
+          if (Platform.OS === 'web') {
+            // Su web, redirect diretto
+            window.location.href = response.checkout_url;
+          } else {
+            // Su mobile, usa WebBrowser
+            const result = await WebBrowser.openBrowserAsync(response.checkout_url, {
+              dismissButtonStyle: 'close',
+              presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
+            });
+            console.log('WebBrowser result:', result);
+            // Ricarica ordini dopo chiusura browser
+            loadOrders();
+          }
+        } else {
+          throw new Error('URL di checkout non ricevuto');
+        }
+      } catch (error: any) {
+        console.error('Checkout error:', error.response?.data || error.message);
+        const errorMsg = error.response?.data?.detail || 'Errore durante la creazione del pagamento. Riprova.';
+        if (Platform.OS === 'web') {
+          window.alert('Errore: ' + errorMsg);
+        } else {
+          Alert.alert('Errore', errorMsg);
+        }
+      } finally {
+        setPayingAll(false);
+      }
+    };
+    
     if (Platform.OS === 'web') {
       const confirmed = window.confirm(
-        `Conferma acquisto\n\nStai per acquistare ${orders.length} libri:\n${booksList}\n\nTotale: €${total.toFixed(2)}`
+        `Conferma acquisto\n\nStai per acquistare ${orders.length} libri:\n${booksList}\n\nTotale: €${total.toFixed(2)}\n\nVerrai reindirizzato alla pagina di pagamento sicura Stripe.`
       );
       
       if (confirmed) {
-        setPayingAll(true);
-        try {
-          const orderIds = orders.map(o => o.id).join(',');
-          await axios.post(`${API_URL}/api/orders/pay-batch?user_id=${userId}&order_ids=${orderIds}`);
-          
-          const bookstores = [...new Set(orders.map(o => o.bookstore_name))];
-          window.alert(
-            `✅ Acquisto completato!\n\n${orders.length} libri acquistati per €${total.toFixed(2)}\n\n🏪 Ritiro presso:\n${bookstores.join('\n')}\n\nI venditori hanno 2 giorni lavorativi per consegnare.`
-          );
-          loadOrders();
-        } catch (error: any) {
-          window.alert('Errore: ' + (error.response?.data?.detail || 'Errore nel pagamento'));
-        } finally {
-          setPayingAll(false);
-        }
+        await proceedWithStripeCheckout();
       }
       return;
     }
@@ -207,30 +239,12 @@ export default function CartScreen() {
     // Su mobile, usa Alert
     Alert.alert(
       'Conferma acquisto',
-      `Stai per acquistare ${orders.length} libri:\n\n${booksList}\n\nTotale: €${total.toFixed(2)}`,
+      `Stai per acquistare ${orders.length} libri:\n\n${booksList}\n\nTotale: €${total.toFixed(2)}\n\nVerrai reindirizzato alla pagina di pagamento sicura.`,
       [
         { text: 'Annulla', style: 'cancel' },
         {
           text: `Paga €${total.toFixed(2)}`,
-          onPress: async () => {
-            setPayingAll(true);
-            try {
-              const orderIds = orders.map(o => o.id).join(',');
-              await axios.post(`${API_URL}/api/orders/pay-batch?user_id=${userId}&order_ids=${orderIds}`);
-              
-              const bookstores = [...new Set(orders.map(o => o.bookstore_name))];
-              Alert.alert(
-                '✅ Acquisto completato!',
-                `${orders.length} libri acquistati per €${total.toFixed(2)}\n\n🏪 Ritiro presso:\n${bookstores.join('\n')}\n\nI venditori hanno 2 giorni lavorativi per consegnare.`,
-                [{ text: 'OK' }]
-              );
-              loadOrders();
-            } catch (error: any) {
-              Alert.alert('Errore', error.response?.data?.detail || 'Errore nel pagamento');
-            } finally {
-              setPayingAll(false);
-            }
-          },
+          onPress: proceedWithStripeCheckout,
         },
       ]
     );
