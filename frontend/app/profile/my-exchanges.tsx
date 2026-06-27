@@ -10,6 +10,11 @@ import {
   Alert,
   Modal,
   TextInput,
+  Keyboard,
+  TouchableWithoutFeedback,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
 } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -646,74 +651,100 @@ export default function MyExchangesScreen() {
         visible={cancelModalVisible}
         animationType="slide"
         transparent={true}
-        onRequestClose={() => setCancelModalVisible(false)}
+        onRequestClose={() => {
+          Keyboard.dismiss();
+          setCancelModalVisible(false);
+        }}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Annulla ordine</Text>
-              <TouchableOpacity onPress={() => setCancelModalVisible(false)}>
-                <Ionicons name="close" size={24} color="#333" />
-              </TouchableOpacity>
-            </View>
-            
-            {orderToCancel && (
-              <View style={styles.cancelOrderInfo}>
-                <Ionicons name="warning" size={32} color="#f44336" />
-                <Text style={styles.cancelOrderTitle}>Stai annullando un ordine già pagato</Text>
-                <Text style={styles.cancelOrderBook}>📚 {orderToCancel.book_titolo}</Text>
-                <Text style={styles.cancelOrderAmount}>
-                  💰 Pagamento: €{orderToCancel.totale_acquirente?.toFixed(2)}
-                </Text>
-              </View>
-            )}
-            
-            <Text style={styles.modalSubtitle}>
-              Inserisci il motivo dell'annullamento:
-            </Text>
-            
-            <TextInput
-              style={styles.returnInput}
-              multiline
-              numberOfLines={3}
-              placeholder="Es: Ho trovato il libro altrove, non mi serve più, errore nell'ordine..."
-              value={cancelReason}
-              onChangeText={setCancelReason}
-              textAlignVertical="top"
-            />
-            
-            <View style={styles.cancelRefundInfo}>
-              <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
-              <Text style={styles.cancelRefundText}>
-                Il pagamento verrà rimborsato automaticamente e il venditore sarà notificato di non consegnare il libro.
-              </Text>
-            </View>
-            
-            <View style={styles.modalButtons}>
-              <TouchableOpacity 
-                style={styles.cancelButton}
-                onPress={() => {
-                  setCancelModalVisible(false);
-                  setOrderToCancel(null);
-                  setCancelReason('');
-                }}
-              >
-                <Text style={styles.cancelButtonText}>Indietro</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.confirmCancelButton, !cancelReason.trim() && styles.submitButtonDisabled]}
-                onPress={confirmCancelOrder}
-                disabled={!cancelReason.trim() || actionLoading}
-              >
-                {actionLoading ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Text style={styles.submitButtonText}>Conferma annullamento</Text>
-                )}
-              </TouchableOpacity>
-            </View>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={styles.modalOverlay}>
+            <KeyboardAvoidingView 
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+              style={styles.keyboardAvoidingView}
+            >
+              <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
+                <View style={styles.modalContent}>
+                  <View style={styles.modalHeader}>
+                    <Text style={styles.modalTitle}>Annulla ordine</Text>
+                    <TouchableOpacity onPress={() => {
+                      Keyboard.dismiss();
+                      setCancelModalVisible(false);
+                    }}>
+                      <Ionicons name="close" size={24} color="#333" />
+                    </TouchableOpacity>
+                  </View>
+                  
+                  <ScrollView 
+                    showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                  >
+                    {orderToCancel && (
+                      <View style={styles.cancelOrderInfo}>
+                        <Ionicons name="warning" size={32} color="#f44336" />
+                        <Text style={styles.cancelOrderTitle}>Stai annullando un ordine già pagato</Text>
+                        <Text style={styles.cancelOrderBook}>📚 {orderToCancel.book_titolo}</Text>
+                        <Text style={styles.cancelOrderAmount}>
+                          💰 Pagamento: €{orderToCancel.totale_acquirente?.toFixed(2)}
+                        </Text>
+                      </View>
+                    )}
+                    
+                    <Text style={styles.modalSubtitle}>
+                      Inserisci il motivo dell'annullamento:
+                    </Text>
+                    
+                    <TextInput
+                      style={styles.returnInput}
+                      multiline
+                      numberOfLines={3}
+                      placeholder="Es: Ho trovato il libro altrove, non mi serve più, errore nell'ordine..."
+                      value={cancelReason}
+                      onChangeText={setCancelReason}
+                      textAlignVertical="top"
+                      blurOnSubmit={true}
+                      returnKeyType="done"
+                    />
+                    
+                    <View style={styles.cancelRefundInfo}>
+                      <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+                      <Text style={styles.cancelRefundText}>
+                        Il pagamento verrà rimborsato automaticamente e il venditore sarà notificato di non consegnare il libro.
+                      </Text>
+                    </View>
+                    
+                    <View style={styles.modalButtons}>
+                      <TouchableOpacity 
+                        style={styles.cancelButton}
+                        onPress={() => {
+                          Keyboard.dismiss();
+                          setCancelModalVisible(false);
+                          setOrderToCancel(null);
+                          setCancelReason('');
+                        }}
+                      >
+                        <Text style={styles.cancelButtonText}>Indietro</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        style={[styles.confirmCancelButton, !cancelReason.trim() && styles.submitButtonDisabled]}
+                        onPress={() => {
+                          Keyboard.dismiss();
+                          confirmCancelOrder();
+                        }}
+                        disabled={!cancelReason.trim() || actionLoading}
+                      >
+                        {actionLoading ? (
+                          <ActivityIndicator size="small" color="#fff" />
+                        ) : (
+                          <Text style={styles.submitButtonText}>Conferma annullamento</Text>
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  </ScrollView>
+                </View>
+              </TouchableWithoutFeedback>
+            </KeyboardAvoidingView>
           </View>
-        </View>
+        </TouchableWithoutFeedback>
       </Modal>
     </SafeAreaView>
   );
@@ -948,6 +979,10 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  keyboardAvoidingView: {
+    width: '100%',
     justifyContent: 'flex-end',
   },
   modalContent: {
