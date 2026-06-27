@@ -8055,9 +8055,9 @@ async def seller_reject_order(order_id: str, user_id: str = Query(...), reason: 
 async def buyer_cancel_order(order_id: str, user_id: str = Query(...), reason: str = Query(default="")):
     """
     Annulla un ordine da parte dell'acquirente.
-    Possibile solo PRIMA della consegna alla cartolibreria:
-    - in_attesa_conferma_venditore
-    - in_attesa_pagamento
+    
+    PRIMA del pagamento: annulla senza rimborso
+    DOPO il pagamento (ma prima della consegna): annulla CON rimborso
     """
     
     order = await db.orders.find_one({"id": order_id, "buyer_id": user_id})
@@ -8066,30 +8066,79 @@ async def buyer_cancel_order(order_id: str, user_id: str = Query(...), reason: s
     
     current_status = order.get("status")
     
-    # Stati in cui l'acquirente può annullare
-    cancellable_states = [
+    # Stati in cui l'acquirente può annullare SENZA rimborso (non ancora pagato)
+    cancellable_no_refund = [
         "in_attesa_conferma_venditore",
         "in_attesa_pagamento", 
         "pending_payment",
         "pending_seller_confirmation"
     ]
     
-    if current_status not in cancellable_states:
+    # Stati in cui l'acquirente può annullare CON rimborso (pagato ma non consegnato)
+    cancellable_with_refund = [
+        "pagato_attesa_consegna",
+        "paid",
+        "in_transito_a_cartolibreria"
+    ]
+    
+    # Stati in cui NON si può più annullare
+    non_cancellable = [
+        "in_custodia",
+        "pronto_per_ritiro",
+        "picked_up",
+        "completed",
+        "refunded"
+    ]
+    
+    if current_status in non_cancellable:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Non puoi più annullare questo ordine. Il libro è già stato consegnato alla cartolibreria."
+        )
+    
+    if current_status not in cancellable_no_refund and current_status not in cancellable_with_refund:
         raise HTTPException(
             status_code=400, 
             detail=f"Non puoi annullare questo ordine. Stato attuale: {ORDER_STATES.get(current_status, current_status)}"
         )
     
     now = get_rome_time()
+    needs_refund = current_status in cancellable_with_refund
+    refund_result = None
+    
+    # Se pagato, processa il rimborso
+    if needs_refund:
+        payment_intent_id = order.get("payment_intent_id")
+        if payment_intent_id and not payment_intent_id.startswith("pi_mock"):
+            try:
+                # Annulla/rimborsa il PaymentIntent
+                refund = stripe.Refund.create(
+                    payment_intent=payment_intent_id,
+                    reason="requested_by_customer"
+                )
+                refund_result = {
+                    "refund_id": refund.id,
+                    "amount": refund.amount / 100,
+                    "status": refund.status
+                }
+            except stripe.error.StripeError as e:
+                # Se il pagamento era in hold (capture_method=manual), annulla invece di rimborsare
+                try:
+                    intent = stripe.PaymentIntent.cancel(payment_intent_id)
+                    refund_result = {"cancelled": True, "status": intent.status}
+                except stripe.error.StripeError as e2:
+                    raise HTTPException(status_code=400, detail=f"Errore rimborso: {str(e2)}")
     
     # Aggiorna stato ordine
+    new_status = "rimborsato_acquirente" if needs_refund else "annullato_acquirente"
     update_data = {
-        "status": "annullato_acquirente",
+        "status": new_status,
         "cancelled_at": now.isoformat(),
         "cancelled_by": "buyer",
         "cancel_reason": reason or "Annullato dall'acquirente",
+        "refund_info": refund_result,
         "status_history": order.get("status_history", []) + [{
-            "status": "annullato_acquirente",
+            "status": new_status,
             "timestamp": now.isoformat(),
             "note": f"Annullato dall'acquirente: {reason or 'Nessun motivo specificato'}"
         }]
@@ -8112,23 +8161,49 @@ async def buyer_cancel_order(order_id: str, user_id: str = Query(...), reason: s
     # Genera codice anonimo per l'acquirente
     buyer_code = f"Utente_{order.get('buyer_id', '')[:5].upper()}"
     
+    # Messaggio diverso se pagato (rimborso) o non pagato
+    if needs_refund:
+        notif_message = (
+            f"⚠️ L'acquirente {buyer_code} ha annullato l'ordine per:\n"
+            f"📚 {order.get('book_titolo')}\n\n"
+            f"❌ NON CONSEGNARE il libro alla cartolibreria.\n"
+            f"💰 Il pagamento è stato rimborsato all'acquirente.\n\n"
+            f"Motivo: {reason or 'Non specificato'}\n\n"
+            f"Il libro è tornato disponibile nel marketplace."
+        )
+        notif_title = "⚠️ ORDINE ANNULLATO - Non consegnare!"
+    else:
+        notif_message = (
+            f"L'acquirente {buyer_code} ha annullato l'ordine per:\n"
+            f"📚 {order.get('book_titolo')}\n\n"
+            f"Motivo: {reason or 'Non specificato'}\n\n"
+            f"Il libro è tornato disponibile nel marketplace."
+        )
+        notif_title = "Ordine annullato"
+    
     # Notifica al venditore
     notification = {
         "id": str(uuid.uuid4()),
         "user_id": order.get("seller_id"),
         "type": "order_cancelled_by_buyer",
-        "title": "Ordine annullato",
-        "message": f"L'acquirente {buyer_code} ha annullato l'ordine per:\n📚 {order.get('book_titolo')}\n\nIl libro è tornato disponibile nel marketplace.",
+        "title": notif_title,
+        "message": notif_message,
         "order_id": order_id,
         "read": False,
         "created_at": now.isoformat()
     }
     await db.notifications.insert_one(notification)
     
+    return_message = "Ordine annullato con successo."
+    if needs_refund:
+        return_message += " Il pagamento è stato rimborsato."
+    return_message += " Il libro è tornato disponibile nel marketplace."
+    
     return {
         "success": True,
-        "status": "annullato_acquirente",
-        "message": "Ordine annullato con successo. Il libro è tornato disponibile nel marketplace."
+        "status": new_status,
+        "refunded": needs_refund,
+        "message": return_message
     }
 
 # ============== STRIPE PAYMENT ENDPOINTS ==============

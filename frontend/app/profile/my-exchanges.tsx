@@ -63,6 +63,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: string
   reso_rifiutato: { label: 'Reso rifiutato', color: '#f44336', icon: 'close-outline', bgColor: '#FFEBEE' },
   cancelled: { label: 'Annullato', color: '#f44336', icon: 'close-circle-outline', bgColor: '#FFEBEE' },
   annullato_acquirente: { label: 'Annullato', color: '#f44336', icon: 'close-circle-outline', bgColor: '#FFEBEE' },
+  rimborsato_acquirente: { label: 'Rimborsato', color: '#f44336', icon: 'refresh-outline', bgColor: '#FFEBEE' },
   refunded: { label: 'Rimborsato', color: '#f44336', icon: 'refresh-outline', bgColor: '#FFEBEE' },
 };
 
@@ -73,6 +74,10 @@ export default function MyExchangesScreen() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [userId, setUserId] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  // Modal per annullamento con motivazione
+  const [cancelModalVisible, setCancelModalVisible] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [orderToCancel, setOrderToCancel] = useState<Order | null>(null);
 
   const loadOrders = async () => {
     try {
@@ -192,8 +197,59 @@ export default function MyExchangesScreen() {
     }
   };
 
-  // Acquirente annulla ordine
+  // Apre il modal per annullare ordine
+  const openCancelModal = (order: Order) => {
+    setOrderToCancel(order);
+    setCancelReason('');
+    setCancelModalVisible(true);
+  };
+
+  // Conferma annullamento con motivazione
+  const confirmCancelOrder = async () => {
+    if (!orderToCancel || !userId) return;
+    
+    if (!cancelReason.trim()) {
+      Alert.alert('Attenzione', 'Inserisci una motivazione per l\'annullamento');
+      return;
+    }
+    
+    setActionLoading(true);
+    setCancelModalVisible(false);
+    
+    try {
+      const response = await authApi.post(
+        `/api/orders/${orderToCancel.id}/buyer-cancel?user_id=${userId}&reason=${encodeURIComponent(cancelReason)}`
+      );
+      
+      const isPaid = ['pagato_attesa_consegna', 'paid', 'in_transito_a_cartolibreria'].includes(orderToCancel.status);
+      
+      Alert.alert(
+        '✅ Ordine annullato',
+        isPaid 
+          ? 'L\'ordine è stato annullato e il pagamento rimborsato. Il venditore è stato notificato di non consegnare il libro.'
+          : 'L\'ordine è stato annullato. Il libro è tornato disponibile.',
+        [{ text: 'OK', onPress: () => loadOrders() }]
+      );
+    } catch (error: any) {
+      console.error('Cancel error:', error.response?.data || error.message);
+      Alert.alert('Errore', error.response?.data?.detail || 'Impossibile annullare l\'ordine');
+    } finally {
+      setActionLoading(false);
+      setOrderToCancel(null);
+    }
+  };
+
+  // Acquirente annulla ordine (versione semplice per ordini non pagati)
   const handleBuyerCancel = async (order: Order) => {
+    // Per ordini pagati, usa il modal con motivazione
+    const isPaid = ['pagato_attesa_consegna', 'paid', 'in_transito_a_cartolibreria'].includes(order.status);
+    
+    if (isPaid) {
+      openCancelModal(order);
+      return;
+    }
+    
+    // Per ordini non pagati, conferma semplice
     Alert.alert(
       '❌ Annulla ordine',
       `Sei sicuro di voler annullare l'ordine per "${order.book_titolo}"?\n\nIl libro tornerà disponibile nel marketplace.`,
@@ -278,12 +334,19 @@ export default function MyExchangesScreen() {
     // Pronto per ritiro - mostra info all'acquirente
     const isReadyForPickup = isBuyer && (item.status === 'pronto_per_ritiro' || item.status === 'ready_for_pickup');
     
-    // L'acquirente può annullare l'ordine PRIMA della consegna
-    const canBuyerCancel = isBuyer && [
+    // L'acquirente può annullare l'ordine PRIMA della consegna (non pagato)
+    const canBuyerCancelUnpaid = isBuyer && [
       'in_attesa_conferma_venditore',
       'pending_seller_confirmation',
       'in_attesa_pagamento',
       'pending_payment'
+    ].includes(item.status);
+    
+    // L'acquirente può annullare un ordine PAGATO prima che venga consegnato (CON RIMBORSO)
+    const canBuyerCancelPaid = isBuyer && [
+      'pagato_attesa_consegna',
+      'paid',
+      'in_transito_a_cartolibreria'
     ].includes(item.status);
     
     // L'acquirente può richiedere reso per ordini ritirato O pronto_per_ritiro (per test)
@@ -380,7 +443,7 @@ export default function MyExchangesScreen() {
         )}
 
         {/* Pulsante Annulla per ordini in attesa conferma venditore */}
-        {canBuyerCancel && !needsBuyerPayment && (
+        {canBuyerCancelUnpaid && !needsBuyerPayment && (
           <TouchableOpacity
             style={styles.cancelOrderButton}
             onPress={() => handleBuyerCancel(item)}
@@ -389,6 +452,29 @@ export default function MyExchangesScreen() {
             <Ionicons name="close-circle-outline" size={18} color="#f44336" />
             <Text style={styles.cancelOrderButtonText}>Annulla ordine</Text>
           </TouchableOpacity>
+        )}
+
+        {/* Pulsante Annulla per ordini GIÀ PAGATI (prima della consegna) - CON RIMBORSO */}
+        {canBuyerCancelPaid && (
+          <View style={styles.paidCancelContainer}>
+            <View style={styles.paidCancelInfo}>
+              <Ionicons name="time-outline" size={18} color="#2196F3" />
+              <View style={{flex: 1, marginLeft: 8}}>
+                <Text style={styles.paidCancelTitle}>In attesa di consegna dal venditore</Text>
+                <Text style={styles.paidCancelNote}>
+                  Puoi annullare l'ordine prima che il venditore consegni il libro alla cartolibreria. Il pagamento verrà rimborsato.
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              style={styles.cancelPaidOrderButton}
+              onPress={() => handleBuyerCancel(item)}
+              disabled={actionLoading}
+            >
+              <Ionicons name="close-circle" size={18} color="#fff" />
+              <Text style={styles.cancelPaidOrderButtonText}>Annulla e rimborsa</Text>
+            </TouchableOpacity>
+          </View>
         )}
 
         {/* Opzione reso per acquirente (solo dopo ritiro, entro 72h) */}
@@ -548,6 +634,81 @@ export default function MyExchangesScreen() {
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
                   <Text style={styles.submitButtonText}>Invia richiesta</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal Annullamento Ordine Pagato */}
+      <Modal
+        visible={cancelModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setCancelModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Annulla ordine</Text>
+              <TouchableOpacity onPress={() => setCancelModalVisible(false)}>
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+            
+            {orderToCancel && (
+              <View style={styles.cancelOrderInfo}>
+                <Ionicons name="warning" size={32} color="#f44336" />
+                <Text style={styles.cancelOrderTitle}>Stai annullando un ordine già pagato</Text>
+                <Text style={styles.cancelOrderBook}>📚 {orderToCancel.book_titolo}</Text>
+                <Text style={styles.cancelOrderAmount}>
+                  💰 Pagamento: €{orderToCancel.totale_acquirente?.toFixed(2)}
+                </Text>
+              </View>
+            )}
+            
+            <Text style={styles.modalSubtitle}>
+              Inserisci il motivo dell'annullamento:
+            </Text>
+            
+            <TextInput
+              style={styles.returnInput}
+              multiline
+              numberOfLines={3}
+              placeholder="Es: Ho trovato il libro altrove, non mi serve più, errore nell'ordine..."
+              value={cancelReason}
+              onChangeText={setCancelReason}
+              textAlignVertical="top"
+            />
+            
+            <View style={styles.cancelRefundInfo}>
+              <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+              <Text style={styles.cancelRefundText}>
+                Il pagamento verrà rimborsato automaticamente e il venditore sarà notificato di non consegnare il libro.
+              </Text>
+            </View>
+            
+            <View style={styles.modalButtons}>
+              <TouchableOpacity 
+                style={styles.cancelButton}
+                onPress={() => {
+                  setCancelModalVisible(false);
+                  setOrderToCancel(null);
+                  setCancelReason('');
+                }}
+              >
+                <Text style={styles.cancelButtonText}>Indietro</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.confirmCancelButton, !cancelReason.trim() && styles.submitButtonDisabled]}
+                onPress={confirmCancelOrder}
+                disabled={!cancelReason.trim() || actionLoading}
+              >
+                {actionLoading ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.submitButtonText}>Conferma annullamento</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -906,5 +1067,92 @@ const styles = StyleSheet.create({
     color: '#f44336',
     fontSize: 14,
     fontWeight: '500',
+  },
+  // Stili per modal annullamento ordine pagato
+  cancelOrderInfo: {
+    alignItems: 'center',
+    backgroundColor: '#FFEBEE',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  cancelOrderTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#d32f2f',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  cancelOrderBook: {
+    fontSize: 14,
+    color: '#333',
+    marginTop: 8,
+    fontWeight: '500',
+  },
+  cancelOrderAmount: {
+    fontSize: 13,
+    color: '#666',
+    marginTop: 4,
+  },
+  cancelRefundInfo: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#E8F5E9',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 12,
+    gap: 8,
+  },
+  cancelRefundText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#2E7D32',
+    lineHeight: 18,
+  },
+  confirmCancelButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 10,
+    backgroundColor: '#f44336',
+    alignItems: 'center',
+  },
+  // Stili per annullamento ordine pagato
+  paidCancelContainer: {
+    marginTop: 12,
+    backgroundColor: '#E3F2FD',
+    borderWidth: 1,
+    borderColor: '#90CAF9',
+    borderRadius: 12,
+    padding: 14,
+  },
+  paidCancelInfo: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  paidCancelTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1976D2',
+    marginBottom: 4,
+  },
+  paidCancelNote: {
+    fontSize: 11,
+    color: '#666',
+    lineHeight: 16,
+  },
+  cancelPaidOrderButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f44336',
+    borderRadius: 8,
+    paddingVertical: 12,
+    gap: 8,
+  },
+  cancelPaidOrderButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
