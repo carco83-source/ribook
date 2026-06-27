@@ -22,6 +22,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { authApi } from '../../src/utils/api';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as WebBrowser from 'expo-web-browser';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -171,7 +172,7 @@ export default function MyExchangesScreen() {
     );
   };
 
-  // Acquirente paga
+  // Acquirente paga con Stripe Checkout
   const handlePayOrder = async (order: Order) => {
     console.log('handlePayOrder called with order:', order.id, order.order_code);
     
@@ -184,19 +185,33 @@ export default function MyExchangesScreen() {
     setActionLoading(true);
     
     try {
-      // Chiama direttamente l'API per pagare
-      const response = await axios.post(`${API_URL}/api/orders/${order.id}/pay?user_id=${userId}`);
-      console.log('Payment response:', response.data);
-      
-      Alert.alert(
-        '✅ Pagamento completato!', 
-        `Hai pagato €${order.totale_acquirente.toFixed(2)} per "${order.book_titolo}".\n\nIl venditore ha 2 giorni lavorativi per consegnare.`,
-        [{ text: 'OK', onPress: () => loadOrders() }]
+      // Crea Stripe Checkout Session
+      const response = await authApi.post(
+        `/api/orders/${order.id}/create-checkout-session?user_id=${userId}`,
+        { platform: 'web' }
       );
+      
+      console.log('Checkout session response:', response);
+      
+      if (response.checkout_url) {
+        // Apri la pagina di pagamento Stripe
+        const result = await WebBrowser.openBrowserAsync(response.checkout_url, {
+          dismissButtonStyle: 'close',
+          presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
+        });
+        
+        console.log('WebBrowser result:', result);
+        
+        // Dopo che l'utente chiude il browser, ricarica gli ordini
+        // (il redirect a stripe-success gestirà la conferma)
+        loadOrders();
+      } else {
+        throw new Error('URL di checkout non ricevuto');
+      }
     } catch (error: any) {
-      console.error('Payment error:', error.response?.data || error.message);
-      const errorMsg = error.response?.data?.detail || 'Errore durante il pagamento. Riprova.';
-      Alert.alert('Errore pagamento', errorMsg);
+      console.error('Checkout error:', error.response?.data || error.message);
+      const errorMsg = error.response?.data?.detail || 'Errore durante la creazione del pagamento. Riprova.';
+      Alert.alert('Errore', errorMsg);
     } finally {
       setActionLoading(false);
     }
