@@ -197,8 +197,12 @@ export default function CartScreen() {
         if (response.checkout_url) {
           // Apri la pagina di pagamento Stripe
           if (Platform.OS === 'web') {
-            // Su web, redirect diretto
-            window.location.href = response.checkout_url;
+            // Su web, apri in una nuova tab per evitare problemi di redirect
+            const stripeWindow = window.open(response.checkout_url, '_blank');
+            if (!stripeWindow) {
+              // Se il popup è bloccato, fai redirect diretto
+              window.location.href = response.checkout_url;
+            }
           } else {
             // Su mobile, usa WebBrowser
             const result = await WebBrowser.openBrowserAsync(response.checkout_url, {
