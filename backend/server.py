@@ -8409,10 +8409,22 @@ async def verify_batch_checkout(
     Verifica il pagamento batch e aggiorna tutti gli ordini.
     """
     try:
-        session = stripe.checkout.Session.retrieve(session_id)
+        session = stripe.checkout.Session.retrieve(session_id, expand=["payment_intent"])
         
-        if session.payment_status != "paid":
-            return {"success": False, "message": "Pagamento non completato"}
+        # Con capture_method: manual, payment_status può essere "unpaid" 
+        # ma il payment_intent.status sarà "requires_capture" (fondi in hold)
+        payment_intent = session.payment_intent
+        valid_statuses = ["paid", "no_payment_required"]
+        valid_pi_statuses = ["requires_capture", "succeeded"]
+        
+        is_valid = (
+            session.payment_status in valid_statuses or 
+            (payment_intent and payment_intent.status in valid_pi_statuses)
+        )
+        
+        if not is_valid:
+            return {"success": False, "message": f"Pagamento non completato. Stato: {session.payment_status}"}
+        
         
         ids = [x.strip() for x in order_ids.split(",") if x.strip()]
         orders = await db.orders.find({
