@@ -75,11 +75,23 @@ export default function RegisterScreen() {
     return value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16);
   };
 
-  // Calcola età dalla data di nascita
+  // Calcola età dalla data di nascita (formato GG/MM/AAAA)
   const calculateAge = (dateString: string): number => {
-    if (!dateString) return -1;
+    if (!dateString || dateString.length < 10) return -1;
+    
+    // Parse formato GG/MM/AAAA
+    const parts = dateString.split('/');
+    if (parts.length !== 3) return -1;
+    
+    const day = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1; // Mesi in JS sono 0-indexed
+    const year = parseInt(parts[2], 10);
+    
+    if (isNaN(day) || isNaN(month) || isNaN(year)) return -1;
+    
+    const birthDate = new Date(year, month, day);
     const today = new Date();
-    const birthDate = new Date(dateString);
+    
     let age = today.getFullYear() - birthDate.getFullYear();
     const monthDiff = today.getMonth() - birthDate.getMonth();
     if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
@@ -170,13 +182,23 @@ export default function RegisterScreen() {
     setLoading(true);
     try {
       const cleanIban = iban ? iban.replace(/\s/g, '').toUpperCase() : null;
+      
+      // Converti data da GG/MM/AAAA a AAAA-MM-GG per il backend
+      let formattedDate = dataNascita;
+      if (dataNascita && dataNascita.includes('/')) {
+        const parts = dataNascita.split('/');
+        if (parts.length === 3) {
+          formattedDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+        }
+      }
+      
       const response = await axios.post(`${API_URL}/api/auth/register`, {
         nome: nome.trim(),
         cognome: cognome.trim(),
         email: email.trim().toLowerCase(),
         password,
         codice_fiscale: codiceFiscale.toUpperCase(),
-        data_nascita: dataNascita,
+        data_nascita: formattedDate,
         iban: cleanIban,
       });
 
@@ -435,17 +457,17 @@ export default function RegisterScreen() {
                     <Ionicons name="calendar-outline" size={20} color="#666" style={styles.inputIcon} />
                     <TextInput
                       style={[styles.input, { fontSize: dynamicStyles.fontSize.input }]}
-                      placeholder="AAAA-MM-GG (es: 1990-05-15)"
+                      placeholder="GG/MM/AAAA (es: 15/05/1990)"
                       placeholderTextColor="#999"
                       value={formData.dataNascita}
                       onChangeText={(v) => {
-                        // Formattazione automatica della data
+                        // Formattazione automatica della data GG/MM/AAAA
                         let formatted = v.replace(/[^0-9]/g, '');
-                        if (formatted.length > 4) {
-                          formatted = formatted.slice(0, 4) + '-' + formatted.slice(4);
+                        if (formatted.length > 2) {
+                          formatted = formatted.slice(0, 2) + '/' + formatted.slice(2);
                         }
-                        if (formatted.length > 7) {
-                          formatted = formatted.slice(0, 7) + '-' + formatted.slice(7);
+                        if (formatted.length > 5) {
+                          formatted = formatted.slice(0, 5) + '/' + formatted.slice(5);
                         }
                         formatted = formatted.slice(0, 10);
                         updateField('dataNascita', formatted);
