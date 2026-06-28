@@ -529,102 +529,98 @@ export default function SearchSellScreen() {
     );
   }
 
-  // Schermata per utenti non loggati (anonimi)
-  if (isAnonymous) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.anonymousContainer}>
-          <Ionicons name="search-outline" size={80} color="#ccc" />
-          <Text style={styles.anonymousTitle}>Accedi per cercare e vendere</Text>
-          <Text style={styles.anonymousSubtitle}>
-            Per cercare libri usati e mettere in vendita i tuoi libri devi accedere al tuo account
-          </Text>
-          <TouchableOpacity
-            style={styles.anonymousButton}
-            onPress={() => router.push('/(auth)/login')}
-          >
-            <Ionicons name="log-in-outline" size={20} color="#fff" />
-            <Text style={styles.anonymousButtonText}>Accedi</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.anonymousRegisterLink}
-            onPress={() => router.push('/(auth)/register')}
-          >
-            <Text style={styles.anonymousRegisterText}>
-              Non hai un account? <Text style={styles.anonymousRegisterBold}>Registrati</Text>
-            </Text>
-          </TouchableOpacity>
-        </View>
+  // Schermata per utenti non loggati (anonimi) - SOLO per sezione VENDI
+  // Gli utenti anonimi possono comunque vedere i libri popolari e cercare
+  const renderAnonymousVendiSection = () => (
+    <View style={styles.section}>
+      <View style={styles.sectionHeader}>
+        <Ionicons name="pricetag" size={24} color="#2196F3" />
+        <Text style={styles.sectionTitle}>VENDI UN LIBRO</Text>
       </View>
-    );
-  }
+      <View style={styles.anonymousVendiContainer}>
+        <Ionicons name="lock-closed-outline" size={40} color="#ccc" />
+        <Text style={styles.anonymousVendiText}>
+          Per vendere i tuoi libri devi registrarti
+        </Text>
+        <TouchableOpacity
+          style={styles.anonymousVendiButton}
+          onPress={() => router.push('/(auth)/register')}
+        >
+          <Text style={styles.anonymousVendiButtonText}>Registrati</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
 
   return (
     <ScrollView style={styles.container}>
       {/* ==================== SEZIONE VENDI ==================== */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Ionicons name="pricetag" size={24} color="#2196F3" />
-          <Text style={styles.sectionTitle}>VENDI UN LIBRO</Text>
-        </View>
-        
-        <View style={styles.inputRow}>
-          <TextInput
-            style={styles.isbnInput}
-            placeholder="Inserisci ISBN o scansiona"
-            placeholderTextColor="#999"
-            value={vendiIsbn}
-            onChangeText={setVendiIsbn}
-            keyboardType="numeric"
-            maxLength={13}
-          />
-          <TouchableOpacity style={styles.scanButton} onPress={openScanner}>
-            <Ionicons name="barcode" size={24} color="#fff" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.searchButton} onPress={handleVendiSearch}>
-            {vendiLoading ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Ionicons name="search" size={20} color="#fff" />
-            )}
-          </TouchableOpacity>
-        </View>
+      {isAnonymous ? (
+        renderAnonymousVendiSection()
+      ) : (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="pricetag" size={24} color="#2196F3" />
+            <Text style={styles.sectionTitle}>VENDI UN LIBRO</Text>
+          </View>
+          
+          <View style={styles.inputRow}>
+            <TextInput
+              style={styles.isbnInput}
+              placeholder="Inserisci ISBN o scansiona"
+              placeholderTextColor="#999"
+              value={vendiIsbn}
+              onChangeText={setVendiIsbn}
+              keyboardType="numeric"
+              maxLength={13}
+            />
+            <TouchableOpacity style={styles.scanButton} onPress={openScanner}>
+              <Ionicons name="barcode" size={24} color="#fff" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.searchButton} onPress={handleVendiSearch}>
+              {vendiLoading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Ionicons name="search" size={20} color="#fff" />
+              )}
+            </TouchableOpacity>
+          </View>
 
-        {vendiBook && (
-          <View style={styles.resultCard}>
-            {vendiBook.source === 'not_found' ? (
-              /* Libro NON scolastico - non vendibile */
-              <View style={styles.notSchoolBookContainer}>
-                <Ionicons name="alert-circle" size={48} color="#FF9800" />
-                <Text style={styles.notSchoolBookTitle}>Libro non trovato</Text>
-                <Text style={styles.notSchoolBookText}>
-                  Questo libro non fa parte delle adozioni scolastiche del comune di Catanzaro.
-                </Text>
-                <Text style={styles.notSchoolBookSubtext}>
-                  Al momento è possibile vendere solo libri scolastici adottati.
-                </Text>
-              </View>
-            ) : (
-              /* Libro scolastico - vendibile */
-              <>
-                <Image
-                  source={{ uri: vendiBook.cover_url || `https://covers.openlibrary.org/b/isbn/${vendiBook.isbn}-M.jpg` }}
-                  style={styles.bookCover}
-                  resizeMode="contain"
-                  onError={() => {
-                    // Se Open Library fallisce, usa IBS come fallback
-                  }}
-                />
-                <View style={styles.bookInfo}>
-                  <Text style={styles.bookTitle} numberOfLines={2}>{vendiBook.titolo || ''}</Text>
-                  {vendiBook.autori ? <Text style={styles.bookAuthor}>{vendiBook.autori}</Text> : null}
-                  <Text style={styles.bookIsbn}>ISBN: {vendiBook.isbn || ''}</Text>
-                  {vendiBook.prezzo_copertina && vendiBook.prezzo_copertina > 0 ? (
-                    <View style={styles.bookPriceRow}>
-                      <Text style={styles.bookPriceLabel}>Prezzo copertina: </Text>
-                      <Text style={styles.bookPriceValue}>€{vendiBook.prezzo_copertina.toFixed(2)}</Text>
-                    </View>
-                  ) : null}
+          {vendiBook && (
+            <View style={styles.resultCard}>
+              {vendiBook.source === 'not_found' ? (
+                /* Libro NON scolastico - non vendibile */
+                <View style={styles.notSchoolBookContainer}>
+                  <Ionicons name="alert-circle" size={48} color="#FF9800" />
+                  <Text style={styles.notSchoolBookTitle}>Libro non trovato</Text>
+                  <Text style={styles.notSchoolBookText}>
+                    Questo libro non fa parte delle adozioni scolastiche del comune di Catanzaro.
+                  </Text>
+                  <Text style={styles.notSchoolBookSubtext}>
+                    Al momento è possibile vendere solo libri scolastici adottati.
+                  </Text>
+                </View>
+              ) : (
+                /* Libro scolastico - vendibile */
+                <>
+                  <Image
+                    source={{ uri: vendiBook.cover_url || `https://covers.openlibrary.org/b/isbn/${vendiBook.isbn}-M.jpg` }}
+                    style={styles.bookCover}
+                    resizeMode="contain"
+                    onError={() => {
+                      // Se Open Library fallisce, usa IBS come fallback
+                    }}
+                  />
+                  <View style={styles.bookInfo}>
+                    <Text style={styles.bookTitle} numberOfLines={2}>{vendiBook.titolo || ''}</Text>
+                    {vendiBook.autori ? <Text style={styles.bookAuthor}>{vendiBook.autori}</Text> : null}
+                    <Text style={styles.bookIsbn}>ISBN: {vendiBook.isbn || ''}</Text>
+                    {vendiBook.prezzo_copertina && vendiBook.prezzo_copertina > 0 ? (
+                      <View style={styles.bookPriceRow}>
+                        <Text style={styles.bookPriceLabel}>Prezzo copertina: </Text>
+                        <Text style={styles.bookPriceValue}>€{vendiBook.prezzo_copertina.toFixed(2)}</Text>
+                      </View>
+                    ) : null}
                 </View>
                 <TouchableOpacity style={styles.actionButton} onPress={goToSellBook}>
                   <Text style={styles.actionButtonText}>Vendi</Text>
@@ -635,6 +631,7 @@ export default function SearchSellScreen() {
           </View>
         )}
       </View>
+      )}
 
       {/* Divider */}
       <View style={styles.divider} />
@@ -1221,5 +1218,31 @@ const styles = StyleSheet.create({
   anonymousRegisterBold: {
     color: '#1a472a',
     fontWeight: 'bold',
+  },
+  // Stili per sezione Vendi anonimi
+  anonymousVendiContainer: {
+    alignItems: 'center',
+    padding: 24,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 12,
+    marginTop: 12,
+  },
+  anonymousVendiText: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 12,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  anonymousVendiButton: {
+    backgroundColor: '#2196F3',
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+    borderRadius: 20,
+  },
+  anonymousVendiButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

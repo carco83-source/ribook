@@ -439,10 +439,20 @@ export default function ListingDetailScreen() {
     }
     
     if (!userId) {
+      // Utente anonimo/provvisorio - reindirizza alla registrazione
       if (Platform.OS === 'web') {
-        window.alert('Devi effettuare il login');
+        if (window.confirm('Per acquistare devi registrarti. Vuoi creare un account?')) {
+          router.push('/(auth)/register');
+        }
       } else {
-        Alert.alert('Errore', 'Devi effettuare il login');
+        Alert.alert(
+          'Registrazione richiesta',
+          'Per acquistare un libro devi creare un account. I tuoi profili verranno mantenuti.',
+          [
+            { text: 'Annulla', style: 'cancel' },
+            { text: 'Registrati', onPress: () => router.push('/(auth)/register') }
+          ]
+        );
       }
       return;
     }
