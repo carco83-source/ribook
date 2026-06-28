@@ -238,13 +238,20 @@ export default function RadarScreen() {
       const storedUserId = await AsyncStorage.getItem('user_id');
       const storedPremium = await AsyncStorage.getItem('is_premium');
       
+      console.log('[HOME] loadData - storedUserId:', storedUserId);
+      
       // NAVIGAZIONE ANONIMA: Se non c'è user_id, carica profili temporanei da localStorage
       if (!storedUserId) {
         setIsAnonymous(true);
+        console.log('[HOME] User is anonymous, loading temp profiles...');
+        
         // Carica profili temporanei salvati localmente
         const tempProfiles = await AsyncStorage.getItem('temp_profiles');
+        console.log('[HOME] temp_profiles from storage:', tempProfiles);
+        
         if (tempProfiles) {
           const profiles = JSON.parse(tempProfiles);
+          console.log('[HOME] Parsed profiles:', profiles.length, 'profiles');
           setChildProfiles(profiles);
           
           // Carica compatibility per profili temporanei
