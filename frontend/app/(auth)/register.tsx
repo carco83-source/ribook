@@ -595,7 +595,7 @@ export default function RegisterScreen() {
                     onChangeText={(v) => updateField('iban', v)}
                     autoCapitalize="characters"
                     autoCorrect={false}
-                    maxLength={31}
+                    maxLength={34}
                   />
                 </View>
                 <Text style={styles.ibanHint}>
