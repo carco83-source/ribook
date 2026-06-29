@@ -8499,14 +8499,27 @@ async def verify_batch_checkout(
                 }}
             )
             
-            # Notifica venditore
+            # Notifica venditore CON CODICE ORDINE
+            order_code = order.get("order_code", "")
             await db.notifications.insert_one({
                 "id": str(uuid.uuid4()),
                 "user_id": order.get("seller_id"),
                 "type": "order_paid",
-                "title": "Pagamento ricevuto!",
-                "message": f"L'acquirente ha pagato per il libro:\n📚 \"{order.get('book_titolo')}\"\n\n⏰ Hai 2 giorni lavorativi per consegnare il libro alla cartolibreria.",
-                "data": {"order_id": order.get("id")},
+                "title": "💰 Pagamento ricevuto!",
+                "message": f"L'acquirente ha pagato per il libro:\n📚 \"{order.get('book_titolo')}\"\n\n📦 Codice ordine: #{order_code}\n\n⏰ Hai 2 giorni lavorativi per consegnare il libro alla cartolibreria.\n\n👉 Mostra questo codice alla cartolibreria per la consegna.",
+                "data": {"order_id": order.get("id"), "order_code": order_code},
+                "read": False,
+                "created_at": now.isoformat(),
+            })
+            
+            # Notifica acquirente - CONFERMA PAGAMENTO
+            await db.notifications.insert_one({
+                "id": str(uuid.uuid4()),
+                "user_id": order.get("buyer_id"),
+                "type": "payment_confirmed",
+                "title": "✅ Pagamento completato!",
+                "message": f"Hai acquistato:\n📚 \"{order.get('book_titolo')}\"\n\n📦 Codice ordine: #{order_code}\n\n⏳ Il venditore ha 2 giorni lavorativi per consegnare il libro alla cartolibreria. Ti notificheremo quando sarà pronto per il ritiro.",
+                "data": {"order_id": order.get("id"), "order_code": order_code},
                 "read": False,
                 "created_at": now.isoformat(),
             })
