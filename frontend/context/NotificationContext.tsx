@@ -1,8 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import axios from 'axios';
-
-const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+import { authApi } from '../src/utils/api';
 
 interface NotificationContextType {
   unreadCount: number;
@@ -31,12 +29,17 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         return;
       }
 
-      const response = await axios.get(`${API_URL}/api/notifications/${userId}`);
-      const notifications = response.data.notifications || [];
+      // Usa authApi per includere il token di autenticazione
+      const response = await authApi.get(`/api/notifications/${userId}`);
+      const notifications = response.notifications || [];
       const unread = notifications.filter((n: any) => !n.read).length;
       setUnreadCount(unread);
-    } catch (error) {
-      console.error('Error fetching notification count:', error);
+    } catch (error: any) {
+      // Non mostrare errore se è 401 (utente non loggato o sessione scaduta)
+      if (error?.response?.status !== 401) {
+        console.error('Error fetching notification count:', error);
+      }
+      setUnreadCount(0);
     }
   }, []);
 
