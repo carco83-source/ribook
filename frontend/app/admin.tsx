@@ -429,6 +429,18 @@ export default function AdminPortalScreen() {
         style={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
+        {/* Quick Actions */}
+        <View style={styles.quickActions}>
+          <TouchableOpacity
+            style={styles.quickActionButton}
+            onPress={() => router.push('/admin/payouts')}
+          >
+            <Ionicons name="wallet" size={24} color="#fff" />
+            <Text style={styles.quickActionText}>Gestione Payout</Text>
+            <Text style={styles.quickActionSubtext}>Bonifici e scadenze</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Dashboard Tab */}
         {activeTab === 'dashboard' && stats && (
           <View style={styles.statsGrid}>
@@ -1221,5 +1233,28 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: 'rgba(255,255,255,0.7)',
     marginTop: 2,
+  },
+  // Quick Actions styles
+  quickActions: {
+    padding: 16,
+    paddingTop: 8,
+  },
+  quickActionButton: {
+    backgroundColor: '#1a472a',
+    borderRadius: 12,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  quickActionText: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  quickActionSubtext: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.7)',
   },
 });
