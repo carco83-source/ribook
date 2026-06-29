@@ -29,17 +29,36 @@ export default function StripeBatchSuccessScreen() {
 
   const verifyPayment = async () => {
     try {
-      const userId = await AsyncStorage.getItem('user_id');
-      if (!userId || !session_id || !order_ids) {
-        setError('Parametri mancanti. Riprova.');
+      // Prova a ottenere user_id da AsyncStorage
+      let userId = await AsyncStorage.getItem('user_id');
+      
+      // Se non c'è, potrebbe essere stato perso durante il redirect Stripe
+      // Proviamo a recuperarlo dalla sessione
+      if (!userId) {
+        console.log('user_id not found in AsyncStorage, checking session...');
+        // Attendi un momento per il caricamento della sessione
+        await new Promise(resolve => setTimeout(resolve, 500));
+        userId = await AsyncStorage.getItem('user_id');
+      }
+      
+      if (!session_id || !order_ids) {
+        setError('Parametri URL mancanti. Torna al carrello e riprova.');
         setLoading(false);
         return;
       }
+      
+      if (!userId) {
+        // Prova comunque a verificare usando solo session_id
+        // Il backend può recuperare user_id dai metadata della sessione Stripe
+        console.log('Verifying without user_id, using session metadata...');
+      }
 
       // Verifica il pagamento batch con il backend
-      const response = await authApi.get(
-        `/api/orders/verify-batch-checkout?session_id=${session_id}&order_ids=${order_ids}&user_id=${userId}`
-      );
+      const url = userId 
+        ? `/api/orders/verify-batch-checkout?session_id=${session_id}&order_ids=${order_ids}&user_id=${userId}`
+        : `/api/orders/verify-batch-checkout?session_id=${session_id}&order_ids=${order_ids}`;
+      
+      const response = await authApi.get(url);
 
       if (response.success) {
         setSuccess(true);
@@ -50,7 +69,8 @@ export default function StripeBatchSuccessScreen() {
       }
     } catch (err: any) {
       console.error('Errore verifica pagamento batch:', err);
-      setError(err.response?.data?.detail || 'Errore durante la verifica del pagamento');
+      const errorMsg = err.response?.data?.detail || err.message || 'Errore durante la verifica del pagamento';
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }

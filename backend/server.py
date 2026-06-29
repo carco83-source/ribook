@@ -8444,13 +8444,19 @@ async def create_batch_checkout_session(
 async def verify_batch_checkout(
     session_id: str = Query(...),
     order_ids: str = Query(...),
-    user_id: str = Query(...)
+    user_id: str = Query(None)  # Ora opzionale
 ):
     """
     Verifica il pagamento batch e aggiorna tutti gli ordini.
     """
     try:
         session = stripe.checkout.Session.retrieve(session_id, expand=["payment_intent"])
+        
+        # Se user_id non è passato, recuperalo dai metadata della sessione
+        if not user_id:
+            user_id = session.metadata.get("user_id")
+            if not user_id:
+                raise HTTPException(status_code=400, detail="Impossibile identificare l'utente")
         
         # Con capture_method: manual, payment_status può essere "unpaid" 
         # ma il payment_intent.status sarà "requires_capture" (fondi in hold)
