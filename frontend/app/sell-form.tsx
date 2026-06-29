@@ -131,6 +131,17 @@ export default function SellFormScreen() {
       }
       setUserId(storedUserId);
 
+      // Carica IBAN esistente dal profilo utente
+      try {
+        const userRes = await axios.get(`${API_URL}/api/users/${storedUserId}`);
+        if (userRes.data?.iban && validateIBAN(userRes.data.iban)) {
+          setIbanInput(formatIBAN(userRes.data.iban));
+          console.log('IBAN caricato dal profilo:', userRes.data.iban);
+        }
+      } catch (e) {
+        console.log('Errore caricamento IBAN utente:', e);
+      }
+
       // MODALITÀ MODIFICA: Carica i dati dell'annuncio esistente
       if (params.listingId) {
         try {
