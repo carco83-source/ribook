@@ -609,56 +609,84 @@ export default function MyExchangesScreen() {
         visible={showReturnModal}
         animationType="slide"
         transparent={true}
-        onRequestClose={() => setShowReturnModal(false)}
+        onRequestClose={() => {
+          Keyboard.dismiss();
+          setShowReturnModal(false);
+        }}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Richiedi reso</Text>
-              <TouchableOpacity onPress={() => setShowReturnModal(false)}>
-                <Ionicons name="close" size={24} color="#333" />
-              </TouchableOpacity>
-            </View>
-            
-            <Text style={styles.modalSubtitle}>
-              Descrivi l'incongruenza tra le condizioni dichiarate e quelle reali del libro:
-            </Text>
-            
-            <TextInput
-              style={styles.returnInput}
-              multiline
-              numberOfLines={4}
-              placeholder="Es: Il libro presenta sottolineature non dichiarate, la copertina è danneggiata..."
-              value={returnReason}
-              onChangeText={setReturnReason}
-              textAlignVertical="top"
-            />
-            
-            <Text style={styles.returnNote}>
-              La cartolibreria verificherà il libro. Se l'incongruenza è confermata, riceverai il rimborso completo.
-            </Text>
-            
-            <View style={styles.modalButtons}>
-              <TouchableOpacity 
-                style={styles.cancelButton}
-                onPress={() => setShowReturnModal(false)}
-              >
-                <Text style={styles.cancelButtonText}>Annulla</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.submitButton, !returnReason.trim() && styles.submitButtonDisabled]}
-                onPress={submitReturn}
-                disabled={!returnReason.trim() || actionLoading}
-              >
-                {actionLoading ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Text style={styles.submitButtonText}>Invia richiesta</Text>
-                )}
-              </TouchableOpacity>
-            </View>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={styles.modalOverlay}>
+            <KeyboardAvoidingView 
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+              style={styles.keyboardAvoidingView}
+            >
+              <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
+                <View style={styles.modalContent}>
+                  <View style={styles.modalHeader}>
+                    <Text style={styles.modalTitle}>Richiedi reso</Text>
+                    <TouchableOpacity onPress={() => {
+                      Keyboard.dismiss();
+                      setShowReturnModal(false);
+                    }}>
+                      <Ionicons name="close" size={24} color="#333" />
+                    </TouchableOpacity>
+                  </View>
+                  
+                  <ScrollView 
+                    showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                  >
+                    <Text style={styles.modalSubtitle}>
+                      Descrivi l'incongruenza tra le condizioni dichiarate e quelle reali del libro:
+                    </Text>
+                    
+                    <TextInput
+                      style={styles.returnInput}
+                      multiline
+                      numberOfLines={4}
+                      placeholder="Es: Il libro presenta sottolineature non dichiarate, la copertina è danneggiata..."
+                      value={returnReason}
+                      onChangeText={setReturnReason}
+                      textAlignVertical="top"
+                      blurOnSubmit={true}
+                      returnKeyType="done"
+                    />
+                    
+                    <Text style={styles.returnNote}>
+                      La cartolibreria verificherà il libro. Se l'incongruenza è confermata, riceverai il rimborso completo.
+                    </Text>
+                    
+                    <View style={styles.modalButtons}>
+                      <TouchableOpacity 
+                        style={styles.cancelButton}
+                        onPress={() => {
+                          Keyboard.dismiss();
+                          setShowReturnModal(false);
+                        }}
+                      >
+                        <Text style={styles.cancelButtonText}>Annulla</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        style={[styles.submitButton, !returnReason.trim() && styles.submitButtonDisabled]}
+                        onPress={() => {
+                          Keyboard.dismiss();
+                          submitReturn();
+                        }}
+                        disabled={!returnReason.trim() || actionLoading}
+                      >
+                        {actionLoading ? (
+                          <ActivityIndicator size="small" color="#fff" />
+                        ) : (
+                          <Text style={styles.submitButtonText}>Invia richiesta</Text>
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  </ScrollView>
+                </View>
+              </TouchableWithoutFeedback>
+            </KeyboardAvoidingView>
           </View>
-        </View>
+        </TouchableWithoutFeedback>
       </Modal>
 
       {/* Modal Annullamento Ordine Pagato */}
