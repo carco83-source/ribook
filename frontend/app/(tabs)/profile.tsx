@@ -95,8 +95,8 @@ export default function ProfileScreen() {
       }
       setIsAnonymous(false);
 
-      // Get full user data
-      const response = await axios.get(`${API_URL}/api/users/${userId}`);
+      // Get full user data (con IBAN completo)
+      const response = await axios.get(`${API_URL}/api/users/${userId}?show_iban=true`);
       
       // Get user stats
       const statsRes = await axios.get(`${API_URL}/api/users/${userId}/stats`);
@@ -386,6 +386,15 @@ export default function ProfileScreen() {
               <Text style={styles.logoutHeaderButtonText}>Esci</Text>
             </TouchableOpacity>
           </View>
+          
+          {/* IBAN Info */}
+          {userData?.iban && (
+            <View style={styles.ibanContainer}>
+              <Ionicons name="card-outline" size={16} color="#4CAF50" />
+              <Text style={styles.ibanLabel}>IBAN:</Text>
+              <Text style={styles.ibanValue}>{userData.iban.replace(/(.{4})/g, '$1 ').trim()}</Text>
+            </View>
+          )}
         </View>
       </View>
 
@@ -2143,5 +2152,27 @@ const styles = StyleSheet.create({
   anonymousRegisterBold: {
     color: '#1a472a',
     fontWeight: 'bold',
+  },
+  // Stili per IBAN
+  ibanContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E8F5E9',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginTop: 12,
+    gap: 6,
+  },
+  ibanLabel: {
+    fontSize: 12,
+    color: '#4CAF50',
+    fontWeight: '500',
+  },
+  ibanValue: {
+    fontSize: 12,
+    color: '#2E7D32',
+    fontFamily: 'monospace',
+    letterSpacing: 0.5,
   },
 });

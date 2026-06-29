@@ -133,7 +133,7 @@ export default function SellFormScreen() {
 
       // Carica IBAN esistente dal profilo utente
       try {
-        const userRes = await axios.get(`${API_URL}/api/users/${storedUserId}`);
+        const userRes = await axios.get(`${API_URL}/api/users/${storedUserId}?show_iban=true`);
         if (userRes.data?.iban && validateIBAN(userRes.data.iban)) {
           setIbanInput(formatIBAN(userRes.data.iban));
           console.log('IBAN caricato dal profilo:', userRes.data.iban);

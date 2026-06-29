@@ -1481,12 +1481,13 @@ async def logout_user(authorization: str = None):
     return {"success": True, "message": "Logout effettuato"}
 
 @api_router.get("/users/{user_id}")
-async def get_user(user_id: str):
+async def get_user(user_id: str, show_iban: bool = Query(False)):
     user = await db.users.find_one({"id": user_id})
     if not user:
         raise HTTPException(status_code=404, detail="Utente non trovato")
-    # Applica sanitizzazione per proteggere i dati sensibili (IBAN mascherato)
-    return sanitize_user_response(dict(user))
+    # Applica sanitizzazione per proteggere i dati sensibili
+    # Se show_iban=True, mostra l'IBAN completo (per il proprio profilo)
+    return sanitize_user_response(dict(user), show_full_iban=show_iban)
 
 
 class UpdateUserRequest(BaseModel):
