@@ -675,10 +675,19 @@ export default function SellFormScreen() {
     }
 
     // VERIFICA IBAN OBBLIGATORIA
+    // Prima controlla se abbiamo già l'IBAN caricato e valido in memoria
+    const localIban = ibanInput.replace(/\s/g, '').toUpperCase();
+    if (localIban && validateIBAN(localIban)) {
+      console.log('IBAN già presente in memoria e valido, procedo con pubblicazione');
+      await doCreateListing();
+      return;
+    }
+    
+    // Se non abbiamo IBAN in memoria, verifica dal server
     try {
-      const userRes = await axios.get(`${API_URL}/api/users/${userId}`);
+      const userRes = await axios.get(`${API_URL}/api/users/${userId}?show_iban=true`);
       const userIban = userRes.data?.iban;
-      console.log('IBAN check - userIban:', userIban);
+      console.log('IBAN check from server - userIban:', userIban);
       
       // Verifica che l'IBAN esista, non sia null/undefined/vuoto, e sia valido
       if (!userIban || userIban === null || userIban === '' || !validateIBAN(userIban)) {
@@ -686,6 +695,8 @@ export default function SellFormScreen() {
         setShowIbanModal(true);
         return;
       }
+      // Aggiorna anche ibanInput locale
+      setIbanInput(formatIBAN(userIban));
       console.log('IBAN valido, procedo con pubblicazione');
     } catch (error) {
       console.error('Error checking IBAN:', error);
