@@ -9909,6 +9909,20 @@ async def request_return(order_id: str, user_id: str = Query(...), reason: str =
     }
     await db.notifications.insert_one(notification_seller)
     
+    # Notifica all'acquirente - CONFERMA richiesta reso inviata
+    notification_buyer = {
+        "id": str(uuid.uuid4()),
+        "user_id": order.get("buyer_id"),
+        "type": "return_request_sent",
+        "title": "Richiesta reso inviata",
+        "message": f"La tua richiesta di reso per:\n📚 {order.get('book_titolo')}\n\nè stata inviata alla cartolibreria.\n\n⏳ Attendi la verifica. Ti notificheremo l'esito.",
+        "order_id": order_id,
+        "return_reason": reason_text,
+        "read": False,
+        "created_at": now.isoformat()
+    }
+    await db.notifications.insert_one(notification_buyer)
+    
     return {
         "success": True,
         "status": "in_verifica_reso",

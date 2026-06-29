@@ -411,7 +411,7 @@ export default function BookstorePortalScreen() {
         const inArrivo = allOrders.filter((o: Order) => ['paid_escrow', 'delivering_to_bookstore', 'pagato_attesa_consegna'].includes(o.status));
         const daRitirare = allOrders.filter((o: Order) => ['ready_for_pickup', 'pronto_per_ritiro'].includes(o.status));
         const completati = allOrders.filter((o: Order) => o.status === 'completed');
-        const resi = allOrders.filter((o: Order) => ['return_requested', 'returned', 'refunded', 'reso_richiesto'].includes(o.status));
+        const resi = allOrders.filter((o: Order) => ['return_requested', 'returned', 'refunded', 'reso_richiesto', 'in_verifica_reso', 'reso_accettato', 'reso_rifiutato'].includes(o.status));
         
         setOrdersInArrivo(inArrivo);
         setOrdersDaRitirare(daRitirare);
@@ -454,7 +454,7 @@ export default function BookstorePortalScreen() {
           da_ritirare: daRitirare.length,
           completati_oggi: completatiOggi.length,
           completati_mese: completati.length,
-          resi_in_attesa: resi.filter((o: Order) => o.status === 'return_requested').length,
+          resi_in_attesa: resi.filter((o: Order) => ['return_requested', 'in_verifica_reso'].includes(o.status)).length,
           guadagno_oggi: guadagnoLibriOggi + guadagnoFoderazioneOggi,
           guadagno_mese: guadagnoLibriMese + guadagnoFoderazioneMese,
           ordini_scaduti: inArrivo.filter((o: Order) => o.seller_delivery_deadline && new Date(o.seller_delivery_deadline) < new Date()).length,
@@ -1273,12 +1273,21 @@ export default function BookstorePortalScreen() {
                     <Text style={styles.orderCode}>{order.order_code}</Text>
                     <View style={styles.statusBadgeReturn}>
                       <Text style={styles.statusBadgeReturnText}>
-                        {order.status === 'return_requested' ? 'Da verificare' : order.status === 'returned' ? 'Rimborsato' : 'Rifiutato'}
+                        {['return_requested', 'in_verifica_reso'].includes(order.status) ? 'Da verificare' : 
+                         ['returned', 'reso_accettato', 'refunded'].includes(order.status) ? 'Rimborsato' : 'Rifiutato'}
                       </Text>
                     </View>
                   </View>
                   
                   <Text style={styles.orderBookTitle}>{order.book_titolo}</Text>
+                  
+                  {/* Mostra motivazione reso se presente */}
+                  {order.return_reason && (
+                    <View style={styles.returnReasonBox}>
+                      <Text style={styles.returnReasonLabel}>⚠️ Motivazione reso:</Text>
+                      <Text style={styles.returnReasonText}>"{order.return_reason}"</Text>
+                    </View>
+                  )}
                   
                   <View style={styles.orderMeta}>
                     <View style={styles.orderMetaRow}>
@@ -1287,7 +1296,7 @@ export default function BookstorePortalScreen() {
                     </View>
                   </View>
 
-                  {order.status === 'return_requested' && (
+                  {['return_requested', 'in_verifica_reso'].includes(order.status) && (
                     <>
                       {/* Codice alfanumerico per verifica reso */}
                       <View style={styles.alphaCodeContainer}>
@@ -2971,5 +2980,26 @@ const styles = StyleSheet.create({
     backgroundColor: '#666',
     borderRightWidth: 1,
     borderRightColor: '#555',
+  },
+  // Stili per motivazione reso
+  returnReasonBox: {
+    backgroundColor: '#FFF3E0',
+    borderWidth: 1,
+    borderColor: '#FFB74D',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  returnReasonLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#E65100',
+    marginBottom: 4,
+  },
+  returnReasonText: {
+    fontSize: 14,
+    color: '#333',
+    fontStyle: 'italic',
   },
 });
