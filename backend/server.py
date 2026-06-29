@@ -1006,6 +1006,47 @@ class BookstoreRegistrationRequestCreate(BaseModel):
     citta: Optional[str] = ""
     telefono: Optional[str] = ""
 
+# ============== PAYOUT SYSTEM ==============
+
+class Payout(BaseModel):
+    """Registro pagamenti da effettuare"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    order_id: str
+    order_code: str
+    
+    # Beneficiario
+    recipient_type: str  # "seller" o "platform" o "cartolibreria"
+    recipient_id: str  # user_id o "platform" o bookstore_id
+    recipient_name: str
+    recipient_iban: str
+    
+    # Importi
+    gross_amount: float  # Importo lordo
+    stripe_fee: float  # Commissione Stripe proporzionale
+    net_amount: float  # Importo netto da bonificare
+    
+    # Dettagli
+    description: str
+    
+    # Stato
+    status: str = "pending"  # pending, completed, failed
+    created_at: datetime = Field(default_factory=get_rome_time)
+    completed_at: Optional[datetime] = None
+    completed_by: Optional[str] = None  # admin che ha fatto il bonifico
+    transaction_reference: Optional[str] = None  # Riferimento bonifico
+
+class PlatformConfig(BaseModel):
+    """Configurazione piattaforma"""
+    id: str = "platform_config"
+    platform_iban: Optional[str] = None
+    platform_name: str = "RiBook"
+    seller_percentage: float = 80.0  # % al venditore
+    platform_percentage: float = 20.0  # % alla piattaforma
+    foderazione_cost: float = 1.50  # Costo foderazione
+    stripe_fee_percentage: float = 1.5  # % commissione Stripe
+    stripe_fee_fixed: float = 0.25  # Costo fisso Stripe per transazione
+    updated_at: Optional[datetime] = None
+
 # Compatibility/Match Model
 class Match(BaseModel):
     listing: dict
@@ -11271,6 +11312,127 @@ async def bookstore_confirm_pickup_by_code(bookstore_id: str, order_code: str = 
     }
     await db.bookstore_notifications.insert_one(bookstore_notification)
     
+    # ============== PROCESSO PAYOUT AUTOMATICO ==============
+    # Cattura pagamento Stripe e crea record payout
+    try:
+        # Ottieni configurazione piattaforma
+        config = await db.platform_config.find_one({"id": "platform_config"})
+        if not config:
+            config = {
+                "seller_percentage": 80.0,
+                "platform_percentage": 20.0,
+                "stripe_fee_percentage": 1.5,
+                "stripe_fee_fixed": 0.25,
+                "foderazione_cost": 1.50
+            }
+        
+        # Cattura il pagamento Stripe (se non già catturato)
+        payment_intent_id = order.get("payment_intent_id") or order.get("stripe_payment_intent_id")
+        if payment_intent_id:
+            try:
+                pi = stripe.PaymentIntent.retrieve(payment_intent_id)
+                if pi.status == "requires_capture":
+                    stripe.PaymentIntent.capture(payment_intent_id)
+                    logger.info(f"Payment captured for order {order['id']}")
+            except stripe.error.StripeError as e:
+                logger.error(f"Stripe capture error: {e}")
+        
+        # Calcola importi
+        prezzo_libro = order.get("prezzo_libro", 0)
+        totale_acquirente = order.get("totale_acquirente", 0)
+        include_foderazione = order.get("include_foderazione", False)
+        
+        # Commissione Stripe sul totale
+        stripe_fee = (totale_acquirente * config.get("stripe_fee_percentage", 1.5) / 100) + config.get("stripe_fee_fixed", 0.25)
+        
+        # Venditore: 80%
+        seller_gross = prezzo_libro * (config.get("seller_percentage", 80.0) / 100)
+        seller_net = round(seller_gross, 2)
+        
+        # Piattaforma: 20% - Stripe fees
+        platform_gross = prezzo_libro * (config.get("platform_percentage", 20.0) / 100)
+        platform_net = round(platform_gross - stripe_fee, 2)
+        
+        # Ottieni IBAN venditore
+        seller = await db.users.find_one({"id": order.get("seller_id")})
+        seller_iban = seller.get("iban") if seller else None
+        
+        # Ottieni IBAN piattaforma
+        platform_iban = config.get("platform_iban")
+        
+        # Crea payout venditore
+        seller_payout = {
+            "id": str(uuid.uuid4()),
+            "order_id": order["id"],
+            "order_code": order.get("order_code", ""),
+            "recipient_type": "seller",
+            "recipient_id": order.get("seller_id"),
+            "recipient_name": order.get("seller_name"),
+            "recipient_iban": seller_iban or "IBAN NON DISPONIBILE",
+            "gross_amount": round(seller_gross, 2),
+            "stripe_fee": 0,
+            "net_amount": seller_net,
+            "description": f"Vendita: {order.get('book_titolo', '')}",
+            "status": "pending",
+            "created_at": now.isoformat(),
+            "book_title": order.get("book_titolo"),
+            "buyer_name": order.get("buyer_name")
+        }
+        await db.payouts.insert_one(seller_payout)
+        
+        # Crea payout piattaforma
+        if platform_net > 0:
+            platform_payout = {
+                "id": str(uuid.uuid4()),
+                "order_id": order["id"],
+                "order_code": order.get("order_code", ""),
+                "recipient_type": "platform",
+                "recipient_id": "platform",
+                "recipient_name": config.get("platform_name", "RiBook"),
+                "recipient_iban": platform_iban or "DA CONFIGURARE",
+                "gross_amount": round(platform_gross, 2),
+                "stripe_fee": round(stripe_fee, 2),
+                "net_amount": platform_net,
+                "description": f"Commissione: {order.get('book_titolo', '')}",
+                "status": "pending",
+                "created_at": now.isoformat()
+            }
+            await db.payouts.insert_one(platform_payout)
+        
+        # Payout foderazione (se applicabile)
+        if include_foderazione:
+            fod_gross = config.get("foderazione_cost", 1.50)
+            fod_stripe = fod_gross * config.get("stripe_fee_percentage", 1.5) / 100
+            fod_net = round(fod_gross - fod_stripe, 2)
+            
+            fod_payout = {
+                "id": str(uuid.uuid4()),
+                "order_id": order["id"],
+                "order_code": order.get("order_code", ""),
+                "recipient_type": "cartolibreria",
+                "recipient_id": bookstore_id,
+                "recipient_name": bookstore.get("nome", "Cartolibreria"),
+                "recipient_iban": bookstore.get("iban", "IBAN NON DISPONIBILE"),
+                "gross_amount": fod_gross,
+                "stripe_fee": round(fod_stripe, 2),
+                "net_amount": fod_net,
+                "description": f"Foderazione: {order.get('book_titolo', '')}",
+                "status": "pending",
+                "created_at": now.isoformat()
+            }
+            await db.payouts.insert_one(fod_payout)
+        
+        # Aggiorna ordine
+        await db.orders.update_one(
+            {"id": order["id"]},
+            {"$set": {"payout_processed": True, "payment_captured": True}}
+        )
+        
+        logger.info(f"Payouts created for order {order['id']}: seller={seller_net}, platform={platform_net}")
+        
+    except Exception as e:
+        logger.error(f"Error creating payouts for order {order['id']}: {e}")
+    
     return {
         "success": True,
         "status": "picked_up",
@@ -13252,6 +13414,472 @@ async def bookstore_register_return(bookstore_id: str, order_id: str, data: dict
     )
     
     return {"success": True, "message": "Reso registrato"}
+
+
+# ============== PAYOUT & DEADLINE MANAGEMENT ==============
+
+@api_router.get("/admin/platform-config")
+async def get_platform_config():
+    """Ottieni configurazione piattaforma"""
+    config = await db.platform_config.find_one({"id": "platform_config"})
+    if not config:
+        # Crea configurazione default
+        default_config = {
+            "id": "platform_config",
+            "platform_iban": None,
+            "platform_name": "RiBook",
+            "seller_percentage": 80.0,
+            "platform_percentage": 20.0,
+            "foderazione_cost": 1.50,
+            "stripe_fee_percentage": 1.5,
+            "stripe_fee_fixed": 0.25,
+            "updated_at": datetime.utcnow().isoformat()
+        }
+        await db.platform_config.insert_one(default_config)
+        return default_config
+    # Rimuovi _id per evitare errore serializzazione
+    config.pop("_id", None)
+    return config
+
+@api_router.put("/admin/platform-config")
+async def update_platform_config(config: dict):
+    """Aggiorna configurazione piattaforma (solo admin)"""
+    config["updated_at"] = datetime.utcnow().isoformat()
+    await db.platform_config.update_one(
+        {"id": "platform_config"},
+        {"$set": config},
+        upsert=True
+    )
+    return {"success": True, "message": "Configurazione aggiornata"}
+
+@api_router.post("/admin/process-pickup/{order_id}")
+async def process_pickup_payout(order_id: str, admin_user_id: str = Query(None)):
+    """
+    Processa il payout quando un libro viene ritirato.
+    Cattura il pagamento Stripe e crea i record di payout.
+    """
+    order = await db.orders.find_one({"id": order_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="Ordine non trovato")
+    
+    if order.get("status") not in ["ready_for_pickup", "pronto_ritiro", "ritirato", "picked_up", "completed"]:
+        raise HTTPException(status_code=400, detail=f"Stato ordine non valido per payout: {order.get('status')}")
+    
+    # Verifica se i payout sono già stati creati
+    existing_payouts = await db.payouts.find({"order_id": order_id}).to_list(10)
+    if existing_payouts:
+        return {"success": True, "message": "Payouts già creati", "payouts": existing_payouts}
+    
+    # Ottieni configurazione piattaforma
+    config = await db.platform_config.find_one({"id": "platform_config"})
+    if not config:
+        config = {
+            "seller_percentage": 80.0,
+            "platform_percentage": 20.0,
+            "stripe_fee_percentage": 1.5,
+            "stripe_fee_fixed": 0.25,
+            "foderazione_cost": 1.50
+        }
+    
+    # Cattura il pagamento Stripe (se non già catturato)
+    payment_intent_id = order.get("payment_intent_id") or order.get("stripe_payment_intent_id")
+    if payment_intent_id:
+        try:
+            pi = stripe.PaymentIntent.retrieve(payment_intent_id)
+            if pi.status == "requires_capture":
+                stripe.PaymentIntent.capture(payment_intent_id)
+                logger.info(f"Payment captured for order {order_id}")
+        except stripe.error.StripeError as e:
+            logger.error(f"Stripe capture error: {e}")
+            # Continua comunque per creare i record payout
+    
+    # Calcola importi
+    prezzo_libro = order.get("prezzo_libro", 0)
+    totale_acquirente = order.get("totale_acquirente", 0)
+    include_foderazione = order.get("include_foderazione", False)
+    
+    # Commissione Stripe sul totale (1.5% + €0.25)
+    stripe_fee = (totale_acquirente * config.get("stripe_fee_percentage", 1.5) / 100) + config.get("stripe_fee_fixed", 0.25)
+    
+    # Importi
+    # Venditore: 80% del prezzo libro
+    seller_gross = prezzo_libro * (config.get("seller_percentage", 80.0) / 100)
+    seller_stripe_fee = stripe_fee * (config.get("seller_percentage", 80.0) / 100)  # Proporzione Stripe
+    seller_net = round(seller_gross, 2)  # Il venditore riceve il lordo, la piattaforma paga Stripe
+    
+    # Piattaforma: 20% del prezzo libro - commissione Stripe totale
+    platform_gross = prezzo_libro * (config.get("platform_percentage", 20.0) / 100)
+    platform_net = round(platform_gross - stripe_fee, 2)  # La piattaforma paga tutta la commissione Stripe
+    
+    # Ottieni IBAN venditore
+    seller = await db.users.find_one({"id": order.get("seller_id")})
+    seller_iban = seller.get("iban") if seller else None
+    seller_name = order.get("seller_name", "Venditore")
+    
+    # Ottieni IBAN piattaforma
+    platform_iban = config.get("platform_iban")
+    
+    now = datetime.utcnow()
+    payouts_created = []
+    
+    # 1. Payout al venditore (80%)
+    seller_payout = {
+        "id": str(uuid.uuid4()),
+        "order_id": order_id,
+        "order_code": order.get("order_code", ""),
+        "recipient_type": "seller",
+        "recipient_id": order.get("seller_id"),
+        "recipient_name": seller_name,
+        "recipient_iban": seller_iban or "IBAN NON DISPONIBILE",
+        "gross_amount": round(seller_gross, 2),
+        "stripe_fee": 0,  # Stripe pagato dalla piattaforma
+        "net_amount": seller_net,
+        "description": f"Vendita libro: {order.get('book_titolo', '')}",
+        "status": "pending",
+        "created_at": now.isoformat(),
+        "book_title": order.get("book_titolo"),
+        "buyer_name": order.get("buyer_name")
+    }
+    await db.payouts.insert_one(seller_payout)
+    payouts_created.append(seller_payout)
+    
+    # 2. Payout alla piattaforma (20% - Stripe fees)
+    if platform_net > 0:
+        platform_payout = {
+            "id": str(uuid.uuid4()),
+            "order_id": order_id,
+            "order_code": order.get("order_code", ""),
+            "recipient_type": "platform",
+            "recipient_id": "platform",
+            "recipient_name": config.get("platform_name", "RiBook"),
+            "recipient_iban": platform_iban or "DA CONFIGURARE",
+            "gross_amount": round(platform_gross, 2),
+            "stripe_fee": round(stripe_fee, 2),
+            "net_amount": platform_net,
+            "description": f"Commissione vendita: {order.get('book_titolo', '')}",
+            "status": "pending" if platform_iban else "awaiting_iban",
+            "created_at": now.isoformat(),
+            "book_title": order.get("book_titolo")
+        }
+        await db.payouts.insert_one(platform_payout)
+        payouts_created.append(platform_payout)
+    
+    # 3. Payout foderazione alla cartolibreria (se applicabile)
+    if include_foderazione:
+        foderazione_gross = config.get("foderazione_cost", 1.50)
+        foderazione_stripe_fee = foderazione_gross * config.get("stripe_fee_percentage", 1.5) / 100
+        foderazione_net = round(foderazione_gross - foderazione_stripe_fee, 2)
+        
+        bookstore = await db.bookstores.find_one({"id": order.get("bookstore_id")})
+        bookstore_iban = bookstore.get("iban") if bookstore else None
+        
+        foderazione_payout = {
+            "id": str(uuid.uuid4()),
+            "order_id": order_id,
+            "order_code": order.get("order_code", ""),
+            "recipient_type": "cartolibreria",
+            "recipient_id": order.get("bookstore_id"),
+            "recipient_name": order.get("bookstore_name", "Cartolibreria"),
+            "recipient_iban": bookstore_iban or "IBAN NON DISPONIBILE",
+            "gross_amount": foderazione_gross,
+            "stripe_fee": round(foderazione_stripe_fee, 2),
+            "net_amount": foderazione_net,
+            "description": f"Foderazione libro: {order.get('book_titolo', '')}",
+            "status": "pending",
+            "created_at": now.isoformat()
+        }
+        await db.payouts.insert_one(foderazione_payout)
+        payouts_created.append(foderazione_payout)
+    
+    # Aggiorna ordine come processato per payout
+    await db.orders.update_one(
+        {"id": order_id},
+        {"$set": {
+            "payout_processed": True,
+            "payout_processed_at": now.isoformat(),
+            "payment_captured": True
+        }}
+    )
+    
+    # Notifica venditore
+    await db.notifications.insert_one({
+        "id": str(uuid.uuid4()),
+        "user_id": order.get("seller_id"),
+        "type": "payout_created",
+        "title": "Pagamento in arrivo!",
+        "message": f"Il libro '{order.get('book_titolo')}' è stato ritirato. Riceverai €{seller_net:.2f} sul tuo IBAN.",
+        "data": {"order_id": order_id, "amount": seller_net},
+        "read": False,
+        "created_at": now.isoformat()
+    })
+    
+    return {
+        "success": True,
+        "message": f"Creati {len(payouts_created)} payout",
+        "payouts": payouts_created,
+        "summary": {
+            "seller_amount": seller_net,
+            "platform_amount": platform_net,
+            "stripe_fees": round(stripe_fee, 2)
+        }
+    }
+
+@api_router.get("/admin/payouts")
+async def get_all_payouts(
+    status: str = Query(None),
+    recipient_type: str = Query(None),
+    limit: int = Query(100)
+):
+    """Ottieni tutti i payout (per admin)"""
+    query = {}
+    if status:
+        query["status"] = status
+    if recipient_type:
+        query["recipient_type"] = recipient_type
+    
+    payouts = await db.payouts.find(query).sort("created_at", -1).to_list(limit)
+    
+    # Rimuovi _id da ogni payout
+    for p in payouts:
+        p.pop("_id", None)
+    
+    # Calcola totali
+    totals = {
+        "pending": {"count": 0, "amount": 0},
+        "completed": {"count": 0, "amount": 0}
+    }
+    for p in payouts:
+        status_key = p.get("status", "pending")
+        if status_key in totals:
+            totals[status_key]["count"] += 1
+            totals[status_key]["amount"] += p.get("net_amount", 0)
+    
+    return {"payouts": payouts, "totals": totals}
+
+@api_router.post("/admin/payouts/{payout_id}/complete")
+async def complete_payout(
+    payout_id: str,
+    transaction_reference: str = Query(None),
+    admin_user_id: str = Query(None)
+):
+    """Segna un payout come completato (bonifico effettuato)"""
+    payout = await db.payouts.find_one({"id": payout_id})
+    if not payout:
+        raise HTTPException(status_code=404, detail="Payout non trovato")
+    
+    now = datetime.utcnow()
+    await db.payouts.update_one(
+        {"id": payout_id},
+        {"$set": {
+            "status": "completed",
+            "completed_at": now.isoformat(),
+            "completed_by": admin_user_id,
+            "transaction_reference": transaction_reference
+        }}
+    )
+    
+    # Notifica al beneficiario
+    if payout.get("recipient_type") == "seller":
+        await db.notifications.insert_one({
+            "id": str(uuid.uuid4()),
+            "user_id": payout.get("recipient_id"),
+            "type": "payout_completed",
+            "title": "Bonifico effettuato!",
+            "message": f"Abbiamo bonificato €{payout.get('net_amount', 0):.2f} sul tuo conto per la vendita di '{payout.get('book_title', 'libro')}'.",
+            "data": {"payout_id": payout_id, "amount": payout.get("net_amount")},
+            "read": False,
+            "created_at": now.isoformat()
+        })
+    
+    return {"success": True, "message": "Payout completato"}
+
+# ============== AUTOMATIC DEADLINE MANAGEMENT ==============
+
+@api_router.post("/admin/check-deadlines")
+async def check_order_deadlines():
+    """
+    Job automatico per verificare scadenze ordini.
+    Chiamare periodicamente (es. ogni ora) via cron o scheduler.
+    
+    1. Annulla ordini se venditore non conferma entro 24h
+    2. Annulla ordini (con rimborso) se venditore non consegna entro deadline
+    """
+    now = datetime.utcnow()
+    results = {
+        "checked_at": now.isoformat(),
+        "expired_confirmations": [],
+        "expired_deliveries": [],
+        "errors": []
+    }
+    
+    # 1. Ordini in attesa conferma venditore scaduti (24h)
+    expired_confirmation_statuses = ["in_attesa_conferma_venditore", "pending_seller_confirmation"]
+    expired_confirmations = await db.orders.find({
+        "status": {"$in": expired_confirmation_statuses},
+        "seller_confirmation_deadline": {"$lt": now.isoformat()}
+    }).to_list(100)
+    
+    for order in expired_confirmations:
+        try:
+            order_id = order.get("id")
+            
+            # Annulla ordine
+            await db.orders.update_one(
+                {"id": order_id},
+                {"$set": {
+                    "status": "annullato_scadenza_conferma",
+                    "cancelled_at": now.isoformat(),
+                    "cancellation_reason": "Venditore non ha confermato entro 24 ore"
+                }}
+            )
+            
+            # Rimetti il listing disponibile
+            listing_id = order.get("listing_id")
+            if listing_id:
+                await db.listings.update_one(
+                    {"id": listing_id},
+                    {"$set": {"status": "disponibile", "reserved_for": None}}
+                )
+            
+            # Notifica acquirente
+            await db.notifications.insert_one({
+                "id": str(uuid.uuid4()),
+                "user_id": order.get("buyer_id"),
+                "type": "order_expired",
+                "title": "Ordine annullato",
+                "message": f"L'ordine per '{order.get('book_titolo')}' è stato annullato perché il venditore non ha confermato entro 24 ore.",
+                "data": {"order_id": order_id},
+                "read": False,
+                "created_at": now.isoformat()
+            })
+            
+            # Notifica venditore
+            await db.notifications.insert_one({
+                "id": str(uuid.uuid4()),
+                "user_id": order.get("seller_id"),
+                "type": "order_expired_seller",
+                "title": "Ordine scaduto",
+                "message": f"Non hai confermato l'ordine per '{order.get('book_titolo')}' entro 24 ore. L'ordine è stato annullato.",
+                "data": {"order_id": order_id},
+                "read": False,
+                "created_at": now.isoformat()
+            })
+            
+            results["expired_confirmations"].append({
+                "order_id": order_id,
+                "order_code": order.get("order_code"),
+                "book": order.get("book_titolo")
+            })
+            
+        except Exception as e:
+            results["errors"].append({"order_id": order.get("id"), "error": str(e)})
+    
+    # 2. Ordini pagati con consegna scaduta (2 giorni lavorativi)
+    paid_statuses = ["pagato_attesa_consegna", "paid", "in_transito_a_cartolibreria"]
+    expired_deliveries = await db.orders.find({
+        "status": {"$in": paid_statuses},
+        "delivery_deadline": {"$lt": now.isoformat()}
+    }).to_list(100)
+    
+    for order in expired_deliveries:
+        try:
+            order_id = order.get("id")
+            
+            # Rimborso Stripe
+            refund_success = False
+            payment_intent_id = order.get("payment_intent_id") or order.get("stripe_payment_intent_id")
+            if payment_intent_id:
+                try:
+                    refund = stripe.Refund.create(payment_intent=payment_intent_id)
+                    refund_success = refund.status == "succeeded"
+                except stripe.error.StripeError as e:
+                    logger.error(f"Stripe refund error for order {order_id}: {e}")
+            
+            new_status = "rimborsato_scadenza_consegna" if refund_success else "annullato_scadenza_consegna"
+            
+            # Annulla ordine
+            await db.orders.update_one(
+                {"id": order_id},
+                {"$set": {
+                    "status": new_status,
+                    "cancelled_at": now.isoformat(),
+                    "cancellation_reason": "Venditore non ha consegnato entro la scadenza",
+                    "refund_processed": refund_success,
+                    "refunded_at": now.isoformat() if refund_success else None
+                }}
+            )
+            
+            # Rimetti il listing disponibile
+            listing_id = order.get("listing_id")
+            if listing_id:
+                await db.listings.update_one(
+                    {"id": listing_id},
+                    {"$set": {"status": "disponibile", "reserved_for": None}}
+                )
+            
+            # Notifica acquirente
+            await db.notifications.insert_one({
+                "id": str(uuid.uuid4()),
+                "user_id": order.get("buyer_id"),
+                "type": "order_refunded_deadline",
+                "title": "Ordine annullato e rimborsato",
+                "message": f"L'ordine per '{order.get('book_titolo')}' è stato annullato perché il venditore non ha consegnato in tempo. {'Il pagamento è stato rimborsato.' if refund_success else 'Il rimborso è in elaborazione.'}",
+                "data": {"order_id": order_id, "refunded": refund_success},
+                "read": False,
+                "created_at": now.isoformat()
+            })
+            
+            # Notifica venditore
+            await db.notifications.insert_one({
+                "id": str(uuid.uuid4()),
+                "user_id": order.get("seller_id"),
+                "type": "order_expired_delivery",
+                "title": "Ordine annullato - Consegna scaduta",
+                "message": f"Non hai consegnato '{order.get('book_titolo')}' entro la scadenza. L'ordine è stato annullato e l'acquirente rimborsato.",
+                "data": {"order_id": order_id},
+                "read": False,
+                "created_at": now.isoformat()
+            })
+            
+            results["expired_deliveries"].append({
+                "order_id": order_id,
+                "order_code": order.get("order_code"),
+                "book": order.get("book_titolo"),
+                "refunded": refund_success
+            })
+            
+        except Exception as e:
+            results["errors"].append({"order_id": order.get("id"), "error": str(e)})
+    
+    return results
+
+@api_router.get("/seller/{user_id}/payouts")
+async def get_seller_payouts(user_id: str):
+    """Ottieni i payout di un venditore"""
+    payouts = await db.payouts.find({
+        "recipient_type": "seller",
+        "recipient_id": user_id
+    }).sort("created_at", -1).to_list(100)
+    
+    # Rimuovi _id da ogni payout
+    for p in payouts:
+        p.pop("_id", None)
+    
+    # Calcola totali
+    totals = {
+        "pending": 0,
+        "completed": 0,
+        "total_earned": 0
+    }
+    for p in payouts:
+        amount = p.get("net_amount", 0)
+        if p.get("status") == "pending":
+            totals["pending"] += amount
+        elif p.get("status") == "completed":
+            totals["completed"] += amount
+        totals["total_earned"] += amount
+    
+    return {"payouts": payouts, "totals": totals}
 
 
 # Include the router in the main app
