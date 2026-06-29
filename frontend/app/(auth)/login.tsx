@@ -85,7 +85,8 @@ export default function LoginScreen() {
       let redirectUrl: string;
       
       if (Platform.OS === 'web') {
-        redirectUrl = window.location.origin + '/';
+        // Su web, redirect a /auth che gestisce il callback OAuth
+        redirectUrl = window.location.origin + '/auth';
       } else {
         redirectUrl = Linking.createURL('auth');
       }
@@ -144,14 +145,23 @@ export default function LoginScreen() {
       console.log('[Google OAuth] Backend response:', data);
       
       if (data.success) {
-        // Salva token e user_id in modo sicuro (SecureStore su mobile, localStorage su web)
+        // Salva token in modo sicuro (localStorage su web, AsyncStorage su mobile)
         await secureSet(STORAGE_KEYS.SESSION_TOKEN, data.session_token);
-        await secureSet(STORAGE_KEYS.USER_ID, data.user_id);
         
-        // Salva dati utente non sensibili in AsyncStorage per compatibilità
+        // IMPORTANTE: Salva user_id in AsyncStorage per compatibilità con il resto dell'app
+        // Le altre pagine usano AsyncStorage.getItem('user_id')
+        await AsyncStorage.setItem('user_id', data.user_id);
         await AsyncStorage.setItem('username', data.username);
         await AsyncStorage.setItem('user_nome', data.nome || data.username);
         await AsyncStorage.setItem('is_premium', data.is_premium ? 'true' : 'false');
+        
+        // Su web, salva anche in localStorage per sicurezza
+        if (Platform.OS === 'web') {
+          localStorage.setItem('user_id', data.user_id);
+          localStorage.setItem('session_token', data.session_token);
+        }
+        
+        console.log('[Google OAuth] User data saved. user_id:', data.user_id);
         
         // Migra profili temporanei se presenti
         const tempProfiles = await AsyncStorage.getItem('temp_profiles');
