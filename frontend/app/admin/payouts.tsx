@@ -33,6 +33,8 @@ interface Payout {
   stripe_fee: number;
   net_amount: number;
   description: string;
+  pickup_date?: string;
+  payable_from?: string;
   status: string;
   created_at: string;
   completed_at?: string;
@@ -205,17 +207,29 @@ export default function AdminPayoutsScreen() {
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'pending':
-        return { label: 'Da pagare', color: '#FF9800', bg: '#FFF3E0' };
-      case 'awaiting_iban':
-        return { label: 'IBAN mancante', color: '#f44336', bg: '#FFEBEE' };
-      case 'completed':
-        return { label: 'Completato', color: '#4CAF50', bg: '#E8F5E9' };
-      default:
-        return { label: status, color: '#666', bg: '#f5f5f5' };
+  const getStatusBadge = (payout: Payout) => {
+    const now = new Date();
+    const payableFrom = payout.payable_from ? new Date(payout.payable_from) : null;
+    const isReady = payableFrom ? now >= payableFrom : true;
+    
+    if (payout.status === 'completed') {
+      return { label: 'Completato', color: '#4CAF50', bg: '#E8F5E9', icon: 'checkmark-circle' };
     }
+    if (payout.status === 'awaiting_iban') {
+      return { label: 'IBAN mancante', color: '#f44336', bg: '#FFEBEE', icon: 'alert-circle' };
+    }
+    if (!isReady) {
+      const daysLeft = Math.ceil((payableFrom!.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      return { label: `Tra ${daysLeft}g`, color: '#9E9E9E', bg: '#F5F5F5', icon: 'time' };
+    }
+    return { label: 'Pronto', color: '#FF9800', bg: '#FFF3E0', icon: 'wallet' };
+  };
+  
+  const isPayoutReady = (payout: Payout) => {
+    if (payout.status !== 'pending') return false;
+    const now = new Date();
+    const payableFrom = payout.payable_from ? new Date(payout.payable_from) : null;
+    return payableFrom ? now >= payableFrom : true;
   };
 
   if (loading) {

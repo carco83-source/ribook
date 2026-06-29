@@ -1028,8 +1028,17 @@ class Payout(BaseModel):
     # Dettagli
     description: str
     
+    # Tempistiche
+    pickup_date: Optional[str] = None  # Data ritiro libro
+    payable_from: Optional[str] = None  # Data da cui è pagabile
+    # - Venditore/Piattaforma: 3 giorni dopo ritiro
+    # - Cartolibreria: cumulo ogni 15 giorni
+    
     # Stato
-    status: str = "pending"  # pending, completed, failed
+    status: str = "pending"  # pending, ready, completed, failed
+    # pending = in attesa (non ancora pagabile)
+    # ready = pronto per bonifico (scadenza raggiunta)
+    # completed = bonifico effettuato
     created_at: datetime = Field(default_factory=get_rome_time)
     completed_at: Optional[datetime] = None
     completed_by: Optional[str] = None  # admin che ha fatto il bonifico
@@ -11394,7 +11403,27 @@ async def bookstore_confirm_pickup_by_code(bookstore_id: str, order_code: str = 
         # Ottieni IBAN piattaforma
         platform_iban = config.get("platform_iban")
         
-        # Crea payout venditore
+        # Calcola date di pagabilità
+        # Venditore e Piattaforma: 3 giorni dopo il ritiro
+        # Cartolibreria: cumulo ogni 15 giorni (prossimo 1° o 15 del mese)
+        pickup_date = now
+        seller_payable_from = (now + timedelta(days=3)).isoformat()
+        platform_payable_from = (now + timedelta(days=3)).isoformat()
+        
+        # Per cartolibreria: calcola prossima scadenza 15 giorni
+        day = now.day
+        if day < 15:
+            # Prossima scadenza: 15 del mese corrente
+            cartolibreria_payable = now.replace(day=15)
+        else:
+            # Prossima scadenza: 1 del mese successivo
+            if now.month == 12:
+                cartolibreria_payable = now.replace(year=now.year+1, month=1, day=1)
+            else:
+                cartolibreria_payable = now.replace(month=now.month+1, day=1)
+        cartolibreria_payable_from = cartolibreria_payable.isoformat()
+        
+        # Crea payout venditore (80% - pagabile dopo 3 giorni)
         seller_payout = {
             "id": str(uuid.uuid4()),
             "order_id": order["id"],
@@ -11407,6 +11436,8 @@ async def bookstore_confirm_pickup_by_code(bookstore_id: str, order_code: str = 
             "stripe_fee": 0,
             "net_amount": seller_net,
             "description": f"Vendita: {order.get('book_titolo', '')}",
+            "pickup_date": pickup_date.isoformat(),
+            "payable_from": seller_payable_from,
             "status": "pending",
             "created_at": now.isoformat(),
             "book_title": order.get("book_titolo"),
@@ -11414,7 +11445,7 @@ async def bookstore_confirm_pickup_by_code(bookstore_id: str, order_code: str = 
         }
         await db.payouts.insert_one(seller_payout)
         
-        # Crea payout piattaforma
+        # Crea payout piattaforma (20% - commissioni Stripe, pagabile dopo 3 giorni)
         if platform_net > 0:
             platform_payout = {
                 "id": str(uuid.uuid4()),
@@ -11428,12 +11459,14 @@ async def bookstore_confirm_pickup_by_code(bookstore_id: str, order_code: str = 
                 "stripe_fee": round(stripe_fee, 2),
                 "net_amount": platform_net,
                 "description": f"Commissione: {order.get('book_titolo', '')}",
+                "pickup_date": pickup_date.isoformat(),
+                "payable_from": platform_payable_from,
                 "status": "pending",
                 "created_at": now.isoformat()
             }
             await db.payouts.insert_one(platform_payout)
         
-        # Payout foderazione (se applicabile)
+        # Payout foderazione cartolibreria (cumulo ogni 15 giorni)
         if include_foderazione:
             fod_gross = config.get("foderazione_cost", 1.50)
             fod_stripe = fod_gross * config.get("stripe_fee_percentage", 1.5) / 100
@@ -11451,6 +11484,8 @@ async def bookstore_confirm_pickup_by_code(bookstore_id: str, order_code: str = 
                 "stripe_fee": round(fod_stripe, 2),
                 "net_amount": fod_net,
                 "description": f"Foderazione: {order.get('book_titolo', '')}",
+                "pickup_date": pickup_date.isoformat(),
+                "payable_from": cartolibreria_payable_from,
                 "status": "pending",
                 "created_at": now.isoformat()
             }
