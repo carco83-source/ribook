@@ -1,9 +1,81 @@
-import React from 'react';
-import { Stack } from 'expo-router';
+import React, { useEffect } from 'react';
+import { Platform } from 'react-native';
+import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { NotificationProvider } from '../context/NotificationContext';
+import * as Notifications from 'expo-notifications';
+import * as Linking from 'expo-linking';
+
+// ============== PUSH NOTIFICATIONS SETUP ==============
+// 1. Foreground handler - MODULE SCOPE, before any component
+// Controlla come vengono mostrate le notifiche quando l'app è in foreground
+if (Platform.OS !== 'web') {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+    }),
+  });
+}
+
+// 2. Android channel - MODULE SCOPE, before any component
+// Necessario per Android per mostrare le notifiche
+if (Platform.OS === 'android') {
+  Notifications.setNotificationChannelAsync('default', {
+    name: 'Default',
+    importance: Notifications.AndroidImportance.MAX,
+    sound: 'default',
+    vibrationPattern: [0, 250, 250, 250],
+    lightColor: '#1a472a',
+  });
+}
 
 export default function RootLayout() {
+  const router = useRouter();
+
+  useEffect(() => {
+    // Skip notification listeners on web
+    if (Platform.OS === 'web') return;
+
+    // 3. Warm tap - user taps notification while app is open
+    const tapSub = Notifications.addNotificationResponseReceivedListener(
+      (response) => {
+        const data = response.notification.request.content.data || {};
+        const url = data.deeplink || data.action_url;
+        if (!url) return;
+        
+        // Navigate to the URL
+        if (typeof url === 'string') {
+          if (url.startsWith('http')) {
+            Linking.openURL(url);
+          } else {
+            router.push(url as any);
+          }
+        }
+      }
+    );
+
+    // 4. Cold-start tap - user tapped notification while app was killed
+    Notifications.getLastNotificationResponseAsync().then((response) => {
+      if (!response) return;
+      const data = response.notification.request.content.data || {};
+      const url = data.deeplink || data.action_url;
+      if (url && typeof url === 'string') {
+        if (url.startsWith('http')) {
+          Linking.openURL(url);
+        } else {
+          router.push(url as any);
+        }
+      }
+    });
+
+    // Cleanup
+    return () => {
+      tapSub.remove();
+    };
+  }, [router]);
+
   return (
     <NotificationProvider>
       <StatusBar style="light" />

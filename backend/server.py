@@ -72,6 +72,55 @@ import stripe
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY")
 
+# ============== PUSH NOTIFICATIONS (Emergent Managed) ==============
+PUSH_BASE_URL = "https://integrations.emergentagent.com"
+PUSH_KEY = os.environ.get("EMERGENT_PUSH_KEY", "placeholder")
+
+_push_client = httpx.AsyncClient(
+    base_url=PUSH_BASE_URL,
+    headers={"X-Push-Key": PUSH_KEY},
+    timeout=10.0,
+)
+
+class RegisterPushBody(BaseModel):
+    user_id: str
+    platform: str   # "android" | "ios"
+    device_token: str
+
+async def send_push(
+    recipients: list,
+    data: dict,  # {title, message, subtext?, image_url?, action_url?}
+    idempotency_key: str = None,
+) -> None:
+    """
+    Invia una push notification a uno o più utenti.
+    - recipients: lista di user_id
+    - data: {title: str, message: str, action_url?: str}
+    """
+    if not recipients:
+        return
+    if len(recipients) > 100:
+        logging.warning("send_push: max 100 recipients per call; chunking required")
+        return
+    if "title" not in data or "message" not in data:
+        logging.warning("send_push: data must include title and message")
+        return
+    
+    payload = {"recipients": recipients, "data": data}
+    if idempotency_key:
+        payload["$idempotency_key"] = idempotency_key
+    
+    try:
+        resp = await _push_client.post("/api/v1/push/trigger", json=payload)
+        if resp.status_code == 401:
+            logging.error("send_push: EMERGENT_PUSH_KEY missing or invalid")
+        elif resp.status_code >= 500:
+            logging.error(f"send_push: Push provider unavailable ({resp.status_code})")
+        else:
+            logging.info(f"send_push: Sent to {len(recipients)} recipients")
+    except Exception as e:
+        logging.error(f"send_push: Failed - {str(e)}")
+
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
@@ -1488,6 +1537,32 @@ async def logout_user(authorization: str = None):
         await db.user_sessions.delete_one({"session_token": token})
     
     return {"success": True, "message": "Logout effettuato"}
+
+# ============== PUSH NOTIFICATIONS ENDPOINTS ==============
+
+@api_router.post("/register-push", status_code=201)
+async def register_push(body: RegisterPushBody):
+    """
+    Registra il device token per le push notifications.
+    Chiamato dal frontend dopo il login o ad ogni apertura dell'app.
+    """
+    try:
+        resp = await _push_client.post("/api/v1/push/users/register", json=body.model_dump())
+        if resp.status_code == 401:
+            logging.error("register_push: EMERGENT_PUSH_KEY missing or invalid")
+            raise HTTPException(500, "Push service configuration error")
+        if resp.status_code >= 500:
+            logging.error(f"register_push: Push provider unavailable ({resp.status_code})")
+            raise HTTPException(502, "Push provider unavailable")
+        resp.raise_for_status()
+        logging.info(f"register_push: Registered device for user {body.user_id} on {body.platform}")
+        return {"status": "registered"}
+    except httpx.HTTPError as e:
+        logging.error(f"register_push: HTTP error - {str(e)}")
+        raise HTTPException(502, "Failed to register push token")
+    except Exception as e:
+        logging.error(f"register_push: Unexpected error - {str(e)}")
+        raise HTTPException(500, "Internal error registering push token")
 
 @api_router.get("/users/{user_id}")
 async def get_user(user_id: str, show_iban: bool = Query(False)):

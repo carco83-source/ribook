@@ -20,6 +20,7 @@ import axios from 'axios';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { secureSet, STORAGE_KEYS } from '../../src/utils/secureStorage';
+import { registerForPushNotifications } from '../../src/utils/pushNotifications';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
@@ -162,6 +163,11 @@ export default function LoginScreen() {
         }
         
         console.log('[Google OAuth] User data saved. user_id:', data.user_id);
+        
+        // Registra per le push notifications (non-blocking)
+        registerForPushNotifications(data.user_id).catch(err => {
+          console.log('[Google OAuth] Push registration failed (non-blocking):', err);
+        });
         
         // Migra profili temporanei se presenti
         const tempProfiles = await AsyncStorage.getItem('temp_profiles');
