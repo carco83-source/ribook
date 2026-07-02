@@ -2885,7 +2885,6 @@ async def get_book_adoptions(isbn: str):
     clean_isbn = isbn.replace("-", "").replace(" ", "").strip()
     
     # Cerca tutte le adozioni che contengono questo ISBN
-    # Le adozioni possono avere l'ISBN direttamente o in un array di libri
     adozioni = await db.adozioni.find({
         "$or": [
             {"isbn": clean_isbn},
@@ -2905,22 +2904,34 @@ async def get_book_adoptions(isbn: str):
     schools_map = {}
     
     for adozione in adozioni:
-        codice_scuola = adozione.get("codice_scuola", adozione.get("scuola_codice", ""))
-        nome_scuola = adozione.get("nome_scuola", adozione.get("scuola_nome", adozione.get("scuola", "")))
+        codice_scuola = adozione.get("codice_scuola", "")
         classe = adozione.get("classe", "")
         sezione = adozione.get("sezione", "")
-        tipo_scuola = adozione.get("tipo_scuola", adozione.get("tipo", ""))
-        citta = adozione.get("citta", adozione.get("comune", ""))
-        provincia = adozione.get("provincia", "")
+        tipo_scuola = adozione.get("tipo_scuola", "")
         
         # Crea chiave unica per la scuola
-        school_key = codice_scuola or nome_scuola
-        
-        if school_key not in schools_map:
-            schools_map[school_key] = {
+        if not codice_scuola:
+            continue
+            
+        if codice_scuola not in schools_map:
+            # Cerca i dettagli della scuola nella collezione schools
+            school_info = await db.schools.find_one({"codice_meccanografico": codice_scuola})
+            
+            if school_info:
+                nome_scuola = school_info.get("nome", "")
+                citta = school_info.get("comune", "")
+                provincia = school_info.get("provincia", "")
+                tipo = school_info.get("tipo", tipo_scuola)
+            else:
+                nome_scuola = f"Scuola {codice_scuola}"
+                citta = ""
+                provincia = ""
+                tipo = tipo_scuola
+            
+            schools_map[codice_scuola] = {
                 "codice_scuola": codice_scuola,
                 "nome_scuola": nome_scuola,
-                "tipo_scuola": tipo_scuola,
+                "tipo_scuola": tipo,
                 "citta": citta,
                 "provincia": provincia,
                 "classi": []
@@ -2932,8 +2943,8 @@ async def get_book_adoptions(isbn: str):
             "sezione": str(sezione) if sezione else ""
         }
         
-        if classe_info not in schools_map[school_key]["classi"]:
-            schools_map[school_key]["classi"].append(classe_info)
+        if classe_info not in schools_map[codice_scuola]["classi"]:
+            schools_map[codice_scuola]["classi"].append(classe_info)
     
     # Converti in lista e ordina
     adoptions = list(schools_map.values())

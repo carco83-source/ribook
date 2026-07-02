@@ -435,8 +435,8 @@ export default function SearchSellScreen() {
     setBookAdoptions([]);
     setShowAdoptions(false);
     
+    // Cerca listings disponibili
     try {
-      // Cerca listings disponibili
       const listingsResponse = await axios.get(`${API_URL}/api/listings/isbn/${isbn}`);
       if (listingsResponse.data?.listings && listingsResponse.data.listings.length > 0) {
         const listings = listingsResponse.data.listings;
@@ -447,23 +447,25 @@ export default function SearchSellScreen() {
           prezzo_minimo: minPrice
         }]);
       }
-      
-      // Cerca scuole che hanno adottato questo libro
-      try {
-        const adoptionsResponse = await axios.get(`${API_URL}/api/books/adoptions/${isbn}`);
-        if (adoptionsResponse.data?.adoptions && adoptionsResponse.data.adoptions.length > 0) {
-          setBookAdoptions(adoptionsResponse.data.adoptions);
-          setShowAdoptions(true);
-        }
-      } catch (adoptionError) {
-        console.log('No adoptions found for ISBN:', isbn);
-      }
-      
     } catch (error) {
-      console.log('No listings found');
-    } finally {
-      setCercaLoading(false);
+      console.log('No listings found for ISBN:', isbn);
     }
+    
+    // Cerca scuole che hanno adottato questo libro (chiamata separata)
+    try {
+      console.log('[Search] Fetching adoptions for ISBN:', isbn);
+      const adoptionsResponse = await axios.get(`${API_URL}/api/books/adoptions/${isbn}`);
+      console.log('[Search] Adoptions response:', adoptionsResponse.data);
+      if (adoptionsResponse.data?.adoptions && adoptionsResponse.data.adoptions.length > 0) {
+        setBookAdoptions(adoptionsResponse.data.adoptions);
+        setShowAdoptions(true);
+        console.log('[Search] Found', adoptionsResponse.data.adoptions.length, 'schools');
+      }
+    } catch (adoptionError) {
+      console.log('No adoptions found for ISBN:', isbn, adoptionError);
+    }
+    
+    setCercaLoading(false);
   };
 
   // ==================== RENDER ====================
