@@ -333,6 +333,8 @@ export default function SearchSellScreen() {
     setCercaLoading(true);
     setCercaResults([]);
     setCercaBook(null);
+    setBookAdoptions([]);
+    setShowAdoptions(false);
     
     try {
       // Prima cerca il libro
@@ -394,6 +396,18 @@ export default function SearchSellScreen() {
           }]);
         }
       }
+      
+      // Cerca scuole che hanno adottato questo libro
+      try {
+        const adoptionsResponse = await axios.get(`${API_URL}/api/books/adoptions/${cercaIsbn}`);
+        if (adoptionsResponse.data?.adoptions && adoptionsResponse.data.adoptions.length > 0) {
+          setBookAdoptions(adoptionsResponse.data.adoptions);
+          setShowAdoptions(true);
+        }
+      } catch (adoptionError) {
+        console.log('No adoptions found for ISBN:', cercaIsbn);
+      }
+      
     } catch (error) {
       console.error('Error searching:', error);
       showAlert('Errore', 'Impossibile cercare il libro');
