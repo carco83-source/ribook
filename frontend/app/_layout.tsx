@@ -105,6 +105,7 @@ export default function RootLayout() {
         <Stack.Screen name="chat/[conversationId]" options={{ title: 'Chat' }} />
         <Stack.Screen name="profile/my-listings" options={{ title: 'I Miei Annunci' }} />
         <Stack.Screen name="profile/my-exchanges" options={{ title: 'I Miei Scambi' }} />
+        <Stack.Screen name="profile/documents" options={{ title: 'Documenti', headerShown: false }} />
         <Stack.Screen name="edit-listing/[id]" options={{ title: 'Modifica Annuncio' }} />
         <Stack.Screen name="my-listing/[id]" options={{ title: 'Modifica Annuncio' }} />
         <Stack.Screen name="student/[id]" options={{ title: 'Dettagli Alunno' }} />

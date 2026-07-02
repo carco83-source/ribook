@@ -482,6 +482,23 @@ export default function ProfileScreen() {
         )}
       </View>
 
+      {/* Sezione Documenti */}
+      <TouchableOpacity 
+        style={styles.documentsSection}
+        onPress={() => router.push('/profile/documents')}
+      >
+        <View style={styles.documentsSectionContent}>
+          <View style={styles.documentsSectionLeft}>
+            <Ionicons name="document-text" size={24} color="#9333ea" />
+            <View style={styles.documentsSectionTextContainer}>
+              <Text style={styles.documentsSectionTitle}>Documenti</Text>
+              <Text style={styles.documentsSectionSubtitle}>Ricevute di vendita e acquisto</Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#999" />
+        </View>
+      </TouchableOpacity>
+
       {/* Sezione I Miei Annunci */}
       <View style={styles.listingsSection}>
         <View style={styles.listingsSectionHeader}>
@@ -1884,6 +1901,42 @@ const styles = StyleSheet.create({
     color: '#1a472a',
     fontSize: 14,
     fontWeight: '600',
+  },
+  // Documents Section Styles
+  documentsSection: {
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginTop: 16,
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  documentsSectionContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  documentsSectionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  documentsSectionTextContainer: {
+    marginLeft: 12,
+  },
+  documentsSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  documentsSectionSubtitle: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
   },
   // Listings Section Styles
   listingsSection: {

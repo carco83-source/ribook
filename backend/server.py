@@ -144,6 +144,269 @@ def mask_iban(iban: str) -> str:
     # Mostra i primi 4 caratteri (codice paese + check digits) e gli ultimi 4
     return f"{iban[:4]}****{iban[-4:]}"
 
+# ============== RICEVUTE PDF (NON FISCALI) ==============
+
+async def get_next_receipt_number(receipt_type: str) -> int:
+    """
+    Genera il prossimo numero progressivo per le ricevute.
+    receipt_type: 'vendita', 'acquisto', 'piattaforma'
+    """
+    counter = await db.receipt_counters.find_one_and_update(
+        {"type": receipt_type},
+        {"$inc": {"counter": 1}},
+        upsert=True,
+        return_document=True
+    )
+    return counter["counter"]
+
+def generate_receipt_pdf(
+    receipt_type: str,  # 'vendita', 'acquisto', 'piattaforma'
+    receipt_number: int,
+    receipt_date: datetime,
+    user_data: dict,
+    order_data: dict,
+    amount: float,
+    commission: float = 0,
+    bookstore_name: str = None
+) -> bytes:
+    """
+    Genera un PDF per la ricevuta non fiscale.
+    """
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=2*cm, bottomMargin=2*cm)
+    
+    styles = getSampleStyleSheet()
+    
+    # Stili personalizzati
+    title_style = ParagraphStyle(
+        'Title',
+        parent=styles['Heading1'],
+        fontSize=18,
+        textColor=colors.HexColor('#1a472a'),
+        alignment=TA_CENTER,
+        spaceAfter=20
+    )
+    
+    subtitle_style = ParagraphStyle(
+        'Subtitle',
+        parent=styles['Normal'],
+        fontSize=12,
+        textColor=colors.grey,
+        alignment=TA_CENTER,
+        spaceAfter=30
+    )
+    
+    header_style = ParagraphStyle(
+        'Header',
+        parent=styles['Heading2'],
+        fontSize=14,
+        textColor=colors.HexColor('#1a472a'),
+        spaceAfter=10
+    )
+    
+    normal_style = ParagraphStyle(
+        'CustomNormal',
+        parent=styles['Normal'],
+        fontSize=11,
+        spaceAfter=5
+    )
+    
+    elements = []
+    
+    # Logo e intestazione
+    elements.append(Paragraph("📚 RiBook", title_style))
+    elements.append(Paragraph("Marketplace Libri Scolastici Usati", subtitle_style))
+    
+    # Tipo ricevuta
+    receipt_titles = {
+        'vendita': 'RICEVUTA DI VENDITA',
+        'acquisto': 'RICEVUTA DI ACQUISTO',
+        'piattaforma': 'RICEVUTA COMMISSIONE PIATTAFORMA'
+    }
+    elements.append(Paragraph(receipt_titles.get(receipt_type, 'RICEVUTA'), header_style))
+    elements.append(Spacer(1, 10))
+    
+    # Numero e data
+    receipt_date_str = receipt_date.strftime('%d/%m/%Y %H:%M')
+    year = receipt_date.year
+    
+    info_data = [
+        ['Numero Ricevuta:', f'{receipt_type.upper()}-{year}-{receipt_number:06d}'],
+        ['Data:', receipt_date_str],
+    ]
+    
+    info_table = Table(info_data, colWidths=[150, 300])
+    info_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 11),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+    ]))
+    elements.append(info_table)
+    elements.append(Spacer(1, 20))
+    
+    # Dati utente
+    elements.append(Paragraph("DATI INTESTATARIO", header_style))
+    
+    user_info = [
+        ['Nome:', f"{user_data.get('nome', '')} {user_data.get('cognome', '')}"],
+        ['Email:', user_data.get('email', 'N/D')],
+    ]
+    if user_data.get('telefono'):
+        user_info.append(['Telefono:', user_data.get('telefono')])
+    
+    user_table = Table(user_info, colWidths=[150, 300])
+    user_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+    ]))
+    elements.append(user_table)
+    elements.append(Spacer(1, 20))
+    
+    # Dettagli transazione
+    elements.append(Paragraph("DETTAGLI TRANSAZIONE", header_style))
+    
+    transaction_data = [
+        ['Codice Ordine:', order_data.get('order_code', order_data.get('id', 'N/D'))],
+        ['Libro:', order_data.get('book_titolo', 'N/D')],
+        ['ISBN:', order_data.get('book_isbn', 'N/D')],
+    ]
+    
+    if bookstore_name:
+        transaction_data.append(['Punto Ritiro:', bookstore_name])
+    
+    trans_table = Table(transaction_data, colWidths=[150, 300])
+    trans_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+    ]))
+    elements.append(trans_table)
+    elements.append(Spacer(1, 20))
+    
+    # Importi
+    elements.append(Paragraph("RIEPILOGO IMPORTI", header_style))
+    
+    if receipt_type == 'vendita':
+        # Ricevuta venditore: mostra 80% che riceve
+        amounts_data = [
+            ['Prezzo di vendita:', f"€ {order_data.get('prezzo_libro', 0):.2f}"],
+            ['Quota venditore (80%):', f"€ {amount:.2f}"],
+        ]
+    elif receipt_type == 'acquisto':
+        # Ricevuta acquirente: mostra totale pagato
+        amounts_data = [
+            ['Prezzo libro:', f"€ {order_data.get('prezzo_libro', 0):.2f}"],
+        ]
+        if order_data.get('include_foderazione'):
+            amounts_data.append(['Foderazione:', f"€ {order_data.get('costo_foderazione', 1.50):.2f}"])
+        amounts_data.append(['TOTALE PAGATO:', f"€ {amount:.2f}"])
+    else:
+        # Ricevuta piattaforma: mostra 20% - commissioni
+        amounts_data = [
+            ['Prezzo di vendita:', f"€ {order_data.get('prezzo_libro', 0):.2f}"],
+            ['Quota piattaforma (20%):', f"€ {order_data.get('commissione_piattaforma', 0):.2f}"],
+            ['Commissioni Stripe:', f"- € {commission:.2f}"],
+            ['NETTO PIATTAFORMA:', f"€ {amount:.2f}"],
+        ]
+    
+    amounts_table = Table(amounts_data, colWidths=[250, 200])
+    amounts_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 11),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, -1), (-1, -1), 12),
+        ('TEXTCOLOR', (0, -1), (-1, -1), colors.HexColor('#1a472a')),
+    ]))
+    elements.append(amounts_table)
+    elements.append(Spacer(1, 30))
+    
+    # Metodo pagamento
+    elements.append(Paragraph("METODO DI PAGAMENTO", header_style))
+    elements.append(Paragraph("Stripe - Carta di credito/debito", normal_style))
+    elements.append(Spacer(1, 30))
+    
+    # Footer
+    footer_style = ParagraphStyle(
+        'Footer',
+        parent=styles['Normal'],
+        fontSize=9,
+        textColor=colors.grey,
+        alignment=TA_CENTER
+    )
+    elements.append(Paragraph("─" * 60, footer_style))
+    elements.append(Spacer(1, 10))
+    elements.append(Paragraph("Documento non fiscale - Solo per uso interno", footer_style))
+    elements.append(Paragraph("RiBook - Marketplace Libri Scolastici Usati", footer_style))
+    elements.append(Paragraph(f"Generato il {datetime.now().strftime('%d/%m/%Y %H:%M')}", footer_style))
+    
+    doc.build(elements)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+async def create_receipt(
+    receipt_type: str,
+    user_id: str,
+    order_data: dict,
+    amount: float,
+    commission: float = 0,
+    bookstore_name: str = None
+) -> dict:
+    """
+    Crea e salva una ricevuta nel database.
+    """
+    # Ottieni dati utente
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        user = {"nome": "Utente", "cognome": "Sconosciuto", "email": "N/D"}
+    
+    # Genera numero progressivo
+    receipt_number = await get_next_receipt_number(receipt_type)
+    receipt_date = datetime.utcnow()
+    
+    # Genera PDF
+    pdf_bytes = generate_receipt_pdf(
+        receipt_type=receipt_type,
+        receipt_number=receipt_number,
+        receipt_date=receipt_date,
+        user_data=user,
+        order_data=order_data,
+        amount=amount,
+        commission=commission,
+        bookstore_name=bookstore_name
+    )
+    
+    # Salva in base64 nel database
+    pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
+    
+    receipt_id = str(uuid.uuid4())
+    year = receipt_date.year
+    
+    receipt = {
+        "id": receipt_id,
+        "receipt_number": f"{receipt_type.upper()}-{year}-{receipt_number:06d}",
+        "type": receipt_type,
+        "user_id": user_id,
+        "order_id": order_data.get("id"),
+        "order_code": order_data.get("order_code"),
+        "book_titolo": order_data.get("book_titolo"),
+        "amount": amount,
+        "commission": commission,
+        "pdf_base64": pdf_base64,
+        "created_at": receipt_date.isoformat()
+    }
+    
+    await db.receipts.insert_one(receipt)
+    
+    return {
+        "id": receipt_id,
+        "receipt_number": receipt["receipt_number"],
+        "type": receipt_type,
+        "amount": amount,
+        "created_at": receipt_date.isoformat()
+    }
+
 def sanitize_user_response(user: dict, show_full_iban: bool = False) -> dict:
     """
     Rimuove/maschera i dati sensibili da una risposta utente.
@@ -1572,6 +1835,143 @@ async def get_user(user_id: str, show_iban: bool = Query(False)):
     # Applica sanitizzazione per proteggere i dati sensibili
     # Se show_iban=True, mostra l'IBAN completo (per il proprio profilo)
     return sanitize_user_response(dict(user), show_full_iban=show_iban)
+
+# ============== RICEVUTE ENDPOINTS ==============
+
+@api_router.get("/receipts/{user_id}")
+async def get_user_receipts(user_id: str):
+    """
+    Ottiene tutte le ricevute di un utente (vendite e acquisti).
+    """
+    receipts = await db.receipts.find(
+        {"user_id": user_id}
+    ).sort("created_at", -1).to_list(100)
+    
+    # Rimuovi il PDF base64 dalla lista (troppo pesante)
+    for r in receipts:
+        r.pop("_id", None)
+        r.pop("pdf_base64", None)
+    
+    return receipts
+
+@api_router.get("/receipts/{user_id}/{receipt_id}/download")
+async def download_receipt(user_id: str, receipt_id: str):
+    """
+    Scarica il PDF di una ricevuta specifica.
+    """
+    receipt = await db.receipts.find_one({"id": receipt_id, "user_id": user_id})
+    if not receipt:
+        raise HTTPException(status_code=404, detail="Ricevuta non trovata")
+    
+    pdf_bytes = base64.b64decode(receipt["pdf_base64"])
+    
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename={receipt['receipt_number']}.pdf"
+        }
+    )
+
+@api_router.get("/admin/receipts/platform")
+async def get_platform_receipts(
+    start_date: str = Query(None, description="Data inizio (YYYY-MM-DD)"),
+    end_date: str = Query(None, description="Data fine (YYYY-MM-DD)")
+):
+    """
+    Ottiene le ricevute della piattaforma (commissioni).
+    Per il riepilogo settimanale dell'admin.
+    """
+    query = {"type": "piattaforma"}
+    
+    if start_date:
+        query["created_at"] = {"$gte": start_date}
+    if end_date:
+        if "created_at" in query:
+            query["created_at"]["$lte"] = end_date + "T23:59:59"
+        else:
+            query["created_at"] = {"$lte": end_date + "T23:59:59"}
+    
+    receipts = await db.receipts.find(query).sort("created_at", -1).to_list(500)
+    
+    # Calcola totali
+    total_amount = sum(r.get("amount", 0) for r in receipts)
+    total_commission = sum(r.get("commission", 0) for r in receipts)
+    
+    # Rimuovi PDF base64
+    for r in receipts:
+        r.pop("_id", None)
+        r.pop("pdf_base64", None)
+    
+    return {
+        "receipts": receipts,
+        "summary": {
+            "total_receipts": len(receipts),
+            "total_net_amount": total_amount,
+            "total_stripe_fees": total_commission,
+            "period_start": start_date,
+            "period_end": end_date
+        }
+    }
+
+@api_router.get("/admin/receipts/weekly-summary")
+async def get_weekly_summary():
+    """
+    Ottiene il riepilogo settimanale delle commissioni piattaforma.
+    """
+    # Calcola inizio settimana (lunedì)
+    today = datetime.utcnow()
+    start_of_week = today - timedelta(days=today.weekday())
+    start_of_week = start_of_week.replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    # Fine settimana (domenica)
+    end_of_week = start_of_week + timedelta(days=6, hours=23, minutes=59, seconds=59)
+    
+    receipts = await db.receipts.find({
+        "type": "piattaforma",
+        "created_at": {
+            "$gte": start_of_week.isoformat(),
+            "$lte": end_of_week.isoformat()
+        }
+    }).sort("created_at", -1).to_list(500)
+    
+    total_amount = sum(r.get("amount", 0) for r in receipts)
+    total_commission = sum(r.get("commission", 0) for r in receipts)
+    
+    # Rimuovi PDF base64
+    for r in receipts:
+        r.pop("_id", None)
+        r.pop("pdf_base64", None)
+    
+    return {
+        "week_start": start_of_week.strftime("%d/%m/%Y"),
+        "week_end": end_of_week.strftime("%d/%m/%Y"),
+        "receipts": receipts,
+        "summary": {
+            "total_transactions": len(receipts),
+            "total_net_amount": round(total_amount, 2),
+            "total_stripe_fees": round(total_commission, 2)
+        }
+    }
+
+@api_router.get("/admin/receipts/{receipt_id}/download")
+async def download_admin_receipt(receipt_id: str):
+    """
+    Scarica il PDF di una ricevuta piattaforma (admin).
+    """
+    receipt = await db.receipts.find_one({"id": receipt_id, "type": "piattaforma"})
+    if not receipt:
+        raise HTTPException(status_code=404, detail="Ricevuta non trovata")
+    
+    pdf_bytes = base64.b64decode(receipt["pdf_base64"])
+    
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename={receipt['receipt_number']}.pdf"
+        }
+    )
 
 
 class UpdateUserRequest(BaseModel):
@@ -13508,12 +13908,16 @@ async def admin_clear_all_data(admin_id: str = Query(...)):
 
 @api_router.post("/bookstore/{bookstore_id}/confirm-pickup/{order_id}")
 async def bookstore_confirm_pickup(bookstore_id: str, order_id: str):
-    """Conferma ritiro libro dall'acquirente"""
+    """Conferma ritiro libro dall'acquirente e genera ricevute"""
     from datetime import datetime
     
     order = await db.orders.find_one({"id": order_id, "bookstore_id": bookstore_id})
     if not order:
         raise HTTPException(status_code=404, detail="Ordine non trovato")
+    
+    # Ottieni nome cartolibreria
+    bookstore = await db.bookstores.find_one({"id": bookstore_id})
+    bookstore_name = bookstore.get("nome", "Cartolibreria") if bookstore else "Cartolibreria"
     
     await db.orders.update_one(
         {"id": order_id},
@@ -13523,19 +13927,89 @@ async def bookstore_confirm_pickup(bookstore_id: str, order_id: str):
         }}
     )
     
+    # ========== GENERAZIONE RICEVUTE ==========
+    try:
+        # Calcola importi
+        prezzo_libro = order.get("prezzo_libro", 0)
+        totale_acquirente = order.get("totale_acquirente", prezzo_libro)
+        quota_venditore = order.get("quota_venditore", prezzo_libro * 0.80)
+        commissione_piattaforma = order.get("commissione_piattaforma", prezzo_libro * 0.20)
+        
+        # Calcola commissioni Stripe (circa 1.5% + €0.25)
+        stripe_fee = round(totale_acquirente * 0.015 + 0.25, 2)
+        netto_piattaforma = round(commissione_piattaforma - stripe_fee, 2)
+        if netto_piattaforma < 0:
+            netto_piattaforma = 0
+        
+        order_data = {
+            "id": order.get("id"),
+            "order_code": order.get("order_code"),
+            "book_titolo": order.get("book_titolo"),
+            "book_isbn": order.get("book_isbn"),
+            "prezzo_libro": prezzo_libro,
+            "include_foderazione": order.get("include_foderazione", False),
+            "costo_foderazione": order.get("costo_foderazione", 1.50),
+            "commissione_piattaforma": commissione_piattaforma
+        }
+        
+        # 1. Ricevuta VENDITORE (80%)
+        await create_receipt(
+            receipt_type="vendita",
+            user_id=order.get("seller_id"),
+            order_data=order_data,
+            amount=quota_venditore,
+            bookstore_name=bookstore_name
+        )
+        
+        # 2. Ricevuta ACQUIRENTE (totale pagato)
+        await create_receipt(
+            receipt_type="acquisto",
+            user_id=order.get("buyer_id"),
+            order_data=order_data,
+            amount=totale_acquirente,
+            bookstore_name=bookstore_name
+        )
+        
+        # 3. Ricevuta PIATTAFORMA (20% - commissioni Stripe)
+        await create_receipt(
+            receipt_type="piattaforma",
+            user_id="PLATFORM",  # ID speciale per la piattaforma
+            order_data=order_data,
+            amount=netto_piattaforma,
+            commission=stripe_fee,
+            bookstore_name=bookstore_name
+        )
+        
+        logging.info(f"Ricevute generate per ordine {order_id}")
+    except Exception as e:
+        logging.error(f"Errore generazione ricevute per ordine {order_id}: {str(e)}")
+        # Non bloccare il flusso principale se le ricevute falliscono
+    
     # Notifica al venditore (pagamento in arrivo)
     await db.notifications.insert_one({
         "id": str(uuid.uuid4()),
         "user_id": order.get("seller_id"),
         "type": "order_completed",
         "title": "Vendita completata!",
-        "message": f"L'acquirente ha ritirato '{order.get('book_titolo')}'. Il pagamento sarà accreditato a breve.",
+        "message": f"L'acquirente ha ritirato '{order.get('book_titolo')}'. Il pagamento sarà accreditato a breve.\n\n📄 La ricevuta è disponibile nella sezione Documenti del tuo profilo.",
         "data": {"order_id": order_id},
         "read": False,
         "created_at": datetime.now()
     })
     
-    return {"success": True, "message": "Ritiro confermato"}
+    # Notifica all'acquirente
+    await db.notifications.insert_one({
+        "id": str(uuid.uuid4()),
+        "user_id": order.get("buyer_id"),
+        "type": "order_completed",
+        "title": "Libro ritirato!",
+        "message": f"Hai ritirato '{order.get('book_titolo')}'.\n\n📄 La ricevuta è disponibile nella sezione Documenti del tuo profilo.",
+        "data": {"order_id": order_id},
+        "read": False,
+        "created_at": datetime.now()
+    })
+    
+    return {"success": True, "message": "Ritiro confermato e ricevute generate"}
 
 @api_router.post("/bookstore/{bookstore_id}/return/{order_id}")
 async def bookstore_register_return(bookstore_id: str, order_id: str, data: dict):
