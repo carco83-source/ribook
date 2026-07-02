@@ -399,13 +399,18 @@ export default function SearchSellScreen() {
       
       // Cerca scuole che hanno adottato questo libro
       try {
+        console.log('[Search] Fetching adoptions for ISBN:', cercaIsbn);
         const adoptionsResponse = await axios.get(`${API_URL}/api/books/adoptions/${cercaIsbn}`);
+        console.log('[Search] Adoptions response:', adoptionsResponse.data);
         if (adoptionsResponse.data?.adoptions && adoptionsResponse.data.adoptions.length > 0) {
+          console.log('[Search] Setting', adoptionsResponse.data.adoptions.length, 'adoptions');
           setBookAdoptions(adoptionsResponse.data.adoptions);
           setShowAdoptions(true);
+        } else {
+          console.log('[Search] No adoptions in response');
         }
-      } catch (adoptionError) {
-        console.log('No adoptions found for ISBN:', cercaIsbn);
+      } catch (adoptionError: any) {
+        console.log('[Search] Adoptions error:', adoptionError?.message || adoptionError);
       }
       
     } catch (error) {
@@ -687,31 +692,11 @@ export default function SearchSellScreen() {
           <Text style={[styles.sectionTitle, { color: '#4CAF50' }]}>CERCA UN LIBRO</Text>
         </View>
         
-        {/* Ricerca per ISBN */}
+        {/* Ricerca unificata per Titolo o ISBN */}
         <View style={styles.inputRow}>
           <TextInput
             style={styles.isbnInput}
-            placeholder="Cerca per ISBN"
-            placeholderTextColor="#999"
-            value={cercaIsbn}
-            onChangeText={setCercaIsbn}
-            keyboardType="numeric"
-            maxLength={13}
-          />
-          <TouchableOpacity style={[styles.searchButton, { backgroundColor: '#4CAF50' }]} onPress={handleCercaSearch}>
-            {cercaLoading && !cercaTitolo ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Ionicons name="search" size={20} color="#fff" />
-            )}
-          </TouchableOpacity>
-        </View>
-
-        {/* Ricerca per Titolo */}
-        <View style={[styles.inputRow, { marginTop: 10 }]}>
-          <TextInput
-            style={styles.isbnInput}
-            placeholder="Cerca per titolo..."
+            placeholder="Cerca titolo o codice ISBN..."
             placeholderTextColor="#999"
             value={cercaTitolo}
             onChangeText={setCercaTitolo}
@@ -724,7 +709,7 @@ export default function SearchSellScreen() {
             onPress={handleCercaTitolo}
             disabled={cercaTitolo.length < 3}
           >
-            {cercaLoading && cercaTitolo ? (
+            {cercaLoading ? (
               <ActivityIndicator size="small" color="#fff" />
             ) : (
               <Ionicons name="search" size={20} color="#fff" />
@@ -770,60 +755,6 @@ export default function SearchSellScreen() {
           </View>
         )}
       </View>
-
-      {/* ==================== SEZIONE ADOZIONI (Scuole che hanno adottato il libro) ==================== */}
-      {showAdoptions && bookAdoptions.length > 0 && (
-        <View style={styles.adoptionsSection}>
-          <View style={styles.adoptionsSectionHeader}>
-            <Ionicons name="school" size={24} color="#1a472a" />
-            <Text style={styles.adoptionsSectionTitle}>Scuole che hanno adottato questo libro</Text>
-          </View>
-          <Text style={styles.adoptionsSectionSubtitle}>
-            {bookAdoptions.length} {bookAdoptions.length === 1 ? 'scuola' : 'scuole'} • {bookAdoptions.reduce((sum, s) => sum + s.classi.length, 0)} classi
-          </Text>
-          
-          {bookAdoptions.slice(0, 5).map((school, index) => (
-            <View key={index} style={styles.adoptionSchoolCard}>
-              <View style={styles.adoptionSchoolHeader}>
-                <View style={styles.adoptionSchoolInfo}>
-                  <Text style={styles.adoptionSchoolName} numberOfLines={2}>{school.nome_scuola || 'Scuola'}</Text>
-                  <Text style={styles.adoptionSchoolLocation}>
-                    {school.citta}{school.provincia ? ` (${school.provincia})` : ''}
-                  </Text>
-                </View>
-                {school.tipo_scuola && (
-                  <View style={styles.adoptionSchoolTypeBadge}>
-                    <Text style={styles.adoptionSchoolType}>{school.tipo_scuola}</Text>
-                  </View>
-                )}
-              </View>
-              <View style={styles.adoptionClassesContainer}>
-                <Text style={styles.adoptionClassesLabel}>Classi:</Text>
-                <View style={styles.adoptionClassesList}>
-                  {school.classi.slice(0, 8).map((c, i) => (
-                    <View key={i} style={styles.adoptionClassBadge}>
-                      <Text style={styles.adoptionClassText}>
-                        {c.classe}{c.sezione ? c.sezione : ''}
-                      </Text>
-                    </View>
-                  ))}
-                  {school.classi.length > 8 && (
-                    <View style={[styles.adoptionClassBadge, { backgroundColor: '#e0e0e0' }]}>
-                      <Text style={styles.adoptionClassText}>+{school.classi.length - 8}</Text>
-                    </View>
-                  )}
-                </View>
-              </View>
-            </View>
-          ))}
-          
-          {bookAdoptions.length > 5 && (
-            <Text style={styles.adoptionsMoreText}>
-              ... e altre {bookAdoptions.length - 5} scuole
-            </Text>
-          )}
-        </View>
-      )}
 
       {/* Divider */}
       <View style={styles.dividerDark} />
