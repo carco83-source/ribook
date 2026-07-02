@@ -44,6 +44,15 @@ interface PopularBook {
   count: number;
 }
 
+interface BookAdoption {
+  codice_scuola: string;
+  nome_scuola: string;
+  tipo_scuola: string;
+  citta: string;
+  provincia: string;
+  classi: Array<{ classe: string; sezione: string }>;
+}
+
 // Anno scolastico corrente
 const CURRENT_SCHOOL_YEAR = '2025/2026';
 // Prossimo anno (per future implementazioni)
@@ -77,6 +86,10 @@ export default function SearchSellScreen() {
   // Libri popolari states
   const [popularBooks, setPopularBooks] = useState<PopularBook[]>([]);
   const [popularLoading, setPopularLoading] = useState(false);
+  
+  // Adozioni (scuole che hanno adottato il libro cercato per ISBN)
+  const [bookAdoptions, setBookAdoptions] = useState<BookAdoption[]>([]);
+  const [showAdoptions, setShowAdoptions] = useState(false);
 
   useEffect(() => {
     loadUserId();
@@ -419,8 +432,11 @@ export default function SearchSellScreen() {
   const handleCercaSearchWithIsbn = async (isbn: string) => {
     setCercaLoading(true);
     setCercaResults([]);
+    setBookAdoptions([]);
+    setShowAdoptions(false);
     
     try {
+      // Cerca listings disponibili
       const listingsResponse = await axios.get(`${API_URL}/api/listings/isbn/${isbn}`);
       if (listingsResponse.data?.listings && listingsResponse.data.listings.length > 0) {
         const listings = listingsResponse.data.listings;
@@ -431,6 +447,18 @@ export default function SearchSellScreen() {
           prezzo_minimo: minPrice
         }]);
       }
+      
+      // Cerca scuole che hanno adottato questo libro
+      try {
+        const adoptionsResponse = await axios.get(`${API_URL}/api/books/adoptions/${isbn}`);
+        if (adoptionsResponse.data?.adoptions && adoptionsResponse.data.adoptions.length > 0) {
+          setBookAdoptions(adoptionsResponse.data.adoptions);
+          setShowAdoptions(true);
+        }
+      } catch (adoptionError) {
+        console.log('No adoptions found for ISBN:', isbn);
+      }
+      
     } catch (error) {
       console.log('No listings found');
     } finally {
@@ -727,6 +755,60 @@ export default function SearchSellScreen() {
         )}
       </View>
 
+      {/* ==================== SEZIONE ADOZIONI (Scuole che hanno adottato il libro) ==================== */}
+      {showAdoptions && bookAdoptions.length > 0 && (
+        <View style={styles.adoptionsSection}>
+          <View style={styles.adoptionsSectionHeader}>
+            <Ionicons name="school" size={24} color="#1a472a" />
+            <Text style={styles.adoptionsSectionTitle}>Scuole che hanno adottato questo libro</Text>
+          </View>
+          <Text style={styles.adoptionsSectionSubtitle}>
+            {bookAdoptions.length} {bookAdoptions.length === 1 ? 'scuola' : 'scuole'} • {bookAdoptions.reduce((sum, s) => sum + s.classi.length, 0)} classi
+          </Text>
+          
+          {bookAdoptions.slice(0, 5).map((school, index) => (
+            <View key={index} style={styles.adoptionSchoolCard}>
+              <View style={styles.adoptionSchoolHeader}>
+                <View style={styles.adoptionSchoolInfo}>
+                  <Text style={styles.adoptionSchoolName} numberOfLines={2}>{school.nome_scuola || 'Scuola'}</Text>
+                  <Text style={styles.adoptionSchoolLocation}>
+                    {school.citta}{school.provincia ? ` (${school.provincia})` : ''}
+                  </Text>
+                </View>
+                {school.tipo_scuola && (
+                  <View style={styles.adoptionSchoolTypeBadge}>
+                    <Text style={styles.adoptionSchoolType}>{school.tipo_scuola}</Text>
+                  </View>
+                )}
+              </View>
+              <View style={styles.adoptionClassesContainer}>
+                <Text style={styles.adoptionClassesLabel}>Classi:</Text>
+                <View style={styles.adoptionClassesList}>
+                  {school.classi.slice(0, 8).map((c, i) => (
+                    <View key={i} style={styles.adoptionClassBadge}>
+                      <Text style={styles.adoptionClassText}>
+                        {c.classe}{c.sezione ? c.sezione : ''}
+                      </Text>
+                    </View>
+                  ))}
+                  {school.classi.length > 8 && (
+                    <View style={[styles.adoptionClassBadge, { backgroundColor: '#e0e0e0' }]}>
+                      <Text style={styles.adoptionClassText}>+{school.classi.length - 8}</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+            </View>
+          ))}
+          
+          {bookAdoptions.length > 5 && (
+            <Text style={styles.adoptionsMoreText}>
+              ... e altre {bookAdoptions.length - 5} scuole
+            </Text>
+          )}
+        </View>
+      )}
+
       {/* Divider */}
       <View style={styles.dividerDark} />
 
@@ -820,6 +902,104 @@ const styles = StyleSheet.create({
     height: 8,
     backgroundColor: '#9e9e9e',
   },
+  // ==================== ADOZIONI STYLES ====================
+  adoptionsSection: {
+    backgroundColor: '#f8f9fa',
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+  },
+  adoptionsSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  adoptionsSectionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1a472a',
+  },
+  adoptionsSectionSubtitle: {
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 12,
+    marginLeft: 32,
+  },
+  adoptionSchoolCard: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#e8e8e8',
+  },
+  adoptionSchoolHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  adoptionSchoolInfo: {
+    flex: 1,
+    marginRight: 8,
+  },
+  adoptionSchoolName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 2,
+  },
+  adoptionSchoolLocation: {
+    fontSize: 12,
+    color: '#666',
+  },
+  adoptionSchoolTypeBadge: {
+    backgroundColor: '#e8f5e9',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  adoptionSchoolType: {
+    fontSize: 10,
+    color: '#1a472a',
+    fontWeight: '500',
+  },
+  adoptionClassesContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  adoptionClassesLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginRight: 4,
+  },
+  adoptionClassesList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+  },
+  adoptionClassBadge: {
+    backgroundColor: '#1a472a',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  adoptionClassText: {
+    fontSize: 11,
+    color: '#fff',
+    fontWeight: '500',
+  },
+  adoptionsMoreText: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+    fontStyle: 'italic',
+    marginTop: 4,
+  },
+  // ==================== END ADOZIONI STYLES ====================
   popularBooksSection: {
     backgroundColor: '#fff',
     padding: 8,

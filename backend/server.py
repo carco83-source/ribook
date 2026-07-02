@@ -2877,6 +2877,79 @@ async def lookup_book_by_isbn(isbn: str):
         "source": "not_found"
     }
 
+@api_router.get("/books/adoptions/{isbn}")
+async def get_book_adoptions(isbn: str):
+    """
+    Ottiene tutte le scuole, classi e sezioni che hanno adottato un libro dato l'ISBN.
+    """
+    clean_isbn = isbn.replace("-", "").replace(" ", "").strip()
+    
+    # Cerca tutte le adozioni che contengono questo ISBN
+    # Le adozioni possono avere l'ISBN direttamente o in un array di libri
+    adozioni = await db.adozioni.find({
+        "$or": [
+            {"isbn": clean_isbn},
+            {"libri.isbn": clean_isbn}
+        ]
+    }).to_list(500)
+    
+    if not adozioni:
+        return {
+            "isbn": clean_isbn,
+            "adoptions": [],
+            "count": 0,
+            "message": "Nessuna scuola ha adottato questo libro"
+        }
+    
+    # Raggruppa per scuola
+    schools_map = {}
+    
+    for adozione in adozioni:
+        codice_scuola = adozione.get("codice_scuola", adozione.get("scuola_codice", ""))
+        nome_scuola = adozione.get("nome_scuola", adozione.get("scuola_nome", adozione.get("scuola", "")))
+        classe = adozione.get("classe", "")
+        sezione = adozione.get("sezione", "")
+        tipo_scuola = adozione.get("tipo_scuola", adozione.get("tipo", ""))
+        citta = adozione.get("citta", adozione.get("comune", ""))
+        provincia = adozione.get("provincia", "")
+        
+        # Crea chiave unica per la scuola
+        school_key = codice_scuola or nome_scuola
+        
+        if school_key not in schools_map:
+            schools_map[school_key] = {
+                "codice_scuola": codice_scuola,
+                "nome_scuola": nome_scuola,
+                "tipo_scuola": tipo_scuola,
+                "citta": citta,
+                "provincia": provincia,
+                "classi": []
+            }
+        
+        # Aggiungi classe/sezione se non già presente
+        classe_info = {
+            "classe": str(classe) if classe else "",
+            "sezione": str(sezione) if sezione else ""
+        }
+        
+        if classe_info not in schools_map[school_key]["classi"]:
+            schools_map[school_key]["classi"].append(classe_info)
+    
+    # Converti in lista e ordina
+    adoptions = list(schools_map.values())
+    adoptions.sort(key=lambda x: (x.get("citta", ""), x.get("nome_scuola", "")))
+    
+    # Ordina le classi per ogni scuola
+    for school in adoptions:
+        school["classi"].sort(key=lambda x: (x.get("classe", ""), x.get("sezione", "")))
+    
+    return {
+        "isbn": clean_isbn,
+        "adoptions": adoptions,
+        "count": len(adoptions),
+        "total_classes": sum(len(s["classi"]) for s in adoptions)
+    }
+
 
 # ============== BOOK COVER API (IBS.it) ==============
 
