@@ -9439,18 +9439,22 @@ async def _process_paid_order(order_id: str, user_id: str, order: dict, payment_
     # Notifica alla cartolibreria con condizioni, foto, NO QR, NO prezzo
     foderazione_text_bs = "\n\n📗 FODERAZIONE: ✅ RICHIESTA (€1.50)" if include_foderazione else ""
     
+    # Anonimizza nomi per privacy nelle notifiche alla cartolibreria
+    seller_anonymous = f"Utente_{order.get('seller_id', '')[:5].upper()}"
+    buyer_anonymous = f"Utente_{order.get('buyer_id', '')[:5].upper()}"
+    
     bookstore_notification = {
         "id": str(uuid.uuid4()),
         "bookstore_id": order.get("bookstore_id"),
         "user_id": f"bookstore_{order.get('bookstore_id')}",
         "type": "incoming_book_delivery",
         "title": "📦 LIBRO IN ARRIVO" + (" + 📗 FODERAZIONE" if include_foderazione else ""),
-        "message": f"🔑 CODICE: {order.get('order_code')}\n\n📚 LIBRO: {order.get('book_titolo')}\n\n👤 VENDITORE: {order.get('seller_name')}\n🛒 ACQUIRENTE: {order.get('buyer_name')}{foderazione_text_bs}\n\n📋 CONDIZIONI:\n{conditions_text}",
+        "message": f"🔑 CODICE: {order.get('order_code')}\n\n📚 LIBRO: {order.get('book_titolo')}\n\n👤 VENDITORE: {seller_anonymous}\n🛒 ACQUIRENTE: {buyer_anonymous}{foderazione_text_bs}\n\n📋 CONDIZIONI:\n{conditions_text}",
         "order_id": order_id,
         "order_code": order.get("order_code"),
         "book_titolo": order.get("book_titolo"),
-        "seller_name": order.get("seller_name"),
-        "buyer_name": order.get("buyer_name"),
+        "seller_name": seller_anonymous,
+        "buyer_name": buyer_anonymous,
         "books_conditions": books_conditions,
         "books_photos": [listing_photo] if listing_photo else [],
         "include_foderazione": include_foderazione,
@@ -9701,12 +9705,16 @@ async def pay_orders_batch(user_id: str = Query(...), order_ids: str = Query(...
         for bc in books_conditions:
             bookstore_conditions_text += f"\n📚 {bc['title']}\n{bc['conditions']}\n"
         
+        # Anonimizza nomi per privacy
+        seller_anon = f"Utente_{group_orders[0].get('seller_id', '')[:5].upper()}"
+        buyer_anon = f"Utente_{group_orders[0].get('buyer_id', '')[:5].upper()}"
+        
         bookstore_notification = {
             "id": str(uuid.uuid4()),
             "bookstore_id": bookstore_id,
             "type": "incoming_order",
             "title": f"{'ORDINE MULTIPLO' if len(group_orders) > 1 else 'NUOVO ORDINE'} IN ARRIVO",
-            "message": f"CODICE: {batch_code}\n\nVENDITORE: {group_orders[0].get('seller_name')}\nACQUIRENTE: {group_orders[0].get('buyer_name')}\n\n📋 DETTAGLI LIBRI:{bookstore_conditions_text}",
+            "message": f"CODICE: {batch_code}\n\nVENDITORE: {seller_anon}\nACQUIRENTE: {buyer_anon}\n\n📋 DETTAGLI LIBRI:{bookstore_conditions_text}",
             "order_id": batch_id,
             "order_code": batch_code,
             "order_count": len(group_orders),
@@ -9772,18 +9780,22 @@ async def mark_delivered_to_bookstore(order_id: str, user_id: str = Query(...)):
     include_foderazione = order.get("include_foderazione", False)
     foderazione_text = "\n\n📦 FODERAZIONE RICHIESTA: ✅ SÌ (€1.50)" if include_foderazione else "\n\n📦 FODERAZIONE: ❌ Non richiesta"
     
+    # Anonimizza nomi per privacy
+    seller_anon = f"Utente_{order.get('seller_id', '')[:5].upper()}"
+    buyer_anon = f"Utente_{order.get('buyer_id', '')[:5].upper()}"
+    
     bookstore_delivery_notification = {
         "id": str(uuid.uuid4()),
         "bookstore_id": order.get("bookstore_id"),
         "type": "seller_delivery",
         "title": "📦 CONSEGNA VENDITORE" + (" + 📗 FODERAZIONE" if include_foderazione else ""),
-        "message": f"Il venditore sta per consegnare un libro.\n\n📚 LIBRO: {order.get('book_titolo')}\n\n👤 VENDITORE: {order.get('seller_name')}\n🛒 ACQUIRENTE: {order.get('buyer_name')}{foderazione_text}\n\n🔑 CODICE: {order.get('order_code')}\n\nVerifica il codice e le condizioni del libro prima di accettare la consegna.",
+        "message": f"Il venditore sta per consegnare un libro.\n\n📚 LIBRO: {order.get('book_titolo')}\n\n👤 VENDITORE: {seller_anon}\n🛒 ACQUIRENTE: {buyer_anon}{foderazione_text}\n\n🔑 CODICE: {order.get('order_code')}\n\nVerifica il codice e le condizioni del libro prima di accettare la consegna.",
         "order_id": order_id,
         "order_code": order.get("order_code"),
         "book_title": order.get("book_titolo"),
         "book_isbn": order.get("book_isbn"),
-        "seller_name": order.get("seller_name"),
-        "buyer_name": order.get("buyer_name"),
+        "seller_name": seller_anon,
+        "buyer_name": buyer_anon,
         "include_foderazione": include_foderazione,
         "book_details": {
             "titolo": order.get("book_titolo"),
@@ -10441,12 +10453,16 @@ async def request_return(order_id: str, user_id: str = Query(...), reason: str =
             condition_details_text = "\n".join(details_lines)
     
     # Notifica alla cartolibreria - SALVA IN bookstore_notifications
+    # Anonimizza nomi per privacy
+    buyer_anon = f"Utente_{order.get('buyer_id', '')[:5].upper()}"
+    seller_anon = f"Utente_{order.get('seller_id', '')[:5].upper()}"
+    
     bookstore_notification = {
         "id": str(uuid.uuid4()),
         "bookstore_id": order.get("bookstore_id"),
         "type": "return_request",
         "title": "🔄 Richiesta reso da verificare",
-        "message": f"Nuovo reso da verificare:\n\n📚 LIBRO:\n{order.get('book_titolo')}\n\n👤 ACQUIRENTE: {order.get('buyer_name')}\n👤 VENDITORE: {order.get('seller_name')}\n\n⚠️ MOTIVAZIONE RESO:\n\"{reason_text}\"\n\n📋 CONDIZIONI GENERALI:\n{listing_details.get('condizioni', 'Non specificate')}\n\n🔍 DETTAGLI CONDIZIONI DICHIARATE:\n{condition_details_text}\n\n📝 NOTE VENDITORE:\n{listing_details.get('descrizione', 'Nessuna')}\n\n💰 Prezzo vendita: €{listing_details.get('prezzo_vendita', 0):.2f}\n\nVerifica il libro e approva o rifiuta il reso.",
+        "message": f"Nuovo reso da verificare:\n\n📚 LIBRO:\n{order.get('book_titolo')}\n\n👤 ACQUIRENTE: {buyer_anon}\n👤 VENDITORE: {seller_anon}\n\n⚠️ MOTIVAZIONE RESO:\n\"{reason_text}\"\n\n📋 CONDIZIONI GENERALI:\n{listing_details.get('condizioni', 'Non specificate')}\n\n🔍 DETTAGLI CONDIZIONI DICHIARATE:\n{condition_details_text}\n\n📝 NOTE VENDITORE:\n{listing_details.get('descrizione', 'Nessuna')}\n\n💰 Prezzo vendita: €{listing_details.get('prezzo_vendita', 0):.2f}\n\nVerifica il libro e approva o rifiuta il reso.",
         "order_id": order_id,
         "order_code": order.get("order_code"),
         "return_reason": reason_text,
@@ -10462,8 +10478,8 @@ async def request_return(order_id: str, user_id: str = Query(...), reason: str =
             "foto": listing_details.get("foto_base64"),
             "prezzo": listing_details.get("prezzo_vendita"),
         },
-        "buyer_name": order.get("buyer_name"),
-        "seller_name": order.get("seller_name"),
+        "buyer_name": buyer_anon,
+        "seller_name": seller_anon,
         "requires_action": True,
         "action_type": "verify_return",
         "read": False,
@@ -11749,11 +11765,11 @@ async def bookstore_confirm_seller_delivery(
         return {
             "success": True,
             "status": "pronto_per_ritiro",
-            "message": f"✅ Libro IDONEO! L'acquirente {order.get('buyer_name')} è stato notificato.",
+            "message": f"✅ Libro IDONEO! L'acquirente è stato notificato.",
             "order_id": order["id"],
             "order_code": order.get("order_code"),
             "book_titolo": order.get("book_titolo"),
-            "buyer_name": order.get("buyer_name"),
+            "buyer_name": f"Utente_{order.get('buyer_id', '')[:5].upper()}",
             "next_step": "In attesa del ritiro dell'acquirente"
         }
     else:
@@ -11899,13 +11915,14 @@ async def bookstore_confirm_pickup_by_code(bookstore_id: str, order_code: str = 
     }
     await db.notifications.insert_one(notification_buyer)
     
-    # Notifica alla cartolibreria
+    # Notifica alla cartolibreria - usa nome anonimo per privacy
+    buyer_anonymous = f"Utente_{order.get('buyer_id', '')[:5].upper()}"
     bookstore_notification = {
         "id": str(uuid.uuid4()),
         "bookstore_id": bookstore_id,
         "type": "order_pickup_completed",
         "title": "Ritiro completato",
-        "message": f"Ordine {order.get('order_code')} - Ritiro completato!\n\nLibro: {order.get('book_titolo')}\nAcquirente: {order.get('buyer_name')}\n\nIl pagamento sarà sbloccato tra 3/5 giorni lavorativi se non verranno trovate evidenti differenze nelle descrizioni dall'acquirente.",
+        "message": f"Ordine {order.get('order_code')} - Ritiro completato!\n\nLibro: {order.get('book_titolo')}\nAcquirente: {buyer_anonymous}\n\nIl pagamento sarà sbloccato tra 3/5 giorni lavorativi se non verranno trovate evidenti differenze nelle descrizioni dall'acquirente.",
         "order_id": order["id"],
         "order_code": order.get("order_code"),
         "commissione_cartolibreria": order.get("commissione_cartolibreria", 0),
