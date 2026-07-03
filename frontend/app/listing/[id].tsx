@@ -339,7 +339,8 @@ export default function ListingDetailScreen() {
   const calculateCommission = () => {
     if (!listing) return { commission: 0, total: 0, foderazione: 0 };
     const sellingPrice = getListingSellingPrice(listing);
-    const foderazioneCost = richiediFoderazione ? 1.50 : 0;
+    // Foderazione ora è solo nel carrello, qui è sempre 0
+    const foderazioneCost = 0;
     // NUOVA LOGICA: Nessuna commissione aggiuntiva per l'acquirente
     // Il prezzo visualizzato è il prezzo finale
     return { commission: 0, total: sellingPrice, foderazione: foderazioneCost };
@@ -540,7 +541,6 @@ export default function ListingDetailScreen() {
   };
 
   const { commission, total, foderazione } = React.useMemo(() => {
-    console.log('[DEBUG useMemo] Calculating with richiediFoderazione:', richiediFoderazione);
     return calculateCommission();
   }, [listing]);
   
@@ -1011,7 +1011,7 @@ export default function ListingDetailScreen() {
         ) : null}
 
         {/* Price Display - Diverso per venditore e acquirente */}
-        <View style={styles.priceBreakdown} key={`price-${richiediFoderazione}`}>
+        <View style={styles.priceBreakdown}>
           {isOwner ? (
             // VENDITORE: vede solo il prezzo annuncio e quanto riceverà
             <>
