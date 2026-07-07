@@ -86,8 +86,21 @@ export default function SearchResultsScreen() {
           title: 'Risultati Ricerca',
           headerStyle: { backgroundColor: '#1a472a' },
           headerTintColor: '#fff',
+          headerBackTitle: 'Indietro',
           headerLeft: () => (
-            <TouchableOpacity onPress={() => router.back()} style={{ paddingHorizontal: 16 }}>
+            <TouchableOpacity 
+              onPress={() => {
+                // Usa canGoBack per verificare se possiamo tornare indietro
+                if (router.canGoBack()) {
+                  router.back();
+                } else {
+                  // Fallback: torna alla tab search
+                  router.replace('/(tabs)/search');
+                }
+              }} 
+              style={{ paddingHorizontal: 16, paddingVertical: 8 }}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
               <Ionicons name="arrow-back" size={24} color="#fff" />
             </TouchableOpacity>
           ),
