@@ -74,6 +74,7 @@ export default function SearchSellScreen() {
   const [cameraKey, setCameraKey] = useState(0);
   const [isCameraReady, setIsCameraReady] = useState(false);
   const [scannerError, setScannerError] = useState<string | null>(null);
+  const [scannerMode, setScannerMode] = useState<'vendi' | 'cerca'>('vendi'); // Modalità scanner
   
   // Cerca states
   const [cercaIsbn, setCercaIsbn] = useState('');
@@ -190,6 +191,7 @@ export default function SearchSellScreen() {
     console.log('=== BARCODE SCANNED ===');
     console.log('Type:', type);
     console.log('Data:', data);
+    console.log('Mode:', scannerMode);
     
     // Clean the ISBN - rimuovi caratteri non numerici (eccetto X per ISBN-10)
     const cleanIsbn = data.replace(/[^0-9X]/gi, '');
@@ -212,15 +214,22 @@ export default function SearchSellScreen() {
       }
     }
     
-    setVendiIsbn(cleanIsbn);
     setShowScanner(false);
     setIsCameraReady(false);
     
-    // Auto search after closing scanner
-    setTimeout(() => {
-      handleVendiSearchWithIsbn(cleanIsbn);
-    }, 300);
-  }, [scanned, isCameraReady]);
+    // Auto search after closing scanner - in base alla modalità
+    if (scannerMode === 'cerca') {
+      setCercaTitolo(cleanIsbn);
+      setTimeout(() => {
+        handleCercaTitolo(cleanIsbn);
+      }, 300);
+    } else {
+      setVendiIsbn(cleanIsbn);
+      setTimeout(() => {
+        handleVendiSearchWithIsbn(cleanIsbn);
+      }, 300);
+    }
+  }, [scanned, isCameraReady, scannerMode]);
 
   const handleVendiSearchWithIsbn = async (isbn: string) => {
     if (!isbn || isbn.length < 10) return;
@@ -695,7 +704,7 @@ export default function SearchSellScreen() {
         {/* Ricerca unificata per Titolo o ISBN */}
         <View style={styles.inputRow}>
           <TextInput
-            style={styles.isbnInput}
+            style={[styles.isbnInput, { flex: 1 }]}
             placeholder="Cerca titolo o codice ISBN..."
             placeholderTextColor="#999"
             value={cercaTitolo}
@@ -704,6 +713,18 @@ export default function SearchSellScreen() {
             returnKeyType="search"
             onSubmitEditing={handleCercaTitolo}
           />
+          <TouchableOpacity 
+            style={[styles.scanButton, { backgroundColor: '#4CAF50' }]} 
+            onPress={() => {
+              // Set scanner to search mode and open
+              setScannerMode('cerca');
+              setScanned(false);
+              setScannerError(null);
+              openScanner();
+            }}
+          >
+            <Ionicons name="barcode-outline" size={22} color="#fff" />
+          </TouchableOpacity>
           <TouchableOpacity 
             style={[styles.searchButton, { backgroundColor: '#4CAF50' }]} 
             onPress={handleCercaTitolo}
