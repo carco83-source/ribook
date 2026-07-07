@@ -958,8 +958,14 @@ class BookListingCreate(BaseModel):
     child_name: Optional[str] = None
     condition_percentage: Optional[float] = None
 
+def generate_listing_code() -> str:
+    """Genera un codice univoco di 6 cifre per il listing"""
+    import random
+    return str(random.randint(100000, 999999))
+
 class BookListing(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    listing_code: str = Field(default_factory=generate_listing_code)  # Codice univoco 6 cifre per il venditore
     seller_id: str
     seller_username: str
     book_id: str
@@ -14087,13 +14093,18 @@ async def bookstore_confirm_pickup(bookstore_id: str, order_id: str):
         # Non bloccare il flusso principale se le ricevute falliscono
     
     # Notifica al venditore (pagamento in arrivo)
+    # Recupera il listing per ottenere il listing_code
+    listing = await db.listings.find_one({"id": order.get("listing_id")})
+    listing_code = listing.get("listing_code", "") if listing else ""
+    listing_code_text = f"\n\n🔖 Codice annuncio: {listing_code}" if listing_code else ""
+    
     await db.notifications.insert_one({
         "id": str(uuid.uuid4()),
         "user_id": order.get("seller_id"),
         "type": "order_completed",
         "title": "Vendita completata!",
-        "message": f"L'acquirente ha ritirato '{order.get('book_titolo')}'. Il pagamento sarà accreditato a breve.\n\n📄 La ricevuta è disponibile nella sezione Documenti del tuo profilo.",
-        "data": {"order_id": order_id},
+        "message": f"L'acquirente ha ritirato '{order.get('book_titolo')}'.{listing_code_text}\n\nIl pagamento sarà accreditato a breve.\n\n📄 La ricevuta è disponibile nella sezione Documenti del tuo profilo.",
+        "data": {"order_id": order_id, "listing_code": listing_code},
         "read": False,
         "created_at": datetime.now()
     })
