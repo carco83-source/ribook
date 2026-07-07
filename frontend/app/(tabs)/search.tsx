@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -75,6 +75,8 @@ export default function SearchSellScreen() {
   const [isCameraReady, setIsCameraReady] = useState(false);
   const [scannerError, setScannerError] = useState<string | null>(null);
   const [scannerMode, setScannerMode] = useState<'vendi' | 'cerca'>('vendi'); // Modalità scanner
+  const lastScannedRef = useRef<string | null>(null); // Debounce ref
+  const scanTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Timeout ref
   
   // Cerca states
   const [cercaIsbn, setCercaIsbn] = useState('');
@@ -184,51 +186,58 @@ export default function SearchSellScreen() {
   };
 
   const handleBarCodeScanned = useCallback((scanResult: BarcodeScanningResult) => {
-    if (scanned || !isCameraReady) return; // Previene scansioni multiple e premature
+    // Previeni scansioni multiple
+    if (scanned || !isCameraReady) return;
     
-    const { type, data } = scanResult;
-    setScanned(true);
-    console.log('=== BARCODE SCANNED ===');
-    console.log('Type:', type);
-    console.log('Data:', data);
-    console.log('Mode:', scannerMode);
+    const { data } = scanResult;
     
-    // Clean the ISBN - rimuovi caratteri non numerici (eccetto X per ISBN-10)
+    // Clean the ISBN
     const cleanIsbn = data.replace(/[^0-9X]/gi, '');
-    console.log('Clean ISBN:', cleanIsbn);
+    
+    // Ignora se stesso ISBN scansionato di recente (debounce)
+    if (lastScannedRef.current === cleanIsbn) {
+      return;
+    }
     
     // Valida la lunghezza dell'ISBN
     if (cleanIsbn.length < 10 || cleanIsbn.length > 13) {
-      console.log('Invalid ISBN length, ignoring...');
-      setScanned(false);
       return;
     }
+    
+    // Imposta il flag immediatamente per prevenire ulteriori scansioni
+    setScanned(true);
+    lastScannedRef.current = cleanIsbn;
+    
+    console.log('ISBN Scansionato:', cleanIsbn, '- Mode:', scannerMode);
     
     // Vibration feedback
     if (Platform.OS !== 'web') {
       try {
         const Haptics = require('expo-haptics');
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } catch (e) {
-        // Haptics not available
-      }
+      } catch (e) {}
     }
     
+    // Chiudi scanner immediatamente
     setShowScanner(false);
     setIsCameraReady(false);
     
-    // Auto search after closing scanner - in base alla modalità
-    if (scannerMode === 'cerca') {
-      setCercaTitolo(cleanIsbn);
-      setTimeout(() => {
-        handleCercaTitolo(cleanIsbn);
-      }, 300);
-    } else {
-      setVendiIsbn(cleanIsbn);
-      setTimeout(() => {
-        handleVendiSearchWithIsbn(cleanIsbn);
-      }, 300);
+    // Esegui ricerca dopo breve delay
+    if (scanTimeoutRef.current) {
+      clearTimeout(scanTimeoutRef.current);
     }
+    
+    scanTimeoutRef.current = setTimeout(() => {
+      if (scannerMode === 'cerca') {
+        setCercaTitolo(cleanIsbn);
+        handleCercaTitolo(cleanIsbn);
+      } else {
+        setVendiIsbn(cleanIsbn);
+        handleVendiSearchWithIsbn(cleanIsbn);
+      }
+      // Reset refs after processing
+      lastScannedRef.current = null;
+    }, 200);
   }, [scanned, isCameraReady, scannerMode]);
 
   const handleVendiSearchWithIsbn = async (isbn: string) => {
@@ -507,9 +516,9 @@ export default function SearchSellScreen() {
           key={cameraKey}
           style={StyleSheet.absoluteFillObject}
           facing="back"
-          autofocus="on"
           barcodeScannerSettings={{
-            barcodeTypes: ['ean13', 'ean8', 'code128', 'code39', 'upc_a', 'upc_e'],
+            barcodeTypes: ['ean13', 'ean8'],
+            interval: 500,
           }}
           onCameraReady={handleCameraReady}
           onBarcodeScanned={isCameraReady && !scanned ? handleBarCodeScanned : undefined}
@@ -523,51 +532,20 @@ export default function SearchSellScreen() {
           </View>
         )}
         
-        {/* Scanner overlay with viewfinder */}
-        <View style={styles.scannerOverlay}>
-          {/* Top dark area */}
-          <View style={styles.overlayDark} />
-          
-          {/* Middle row with viewfinder */}
-          <View style={styles.overlayMiddle}>
-            <View style={styles.overlayDarkSide} />
-            <View style={styles.scannerFrameContainer}>
-              <View style={styles.scannerFrame}>
-                {/* Corner markers */}
-                <View style={[styles.cornerMarker, styles.cornerTopLeft]} />
-                <View style={[styles.cornerMarker, styles.cornerTopRight]} />
-                <View style={[styles.cornerMarker, styles.cornerBottomLeft]} />
-                <View style={[styles.cornerMarker, styles.cornerBottomRight]} />
-                
-                {/* Scan line animation indicator */}
-                {isCameraReady && (
-                  <View style={styles.scanLine} />
-                )}
-              </View>
-            </View>
-            <View style={styles.overlayDarkSide} />
+        {/* Scanner overlay - simplified for performance */}
+        <View style={styles.scannerOverlaySimple}>
+          {/* Viewfinder frame */}
+          <View style={styles.scannerFrameSimple}>
+            <View style={[styles.cornerMarker, styles.cornerTopLeft]} />
+            <View style={[styles.cornerMarker, styles.cornerTopRight]} />
+            <View style={[styles.cornerMarker, styles.cornerBottomLeft]} />
+            <View style={[styles.cornerMarker, styles.cornerBottomRight]} />
           </View>
           
-          {/* Bottom area with instructions */}
-          <View style={styles.overlayBottom}>
-            <Text style={styles.scannerText}>
-              {isCameraReady ? 'Inquadra il codice a barre ISBN' : 'Attendere...'}
-            </Text>
-            <Text style={styles.scannerHint}>
-              {isCameraReady ? 'Posiziona il codice nel riquadro verde' : 'Preparazione fotocamera'}
-            </Text>
-            
-            {/* Manual entry button */}
-            <TouchableOpacity 
-              style={styles.manualEntryButton}
-              onPress={() => {
-                closeScanner();
-              }}
-            >
-              <Ionicons name="keypad-outline" size={20} color="#fff" />
-              <Text style={styles.manualEntryText}>Inserisci manualmente</Text>
-            </TouchableOpacity>
-          </View>
+          {/* Instructions */}
+          <Text style={styles.scannerTextSimple}>
+            {isCameraReady ? 'Inquadra il codice a barre' : 'Attendere...'}
+          </Text>
         </View>
         
         {/* Close button */}
@@ -578,13 +556,14 @@ export default function SearchSellScreen() {
           <Ionicons name="close" size={30} color="#fff" />
         </TouchableOpacity>
         
-        {/* Camera ready indicator */}
-        {isCameraReady && (
-          <View style={styles.cameraReadyBadge}>
-            <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
-            <Text style={styles.cameraReadyText}>Pronto</Text>
-          </View>
-        )}
+        {/* Manual entry button */}
+        <TouchableOpacity 
+          style={styles.manualEntryBtnFixed}
+          onPress={closeScanner}
+        >
+          <Ionicons name="keypad-outline" size={18} color="#fff" />
+          <Text style={styles.manualEntryText}>Manuale</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -1275,6 +1254,40 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',
+  },
+  // Stili scanner semplificati per performance
+  scannerOverlaySimple: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+  },
+  scannerFrameSimple: {
+    width: 280,
+    height: 160,
+    borderWidth: 0,
+    backgroundColor: 'transparent',
+  },
+  scannerTextSimple: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 20,
+    textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.8)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
+  },
+  manualEntryBtnFixed: {
+    position: 'absolute',
+    bottom: 80,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    gap: 6,
   },
   cameraReadyBadge: {
     position: 'absolute',
