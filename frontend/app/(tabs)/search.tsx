@@ -467,7 +467,8 @@ export default function SearchSellScreen() {
 
   // Cerca per titolo o ISBN
   const handleCercaTitolo = async (searchQuery?: string) => {
-    const query = searchQuery || cercaTitolo;
+    // Se searchQuery è un evento o undefined, usa cercaTitolo
+    const query = (typeof searchQuery === 'string') ? searchQuery : cercaTitolo;
     
     if (!query || query.length < 3) {
       showAlert('Errore', 'Inserisci almeno 3 caratteri per la ricerca');
