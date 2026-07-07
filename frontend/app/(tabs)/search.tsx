@@ -13,8 +13,7 @@ import {
   Keyboard,
   Dimensions,
 } from 'react-native';
-import { useRouter } from 'expo-router';
-import { useFocusEffect } from '@react-navigation/native';
+import { useRouter, usePathname } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
@@ -102,23 +101,25 @@ export default function SearchSellScreen() {
     console.log('Search screen mounted - Platform.OS:', Platform.OS);
   }, []);
 
-  // Reset scanner state quando si torna alla schermata
-  useFocusEffect(
-    useCallback(() => {
-      // Reset scanner states quando la schermata viene focalizzata
+  // Reset scanner state quando il pathname cambia (torna a questa schermata)
+  const pathname = usePathname();
+  
+  useEffect(() => {
+    // Reset scanner states quando si naviga a questa schermata
+    if (pathname === '/search' || pathname === '/(tabs)/search') {
       setScanned(false);
       setShowScanner(false);
       setIsCameraReady(false);
       lastScannedRef.current = null;
-      
-      return () => {
-        // Cleanup quando si lascia la schermata
-        if (scanTimeoutRef.current) {
-          clearTimeout(scanTimeoutRef.current);
-        }
-      };
-    }, [])
-  );
+    }
+    
+    return () => {
+      // Cleanup timeout quando si lascia la schermata
+      if (scanTimeoutRef.current) {
+        clearTimeout(scanTimeoutRef.current);
+      }
+    };
+  }, [pathname]);
 
   const loadUserId = async () => {
     const id = await AsyncStorage.getItem('user_id');
