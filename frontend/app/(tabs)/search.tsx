@@ -436,16 +436,18 @@ export default function SearchSellScreen() {
     }
   };
 
-  // Cerca per titolo
-  const handleCercaTitolo = async () => {
-    if (!cercaTitolo || cercaTitolo.length < 3) {
+  // Cerca per titolo o ISBN
+  const handleCercaTitolo = async (searchQuery?: string) => {
+    const query = searchQuery || cercaTitolo;
+    
+    if (!query || query.length < 3) {
       showAlert('Errore', 'Inserisci almeno 3 caratteri per la ricerca');
       return;
     }
     
     Keyboard.dismiss();
     // Naviga alla pagina dei risultati
-    router.push(`/search-results?q=${encodeURIComponent(cercaTitolo)}`);
+    router.push(`/search-results?q=${encodeURIComponent(query)}`);
   };
 
   const selectBookFromTitolo = (book: Book) => {
