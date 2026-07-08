@@ -843,6 +843,25 @@ export default function BookstorePortalScreen() {
             <Ionicons name="arrow-back" size={18} color="#666" />
             <Text style={styles.backLinkText}>Torna indietro</Text>
           </TouchableOpacity>
+
+          {/* Divider */}
+          <View style={styles.loginDivider}>
+            <View style={styles.loginDividerLine} />
+            <Text style={styles.loginDividerText}>oppure</Text>
+            <View style={styles.loginDividerLine} />
+          </View>
+
+          {/* Link registrazione */}
+          <TouchableOpacity 
+            style={styles.registerLink} 
+            onPress={() => router.push('/bookstore-register')}
+          >
+            <Ionicons name="storefront-outline" size={20} color="#1a472a" />
+            <Text style={styles.registerLinkText}>Registra la tua cartolibreria</Text>
+          </TouchableOpacity>
+          <Text style={styles.registerNote}>
+            Non hai ancora un account? Richiedi l'accesso al portale
+          </Text>
         </View>
       </ScrollView>
     );
@@ -1819,6 +1838,45 @@ const styles = StyleSheet.create({
   backLinkText: {
     color: '#666',
     fontSize: 14,
+  },
+  loginDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    marginVertical: 20,
+  },
+  loginDividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#e0e0e0',
+  },
+  loginDividerText: {
+    color: '#999',
+    fontSize: 12,
+    paddingHorizontal: 12,
+  },
+  registerLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#e8f5e9',
+    padding: 14,
+    borderRadius: 12,
+    width: '100%',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#1a472a',
+  },
+  registerLinkText: {
+    color: '#1a472a',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  registerNote: {
+    color: '#888',
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 10,
   },
   // Header
   header: {
