@@ -1,0 +1,65 @@
+name: Deploy VPS
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install deploy tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rsync sshpass
+
+      - name: Prepare remote directory
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PASSWORD: ${{ secrets.VPS_PASSWORD }}
+          APP_DIR: ${{ secrets.APP_DIR }}
+        run: |
+          APP_DIR="${APP_DIR:-/opt/ribook}"
+          sshpass -p "$VPS_PASSWORD" ssh -o StrictHostKeyChecking=no "$VPS_USER@$VPS_HOST" "mkdir -p '$APP_DIR'"
+
+      - name: Upload application
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PASSWORD: ${{ secrets.VPS_PASSWORD }}
+          APP_DIR: ${{ secrets.APP_DIR }}
+        run: |
+          APP_DIR="${APP_DIR:-/opt/ribook}"
+          rsync -az --delete \
+            --exclude '.git' \
+            --exclude '.github' \
+            --exclude 'node_modules' \
+            --exclude 'frontend/node_modules' \
+            --exclude 'frontend/dist' \
+            --exclude '__pycache__' \
+            --exclude '.env' \
+            --exclude '*.env' \
+            --exclude '.idea' \
+            -e "sshpass -p '$VPS_PASSWORD' ssh -o StrictHostKeyChecking=no" \
+            ./ "$VPS_USER@$VPS_HOST:$APP_DIR/"
+
+      - name: Deploy with Docker Compose
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PASSWORD: ${{ secrets.VPS_PASSWORD }}
+          APP_DIR: ${{ secrets.APP_DIR }}
+        run: |
+          APP_DIR="${APP_DIR:-/opt/ribook}"
+          sshpass -p "$VPS_PASSWORD" ssh -o StrictHostKeyChecking=no "$VPS_USER@$VPS_HOST" \
+            "APP_DIR='$APP_DIR' bash '$APP_DIR/scripts/deploy-vps.sh'"
