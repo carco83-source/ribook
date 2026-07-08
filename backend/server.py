@@ -14630,6 +14630,17 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Seed database on startup
+from seed_database import run_seed
+
+@app.on_event("startup")
+async def startup_seed_database():
+    """Esegue il seed del database all'avvio se necessario."""
+    try:
+        await run_seed()
+    except Exception as e:
+        logger.error(f"Errore durante il seed del database: {e}")
+
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
