@@ -131,6 +131,17 @@ export default function SellFormScreen() {
       }
       setUserId(storedUserId);
 
+      // Carica IBAN esistente dal profilo utente
+      try {
+        const userRes = await axios.get(`${API_URL}/api/users/${storedUserId}?show_iban=true`);
+        if (userRes.data?.iban && validateIBAN(userRes.data.iban)) {
+          setIbanInput(formatIBAN(userRes.data.iban));
+          console.log('IBAN caricato dal profilo:', userRes.data.iban);
+        }
+      } catch (e) {
+        console.log('Errore caricamento IBAN utente:', e);
+      }
+
       // MODALITÀ MODIFICA: Carica i dati dell'annuncio esistente
       if (params.listingId) {
         try {
@@ -397,15 +408,43 @@ export default function SellFormScreen() {
     // NUOVA LOGICA: Venditore riceve 80% del prezzo
     const quotaVenditore = 0.80;
     
-    const prezzoAlto = Math.min(prezzoUsato * 1.08, prezzoNuovo * 0.70);
-    const prezzoMedio = prezzoUsato;
-    const prezzoBasso = Math.max(prezzoUsato * 0.92, prezzoNuovo * 0.30);
-    
+    // Determina la condizione prima del calcolo prezzi
     let condition = 'buono';
     if (usuraScore <= 15) condition = 'ottimo';
     else if (usuraScore <= 40) condition = 'buono';
     else if (usuraScore <= 70) condition = 'accettabile';
     else condition = 'scarso';
+    
+    // Calcolo prezzi in base alla condizione
+    // La forbice tra i prezzi aumenta man mano che peggiora la condizione
+    let prezzoAlto, prezzoMedio, prezzoBasso;
+    
+    if (condition === 'ottimo') {
+      // Condizione ottima: forbice stretta
+      prezzoAlto = Math.min(prezzoUsato * 1.05, prezzoNuovo * 0.70);
+      prezzoMedio = prezzoUsato;
+      prezzoBasso = Math.max(prezzoUsato * 0.95, prezzoNuovo * 0.55);
+    } else if (condition === 'buono') {
+      // Condizione buona: forbice normale
+      prezzoAlto = Math.min(prezzoUsato * 1.08, prezzoNuovo * 0.65);
+      prezzoMedio = prezzoUsato;
+      prezzoBasso = Math.max(prezzoUsato * 0.90, prezzoNuovo * 0.45);
+    } else if (condition === 'accettabile') {
+      // CONDIZIONE ACCETTABILE: forbice ampia
+      // Prezzo alto rimane proporzionato
+      prezzoAlto = Math.min(prezzoUsato * 1.10, prezzoNuovo * 0.55);
+      // Prezzo standard: sotto il 40% del costo nuovo
+      prezzoMedio = Math.min(prezzoUsato * 0.85, prezzoNuovo * 0.38);
+      // Vendita rapida: può arrivare al 25%
+      prezzoBasso = Math.max(prezzoUsato * 0.65, prezzoNuovo * 0.22);
+      prezzoBasso = Math.min(prezzoBasso, prezzoNuovo * 0.28);
+    } else {
+      // Condizione scarsa: forbice molto ampia
+      prezzoAlto = Math.min(prezzoUsato * 1.05, prezzoNuovo * 0.40);
+      prezzoMedio = Math.min(prezzoUsato * 0.75, prezzoNuovo * 0.30);
+      prezzoBasso = Math.max(prezzoUsato * 0.55, prezzoNuovo * 0.18);
+      prezzoBasso = Math.min(prezzoBasso, prezzoNuovo * 0.22);
+    }
     
     return {
       usura: Math.round(usuraScore * 10) / 10,
@@ -664,10 +703,19 @@ export default function SellFormScreen() {
     }
 
     // VERIFICA IBAN OBBLIGATORIA
+    // Prima controlla se abbiamo già l'IBAN caricato e valido in memoria
+    const localIban = ibanInput.replace(/\s/g, '').toUpperCase();
+    if (localIban && validateIBAN(localIban)) {
+      console.log('IBAN già presente in memoria e valido, procedo con pubblicazione');
+      await doCreateListing();
+      return;
+    }
+    
+    // Se non abbiamo IBAN in memoria, verifica dal server
     try {
-      const userRes = await axios.get(`${API_URL}/api/users/${userId}`);
+      const userRes = await axios.get(`${API_URL}/api/users/${userId}?show_iban=true`);
       const userIban = userRes.data?.iban;
-      console.log('IBAN check - userIban:', userIban);
+      console.log('IBAN check from server - userIban:', userIban);
       
       // Verifica che l'IBAN esista, non sia null/undefined/vuoto, e sia valido
       if (!userIban || userIban === null || userIban === '' || !validateIBAN(userIban)) {
@@ -675,6 +723,8 @@ export default function SellFormScreen() {
         setShowIbanModal(true);
         return;
       }
+      // Aggiorna anche ibanInput locale
+      setIbanInput(formatIBAN(userIban));
       console.log('IBAN valido, procedo con pubblicazione');
     } catch (error) {
       console.error('Error checking IBAN:', error);

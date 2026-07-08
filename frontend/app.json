@@ -10,6 +10,7 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.ribook.app",
       "infoPlist": {
         "NSCameraUsageDescription": "Scatta foto dei libri da vendere",
         "NSPhotoLibraryUsageDescription": "Seleziona foto dei libri dalla galleria"
@@ -21,6 +22,8 @@
         "backgroundColor": "#1a5c4c"
       },
       "edgeToEdgeEnabled": true,
+      "package": "com.ribook.app",
+      "googleServicesFile": "./google-services.json",
       "permissions": [
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
@@ -52,7 +55,14 @@
       ],
       "expo-web-browser",
       "expo-font",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#1a5c4c"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

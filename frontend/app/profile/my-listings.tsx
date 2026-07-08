@@ -182,6 +182,14 @@ export default function MyListingsScreen() {
                         {listing.book_titolo || 'Titolo non disponibile'}
                       </Text>
                       
+                      {/* Codice univoco annuncio (visibile solo al venditore) */}
+                      {listing.listing_code && (
+                        <View style={styles.listingCodeContainer}>
+                          <Ionicons name="barcode-outline" size={14} color="#666" />
+                          <Text style={styles.listingCode}>Codice: {listing.listing_code}</Text>
+                        </View>
+                      )}
+                      
                       {listing.book_autori && (
                         <Text style={styles.listingAuthor} numberOfLines={1}>
                           {listing.book_autori}
@@ -407,6 +415,23 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#333',
     marginTop: 6,
+  },
+  listingCodeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    gap: 4,
+    backgroundColor: '#f5f5f5',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+  },
+  listingCode: {
+    fontSize: 12,
+    color: '#666',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontWeight: '600',
   },
   listingAuthor: {
     fontSize: 13,

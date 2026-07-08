@@ -11,10 +11,11 @@ import {
   Platform,
   useWindowDimensions,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import { secureSet, STORAGE_KEYS } from '../../src/utils/secureStorage';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -41,12 +42,15 @@ export default function RegisterScreen() {
     email: '',
     password: '',
     confirmPassword: '',
+    codiceFiscale: '',
+    dataNascita: '',
     iban: '',
   });
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   // Funzione per validare IBAN italiano
   const validateIBAN = (iban: string): boolean => {
@@ -55,6 +59,45 @@ export default function RegisterScreen() {
     // IBAN italiano: IT + 2 cifre controllo + 1 lettera + 5 cifre ABI + 5 cifre CAB + 12 caratteri conto
     const ibanRegex = /^IT\d{2}[A-Z]\d{5}\d{5}[A-Z0-9]{12}$/;
     return ibanRegex.test(cleanIban);
+  };
+
+  // Funzione per validare formato Codice Fiscale
+  const validateCodiceFiscaleFormat = (cf: string): boolean => {
+    if (!cf) return false;
+    const cleanCf = cf.toUpperCase().replace(/\s/g, '');
+    // Pattern: 6 lettere + 2 numeri + 1 lettera + 2 numeri + 1 lettera + 3 alfanumerici + 1 lettera
+    const pattern = /^[A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z]$/;
+    return pattern.test(cleanCf);
+  };
+
+  // Formatta codice fiscale in maiuscolo
+  const formatCodiceFiscale = (value: string): string => {
+    return value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16);
+  };
+
+  // Calcola età dalla data di nascita (formato GG/MM/AAAA)
+  const calculateAge = (dateString: string): number => {
+    if (!dateString || dateString.length < 10) return -1;
+    
+    // Parse formato GG/MM/AAAA
+    const parts = dateString.split('/');
+    if (parts.length !== 3) return -1;
+    
+    const day = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1; // Mesi in JS sono 0-indexed
+    const year = parseInt(parts[2], 10);
+    
+    if (isNaN(day) || isNaN(month) || isNaN(year)) return -1;
+    
+    const birthDate = new Date(year, month, day);
+    const today = new Date();
+    
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age;
   };
 
   const formatIBAN = (value: string): string => {
@@ -66,6 +109,8 @@ export default function RegisterScreen() {
   const updateField = (field: string, value: string) => {
     if (field === 'iban') {
       value = formatIBAN(value);
+    } else if (field === 'codiceFiscale') {
+      value = formatCodiceFiscale(value);
     }
     setFormData(prev => ({ ...prev, [field]: value }));
     setErrorMessage('');
@@ -73,7 +118,7 @@ export default function RegisterScreen() {
 
   const handleRegister = async () => {
     setErrorMessage('');
-    const { nome, cognome, email, password, confirmPassword, iban } = formData;
+    const { nome, cognome, email, password, confirmPassword, codiceFiscale, dataNascita, iban } = formData;
 
     // Validazione campi
     if (!nome.trim()) {
@@ -92,6 +137,30 @@ export default function RegisterScreen() {
       setErrorMessage('Inserisci un\'email valida');
       return;
     }
+    
+    // Validazione Codice Fiscale (OBBLIGATORIO)
+    if (!codiceFiscale.trim()) {
+      setErrorMessage('Il codice fiscale è obbligatorio');
+      return;
+    }
+    if (!validateCodiceFiscaleFormat(codiceFiscale)) {
+      setErrorMessage('Codice fiscale non valido. Deve essere di 16 caratteri.');
+      return;
+    }
+    
+    // Validazione Data di Nascita (OBBLIGATORIA)
+    if (!dataNascita) {
+      setErrorMessage('La data di nascita è obbligatoria');
+      return;
+    }
+    
+    // Verifica età minima (16 anni)
+    const age = calculateAge(dataNascita);
+    if (age < 16) {
+      setErrorMessage('Devi avere almeno 16 anni per registrarti');
+      return;
+    }
+    
     if (!password) {
       setErrorMessage('Inserisci una password');
       return;
@@ -113,11 +182,23 @@ export default function RegisterScreen() {
     setLoading(true);
     try {
       const cleanIban = iban ? iban.replace(/\s/g, '').toUpperCase() : null;
+      
+      // Converti data da GG/MM/AAAA a AAAA-MM-GG per il backend
+      let formattedDate = dataNascita;
+      if (dataNascita && dataNascita.includes('/')) {
+        const parts = dataNascita.split('/');
+        if (parts.length === 3) {
+          formattedDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+        }
+      }
+      
       const response = await axios.post(`${API_URL}/api/auth/register`, {
         nome: nome.trim(),
         cognome: cognome.trim(),
         email: email.trim().toLowerCase(),
         password,
+        codice_fiscale: codiceFiscale.toUpperCase(),
+        data_nascita: formattedDate,
         iban: cleanIban,
       });
 
@@ -143,8 +224,10 @@ export default function RegisterScreen() {
         }
       }
 
-      // Salva i dati dell'utente
-      await AsyncStorage.setItem('user_id', user_id);
+      // Salva i dati dell'utente in modo sicuro
+      await secureSet(STORAGE_KEYS.USER_ID, user_id);
+      
+      // Dati non sensibili in AsyncStorage
       await AsyncStorage.setItem('username', username);
       await AsyncStorage.setItem('user_nome', nome.trim());
       await AsyncStorage.setItem('is_premium', 'false');
@@ -198,6 +281,17 @@ export default function RegisterScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
+      <Stack.Screen 
+        options={{
+          title: 'Registrati',
+          headerShown: true,
+          headerBackTitle: '',
+          headerBackTitleVisible: false,
+          headerStyle: { backgroundColor: '#1a472a' },
+          headerTintColor: '#fff',
+          headerTitleStyle: { fontWeight: '600' },
+        }}
+      />
       <ScrollView
         contentContainerStyle={[
           styles.scrollContent,
@@ -315,6 +409,98 @@ export default function RegisterScreen() {
                 </View>
               </View>
 
+              {/* Sezione Identità */}
+              <Text style={[
+                styles.sectionTitle, 
+                { marginTop: 24, fontSize: dynamicStyles.fontSize.sectionTitle }
+              ]}>
+                Verifica Identità
+              </Text>
+              
+              <View style={styles.identityInfoBox}>
+                <Ionicons name="shield-checkmark-outline" size={18} color="#2563eb" />
+                <Text style={styles.identityInfoText}>
+                  Per la sicurezza di tutti gli utenti, verifichiamo la tua identità tramite il codice fiscale.
+                  I dati sono criptati e protetti.
+                </Text>
+              </View>
+
+              {/* Layout a 2 colonne per CF e Data Nascita su desktop */}
+              <View style={[
+                styles.fieldsRow,
+                (isDesktop || (isTablet && isLandscape)) && styles.fieldsRowDesktop,
+              ]}>
+                {/* Codice Fiscale */}
+                <View style={[
+                  styles.inputGroup,
+                  (isDesktop || (isTablet && isLandscape)) && styles.inputGroupHalf,
+                  { marginBottom: dynamicStyles.spacing.inputMargin },
+                ]}>
+                  <Text style={styles.inputLabel}>Codice Fiscale *</Text>
+                  <View style={styles.inputWrapper}>
+                    <Ionicons name="card-outline" size={20} color="#666" style={styles.inputIcon} />
+                    <TextInput
+                      style={[styles.input, { fontSize: dynamicStyles.fontSize.input }]}
+                      placeholder="Es: RSSMRA85M01H501Z"
+                      placeholderTextColor="#999"
+                      value={formData.codiceFiscale}
+                      onChangeText={(v) => updateField('codiceFiscale', v)}
+                      autoCapitalize="characters"
+                      autoCorrect={false}
+                      maxLength={16}
+                    />
+                  </View>
+                  {formData.codiceFiscale.length > 0 && formData.codiceFiscale.length < 16 && (
+                    <Text style={styles.charCountText}>
+                      {formData.codiceFiscale.length}/16 caratteri
+                    </Text>
+                  )}
+                </View>
+
+                {/* Data di Nascita */}
+                <View style={[
+                  styles.inputGroup,
+                  (isDesktop || (isTablet && isLandscape)) && styles.inputGroupHalf,
+                  { marginBottom: dynamicStyles.spacing.inputMargin },
+                ]}>
+                  <Text style={styles.inputLabel}>Data di Nascita *</Text>
+                  <View style={styles.inputWrapper}>
+                    <Ionicons name="calendar-outline" size={20} color="#666" style={styles.inputIcon} />
+                    <TextInput
+                      style={[styles.input, { fontSize: dynamicStyles.fontSize.input }]}
+                      placeholder="GG/MM/AAAA (es: 15/05/1990)"
+                      placeholderTextColor="#999"
+                      value={formData.dataNascita}
+                      onChangeText={(v) => {
+                        // Formattazione automatica della data GG/MM/AAAA
+                        let formatted = v.replace(/[^0-9]/g, '');
+                        if (formatted.length > 2) {
+                          formatted = formatted.slice(0, 2) + '/' + formatted.slice(2);
+                        }
+                        if (formatted.length > 5) {
+                          formatted = formatted.slice(0, 5) + '/' + formatted.slice(5);
+                        }
+                        formatted = formatted.slice(0, 10);
+                        updateField('dataNascita', formatted);
+                      }}
+                      keyboardType="numeric"
+                      maxLength={10}
+                    />
+                  </View>
+                  {formData.dataNascita && calculateAge(formData.dataNascita) >= 0 && (
+                    <Text style={[
+                      styles.ageText,
+                      calculateAge(formData.dataNascita) < 16 && styles.ageTextError
+                    ]}>
+                      {calculateAge(formData.dataNascita) < 16 
+                        ? `Età: ${calculateAge(formData.dataNascita)} anni - Devi avere almeno 16 anni`
+                        : `Età: ${calculateAge(formData.dataNascita)} anni ✓`
+                      }
+                    </Text>
+                  )}
+                </View>
+              </View>
+
               <Text style={[
                 styles.sectionTitle, 
                 { marginTop: 24, fontSize: dynamicStyles.fontSize.sectionTitle }
@@ -409,7 +595,7 @@ export default function RegisterScreen() {
                     onChangeText={(v) => updateField('iban', v)}
                     autoCapitalize="characters"
                     autoCorrect={false}
-                    maxLength={31}
+                    maxLength={34}
                   />
                 </View>
                 <Text style={styles.ibanHint}>
@@ -673,5 +859,36 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 6,
     lineHeight: 16,
+  },
+  identityInfoBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#eff6ff',
+    padding: 14,
+    borderRadius: 10,
+    marginBottom: 16,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+  },
+  identityInfoText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#1e40af',
+    lineHeight: 18,
+  },
+  charCountText: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
+    textAlign: 'right',
+  },
+  ageText: {
+    fontSize: 12,
+    color: '#22c55e',
+    marginTop: 4,
+  },
+  ageTextError: {
+    color: '#ef4444',
   },
 });

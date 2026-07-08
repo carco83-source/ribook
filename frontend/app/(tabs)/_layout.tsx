@@ -4,7 +4,7 @@ import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import axios from 'axios';
+import { authApi } from '../../src/utils/api';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -70,20 +70,23 @@ export default function TabLayout() {
           return;
         }
         
-        // Fetch notifications
+        // Fetch notifications (usando API autenticata)
         try {
-          const notifResponse = await axios.get(`${API_URL}/api/notifications/${userId}`);
-          const notifications = notifResponse.data.notifications || [];
+          const notifResponse = await authApi.get(`/api/notifications/${userId}`);
+          const notifications = notifResponse.notifications || [];
           const unread = notifications.filter((n: any) => !n.read).length;
           setUnreadNotifications(unread);
-        } catch (e) {
-          console.log('Error fetching notifications:', e);
+        } catch (e: any) {
+          // Se 401, l'utente non è autenticato - silenziosamente ignora
+          if (e.response?.status !== 401) {
+            console.log('Error fetching notifications:', e.message);
+          }
         }
         
-        // Fetch unread messages from conversations
+        // Fetch unread messages from conversations (usando API autenticata)
         try {
-          const convResponse = await axios.get(`${API_URL}/api/conversations/${userId}`);
-          const conversations = convResponse.data.conversations || [];
+          const convResponse = await authApi.get(`/api/conversations/${userId}`);
+          const conversations = convResponse.conversations || [];
           let totalUnreadMessages = 0;
           for (const conv of conversations) {
             if (conv.unread_count && conv.unread_count > 0) {
@@ -91,22 +94,26 @@ export default function TabLayout() {
             }
           }
           setUnreadMessages(totalUnreadMessages);
-        } catch (e) {
-          console.log('Error fetching conversations:', e);
+        } catch (e: any) {
+          if (e.response?.status !== 401) {
+            console.log('Error fetching conversations:', e.message);
+          }
         }
         
-        // Fetch cart items (orders in_attesa_pagamento dove l'utente è ACQUIRENTE)
+        // Fetch cart items (usando API autenticata)
         try {
-          const ordersResponse = await axios.get(`${API_URL}/api/user-orders/${userId}`);
-          const orders = ordersResponse.data.orders || [];
+          const ordersResponse = await authApi.get(`/api/user-orders/${userId}`);
+          const orders = ordersResponse.orders || [];
           // Conta solo gli ordini dove l'utente è l'ACQUIRENTE (buyer), non il venditore
           const cartOrders = orders.filter((o: any) => 
             (o.status === 'in_attesa_pagamento' || o.status === 'pending_payment') &&
             o.buyer_id === userId // IMPORTANTE: Solo ordini dove è acquirente
           );
           setCartItemsCount(cartOrders.length);
-        } catch (e) {
-          console.log('Error fetching orders:', e);
+        } catch (e: any) {
+          if (e.response?.status !== 401) {
+            console.log('Error fetching orders:', e.message);
+          }
         }
       } catch (error) {
         console.error('Error fetching counts:', error);

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "802478640079",
+    "project_id": "ribook-e10e7",
+    "storage_bucket": "ribook-e10e7.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:802478640079:android:d023c382ab640decbf60ba",
+        "android_client_info": {
+          "package_name": "com.ribook.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAG_kx1l4HVmDssl5Vj1u1Ms1I3YQjeoHU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

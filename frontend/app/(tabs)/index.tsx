@@ -19,6 +19,7 @@ import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import { authApi } from '../../src/utils/api';
 import CustomPicker from '../../src/components/CustomPicker';
 import { SCUOLE_PRIMO_GRADO, SCUOLE_SECONDO_GRADO, getClassiByType, SEZIONI } from '../../src/constants/schools';
 import { useProfileStore } from '../../src/store/profileStore';
@@ -237,13 +238,20 @@ export default function RadarScreen() {
       const storedUserId = await AsyncStorage.getItem('user_id');
       const storedPremium = await AsyncStorage.getItem('is_premium');
       
+      console.log('[HOME] loadData - storedUserId:', storedUserId);
+      
       // NAVIGAZIONE ANONIMA: Se non c'è user_id, carica profili temporanei da localStorage
       if (!storedUserId) {
         setIsAnonymous(true);
+        console.log('[HOME] User is anonymous, loading temp profiles...');
+        
         // Carica profili temporanei salvati localmente
         const tempProfiles = await AsyncStorage.getItem('temp_profiles');
+        console.log('[HOME] temp_profiles from storage:', tempProfiles);
+        
         if (tempProfiles) {
           const profiles = JSON.parse(tempProfiles);
+          console.log('[HOME] Parsed profiles:', profiles.length, 'profiles');
           setChildProfiles(profiles);
           
           // Carica compatibility per profili temporanei
@@ -328,23 +336,23 @@ export default function RadarScreen() {
       }
       setChildrenCompatibility(compatibilityData);
       
-      // Load cart data
+      // Load cart data (usando API autenticata)
       try {
-        const cartResponse = await axios.get(`${API_URL}/api/cart/${storedUserId}`);
-        setCartData(cartResponse.data);
+        const cartResponse = await authApi.get(`/api/cart/${storedUserId}`);
+        setCartData(cartResponse);
       } catch (e) {
         console.log('Failed to load cart');
       }
       
-      // Load notifications - prima controlla le scadute
+      // Load notifications - prima controlla le scadute (usando API autenticata)
       try {
         // Controlla e processa notifiche scadute
-        await axios.get(`${API_URL}/api/notifications/check-expired/${storedUserId}`);
+        await authApi.get(`/api/notifications/check-expired/${storedUserId}`);
         
         // Poi carica le notifiche aggiornate
-        const notifResponse = await axios.get(`${API_URL}/api/notifications/${storedUserId}`);
-        setNotifications(notifResponse.data.notifications || []);
-        setUnreadCount(notifResponse.data.unread_count || 0);
+        const notifResponse = await authApi.get(`/api/notifications/${storedUserId}`);
+        setNotifications(notifResponse.notifications || []);
+        setUnreadCount(notifResponse.unread_count || 0);
       } catch (e) {
         console.log('Failed to load notifications');
       }

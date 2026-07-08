@@ -14,6 +14,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import axios from 'axios';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
@@ -39,7 +40,13 @@ export default function EditProfileScreen() {
     try {
       const userId = await AsyncStorage.getItem('user_id');
       if (!userId) {
-        router.replace('/');
+        // Nessun user_id, utente non loggato
+        if (Platform.OS === 'web') {
+          window.alert('Devi effettuare il login per modificare il profilo');
+        } else {
+          Alert.alert('Accesso richiesto', 'Devi effettuare il login per modificare il profilo');
+        }
+        router.replace('/(auth)/login');
         return;
       }
 
@@ -52,8 +59,39 @@ export default function EditProfileScreen() {
       setEmail(user.email || '');
       setTelefono(user.telefono || '');
       setIban(user.iban || '');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading user data:', error);
+      
+      // Se l'utente non esiste nel database (404), pulisci la sessione e reindirizza al login
+      if (error?.response?.status === 404) {
+        // Pulisci la sessione locale corrotta
+        await AsyncStorage.removeItem('user_id');
+        await AsyncStorage.removeItem('username');
+        await AsyncStorage.removeItem('user_nome');
+        await AsyncStorage.removeItem('session_token');
+        await AsyncStorage.removeItem('is_premium');
+        
+        if (Platform.OS === 'web') {
+          localStorage.removeItem('session_token');
+          window.alert('La tua sessione è scaduta. Effettua nuovamente il login o registrati.');
+        } else {
+          // Pulisci anche SecureStore su mobile
+          try {
+            await SecureStore.deleteItemAsync('session_token');
+          } catch (e) {
+            console.log('SecureStore cleanup error:', e);
+          }
+          Alert.alert(
+            'Sessione scaduta', 
+            'La tua sessione è scaduta. Effettua nuovamente il login o registrati.',
+            [{ text: 'OK', onPress: () => router.replace('/(auth)/login') }]
+          );
+          return;
+        }
+        router.replace('/(auth)/login');
+        return;
+      }
+      
       if (Platform.OS === 'web') {
         window.alert('Impossibile caricare i dati del profilo');
       } else {

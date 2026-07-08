@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,7 @@ import {
   Keyboard,
   Dimensions,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, usePathname } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
@@ -44,6 +44,15 @@ interface PopularBook {
   count: number;
 }
 
+interface BookAdoption {
+  codice_scuola: string;
+  nome_scuola: string;
+  tipo_scuola: string;
+  citta: string;
+  provincia: string;
+  classi: Array<{ classe: string; sezione: string }>;
+}
+
 // Anno scolastico corrente
 const CURRENT_SCHOOL_YEAR = '2025/2026';
 // Prossimo anno (per future implementazioni)
@@ -65,6 +74,9 @@ export default function SearchSellScreen() {
   const [cameraKey, setCameraKey] = useState(0);
   const [isCameraReady, setIsCameraReady] = useState(false);
   const [scannerError, setScannerError] = useState<string | null>(null);
+  const [scannerMode, setScannerMode] = useState<'vendi' | 'cerca'>('vendi'); // Modalità scanner
+  const lastScannedRef = useRef<string | null>(null); // Debounce ref
+  const scanTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Timeout ref
   
   // Cerca states
   const [cercaIsbn, setCercaIsbn] = useState('');
@@ -77,6 +89,10 @@ export default function SearchSellScreen() {
   // Libri popolari states
   const [popularBooks, setPopularBooks] = useState<PopularBook[]>([]);
   const [popularLoading, setPopularLoading] = useState(false);
+  
+  // Adozioni (scuole che hanno adottato il libro cercato per ISBN)
+  const [bookAdoptions, setBookAdoptions] = useState<BookAdoption[]>([]);
+  const [showAdoptions, setShowAdoptions] = useState(false);
 
   useEffect(() => {
     loadUserId();
@@ -84,6 +100,26 @@ export default function SearchSellScreen() {
     // Log platform info on mount for debugging
     console.log('Search screen mounted - Platform.OS:', Platform.OS);
   }, []);
+
+  // Reset scanner state quando il pathname cambia (torna a questa schermata)
+  const pathname = usePathname();
+  
+  useEffect(() => {
+    // Reset scanner states quando si naviga a questa schermata
+    if (pathname === '/search' || pathname === '/(tabs)/search') {
+      setScanned(false);
+      setShowScanner(false);
+      setIsCameraReady(false);
+      lastScannedRef.current = null;
+    }
+    
+    return () => {
+      // Cleanup timeout quando si lascia la schermata
+      if (scanTimeoutRef.current) {
+        clearTimeout(scanTimeoutRef.current);
+      }
+    };
+  }, [pathname]);
 
   const loadUserId = async () => {
     const id = await AsyncStorage.getItem('user_id');
@@ -170,44 +206,59 @@ export default function SearchSellScreen() {
   };
 
   const handleBarCodeScanned = useCallback((scanResult: BarcodeScanningResult) => {
-    if (scanned || !isCameraReady) return; // Previene scansioni multiple e premature
+    // Previeni scansioni multiple
+    if (scanned || !isCameraReady) return;
     
-    const { type, data } = scanResult;
-    setScanned(true);
-    console.log('=== BARCODE SCANNED ===');
-    console.log('Type:', type);
-    console.log('Data:', data);
+    const { data } = scanResult;
     
-    // Clean the ISBN - rimuovi caratteri non numerici (eccetto X per ISBN-10)
+    // Clean the ISBN
     const cleanIsbn = data.replace(/[^0-9X]/gi, '');
-    console.log('Clean ISBN:', cleanIsbn);
+    
+    // Ignora se stesso ISBN scansionato di recente (debounce)
+    if (lastScannedRef.current === cleanIsbn) {
+      return;
+    }
     
     // Valida la lunghezza dell'ISBN
     if (cleanIsbn.length < 10 || cleanIsbn.length > 13) {
-      console.log('Invalid ISBN length, ignoring...');
-      setScanned(false);
       return;
     }
+    
+    // Imposta il flag immediatamente per prevenire ulteriori scansioni
+    setScanned(true);
+    lastScannedRef.current = cleanIsbn;
+    
+    console.log('ISBN Scansionato:', cleanIsbn, '- Mode:', scannerMode);
     
     // Vibration feedback
     if (Platform.OS !== 'web') {
       try {
         const Haptics = require('expo-haptics');
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } catch (e) {
-        // Haptics not available
-      }
+      } catch (e) {}
     }
     
-    setVendiIsbn(cleanIsbn);
+    // Chiudi scanner immediatamente
     setShowScanner(false);
     setIsCameraReady(false);
     
-    // Auto search after closing scanner
-    setTimeout(() => {
-      handleVendiSearchWithIsbn(cleanIsbn);
-    }, 300);
-  }, [scanned, isCameraReady]);
+    // Esegui ricerca dopo breve delay
+    if (scanTimeoutRef.current) {
+      clearTimeout(scanTimeoutRef.current);
+    }
+    
+    scanTimeoutRef.current = setTimeout(() => {
+      if (scannerMode === 'cerca') {
+        setCercaTitolo(cleanIsbn);
+        handleCercaTitolo(cleanIsbn);
+      } else {
+        setVendiIsbn(cleanIsbn);
+        handleVendiSearchWithIsbn(cleanIsbn);
+      }
+      // Reset refs after processing
+      lastScannedRef.current = null;
+    }, 200);
+  }, [scanned, isCameraReady, scannerMode]);
 
   const handleVendiSearchWithIsbn = async (isbn: string) => {
     if (!isbn || isbn.length < 10) return;
@@ -320,6 +371,8 @@ export default function SearchSellScreen() {
     setCercaLoading(true);
     setCercaResults([]);
     setCercaBook(null);
+    setBookAdoptions([]);
+    setShowAdoptions(false);
     
     try {
       // Prima cerca il libro
@@ -381,6 +434,23 @@ export default function SearchSellScreen() {
           }]);
         }
       }
+      
+      // Cerca scuole che hanno adottato questo libro
+      try {
+        console.log('[Search] Fetching adoptions for ISBN:', cercaIsbn);
+        const adoptionsResponse = await axios.get(`${API_URL}/api/books/adoptions/${cercaIsbn}`);
+        console.log('[Search] Adoptions response:', adoptionsResponse.data);
+        if (adoptionsResponse.data?.adoptions && adoptionsResponse.data.adoptions.length > 0) {
+          console.log('[Search] Setting', adoptionsResponse.data.adoptions.length, 'adoptions');
+          setBookAdoptions(adoptionsResponse.data.adoptions);
+          setShowAdoptions(true);
+        } else {
+          console.log('[Search] No adoptions in response');
+        }
+      } catch (adoptionError: any) {
+        console.log('[Search] Adoptions error:', adoptionError?.message || adoptionError);
+      }
+      
     } catch (error) {
       console.error('Error searching:', error);
       showAlert('Errore', 'Impossibile cercare il libro');
@@ -395,16 +465,19 @@ export default function SearchSellScreen() {
     }
   };
 
-  // Cerca per titolo
-  const handleCercaTitolo = async () => {
-    if (!cercaTitolo || cercaTitolo.length < 3) {
+  // Cerca per titolo o ISBN
+  const handleCercaTitolo = async (searchQuery?: string) => {
+    // Se searchQuery è un evento o undefined, usa cercaTitolo
+    const query = (typeof searchQuery === 'string') ? searchQuery : cercaTitolo;
+    
+    if (!query || query.length < 3) {
       showAlert('Errore', 'Inserisci almeno 3 caratteri per la ricerca');
       return;
     }
     
     Keyboard.dismiss();
     // Naviga alla pagina dei risultati
-    router.push(`/search-results?q=${encodeURIComponent(cercaTitolo)}`);
+    router.push(`/search-results?q=${encodeURIComponent(query)}`);
   };
 
   const selectBookFromTitolo = (book: Book) => {
@@ -419,7 +492,10 @@ export default function SearchSellScreen() {
   const handleCercaSearchWithIsbn = async (isbn: string) => {
     setCercaLoading(true);
     setCercaResults([]);
+    setBookAdoptions([]);
+    setShowAdoptions(false);
     
+    // Cerca listings disponibili
     try {
       const listingsResponse = await axios.get(`${API_URL}/api/listings/isbn/${isbn}`);
       if (listingsResponse.data?.listings && listingsResponse.data.listings.length > 0) {
@@ -432,10 +508,24 @@ export default function SearchSellScreen() {
         }]);
       }
     } catch (error) {
-      console.log('No listings found');
-    } finally {
-      setCercaLoading(false);
+      console.log('No listings found for ISBN:', isbn);
     }
+    
+    // Cerca scuole che hanno adottato questo libro (chiamata separata)
+    try {
+      console.log('[Search] Fetching adoptions for ISBN:', isbn);
+      const adoptionsResponse = await axios.get(`${API_URL}/api/books/adoptions/${isbn}`);
+      console.log('[Search] Adoptions response:', adoptionsResponse.data);
+      if (adoptionsResponse.data?.adoptions && adoptionsResponse.data.adoptions.length > 0) {
+        setBookAdoptions(adoptionsResponse.data.adoptions);
+        setShowAdoptions(true);
+        console.log('[Search] Found', adoptionsResponse.data.adoptions.length, 'schools');
+      }
+    } catch (adoptionError) {
+      console.log('No adoptions found for ISBN:', isbn, adoptionError);
+    }
+    
+    setCercaLoading(false);
   };
 
   // ==================== RENDER ====================
@@ -447,9 +537,9 @@ export default function SearchSellScreen() {
           key={cameraKey}
           style={StyleSheet.absoluteFillObject}
           facing="back"
-          autofocus="on"
           barcodeScannerSettings={{
-            barcodeTypes: ['ean13', 'ean8', 'code128', 'code39', 'upc_a', 'upc_e'],
+            barcodeTypes: ['ean13', 'ean8'],
+            interval: 500,
           }}
           onCameraReady={handleCameraReady}
           onBarcodeScanned={isCameraReady && !scanned ? handleBarCodeScanned : undefined}
@@ -463,51 +553,20 @@ export default function SearchSellScreen() {
           </View>
         )}
         
-        {/* Scanner overlay with viewfinder */}
-        <View style={styles.scannerOverlay}>
-          {/* Top dark area */}
-          <View style={styles.overlayDark} />
-          
-          {/* Middle row with viewfinder */}
-          <View style={styles.overlayMiddle}>
-            <View style={styles.overlayDarkSide} />
-            <View style={styles.scannerFrameContainer}>
-              <View style={styles.scannerFrame}>
-                {/* Corner markers */}
-                <View style={[styles.cornerMarker, styles.cornerTopLeft]} />
-                <View style={[styles.cornerMarker, styles.cornerTopRight]} />
-                <View style={[styles.cornerMarker, styles.cornerBottomLeft]} />
-                <View style={[styles.cornerMarker, styles.cornerBottomRight]} />
-                
-                {/* Scan line animation indicator */}
-                {isCameraReady && (
-                  <View style={styles.scanLine} />
-                )}
-              </View>
-            </View>
-            <View style={styles.overlayDarkSide} />
+        {/* Scanner overlay - simplified for performance */}
+        <View style={styles.scannerOverlaySimple}>
+          {/* Viewfinder frame */}
+          <View style={styles.scannerFrameSimple}>
+            <View style={[styles.cornerMarker, styles.cornerTopLeft]} />
+            <View style={[styles.cornerMarker, styles.cornerTopRight]} />
+            <View style={[styles.cornerMarker, styles.cornerBottomLeft]} />
+            <View style={[styles.cornerMarker, styles.cornerBottomRight]} />
           </View>
           
-          {/* Bottom area with instructions */}
-          <View style={styles.overlayBottom}>
-            <Text style={styles.scannerText}>
-              {isCameraReady ? 'Inquadra il codice a barre ISBN' : 'Attendere...'}
-            </Text>
-            <Text style={styles.scannerHint}>
-              {isCameraReady ? 'Posiziona il codice nel riquadro verde' : 'Preparazione fotocamera'}
-            </Text>
-            
-            {/* Manual entry button */}
-            <TouchableOpacity 
-              style={styles.manualEntryButton}
-              onPress={() => {
-                closeScanner();
-              }}
-            >
-              <Ionicons name="keypad-outline" size={20} color="#fff" />
-              <Text style={styles.manualEntryText}>Inserisci manualmente</Text>
-            </TouchableOpacity>
-          </View>
+          {/* Instructions */}
+          <Text style={styles.scannerTextSimple}>
+            {isCameraReady ? 'Inquadra il codice a barre' : 'Attendere...'}
+          </Text>
         </View>
         
         {/* Close button */}
@@ -518,113 +577,110 @@ export default function SearchSellScreen() {
           <Ionicons name="close" size={30} color="#fff" />
         </TouchableOpacity>
         
-        {/* Camera ready indicator */}
-        {isCameraReady && (
-          <View style={styles.cameraReadyBadge}>
-            <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
-            <Text style={styles.cameraReadyText}>Pronto</Text>
-          </View>
-        )}
+        {/* Manual entry button */}
+        <TouchableOpacity 
+          style={styles.manualEntryBtnFixed}
+          onPress={closeScanner}
+        >
+          <Ionicons name="keypad-outline" size={18} color="#fff" />
+          <Text style={styles.manualEntryText}>Manuale</Text>
+        </TouchableOpacity>
       </View>
     );
   }
 
-  // Schermata per utenti non loggati (anonimi)
-  if (isAnonymous) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.anonymousContainer}>
-          <Ionicons name="search-outline" size={80} color="#ccc" />
-          <Text style={styles.anonymousTitle}>Accedi per cercare e vendere</Text>
-          <Text style={styles.anonymousSubtitle}>
-            Per cercare libri usati e mettere in vendita i tuoi libri devi accedere al tuo account
-          </Text>
-          <TouchableOpacity
-            style={styles.anonymousButton}
-            onPress={() => router.push('/(auth)/login')}
-          >
-            <Ionicons name="log-in-outline" size={20} color="#fff" />
-            <Text style={styles.anonymousButtonText}>Accedi</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.anonymousRegisterLink}
-            onPress={() => router.push('/(auth)/register')}
-          >
-            <Text style={styles.anonymousRegisterText}>
-              Non hai un account? <Text style={styles.anonymousRegisterBold}>Registrati</Text>
-            </Text>
-          </TouchableOpacity>
-        </View>
+  // Schermata per utenti non loggati (anonimi) - SOLO per sezione VENDI
+  // Gli utenti anonimi possono comunque vedere i libri popolari e cercare
+  const renderAnonymousVendiSection = () => (
+    <View style={styles.section}>
+      <View style={styles.sectionHeader}>
+        <Ionicons name="pricetag" size={24} color="#2196F3" />
+        <Text style={styles.sectionTitle}>VENDI UN LIBRO</Text>
       </View>
-    );
-  }
+      <View style={styles.anonymousVendiContainer}>
+        <Ionicons name="lock-closed-outline" size={40} color="#ccc" />
+        <Text style={styles.anonymousVendiText}>
+          Per vendere i tuoi libri devi registrarti
+        </Text>
+        <TouchableOpacity
+          style={styles.anonymousVendiButton}
+          onPress={() => router.push('/(auth)/register')}
+        >
+          <Text style={styles.anonymousVendiButtonText}>Registrati</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
 
   return (
     <ScrollView style={styles.container}>
       {/* ==================== SEZIONE VENDI ==================== */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Ionicons name="pricetag" size={24} color="#2196F3" />
-          <Text style={styles.sectionTitle}>VENDI UN LIBRO</Text>
-        </View>
-        
-        <View style={styles.inputRow}>
-          <TextInput
-            style={styles.isbnInput}
-            placeholder="Inserisci ISBN o scansiona"
-            placeholderTextColor="#999"
-            value={vendiIsbn}
-            onChangeText={setVendiIsbn}
-            keyboardType="numeric"
-            maxLength={13}
-          />
-          <TouchableOpacity style={styles.scanButton} onPress={openScanner}>
-            <Ionicons name="barcode" size={24} color="#fff" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.searchButton} onPress={handleVendiSearch}>
-            {vendiLoading ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Ionicons name="search" size={20} color="#fff" />
-            )}
-          </TouchableOpacity>
-        </View>
+      {isAnonymous ? (
+        renderAnonymousVendiSection()
+      ) : (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="pricetag" size={24} color="#2196F3" />
+            <Text style={styles.sectionTitle}>VENDI UN LIBRO</Text>
+          </View>
+          
+          <View style={styles.inputRow}>
+            <TextInput
+              style={styles.isbnInput}
+              placeholder="Inserisci ISBN o scansiona"
+              placeholderTextColor="#999"
+              value={vendiIsbn}
+              onChangeText={setVendiIsbn}
+              keyboardType="numeric"
+              maxLength={13}
+            />
+            <TouchableOpacity style={styles.scanButton} onPress={openScanner}>
+              <Ionicons name="barcode" size={24} color="#fff" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.searchButton} onPress={handleVendiSearch}>
+              {vendiLoading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Ionicons name="search" size={20} color="#fff" />
+              )}
+            </TouchableOpacity>
+          </View>
 
-        {vendiBook && (
-          <View style={styles.resultCard}>
-            {vendiBook.source === 'not_found' ? (
-              /* Libro NON scolastico - non vendibile */
-              <View style={styles.notSchoolBookContainer}>
-                <Ionicons name="alert-circle" size={48} color="#FF9800" />
-                <Text style={styles.notSchoolBookTitle}>Libro non trovato</Text>
-                <Text style={styles.notSchoolBookText}>
-                  Questo libro non fa parte delle adozioni scolastiche del comune di Catanzaro.
-                </Text>
-                <Text style={styles.notSchoolBookSubtext}>
-                  Al momento è possibile vendere solo libri scolastici adottati.
-                </Text>
-              </View>
-            ) : (
-              /* Libro scolastico - vendibile */
-              <>
-                <Image
-                  source={{ uri: vendiBook.cover_url || `https://covers.openlibrary.org/b/isbn/${vendiBook.isbn}-M.jpg` }}
-                  style={styles.bookCover}
-                  resizeMode="contain"
-                  onError={() => {
-                    // Se Open Library fallisce, usa IBS come fallback
-                  }}
-                />
-                <View style={styles.bookInfo}>
-                  <Text style={styles.bookTitle} numberOfLines={2}>{vendiBook.titolo || ''}</Text>
-                  {vendiBook.autori ? <Text style={styles.bookAuthor}>{vendiBook.autori}</Text> : null}
-                  <Text style={styles.bookIsbn}>ISBN: {vendiBook.isbn || ''}</Text>
-                  {vendiBook.prezzo_copertina && vendiBook.prezzo_copertina > 0 ? (
-                    <View style={styles.bookPriceRow}>
-                      <Text style={styles.bookPriceLabel}>Prezzo copertina: </Text>
-                      <Text style={styles.bookPriceValue}>€{vendiBook.prezzo_copertina.toFixed(2)}</Text>
-                    </View>
-                  ) : null}
+          {vendiBook && (
+            <View style={styles.resultCard}>
+              {vendiBook.source === 'not_found' ? (
+                /* Libro NON scolastico - non vendibile */
+                <View style={styles.notSchoolBookContainer}>
+                  <Ionicons name="alert-circle" size={48} color="#FF9800" />
+                  <Text style={styles.notSchoolBookTitle}>Libro non trovato</Text>
+                  <Text style={styles.notSchoolBookText}>
+                    Questo libro non fa parte delle adozioni scolastiche del comune di Catanzaro.
+                  </Text>
+                  <Text style={styles.notSchoolBookSubtext}>
+                    Al momento è possibile vendere solo libri scolastici adottati.
+                  </Text>
+                </View>
+              ) : (
+                /* Libro scolastico - vendibile */
+                <>
+                  <Image
+                    source={{ uri: vendiBook.cover_url || `https://covers.openlibrary.org/b/isbn/${vendiBook.isbn}-M.jpg` }}
+                    style={styles.bookCover}
+                    resizeMode="contain"
+                    onError={() => {
+                      // Se Open Library fallisce, usa IBS come fallback
+                    }}
+                  />
+                  <View style={styles.bookInfo}>
+                    <Text style={styles.bookTitle} numberOfLines={2}>{vendiBook.titolo || ''}</Text>
+                    {vendiBook.autori ? <Text style={styles.bookAuthor}>{vendiBook.autori}</Text> : null}
+                    <Text style={styles.bookIsbn}>ISBN: {vendiBook.isbn || ''}</Text>
+                    {vendiBook.prezzo_copertina && vendiBook.prezzo_copertina > 0 ? (
+                      <View style={styles.bookPriceRow}>
+                        <Text style={styles.bookPriceLabel}>Prezzo copertina: </Text>
+                        <Text style={styles.bookPriceValue}>€{vendiBook.prezzo_copertina.toFixed(2)}</Text>
+                      </View>
+                    ) : null}
                 </View>
                 <TouchableOpacity style={styles.actionButton} onPress={goToSellBook}>
                   <Text style={styles.actionButtonText}>Vendi</Text>
@@ -635,6 +691,7 @@ export default function SearchSellScreen() {
           </View>
         )}
       </View>
+      )}
 
       {/* Divider */}
       <View style={styles.divider} />
@@ -646,31 +703,11 @@ export default function SearchSellScreen() {
           <Text style={[styles.sectionTitle, { color: '#4CAF50' }]}>CERCA UN LIBRO</Text>
         </View>
         
-        {/* Ricerca per ISBN */}
+        {/* Ricerca unificata per Titolo o ISBN */}
         <View style={styles.inputRow}>
           <TextInput
-            style={styles.isbnInput}
-            placeholder="Cerca per ISBN"
-            placeholderTextColor="#999"
-            value={cercaIsbn}
-            onChangeText={setCercaIsbn}
-            keyboardType="numeric"
-            maxLength={13}
-          />
-          <TouchableOpacity style={[styles.searchButton, { backgroundColor: '#4CAF50' }]} onPress={handleCercaSearch}>
-            {cercaLoading && !cercaTitolo ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Ionicons name="search" size={20} color="#fff" />
-            )}
-          </TouchableOpacity>
-        </View>
-
-        {/* Ricerca per Titolo */}
-        <View style={[styles.inputRow, { marginTop: 10 }]}>
-          <TextInput
-            style={styles.isbnInput}
-            placeholder="Cerca per titolo..."
+            style={[styles.isbnInput, { flex: 1 }]}
+            placeholder="Cerca titolo o codice ISBN..."
             placeholderTextColor="#999"
             value={cercaTitolo}
             onChangeText={setCercaTitolo}
@@ -679,11 +716,23 @@ export default function SearchSellScreen() {
             onSubmitEditing={handleCercaTitolo}
           />
           <TouchableOpacity 
+            style={[styles.scanButton, { backgroundColor: '#4CAF50' }]} 
+            onPress={() => {
+              // Set scanner to search mode and open
+              setScannerMode('cerca');
+              setScanned(false);
+              setScannerError(null);
+              openScanner();
+            }}
+          >
+            <Ionicons name="barcode-outline" size={22} color="#fff" />
+          </TouchableOpacity>
+          <TouchableOpacity 
             style={[styles.searchButton, { backgroundColor: '#4CAF50' }]} 
             onPress={handleCercaTitolo}
             disabled={cercaTitolo.length < 3}
           >
-            {cercaLoading && cercaTitolo ? (
+            {cercaLoading ? (
               <ActivityIndicator size="small" color="#fff" />
             ) : (
               <Ionicons name="search" size={20} color="#fff" />
@@ -823,6 +872,104 @@ const styles = StyleSheet.create({
     height: 8,
     backgroundColor: '#9e9e9e',
   },
+  // ==================== ADOZIONI STYLES ====================
+  adoptionsSection: {
+    backgroundColor: '#f8f9fa',
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+  },
+  adoptionsSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  adoptionsSectionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1a472a',
+  },
+  adoptionsSectionSubtitle: {
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 12,
+    marginLeft: 32,
+  },
+  adoptionSchoolCard: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#e8e8e8',
+  },
+  adoptionSchoolHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  adoptionSchoolInfo: {
+    flex: 1,
+    marginRight: 8,
+  },
+  adoptionSchoolName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 2,
+  },
+  adoptionSchoolLocation: {
+    fontSize: 12,
+    color: '#666',
+  },
+  adoptionSchoolTypeBadge: {
+    backgroundColor: '#e8f5e9',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  adoptionSchoolType: {
+    fontSize: 10,
+    color: '#1a472a',
+    fontWeight: '500',
+  },
+  adoptionClassesContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  adoptionClassesLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginRight: 4,
+  },
+  adoptionClassesList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+  },
+  adoptionClassBadge: {
+    backgroundColor: '#1a472a',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  adoptionClassText: {
+    fontSize: 11,
+    color: '#fff',
+    fontWeight: '500',
+  },
+  adoptionsMoreText: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+    fontStyle: 'italic',
+    marginTop: 4,
+  },
+  // ==================== END ADOZIONI STYLES ====================
   popularBooksSection: {
     backgroundColor: '#fff',
     padding: 8,
@@ -1129,6 +1276,40 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
+  // Stili scanner semplificati per performance
+  scannerOverlaySimple: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+  },
+  scannerFrameSimple: {
+    width: 280,
+    height: 160,
+    borderWidth: 0,
+    backgroundColor: 'transparent',
+  },
+  scannerTextSimple: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 20,
+    textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.8)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
+  },
+  manualEntryBtnFixed: {
+    position: 'absolute',
+    bottom: 80,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    gap: 6,
+  },
   cameraReadyBadge: {
     position: 'absolute',
     top: 60,
@@ -1221,5 +1402,31 @@ const styles = StyleSheet.create({
   anonymousRegisterBold: {
     color: '#1a472a',
     fontWeight: 'bold',
+  },
+  // Stili per sezione Vendi anonimi
+  anonymousVendiContainer: {
+    alignItems: 'center',
+    padding: 24,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 12,
+    marginTop: 12,
+  },
+  anonymousVendiText: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 12,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  anonymousVendiButton: {
+    backgroundColor: '#2196F3',
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+    borderRadius: 20,
+  },
+  anonymousVendiButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

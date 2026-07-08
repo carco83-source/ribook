@@ -16,6 +16,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import { authApi } from '../../src/utils/api';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -94,17 +95,17 @@ export default function ProfileScreen() {
       }
       setIsAnonymous(false);
 
-      // Get full user data
-      const response = await axios.get(`${API_URL}/api/users/${userId}`);
+      // Get full user data (con IBAN completo)
+      const response = await axios.get(`${API_URL}/api/users/${userId}?show_iban=true`);
       
       // Get user stats
       const statsRes = await axios.get(`${API_URL}/api/users/${userId}/stats`);
       setStats(statsRes.data);
 
-      // Get user orders (I Miei Scambi) - usa il nuovo endpoint
+      // Get user orders (I Miei Scambi) - usa l'API autenticata
       try {
-        const ordersRes = await axios.get(`${API_URL}/api/user-orders/${userId}`);
-        const orders = ordersRes.data.orders || [];
+        const ordersRes = await authApi.get(`/api/user-orders/${userId}`);
+        const orders = ordersRes.orders || [];
         // Converti gli ordini nel formato transactions per compatibilità
         setTransactions({
           acquisti: orders.filter((o: any) => o.buyer_id === userId),
@@ -385,6 +386,15 @@ export default function ProfileScreen() {
               <Text style={styles.logoutHeaderButtonText}>Esci</Text>
             </TouchableOpacity>
           </View>
+          
+          {/* IBAN Info */}
+          {userData?.iban && (
+            <View style={styles.ibanContainer}>
+              <Ionicons name="card-outline" size={16} color="#4CAF50" />
+              <Text style={styles.ibanLabel}>IBAN:</Text>
+              <Text style={styles.ibanValue}>{userData.iban.replace(/(.{4})/g, '$1 ').trim()}</Text>
+            </View>
+          )}
         </View>
       </View>
 
@@ -471,6 +481,23 @@ export default function ProfileScreen() {
           </View>
         )}
       </View>
+
+      {/* Sezione Documenti */}
+      <TouchableOpacity 
+        style={styles.documentsSection}
+        onPress={() => router.push('/profile/documents')}
+      >
+        <View style={styles.documentsSectionContent}>
+          <View style={styles.documentsSectionLeft}>
+            <Ionicons name="document-text" size={24} color="#9333ea" />
+            <View style={styles.documentsSectionTextContainer}>
+              <Text style={styles.documentsSectionTitle}>Documenti</Text>
+              <Text style={styles.documentsSectionSubtitle}>Ricevute di vendita e acquisto</Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#999" />
+        </View>
+      </TouchableOpacity>
 
       {/* Sezione I Miei Annunci */}
       <View style={styles.listingsSection}>
@@ -1875,6 +1902,42 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
+  // Documents Section Styles
+  documentsSection: {
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginTop: 16,
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  documentsSectionContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  documentsSectionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  documentsSectionTextContainer: {
+    marginLeft: 12,
+  },
+  documentsSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  documentsSectionSubtitle: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
+  },
   // Listings Section Styles
   listingsSection: {
     backgroundColor: '#fff',
@@ -2142,5 +2205,27 @@ const styles = StyleSheet.create({
   anonymousRegisterBold: {
     color: '#1a472a',
     fontWeight: 'bold',
+  },
+  // Stili per IBAN
+  ibanContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E8F5E9',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginTop: 12,
+    gap: 6,
+  },
+  ibanLabel: {
+    fontSize: 12,
+    color: '#4CAF50',
+    fontWeight: '500',
+  },
+  ibanValue: {
+    fontSize: 12,
+    color: '#2E7D32',
+    fontFamily: 'monospace',
+    letterSpacing: 0.5,
   },
 });

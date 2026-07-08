@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form, Query
+from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form, Query, Depends, Header
 from fastapi.responses import StreamingResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -72,6 +72,55 @@ import stripe
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY")
 
+# ============== PUSH NOTIFICATIONS (Emergent Managed) ==============
+PUSH_BASE_URL = "https://integrations.emergentagent.com"
+PUSH_KEY = os.environ.get("EMERGENT_PUSH_KEY", "placeholder")
+
+_push_client = httpx.AsyncClient(
+    base_url=PUSH_BASE_URL,
+    headers={"X-Push-Key": PUSH_KEY},
+    timeout=10.0,
+)
+
+class RegisterPushBody(BaseModel):
+    user_id: str
+    platform: str   # "android" | "ios"
+    device_token: str
+
+async def send_push(
+    recipients: list,
+    data: dict,  # {title, message, subtext?, image_url?, action_url?}
+    idempotency_key: str = None,
+) -> None:
+    """
+    Invia una push notification a uno o più utenti.
+    - recipients: lista di user_id
+    - data: {title: str, message: str, action_url?: str}
+    """
+    if not recipients:
+        return
+    if len(recipients) > 100:
+        logging.warning("send_push: max 100 recipients per call; chunking required")
+        return
+    if "title" not in data or "message" not in data:
+        logging.warning("send_push: data must include title and message")
+        return
+    
+    payload = {"recipients": recipients, "data": data}
+    if idempotency_key:
+        payload["$idempotency_key"] = idempotency_key
+    
+    try:
+        resp = await _push_client.post("/api/v1/push/trigger", json=payload)
+        if resp.status_code == 401:
+            logging.error("send_push: EMERGENT_PUSH_KEY missing or invalid")
+        elif resp.status_code >= 500:
+            logging.error(f"send_push: Push provider unavailable ({resp.status_code})")
+        else:
+            logging.info(f"send_push: Sent to {len(recipients)} recipients")
+    except Exception as e:
+        logging.error(f"send_push: Failed - {str(e)}")
+
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
@@ -82,6 +131,418 @@ app = FastAPI(title="ScambiaLibri API")
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
+
+# ============== HELPER FUNCTIONS (PRIVACY & SECURITY) ==============
+
+def mask_iban(iban: str) -> str:
+    """
+    Maschera un IBAN per la privacy.
+    Esempio: IT60X0542811101000000127339 -> IT60****7339
+    """
+    if not iban or len(iban) < 8:
+        return iban or ""
+    # Mostra i primi 4 caratteri (codice paese + check digits) e gli ultimi 4
+    return f"{iban[:4]}****{iban[-4:]}"
+
+# ============== RICEVUTE PDF (NON FISCALI) ==============
+
+async def get_next_receipt_number(receipt_type: str) -> int:
+    """
+    Genera il prossimo numero progressivo per le ricevute.
+    receipt_type: 'vendita', 'acquisto', 'piattaforma'
+    """
+    counter = await db.receipt_counters.find_one_and_update(
+        {"type": receipt_type},
+        {"$inc": {"counter": 1}},
+        upsert=True,
+        return_document=True
+    )
+    return counter["counter"]
+
+def generate_receipt_pdf(
+    receipt_type: str,  # 'vendita', 'acquisto', 'piattaforma'
+    receipt_number: int,
+    receipt_date: datetime,
+    user_data: dict,
+    order_data: dict,
+    amount: float,
+    commission: float = 0,
+    bookstore_name: str = None
+) -> bytes:
+    """
+    Genera un PDF per la ricevuta non fiscale.
+    """
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=2*cm, bottomMargin=2*cm)
+    
+    styles = getSampleStyleSheet()
+    
+    # Stili personalizzati
+    title_style = ParagraphStyle(
+        'Title',
+        parent=styles['Heading1'],
+        fontSize=18,
+        textColor=colors.HexColor('#1a472a'),
+        alignment=TA_CENTER,
+        spaceAfter=20
+    )
+    
+    subtitle_style = ParagraphStyle(
+        'Subtitle',
+        parent=styles['Normal'],
+        fontSize=12,
+        textColor=colors.grey,
+        alignment=TA_CENTER,
+        spaceAfter=30
+    )
+    
+    header_style = ParagraphStyle(
+        'Header',
+        parent=styles['Heading2'],
+        fontSize=14,
+        textColor=colors.HexColor('#1a472a'),
+        spaceAfter=10
+    )
+    
+    normal_style = ParagraphStyle(
+        'CustomNormal',
+        parent=styles['Normal'],
+        fontSize=11,
+        spaceAfter=5
+    )
+    
+    elements = []
+    
+    # Logo e intestazione
+    elements.append(Paragraph("📚 RiBook", title_style))
+    elements.append(Paragraph("Marketplace Libri Scolastici Usati", subtitle_style))
+    
+    # Tipo ricevuta
+    receipt_titles = {
+        'vendita': 'RICEVUTA DI VENDITA',
+        'acquisto': 'RICEVUTA DI ACQUISTO',
+        'piattaforma': 'RICEVUTA COMMISSIONE PIATTAFORMA'
+    }
+    elements.append(Paragraph(receipt_titles.get(receipt_type, 'RICEVUTA'), header_style))
+    elements.append(Spacer(1, 10))
+    
+    # Numero e data
+    receipt_date_str = receipt_date.strftime('%d/%m/%Y %H:%M')
+    year = receipt_date.year
+    
+    info_data = [
+        ['Numero Ricevuta:', f'{receipt_type.upper()}-{year}-{receipt_number:06d}'],
+        ['Data:', receipt_date_str],
+    ]
+    
+    info_table = Table(info_data, colWidths=[150, 300])
+    info_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 11),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+    ]))
+    elements.append(info_table)
+    elements.append(Spacer(1, 20))
+    
+    # Dati utente
+    elements.append(Paragraph("DATI INTESTATARIO", header_style))
+    
+    user_info = [
+        ['Nome:', f"{user_data.get('nome', '')} {user_data.get('cognome', '')}"],
+        ['Email:', user_data.get('email', 'N/D')],
+    ]
+    if user_data.get('telefono'):
+        user_info.append(['Telefono:', user_data.get('telefono')])
+    
+    user_table = Table(user_info, colWidths=[150, 300])
+    user_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+    ]))
+    elements.append(user_table)
+    elements.append(Spacer(1, 20))
+    
+    # Dettagli transazione
+    elements.append(Paragraph("DETTAGLI TRANSAZIONE", header_style))
+    
+    transaction_data = [
+        ['Codice Ordine:', order_data.get('order_code', order_data.get('id', 'N/D'))],
+        ['Libro:', order_data.get('book_titolo', 'N/D')],
+        ['ISBN:', order_data.get('book_isbn', 'N/D')],
+    ]
+    
+    if bookstore_name:
+        transaction_data.append(['Punto Ritiro:', bookstore_name])
+    
+    trans_table = Table(transaction_data, colWidths=[150, 300])
+    trans_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+    ]))
+    elements.append(trans_table)
+    elements.append(Spacer(1, 20))
+    
+    # Importi
+    elements.append(Paragraph("RIEPILOGO IMPORTI", header_style))
+    
+    if receipt_type == 'vendita':
+        # Ricevuta venditore: mostra 80% che riceve
+        amounts_data = [
+            ['Prezzo di vendita:', f"€ {order_data.get('prezzo_libro', 0):.2f}"],
+            ['Quota venditore (80%):', f"€ {amount:.2f}"],
+        ]
+    elif receipt_type == 'acquisto':
+        # Ricevuta acquirente: mostra totale pagato
+        amounts_data = [
+            ['Prezzo libro:', f"€ {order_data.get('prezzo_libro', 0):.2f}"],
+        ]
+        if order_data.get('include_foderazione'):
+            amounts_data.append(['Foderazione:', f"€ {order_data.get('costo_foderazione', 1.50):.2f}"])
+        amounts_data.append(['TOTALE PAGATO:', f"€ {amount:.2f}"])
+    else:
+        # Ricevuta piattaforma: mostra 20% - commissioni
+        amounts_data = [
+            ['Prezzo di vendita:', f"€ {order_data.get('prezzo_libro', 0):.2f}"],
+            ['Quota piattaforma (20%):', f"€ {order_data.get('commissione_piattaforma', 0):.2f}"],
+            ['Commissioni Stripe:', f"- € {commission:.2f}"],
+            ['NETTO PIATTAFORMA:', f"€ {amount:.2f}"],
+        ]
+    
+    amounts_table = Table(amounts_data, colWidths=[250, 200])
+    amounts_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 11),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, -1), (-1, -1), 12),
+        ('TEXTCOLOR', (0, -1), (-1, -1), colors.HexColor('#1a472a')),
+    ]))
+    elements.append(amounts_table)
+    elements.append(Spacer(1, 30))
+    
+    # Metodo pagamento
+    elements.append(Paragraph("METODO DI PAGAMENTO", header_style))
+    elements.append(Paragraph("Stripe - Carta di credito/debito", normal_style))
+    elements.append(Spacer(1, 30))
+    
+    # Footer
+    footer_style = ParagraphStyle(
+        'Footer',
+        parent=styles['Normal'],
+        fontSize=9,
+        textColor=colors.grey,
+        alignment=TA_CENTER
+    )
+    elements.append(Paragraph("─" * 60, footer_style))
+    elements.append(Spacer(1, 10))
+    elements.append(Paragraph("Documento non fiscale - Solo per uso interno", footer_style))
+    elements.append(Paragraph("RiBook - Marketplace Libri Scolastici Usati", footer_style))
+    elements.append(Paragraph(f"Generato il {datetime.now().strftime('%d/%m/%Y %H:%M')}", footer_style))
+    
+    doc.build(elements)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+async def create_receipt(
+    receipt_type: str,
+    user_id: str,
+    order_data: dict,
+    amount: float,
+    commission: float = 0,
+    bookstore_name: str = None
+) -> dict:
+    """
+    Crea e salva una ricevuta nel database.
+    """
+    # Ottieni dati utente
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        user = {"nome": "Utente", "cognome": "Sconosciuto", "email": "N/D"}
+    
+    # Genera numero progressivo
+    receipt_number = await get_next_receipt_number(receipt_type)
+    receipt_date = datetime.utcnow()
+    
+    # Genera PDF
+    pdf_bytes = generate_receipt_pdf(
+        receipt_type=receipt_type,
+        receipt_number=receipt_number,
+        receipt_date=receipt_date,
+        user_data=user,
+        order_data=order_data,
+        amount=amount,
+        commission=commission,
+        bookstore_name=bookstore_name
+    )
+    
+    # Salva in base64 nel database
+    pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
+    
+    receipt_id = str(uuid.uuid4())
+    year = receipt_date.year
+    
+    receipt = {
+        "id": receipt_id,
+        "receipt_number": f"{receipt_type.upper()}-{year}-{receipt_number:06d}",
+        "type": receipt_type,
+        "user_id": user_id,
+        "order_id": order_data.get("id"),
+        "order_code": order_data.get("order_code"),
+        "book_titolo": order_data.get("book_titolo"),
+        "amount": amount,
+        "commission": commission,
+        "pdf_base64": pdf_base64,
+        "created_at": receipt_date.isoformat()
+    }
+    
+    await db.receipts.insert_one(receipt)
+    
+    return {
+        "id": receipt_id,
+        "receipt_number": receipt["receipt_number"],
+        "type": receipt_type,
+        "amount": amount,
+        "created_at": receipt_date.isoformat()
+    }
+
+def sanitize_user_response(user: dict, show_full_iban: bool = False) -> dict:
+    """
+    Rimuove/maschera i dati sensibili da una risposta utente.
+    - Rimuove password_hash
+    - Maschera IBAN (a meno che show_full_iban=True)
+    """
+    if not user:
+        return user
+    
+    user.pop("_id", None)
+    user.pop("password_hash", None)
+    
+    # Maschera IBAN se presente
+    if "iban" in user and user["iban"] and not show_full_iban:
+        user["iban_masked"] = mask_iban(user["iban"])
+        user["iban"] = ""  # Non esporre l'IBAN completo
+    
+    return user
+
+# ============== FUNZIONE DI AUTENTICAZIONE (SECURITY FIX) ==============
+
+async def verify_user_auth(
+    path_user_id: str,
+    authorization: Optional[str] = Header(None, alias="Authorization")
+) -> str:
+    """
+    Verifica che l'utente autenticato sia autorizzato ad accedere ai dati di path_user_id.
+    Usata come dipendenza negli endpoint che richiedono autenticazione.
+    
+    Raises:
+        HTTPException 401: Token mancante o non valido
+        HTTPException 403: Utente non autorizzato ad accedere a questi dati
+    """
+    if not authorization:
+        raise HTTPException(
+            status_code=401, 
+            detail="Autenticazione richiesta. Effettua il login."
+        )
+    
+    # Estrai token dal Bearer
+    if authorization.startswith("Bearer "):
+        token = authorization[7:]
+    else:
+        token = authorization
+    
+    if not token or token == "null" or token == "undefined":
+        raise HTTPException(
+            status_code=401, 
+            detail="Token non valido. Effettua nuovamente il login."
+        )
+    
+    # Cerca sessione nel database
+    session = await db.user_sessions.find_one({"session_token": token})
+    if not session:
+        raise HTTPException(
+            status_code=401, 
+            detail="Sessione non valida o scaduta. Effettua nuovamente il login."
+        )
+    
+    # Verifica scadenza
+    expires_at_str = session.get("expires_at", "")
+    if expires_at_str:
+        try:
+            if isinstance(expires_at_str, str):
+                expires_at = datetime.fromisoformat(expires_at_str.replace("Z", "+00:00"))
+            else:
+                expires_at = expires_at_str
+            
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+            
+            if datetime.now(timezone.utc) > expires_at:
+                await db.user_sessions.delete_one({"session_token": token})
+                raise HTTPException(
+                    status_code=401, 
+                    detail="Sessione scaduta. Effettua nuovamente il login."
+                )
+        except (ValueError, TypeError):
+            pass
+    
+    # Verifica che l'utente autenticato corrisponda a quello richiesto
+    authenticated_user_id = session.get("user_id")
+    if authenticated_user_id != path_user_id:
+        raise HTTPException(
+            status_code=403, 
+            detail="Non sei autorizzato ad accedere a questi dati."
+        )
+    
+    return authenticated_user_id
+
+
+async def get_authenticated_user(
+    authorization: Optional[str] = Header(None, alias="Authorization")
+) -> dict:
+    """
+    Ottiene l'utente autenticato dal token.
+    Usata quando non c'è user_id nel path ma serve comunque autenticazione.
+    """
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Autenticazione richiesta")
+    
+    if authorization.startswith("Bearer "):
+        token = authorization[7:]
+    else:
+        token = authorization
+    
+    if not token or token == "null" or token == "undefined":
+        raise HTTPException(status_code=401, detail="Token non valido")
+    
+    session = await db.user_sessions.find_one({"session_token": token})
+    if not session:
+        raise HTTPException(status_code=401, detail="Sessione non valida")
+    
+    # Verifica scadenza
+    expires_at_str = session.get("expires_at", "")
+    if expires_at_str:
+        try:
+            if isinstance(expires_at_str, str):
+                expires_at = datetime.fromisoformat(expires_at_str.replace("Z", "+00:00"))
+            else:
+                expires_at = expires_at_str
+            
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+            
+            if datetime.now(timezone.utc) > expires_at:
+                await db.user_sessions.delete_one({"session_token": token})
+                raise HTTPException(status_code=401, detail="Sessione scaduta")
+        except (ValueError, TypeError):
+            pass
+    
+    user = await db.users.find_one({"id": session["user_id"]}, {"_id": 0, "password_hash": 0})
+    if not user:
+        raise HTTPException(status_code=401, detail="Utente non trovato")
+    
+    return {"user_id": user["id"], "user": user}
 
 # ============== MODELS ==============
 
@@ -165,6 +626,160 @@ def generate_bookstore_password():
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
 
+# ============== VALIDAZIONE CODICE FISCALE ==============
+
+# Mappa mesi per codice fiscale
+CF_MONTH_CODES = {
+    'A': 1, 'B': 2, 'C': 3, 'D': 4, 'E': 5, 'H': 6,
+    'L': 7, 'M': 8, 'P': 9, 'R': 10, 'S': 11, 'T': 12
+}
+
+# Mappa inversa mesi
+CF_MONTH_LETTERS = {v: k for k, v in CF_MONTH_CODES.items()}
+
+# Caratteri dispari per calcolo check digit
+CF_ODD_VALUES = {
+    '0': 1, '1': 0, '2': 5, '3': 7, '4': 9, '5': 13, '6': 15, '7': 17, '8': 19, '9': 21,
+    'A': 1, 'B': 0, 'C': 5, 'D': 7, 'E': 9, 'F': 13, 'G': 15, 'H': 17, 'I': 19, 'J': 21,
+    'K': 2, 'L': 4, 'M': 18, 'N': 20, 'O': 11, 'P': 3, 'Q': 6, 'R': 8, 'S': 12, 'T': 14,
+    'U': 16, 'V': 10, 'W': 22, 'X': 25, 'Y': 24, 'Z': 23
+}
+
+# Caratteri pari per calcolo check digit
+CF_EVEN_VALUES = {
+    '0': 0, '1': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9,
+    'A': 0, 'B': 1, 'C': 2, 'D': 3, 'E': 4, 'F': 5, 'G': 6, 'H': 7, 'I': 8, 'J': 9,
+    'K': 10, 'L': 11, 'M': 12, 'N': 13, 'O': 14, 'P': 15, 'Q': 16, 'R': 17, 'S': 18, 'T': 19,
+    'U': 20, 'V': 21, 'W': 22, 'X': 23, 'Y': 24, 'Z': 25
+}
+
+def validate_codice_fiscale_format(cf: str) -> bool:
+    """Valida il formato base del codice fiscale (16 caratteri alfanumerici)"""
+    if not cf or len(cf) != 16:
+        return False
+    cf = cf.upper()
+    # Pattern: 6 lettere + 2 numeri + 1 lettera + 2 numeri + 1 lettera + 3 alfanumerici + 1 lettera
+    pattern = r'^[A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z]$'
+    import re
+    return bool(re.match(pattern, cf))
+
+def calculate_cf_check_digit(cf_without_check: str) -> str:
+    """Calcola il carattere di controllo del codice fiscale"""
+    cf = cf_without_check.upper()
+    total = 0
+    for i, char in enumerate(cf):
+        if (i + 1) % 2 == 0:  # Posizioni pari (1-indexed)
+            total += CF_EVEN_VALUES.get(char, 0)
+        else:  # Posizioni dispari
+            total += CF_ODD_VALUES.get(char, 0)
+    return chr(65 + (total % 26))  # A=65 in ASCII
+
+def validate_codice_fiscale_checksum(cf: str) -> bool:
+    """Verifica il carattere di controllo del codice fiscale"""
+    if len(cf) != 16:
+        return False
+    cf = cf.upper()
+    expected_check = calculate_cf_check_digit(cf[:15])
+    return cf[15] == expected_check
+
+def extract_birth_date_from_cf(cf: str) -> Optional[dict]:
+    """
+    Estrae la data di nascita dal codice fiscale.
+    Restituisce dict con anno, mese, giorno oppure None se non valido.
+    """
+    if not validate_codice_fiscale_format(cf):
+        return None
+    
+    cf = cf.upper()
+    
+    try:
+        # Anno (posizioni 6-7): ultime 2 cifre
+        year_code = int(cf[6:8])
+        # Determina il secolo (assumiamo che chi si registra oggi abbia almeno 16 anni)
+        current_year = datetime.now().year
+        if year_code <= (current_year - 2000):
+            year = 2000 + year_code
+        else:
+            year = 1900 + year_code
+        
+        # Mese (posizione 8): lettera
+        month_letter = cf[8]
+        month = CF_MONTH_CODES.get(month_letter)
+        if not month:
+            return None
+        
+        # Giorno (posizioni 9-10): per le donne si aggiunge 40
+        day_code = int(cf[9:11])
+        is_female = day_code > 40
+        day = day_code - 40 if is_female else day_code
+        
+        return {
+            'year': year,
+            'month': month,
+            'day': day,
+            'is_female': is_female
+        }
+    except (ValueError, IndexError):
+        return None
+
+def validate_cf_matches_birth_date(cf: str, birth_date: str) -> tuple[bool, str]:
+    """
+    Verifica che il codice fiscale corrisponda alla data di nascita fornita.
+    birth_date deve essere in formato YYYY-MM-DD.
+    Restituisce (is_valid, error_message).
+    """
+    cf_data = extract_birth_date_from_cf(cf)
+    if not cf_data:
+        return False, "Codice fiscale non valido"
+    
+    try:
+        # Parse della data fornita
+        bd = datetime.strptime(birth_date, "%Y-%m-%d")
+        
+        # Confronta anno (considera che il CF ha solo 2 cifre)
+        cf_year_suffix = cf_data['year'] % 100
+        bd_year_suffix = bd.year % 100
+        
+        # Verifica che l'anno corrisponda (considerando il secolo)
+        if cf_year_suffix != bd_year_suffix:
+            return False, "L'anno di nascita nel codice fiscale non corrisponde alla data inserita"
+        
+        # Verifica mese
+        if cf_data['month'] != bd.month:
+            return False, "Il mese di nascita nel codice fiscale non corrisponde alla data inserita"
+        
+        # Verifica giorno
+        if cf_data['day'] != bd.day:
+            return False, "Il giorno di nascita nel codice fiscale non corrisponde alla data inserita"
+        
+        return True, ""
+    except ValueError:
+        return False, "Formato data di nascita non valido (usa YYYY-MM-DD)"
+
+def calculate_age(birth_date: str) -> int:
+    """Calcola l'età in anni dalla data di nascita (formato YYYY-MM-DD)"""
+    try:
+        bd = datetime.strptime(birth_date, "%Y-%m-%d")
+        today = datetime.now()
+        age = today.year - bd.year
+        # Se il compleanno non è ancora arrivato quest'anno, sottrai 1
+        if (today.month, today.day) < (bd.month, bd.day):
+            age -= 1
+        return age
+    except ValueError:
+        return -1
+
+def encrypt_sensitive_data(data: str) -> str:
+    """
+    Cripta dati sensibili per lo storage.
+    Usa hashing + salt per codice fiscale (non reversibile).
+    """
+    import hashlib
+    import os
+    # Per il codice fiscale usiamo un hash con salt fisso (per poter verificare duplicati)
+    salt = os.getenv("CF_SALT", "ribook_cf_salt_2024")
+    return hashlib.sha256(f"{salt}{data.upper()}".encode()).hexdigest()
+
 # User Models
 
 # Child profile for multi-profile support
@@ -182,6 +797,8 @@ class UserCreate(BaseModel):
     email: str
     telefono: Optional[str] = None
     password: str
+    codice_fiscale: str  # Obbligatorio - validato
+    data_nascita: str  # Obbligatorio - formato YYYY-MM-DD
     iban: Optional[str] = None  # IBAN per ricevere pagamenti
     scuola: Optional[str] = None
     classe: Optional[str] = None
@@ -199,6 +816,8 @@ class User(BaseModel):
     email: str
     telefono: Optional[str] = None
     password_hash: str
+    codice_fiscale_hash: str = ""  # Hash del CF per privacy
+    data_nascita_encrypted: str = ""  # Data nascita criptata
     iban: Optional[str] = None  # IBAN per ricevere pagamenti
     scuola: Optional[str] = None
     classe: Optional[str] = None
@@ -215,6 +834,7 @@ class User(BaseModel):
     total_purchases: int = 0  # Total books purchased
     rating: float = 0.0  # Average rating (0-5)
     rating_count: int = 0  # Number of ratings received
+    verified_identity: bool = True  # CF validato
     created_at: datetime = Field(default_factory=get_rome_time)
 
 # Review model
@@ -338,8 +958,14 @@ class BookListingCreate(BaseModel):
     child_name: Optional[str] = None
     condition_percentage: Optional[float] = None
 
+def generate_listing_code() -> str:
+    """Genera un codice univoco di 6 cifre per il listing"""
+    import random
+    return str(random.randint(100000, 999999))
+
 class BookListing(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    listing_code: str = Field(default_factory=generate_listing_code)  # Codice univoco 6 cifre per il venditore
     seller_id: str
     seller_username: str
     book_id: str
@@ -485,7 +1111,8 @@ ORDER_STATES = {
     
     # Altri stati
     "cancelled": "Annullato",
-    "refunded": "Rimborsato"
+    "refunded": "Rimborsato",
+    "annullato_acquirente": "Annullato dall'acquirente",
 }
 
 # Timer automatici
@@ -697,6 +1324,56 @@ class BookstoreRegistrationRequestCreate(BaseModel):
     citta: Optional[str] = ""
     telefono: Optional[str] = ""
 
+# ============== PAYOUT SYSTEM ==============
+
+class Payout(BaseModel):
+    """Registro pagamenti da effettuare"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    order_id: str
+    order_code: str
+    
+    # Beneficiario
+    recipient_type: str  # "seller" o "platform" o "cartolibreria"
+    recipient_id: str  # user_id o "platform" o bookstore_id
+    recipient_name: str
+    recipient_iban: str
+    
+    # Importi
+    gross_amount: float  # Importo lordo
+    stripe_fee: float  # Commissione Stripe proporzionale
+    net_amount: float  # Importo netto da bonificare
+    
+    # Dettagli
+    description: str
+    
+    # Tempistiche
+    pickup_date: Optional[str] = None  # Data ritiro libro
+    payable_from: Optional[str] = None  # Data da cui è pagabile
+    # - Venditore/Piattaforma: 3 giorni dopo ritiro
+    # - Cartolibreria: cumulo ogni 15 giorni
+    
+    # Stato
+    status: str = "pending"  # pending, ready, completed, failed
+    # pending = in attesa (non ancora pagabile)
+    # ready = pronto per bonifico (scadenza raggiunta)
+    # completed = bonifico effettuato
+    created_at: datetime = Field(default_factory=get_rome_time)
+    completed_at: Optional[datetime] = None
+    completed_by: Optional[str] = None  # admin che ha fatto il bonifico
+    transaction_reference: Optional[str] = None  # Riferimento bonifico
+
+class PlatformConfig(BaseModel):
+    """Configurazione piattaforma"""
+    id: str = "platform_config"
+    platform_iban: Optional[str] = None
+    platform_name: str = "RiBook"
+    seller_percentage: float = 80.0  # % al venditore
+    platform_percentage: float = 20.0  # % alla piattaforma
+    foderazione_cost: float = 1.50  # Costo foderazione
+    stripe_fee_percentage: float = 1.5  # % commissione Stripe
+    stripe_fee_fixed: float = 0.25  # Costo fisso Stripe per transazione
+    updated_at: Optional[datetime] = None
+
 # Compatibility/Match Model
 class Match(BaseModel):
     listing: dict
@@ -714,11 +1391,66 @@ async def register_user(user_data: UserCreate):
     print(f"Nome: {user_data.nome}")
     print(f"Cognome: {user_data.cognome}")
     
+    # ============== VALIDAZIONE CODICE FISCALE E ETÀ ==============
+    
+    # 1. Valida formato codice fiscale
+    cf = user_data.codice_fiscale.upper().strip()
+    if not validate_codice_fiscale_format(cf):
+        raise HTTPException(
+            status_code=400, 
+            detail="Codice fiscale non valido. Deve essere di 16 caratteri alfanumerici."
+        )
+    
+    # 2. Valida checksum del codice fiscale
+    if not validate_codice_fiscale_checksum(cf):
+        raise HTTPException(
+            status_code=400, 
+            detail="Codice fiscale non valido. Il carattere di controllo non corrisponde."
+        )
+    
+    # 3. Verifica che la data di nascita corrisponda al codice fiscale
+    is_valid, error_msg = validate_cf_matches_birth_date(cf, user_data.data_nascita)
+    if not is_valid:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Verifica identità fallita: {error_msg}"
+        )
+    
+    # 4. Verifica età minima (16 anni)
+    age = calculate_age(user_data.data_nascita)
+    if age < 0:
+        raise HTTPException(
+            status_code=400, 
+            detail="Data di nascita non valida. Usa il formato YYYY-MM-DD."
+        )
+    if age < 16:
+        raise HTTPException(
+            status_code=400, 
+            detail="Devi avere almeno 16 anni per registrarti."
+        )
+    
+    # 5. Verifica che il codice fiscale non sia già registrato
+    cf_hash = encrypt_sensitive_data(cf)
+    existing_cf = await db.users.find_one({"codice_fiscale_hash": cf_hash})
+    if existing_cf:
+        raise HTTPException(
+            status_code=400, 
+            detail="Questo codice fiscale è già associato a un account esistente."
+        )
+    
+    # ============== FINE VALIDAZIONE ==============
+    
     # Check if email already exists
     existing = await db.users.find_one({"email": user_data.email.lower()})
     if existing:
         print(f"Email già esistente!")
         raise HTTPException(status_code=400, detail="Email già registrata")
+    
+    # Cripta i dati sensibili per lo storage
+    # Il CF viene hashato (non reversibile) per verificare duplicati
+    # La data di nascita viene criptata (reversibile solo con la chiave)
+    import base64
+    data_nascita_encrypted = base64.b64encode(user_data.data_nascita.encode()).decode()
     
     # Create user with auto-generated username
     user = User(
@@ -727,33 +1459,52 @@ async def register_user(user_data: UserCreate):
         email=user_data.email.lower(),
         telefono=user_data.telefono,
         password_hash=hash_password(user_data.password),
+        codice_fiscale_hash=cf_hash,
+        data_nascita_encrypted=data_nascita_encrypted,
         iban=user_data.iban,
         scuola=user_data.scuola,
         classe=user_data.classe,
         sezione=user_data.sezione,
         tipo_scuola=user_data.tipo_scuola,
-        username=generate_username()
+        username=generate_username(),
+        verified_identity=True
     )
     
     await db.users.insert_one(user.dict())
-    print(f"Utente creato con ID: {user.id}")
+    print(f"Utente creato con ID: {user.id} - Identità verificata")
     return {"message": "Registrazione completata", "user_id": user.id, "username": user.username}
 
 @api_router.post("/auth/login")
 async def login_user(credentials: UserLogin):
     user = await db.users.find_one({"email": credentials.email})
-    if not user or user["password_hash"] != hash_password(credentials.password):
+    if not user or user.get("password_hash") != hash_password(credentials.password):
         raise HTTPException(status_code=401, detail="Credenziali non valide")
     
-    return {
+    # Genera token di sessione
+    session_token = str(uuid.uuid4()) + "-" + str(uuid.uuid4())
+    expires_at = datetime.now(timezone.utc) + timedelta(days=30)  # 30 giorni
+    
+    # Salva sessione nel database
+    session = {
+        "id": str(uuid.uuid4()),
         "user_id": user["id"],
-        "username": user["username"],
+        "session_token": session_token,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "expires_at": expires_at.isoformat(),
+    }
+    await db.user_sessions.insert_one(session)
+    
+    return {
+        "success": True,
+        "user_id": user["id"],
+        "username": user.get("username", f"Utente_{user['id'][:5].upper()}"),
         "nome": user.get("nome", ""),
         "is_premium": user.get("is_premium", False),
         "scuola": user.get("scuola"),
         "classe": user.get("classe"),
         "sezione": user.get("sezione"),
-        "profili_figli": user.get("profili_figli", [])
+        "profili_figli": user.get("profili_figli", []),
+        "session_token": session_token
     }
 
 # ============== MIGRAZIONE PROFILI TEMPORANEI ==============
@@ -1056,15 +1807,177 @@ async def logout_user(authorization: str = None):
     
     return {"success": True, "message": "Logout effettuato"}
 
+# ============== PUSH NOTIFICATIONS ENDPOINTS ==============
+
+@api_router.post("/register-push", status_code=201)
+async def register_push(body: RegisterPushBody):
+    """
+    Registra il device token per le push notifications.
+    Chiamato dal frontend dopo il login o ad ogni apertura dell'app.
+    """
+    try:
+        resp = await _push_client.post("/api/v1/push/users/register", json=body.model_dump())
+        if resp.status_code == 401:
+            logging.error("register_push: EMERGENT_PUSH_KEY missing or invalid")
+            raise HTTPException(500, "Push service configuration error")
+        if resp.status_code >= 500:
+            logging.error(f"register_push: Push provider unavailable ({resp.status_code})")
+            raise HTTPException(502, "Push provider unavailable")
+        resp.raise_for_status()
+        logging.info(f"register_push: Registered device for user {body.user_id} on {body.platform}")
+        return {"status": "registered"}
+    except httpx.HTTPError as e:
+        logging.error(f"register_push: HTTP error - {str(e)}")
+        raise HTTPException(502, "Failed to register push token")
+    except Exception as e:
+        logging.error(f"register_push: Unexpected error - {str(e)}")
+        raise HTTPException(500, "Internal error registering push token")
+
 @api_router.get("/users/{user_id}")
-async def get_user(user_id: str):
+async def get_user(user_id: str, show_iban: bool = Query(False)):
     user = await db.users.find_one({"id": user_id})
     if not user:
         raise HTTPException(status_code=404, detail="Utente non trovato")
-    # Return full user data including profili_figli
-    user.pop("_id", None)
-    user.pop("password_hash", None)
-    return user
+    # Applica sanitizzazione per proteggere i dati sensibili
+    # Se show_iban=True, mostra l'IBAN completo (per il proprio profilo)
+    return sanitize_user_response(dict(user), show_full_iban=show_iban)
+
+# ============== RICEVUTE ENDPOINTS ==============
+
+@api_router.get("/receipts/{user_id}")
+async def get_user_receipts(user_id: str):
+    """
+    Ottiene tutte le ricevute di un utente (vendite e acquisti).
+    """
+    receipts = await db.receipts.find(
+        {"user_id": user_id}
+    ).sort("created_at", -1).to_list(100)
+    
+    # Rimuovi il PDF base64 dalla lista (troppo pesante)
+    for r in receipts:
+        r.pop("_id", None)
+        r.pop("pdf_base64", None)
+    
+    return receipts
+
+@api_router.get("/receipts/{user_id}/{receipt_id}/download")
+async def download_receipt(user_id: str, receipt_id: str):
+    """
+    Scarica il PDF di una ricevuta specifica.
+    """
+    receipt = await db.receipts.find_one({"id": receipt_id, "user_id": user_id})
+    if not receipt:
+        raise HTTPException(status_code=404, detail="Ricevuta non trovata")
+    
+    pdf_bytes = base64.b64decode(receipt["pdf_base64"])
+    
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename={receipt['receipt_number']}.pdf"
+        }
+    )
+
+@api_router.get("/admin/receipts/platform")
+async def get_platform_receipts(
+    start_date: str = Query(None, description="Data inizio (YYYY-MM-DD)"),
+    end_date: str = Query(None, description="Data fine (YYYY-MM-DD)")
+):
+    """
+    Ottiene le ricevute della piattaforma (commissioni).
+    Per il riepilogo settimanale dell'admin.
+    """
+    query = {"type": "piattaforma"}
+    
+    if start_date:
+        query["created_at"] = {"$gte": start_date}
+    if end_date:
+        if "created_at" in query:
+            query["created_at"]["$lte"] = end_date + "T23:59:59"
+        else:
+            query["created_at"] = {"$lte": end_date + "T23:59:59"}
+    
+    receipts = await db.receipts.find(query).sort("created_at", -1).to_list(500)
+    
+    # Calcola totali
+    total_amount = sum(r.get("amount", 0) for r in receipts)
+    total_commission = sum(r.get("commission", 0) for r in receipts)
+    
+    # Rimuovi PDF base64
+    for r in receipts:
+        r.pop("_id", None)
+        r.pop("pdf_base64", None)
+    
+    return {
+        "receipts": receipts,
+        "summary": {
+            "total_receipts": len(receipts),
+            "total_net_amount": total_amount,
+            "total_stripe_fees": total_commission,
+            "period_start": start_date,
+            "period_end": end_date
+        }
+    }
+
+@api_router.get("/admin/receipts/weekly-summary")
+async def get_weekly_summary():
+    """
+    Ottiene il riepilogo settimanale delle commissioni piattaforma.
+    """
+    # Calcola inizio settimana (lunedì)
+    today = datetime.utcnow()
+    start_of_week = today - timedelta(days=today.weekday())
+    start_of_week = start_of_week.replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    # Fine settimana (domenica)
+    end_of_week = start_of_week + timedelta(days=6, hours=23, minutes=59, seconds=59)
+    
+    receipts = await db.receipts.find({
+        "type": "piattaforma",
+        "created_at": {
+            "$gte": start_of_week.isoformat(),
+            "$lte": end_of_week.isoformat()
+        }
+    }).sort("created_at", -1).to_list(500)
+    
+    total_amount = sum(r.get("amount", 0) for r in receipts)
+    total_commission = sum(r.get("commission", 0) for r in receipts)
+    
+    # Rimuovi PDF base64
+    for r in receipts:
+        r.pop("_id", None)
+        r.pop("pdf_base64", None)
+    
+    return {
+        "week_start": start_of_week.strftime("%d/%m/%Y"),
+        "week_end": end_of_week.strftime("%d/%m/%Y"),
+        "receipts": receipts,
+        "summary": {
+            "total_transactions": len(receipts),
+            "total_net_amount": round(total_amount, 2),
+            "total_stripe_fees": round(total_commission, 2)
+        }
+    }
+
+@api_router.get("/admin/receipts/{receipt_id}/download")
+async def download_admin_receipt(receipt_id: str):
+    """
+    Scarica il PDF di una ricevuta piattaforma (admin).
+    """
+    receipt = await db.receipts.find_one({"id": receipt_id, "type": "piattaforma"})
+    if not receipt:
+        raise HTTPException(status_code=404, detail="Ricevuta non trovata")
+    
+    pdf_bytes = base64.b64decode(receipt["pdf_base64"])
+    
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename={receipt['receipt_number']}.pdf"
+        }
+    )
 
 
 class UpdateUserRequest(BaseModel):
@@ -1970,6 +2883,90 @@ async def lookup_book_by_isbn(isbn: str):
         "source": "not_found"
     }
 
+@api_router.get("/books/adoptions/{isbn}")
+async def get_book_adoptions(isbn: str):
+    """
+    Ottiene tutte le scuole, classi e sezioni che hanno adottato un libro dato l'ISBN.
+    """
+    clean_isbn = isbn.replace("-", "").replace(" ", "").strip()
+    
+    # Cerca tutte le adozioni che contengono questo ISBN
+    adozioni = await db.adozioni.find({
+        "$or": [
+            {"isbn": clean_isbn},
+            {"libri.isbn": clean_isbn}
+        ]
+    }).to_list(500)
+    
+    if not adozioni:
+        return {
+            "isbn": clean_isbn,
+            "adoptions": [],
+            "count": 0,
+            "message": "Nessuna scuola ha adottato questo libro"
+        }
+    
+    # Raggruppa per scuola
+    schools_map = {}
+    
+    for adozione in adozioni:
+        codice_scuola = adozione.get("codice_scuola", "")
+        classe = adozione.get("classe", "")
+        sezione = adozione.get("sezione", "")
+        tipo_scuola = adozione.get("tipo_scuola", "")
+        
+        # Crea chiave unica per la scuola
+        if not codice_scuola:
+            continue
+            
+        if codice_scuola not in schools_map:
+            # Cerca i dettagli della scuola nella collezione schools
+            school_info = await db.schools.find_one({"codice_meccanografico": codice_scuola})
+            
+            if school_info:
+                nome_scuola = school_info.get("nome", "")
+                citta = school_info.get("comune", "")
+                provincia = school_info.get("provincia", "")
+                tipo = school_info.get("tipo", tipo_scuola)
+            else:
+                nome_scuola = f"Scuola {codice_scuola}"
+                citta = ""
+                provincia = ""
+                tipo = tipo_scuola
+            
+            schools_map[codice_scuola] = {
+                "codice_scuola": codice_scuola,
+                "nome_scuola": nome_scuola,
+                "tipo_scuola": tipo,
+                "citta": citta,
+                "provincia": provincia,
+                "classi": []
+            }
+        
+        # Aggiungi classe/sezione se non già presente
+        classe_info = {
+            "classe": str(classe) if classe else "",
+            "sezione": str(sezione) if sezione else ""
+        }
+        
+        if classe_info not in schools_map[codice_scuola]["classi"]:
+            schools_map[codice_scuola]["classi"].append(classe_info)
+    
+    # Converti in lista e ordina
+    adoptions = list(schools_map.values())
+    adoptions.sort(key=lambda x: (x.get("citta", ""), x.get("nome_scuola", "")))
+    
+    # Ordina le classi per ogni scuola
+    for school in adoptions:
+        school["classi"].sort(key=lambda x: (x.get("classe", ""), x.get("sezione", "")))
+    
+    return {
+        "isbn": clean_isbn,
+        "adoptions": adoptions,
+        "count": len(adoptions),
+        "total_classes": sum(len(s["classi"]) for s in adoptions)
+    }
+
 
 # ============== BOOK COVER API (IBS.it) ==============
 
@@ -2257,8 +3254,15 @@ async def create_listing(listing_data: BookListingCreate, user_id: str = Query(.
 
 # Endpoint per le notifiche
 @api_router.get("/notifications/{user_id}")
-async def get_notifications(user_id: str, limit: int = 50):
-    """Recupera le notifiche per un utente"""
+async def get_notifications(
+    user_id: str, 
+    limit: int = 50,
+    authorization: Optional[str] = Header(None, alias="Authorization")
+):
+    """Recupera le notifiche per un utente - RICHIEDE AUTENTICAZIONE"""
+    # Verifica autenticazione
+    await verify_user_auth(user_id, authorization)
+    
     notifications = await db.notifications.find(
         {"user_id": user_id}
     ).sort("created_at", -1).limit(limit).to_list(limit)
@@ -2506,11 +3510,18 @@ async def process_completed_orders():
 
 
 @api_router.get("/notifications/check-expired/{user_id}")
-async def check_expired_for_user(user_id: str):
+async def check_expired_for_user(
+    user_id: str,
+    authorization: Optional[str] = Header(None, alias="Authorization")
+):
     """
     Controlla e processa le notifiche scadute per un utente specifico.
     Chiamato quando l'utente apre l'app per aggiornare lo stato.
+    RICHIEDE AUTENTICAZIONE
     """
+    # Verifica autenticazione
+    await verify_user_auth(user_id, authorization)
+    
     from datetime import datetime
     
     now = datetime.utcnow()
@@ -6900,8 +7911,14 @@ async def add_to_cart(listing_id: str, bookstore_id: str, buyer_id: str, include
 
 
 @api_router.get("/cart/{user_id}")
-async def get_cart(user_id: str):
-    """Ottiene il carrello dell'utente con lo stato di ogni libro"""
+async def get_cart(
+    user_id: str,
+    authorization: Optional[str] = Header(None, alias="Authorization")
+):
+    """Ottiene il carrello dell'utente con lo stato di ogni libro - RICHIEDE AUTENTICAZIONE"""
+    # Verifica autenticazione
+    await verify_user_auth(user_id, authorization)
+    
     from datetime import timedelta
     
     now = datetime.utcnow()
@@ -7371,9 +8388,23 @@ async def create_order(
     # ==========================================
     # CHECK ORDINI DUPLICATI - Evita doppi ordini
     # ==========================================
+    # Stati terminati che permettono un nuovo ordine
+    terminated_statuses = [
+        "cancelled", 
+        "refunded", 
+        "rejected", 
+        "completed",
+        "rifiutato_condizioni",
+        "rifiutato",
+        "annullato",
+        "annullato_acquirente",
+        "annullato_non_disponibile",
+        "expired"
+    ]
+    
     existing_order = await db.orders.find_one({
         "listing_id": actual_listing_id,
-        "status": {"$nin": ["cancelled", "refunded", "rejected", "completed"]}
+        "status": {"$nin": terminated_statuses}
     })
     if existing_order:
         # Se l'ordine esistente è dello stesso acquirente, restituisci info
@@ -7636,6 +8667,161 @@ async def seller_reject_order(order_id: str, user_id: str = Query(...), reason: 
         "message": "Ordine rifiutato. Il libro è tornato disponibile nel marketplace."
     }
 
+@api_router.post("/orders/{order_id}/buyer-cancel")
+async def buyer_cancel_order(order_id: str, user_id: str = Query(...), reason: str = Query(default="")):
+    """
+    Annulla un ordine da parte dell'acquirente.
+    
+    PRIMA del pagamento: annulla senza rimborso
+    DOPO il pagamento (ma prima della consegna): annulla CON rimborso
+    """
+    
+    order = await db.orders.find_one({"id": order_id, "buyer_id": user_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="Ordine non trovato")
+    
+    current_status = order.get("status")
+    
+    # Stati in cui l'acquirente può annullare SENZA rimborso (non ancora pagato)
+    cancellable_no_refund = [
+        "in_attesa_conferma_venditore",
+        "in_attesa_pagamento", 
+        "pending_payment",
+        "pending_seller_confirmation"
+    ]
+    
+    # Stati in cui l'acquirente può annullare CON rimborso (pagato ma non consegnato)
+    cancellable_with_refund = [
+        "pagato_attesa_consegna",
+        "paid",
+        "in_transito_a_cartolibreria"
+    ]
+    
+    # Stati in cui NON si può più annullare
+    non_cancellable = [
+        "in_custodia",
+        "pronto_per_ritiro",
+        "picked_up",
+        "completed",
+        "refunded"
+    ]
+    
+    if current_status in non_cancellable:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Non puoi più annullare questo ordine. Il libro è già stato consegnato alla cartolibreria."
+        )
+    
+    if current_status not in cancellable_no_refund and current_status not in cancellable_with_refund:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Non puoi annullare questo ordine. Stato attuale: {ORDER_STATES.get(current_status, current_status)}"
+        )
+    
+    now = get_rome_time()
+    needs_refund = current_status in cancellable_with_refund
+    refund_result = None
+    
+    # Se pagato, processa il rimborso
+    if needs_refund:
+        payment_intent_id = order.get("payment_intent_id")
+        if payment_intent_id and not payment_intent_id.startswith("pi_mock"):
+            try:
+                # Annulla/rimborsa il PaymentIntent
+                refund = stripe.Refund.create(
+                    payment_intent=payment_intent_id,
+                    reason="requested_by_customer"
+                )
+                refund_result = {
+                    "refund_id": refund.id,
+                    "amount": refund.amount / 100,
+                    "status": refund.status
+                }
+            except stripe.error.StripeError as e:
+                # Se il pagamento era in hold (capture_method=manual), annulla invece di rimborsare
+                try:
+                    intent = stripe.PaymentIntent.cancel(payment_intent_id)
+                    refund_result = {"cancelled": True, "status": intent.status}
+                except stripe.error.StripeError as e2:
+                    raise HTTPException(status_code=400, detail=f"Errore rimborso: {str(e2)}")
+    
+    # Aggiorna stato ordine
+    new_status = "rimborsato_acquirente" if needs_refund else "annullato_acquirente"
+    update_data = {
+        "status": new_status,
+        "cancelled_at": now.isoformat(),
+        "cancelled_by": "buyer",
+        "cancel_reason": reason or "Annullato dall'acquirente",
+        "refund_info": refund_result,
+        "status_history": order.get("status_history", []) + [{
+            "status": new_status,
+            "timestamp": now.isoformat(),
+            "note": f"Annullato dall'acquirente: {reason or 'Nessun motivo specificato'}"
+        }]
+    }
+    
+    await db.orders.update_one({"id": order_id}, {"$set": update_data})
+    
+    # Rimetti il listing come disponibile
+    await db.listings.update_one(
+        {"id": order.get("listing_id")},
+        {"$set": {"status": "available", "stato": "disponibile"}, "$unset": {"reserved_by": "", "order_id": ""}}
+    )
+    
+    # Elimina le notifiche relative a questo ordine
+    await db.notifications.delete_many({
+        "order_id": order_id,
+        "type": {"$in": ["seller_confirmation_request", "ready_for_payment", "order_pending"]}
+    })
+    
+    # Genera codice anonimo per l'acquirente
+    buyer_code = f"Utente_{order.get('buyer_id', '')[:5].upper()}"
+    
+    # Messaggio diverso se pagato (rimborso) o non pagato
+    if needs_refund:
+        notif_message = (
+            f"⚠️ L'acquirente {buyer_code} ha annullato l'ordine per:\n"
+            f"📚 {order.get('book_titolo')}\n\n"
+            f"❌ NON CONSEGNARE il libro alla cartolibreria.\n"
+            f"💰 Il pagamento è stato rimborsato all'acquirente.\n\n"
+            f"Motivo: {reason or 'Non specificato'}\n\n"
+            f"Il libro è tornato disponibile nel marketplace."
+        )
+        notif_title = "⚠️ ORDINE ANNULLATO - Non consegnare!"
+    else:
+        notif_message = (
+            f"L'acquirente {buyer_code} ha annullato l'ordine per:\n"
+            f"📚 {order.get('book_titolo')}\n\n"
+            f"Motivo: {reason or 'Non specificato'}\n\n"
+            f"Il libro è tornato disponibile nel marketplace."
+        )
+        notif_title = "Ordine annullato"
+    
+    # Notifica al venditore
+    notification = {
+        "id": str(uuid.uuid4()),
+        "user_id": order.get("seller_id"),
+        "type": "order_cancelled_by_buyer",
+        "title": notif_title,
+        "message": notif_message,
+        "order_id": order_id,
+        "read": False,
+        "created_at": now.isoformat()
+    }
+    await db.notifications.insert_one(notification)
+    
+    return_message = "Ordine annullato con successo."
+    if needs_refund:
+        return_message += " Il pagamento è stato rimborsato."
+    return_message += " Il libro è tornato disponibile nel marketplace."
+    
+    return {
+        "success": True,
+        "status": new_status,
+        "refunded": needs_refund,
+        "message": return_message
+    }
+
 # ============== STRIPE PAYMENT ENDPOINTS ==============
 
 @api_router.post("/orders/{order_id}/create-payment-intent")
@@ -7719,50 +8905,392 @@ async def confirm_payment(order_id: str, user_id: str = Query(...)):
 
 class StripePaymentRequest(BaseModel):
     payment_intent_id: str
-    card_number: str
-    exp_month: int
-    exp_year: int
-    cvc: str
+    # RIMOSSI i campi card_number, exp_month, exp_year, cvc per compliance PCI
+    # Il pagamento viene completato tramite Stripe Checkout o Payment Sheet
 
-@api_router.post("/orders/{order_id}/confirm-stripe-payment")
-async def confirm_stripe_payment(order_id: str, payment_data: StripePaymentRequest, user_id: str = Query(...)):
-    """Conferma il pagamento Stripe con i dati della carta"""
+# Modello per checkout session
+class CheckoutSessionRequest(BaseModel):
+    platform: str = "web"  # 'web' o 'mobile'
+
+class BatchCheckoutRequest(BaseModel):
+    platform: str = "web"
+    order_ids: list[str]
+
+@api_router.post("/orders/create-batch-checkout")
+async def create_batch_checkout_session(
+    request: BatchCheckoutRequest,
+    user_id: str = Query(...)
+):
+    """
+    Crea una Stripe Checkout Session per più ordini (carrello).
+    Tutti gli ordini vengono pagati in un'unica transazione.
+    """
+    
+    if not request.order_ids:
+        raise HTTPException(status_code=400, detail="Nessun ordine specificato")
+    
+    # Carica tutti gli ordini
+    orders = await db.orders.find({
+        "id": {"$in": request.order_ids},
+        "buyer_id": user_id,
+        "status": {"$in": ["pending_payment", "in_attesa_pagamento"]}
+    }).to_list(50)
+    
+    if len(orders) != len(request.order_ids):
+        found_ids = [o.get("id") for o in orders]
+        missing = [i for i in request.order_ids if i not in found_ids]
+        raise HTTPException(status_code=400, detail=f"Alcuni ordini non trovati o non pagabili: {missing}")
+    
+    # Calcola totale e crea line_items per Stripe
+    line_items = []
+    total_cents = 0
+    order_metadata = []
+    
+    for order in orders:
+        include_foderazione = order.get("include_foderazione", False)
+        prezzo_libro = order.get("prezzo_libro", 0)
+        commissioni = calcola_commissioni(prezzo_libro, include_foderazione)
+        amount_cents = int(commissioni["totale_acquirente"] * 100)
+        total_cents += amount_cents
+        
+        book_title = order.get("book_titolo", "Libro")[:50]
+        order_code = order.get("order_code", order.get("id")[:8])
+        
+        line_items.append({
+            "price_data": {
+                "currency": "eur",
+                "product_data": {
+                    "name": f"📚 {book_title}",
+                    "description": f"Ordine #{order_code}",
+                },
+                "unit_amount": amount_cents,
+            },
+            "quantity": 1,
+        })
+        order_metadata.append(order.get("id"))
+    
+    try:
+        base_url = os.getenv("FRONTEND_URL", "https://language-check-10.preview.emergentagent.com")
+        
+        # Crea una sessione Stripe con tutti gli ordini
+        session = stripe.checkout.Session.create(
+            payment_method_types=["card"],
+            line_items=line_items,
+            mode="payment",
+            success_url=f"{base_url}/stripe-batch-success?session_id={{CHECKOUT_SESSION_ID}}&order_ids={','.join(request.order_ids)}",
+            cancel_url=f"{base_url}/sell?canceled=true",
+            metadata={
+                "order_ids": ",".join(request.order_ids),
+                "user_id": user_id,
+                "batch_payment": "true",
+            },
+            payment_intent_data={
+                "capture_method": "manual",  # Escrow: fondi in hold
+                "metadata": {
+                    "order_ids": ",".join(request.order_ids),
+                    "user_id": user_id,
+                    "batch_payment": "true",
+                }
+            },
+        )
+        
+        # Salva il session ID su tutti gli ordini
+        for order in orders:
+            await db.orders.update_one(
+                {"id": order.get("id")},
+                {"$set": {
+                    "stripe_checkout_session_id": session.id,
+                    "stripe_checkout_created_at": datetime.utcnow().isoformat(),
+                }}
+            )
+        
+        return {
+            "success": True,
+            "checkout_url": session.url,
+            "session_id": session.id,
+            "total_amount": total_cents / 100,
+            "order_count": len(orders),
+        }
+        
+    except stripe.error.StripeError as e:
+        raise HTTPException(status_code=400, detail=f"Errore Stripe: {str(e)}")
+
+@api_router.get("/orders/verify-batch-checkout")
+async def verify_batch_checkout(
+    session_id: str = Query(...),
+    order_ids: str = Query(...),
+    user_id: str = Query(None)  # Ora opzionale
+):
+    """
+    Verifica il pagamento batch e aggiorna tutti gli ordini.
+    """
+    try:
+        session = stripe.checkout.Session.retrieve(session_id, expand=["payment_intent"])
+        
+        # Se user_id non è passato, recuperalo dai metadata della sessione
+        if not user_id:
+            user_id = session.metadata.get("user_id")
+            if not user_id:
+                raise HTTPException(status_code=400, detail="Impossibile identificare l'utente")
+        
+        # Con capture_method: manual, payment_status può essere "unpaid" 
+        # ma il payment_intent.status sarà "requires_capture" (fondi in hold)
+        payment_intent = session.payment_intent
+        valid_statuses = ["paid", "no_payment_required"]
+        valid_pi_statuses = ["requires_capture", "succeeded"]
+        
+        is_valid = (
+            session.payment_status in valid_statuses or 
+            (payment_intent and payment_intent.status in valid_pi_statuses)
+        )
+        
+        if not is_valid:
+            return {"success": False, "message": f"Pagamento non completato. Stato: {session.payment_status}"}
+        
+        
+        ids = [x.strip() for x in order_ids.split(",") if x.strip()]
+        orders = await db.orders.find({
+            "id": {"$in": ids},
+            "buyer_id": user_id,
+        }).to_list(50)
+        
+        now = datetime.utcnow()
+        paid_orders = []
+        
+        for order in orders:
+            if order.get("status") not in ["pending_payment", "in_attesa_pagamento"]:
+                continue
+                
+            # Aggiorna ordine
+            delivery_deadline = now + timedelta(days=2)
+            await db.orders.update_one(
+                {"id": order.get("id")},
+                {"$set": {
+                    "status": "pagato_attesa_consegna",
+                    "paid_at": now.isoformat(),
+                    "payment_intent_id": session.payment_intent,
+                    "delivery_deadline": delivery_deadline.isoformat(),
+                }}
+            )
+            
+            # Notifica venditore CON CODICE ORDINE
+            order_code = order.get("order_code", "")
+            await db.notifications.insert_one({
+                "id": str(uuid.uuid4()),
+                "user_id": order.get("seller_id"),
+                "type": "order_paid",
+                "title": "💰 Pagamento ricevuto!",
+                "message": f"L'acquirente ha pagato per il libro:\n📚 \"{order.get('book_titolo')}\"\n\n📦 Codice ordine: #{order_code}\n\n⏰ Hai 2 giorni lavorativi per consegnare il libro alla cartolibreria.\n\n👉 Mostra questo codice alla cartolibreria per la consegna.",
+                "data": {"order_id": order.get("id"), "order_code": order_code},
+                "read": False,
+                "created_at": now.isoformat(),
+            })
+            
+            # Notifica acquirente - CONFERMA PAGAMENTO
+            await db.notifications.insert_one({
+                "id": str(uuid.uuid4()),
+                "user_id": order.get("buyer_id"),
+                "type": "payment_confirmed",
+                "title": "✅ Pagamento completato!",
+                "message": f"Hai acquistato:\n📚 \"{order.get('book_titolo')}\"\n\n📦 Codice ordine: #{order_code}\n\n⏳ Il venditore ha 2 giorni lavorativi per consegnare il libro alla cartolibreria. Ti notificheremo quando sarà pronto per il ritiro.",
+                "data": {"order_id": order.get("id"), "order_code": order_code},
+                "read": False,
+                "created_at": now.isoformat(),
+            })
+            
+            paid_orders.append(order.get("order_code"))
+        
+        return {
+            "success": True,
+            "message": f"{len(paid_orders)} ordini confermati",
+            "order_codes": paid_orders,
+        }
+        
+    except stripe.error.StripeError as e:
+        raise HTTPException(status_code=400, detail=f"Errore verifica: {str(e)}")
+
+@api_router.post("/orders/{order_id}/create-checkout-session")
+async def create_checkout_session(
+    order_id: str, 
+    request: CheckoutSessionRequest,
+    user_id: str = Query(...)
+):
+    """
+    Crea una Stripe Checkout Session (PCI-Compliant).
+    - Web: Restituisce URL per redirect alla pagina Stripe
+    - Mobile: Restituisce dati per Payment Sheet
+    """
+    
+    order = await db.orders.find_one({"id": order_id, "buyer_id": user_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="Ordine non trovato")
+    
+    current_status = order.get("status")
+    if current_status not in ["pending_payment", "in_attesa_pagamento"]:
+        raise HTTPException(status_code=400, detail=f"Ordine non in attesa di pagamento. Stato: {current_status}")
+    
+    # Calcola commissioni
+    include_foderazione = order.get("include_foderazione", False)
+    prezzo_libro = order.get("prezzo_libro", 0)
+    commissioni = calcola_commissioni(prezzo_libro, include_foderazione)
+    totale_centesimi = int(commissioni["totale_acquirente"] * 100)  # Stripe vuole centesimi
+    
+    book_title = order.get("book_titolo", "Libro")[:100]
+    
+    try:
+        if request.platform == "web":
+            # WEB: Crea Checkout Session con redirect
+            # Usa URL assoluto del frontend per success/cancel
+            base_url = os.getenv("FRONTEND_URL", "https://language-check-10.preview.emergentagent.com")
+            
+            session = stripe.checkout.Session.create(
+                payment_method_types=["card"],
+                line_items=[{
+                    "price_data": {
+                        "currency": "eur",
+                        "product_data": {
+                            "name": f"RiBook - {book_title}",
+                            "description": f"Ordine #{order.get('order_code', order_id[:8])}",
+                        },
+                        "unit_amount": totale_centesimi,
+                    },
+                    "quantity": 1,
+                }],
+                mode="payment",
+                success_url=f"{base_url}/stripe-success?order_id={order_id}&session_id={{CHECKOUT_SESSION_ID}}",
+                cancel_url=f"{base_url}/stripe-payment?orderId={order_id}&canceled=true",
+                metadata={
+                    "order_id": order_id,
+                    "user_id": user_id,
+                },
+                payment_intent_data={
+                    "capture_method": "manual",  # Escrow: fondi in hold
+                    "metadata": {
+                        "order_id": order_id,
+                        "user_id": user_id,
+                    }
+                },
+                locale="it",  # Interfaccia in italiano
+            )
+            
+            # Salva session_id nell'ordine
+            await db.orders.update_one(
+                {"id": order_id},
+                {"$set": {
+                    "stripe_checkout_session_id": session.id,
+                    "payment_status": "checkout_pending"
+                }}
+            )
+            
+            return {
+                "checkout_url": session.url,
+                "session_id": session.id,
+                "platform": "web"
+            }
+        
+        else:
+            # MOBILE: Crea setup per Payment Sheet
+            customer = stripe.Customer.create()
+            ephemeral_key = stripe.EphemeralKey.create(
+                customer=customer.id,
+                stripe_version='2023-10-16'
+            )
+            
+            payment_intent = stripe.PaymentIntent.create(
+                amount=totale_centesimi,
+                currency="eur",
+                customer=customer.id,
+                capture_method="manual",  # Escrow
+                metadata={
+                    "order_id": order_id,
+                    "user_id": user_id,
+                },
+                description=f"RiBook - {book_title}"
+            )
+            
+            # Salva payment_intent_id nell'ordine
+            await db.orders.update_one(
+                {"id": order_id},
+                {"$set": {
+                    "payment_intent_id": payment_intent.id,
+                    "payment_status": "requires_payment_method"
+                }}
+            )
+            
+            return {
+                "paymentIntent": payment_intent.client_secret,
+                "ephemeralKey": ephemeral_key.secret,
+                "customer": customer.id,
+                "publishableKey": STRIPE_PUBLISHABLE_KEY,
+                "platform": "mobile"
+            }
+            
+    except stripe.error.StripeError as e:
+        raise HTTPException(status_code=400, detail=f"Errore Stripe: {str(e)}")
+
+@api_router.get("/orders/{order_id}/verify-checkout")
+async def verify_checkout_session(
+    order_id: str,
+    session_id: str = Query(...),
+    user_id: str = Query(...)
+):
+    """
+    Verifica che il Checkout Session sia stato completato con successo.
+    Chiamato dalla pagina di successo dopo il redirect da Stripe.
+    """
     
     order = await db.orders.find_one({"id": order_id, "buyer_id": user_id})
     if not order:
         raise HTTPException(status_code=404, detail="Ordine non trovato")
     
     try:
-        # Crea un PaymentMethod con i dati della carta
-        payment_method = stripe.PaymentMethod.create(
-            type="card",
-            card={
-                "number": payment_data.card_number,
-                "exp_month": payment_data.exp_month,
-                "exp_year": payment_data.exp_year,
-                "cvc": payment_data.cvc,
-            },
+        # Recupera la session da Stripe
+        session = stripe.checkout.Session.retrieve(session_id)
+        
+        if session.payment_status != "paid":
+            return {
+                "success": False,
+                "message": f"Pagamento non completato. Stato: {session.payment_status}"
+            }
+        
+        # Recupera il PaymentIntent dalla session
+        payment_intent_id = session.payment_intent
+        
+        # Aggiorna l'ordine e processa
+        await db.orders.update_one(
+            {"id": order_id},
+            {"$set": {
+                "payment_intent_id": payment_intent_id,
+                "stripe_checkout_session_id": session_id,
+            }}
         )
         
-        # Conferma il PaymentIntent con il PaymentMethod
-        intent = stripe.PaymentIntent.confirm(
-            payment_data.payment_intent_id,
-            payment_method=payment_method.id,
-        )
+        # Processa l'ordine come pagato
+        result = await _process_paid_order(order_id, user_id, order, payment_intent_id)
         
-        # Verifica lo stato
-        if intent.status in ["requires_capture", "succeeded"]:
-            # Pagamento riuscito! Procedi con l'ordine
-            result = await _process_paid_order(order_id, user_id, order, payment_data.payment_intent_id)
-            return {"success": True, "message": "Pagamento completato", **result}
-        else:
-            return {"success": False, "message": f"Pagamento non completato. Stato: {intent.status}"}
-            
-    except stripe.error.CardError as e:
-        # Errore della carta (es. fondi insufficienti, carta scaduta)
-        return {"success": False, "message": f"Errore carta: {e.user_message}"}
+        return {
+            "success": True,
+            "message": "Pagamento completato con successo!",
+            **result
+        }
+        
     except stripe.error.StripeError as e:
-        raise HTTPException(status_code=400, detail=f"Errore Stripe: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Errore verifica Stripe: {str(e)}")
+
+# DEPRECATED - Endpoint non PCI-compliant, mantenuto solo per backwards compatibility
+# In produzione questo endpoint dovrebbe essere RIMOSSO
+@api_router.post("/orders/{order_id}/confirm-stripe-payment")
+async def confirm_stripe_payment_deprecated(order_id: str, payment_data: StripePaymentRequest, user_id: str = Query(...)):
+    """
+    DEPRECATO - NON USARE IN PRODUZIONE
+    Questo endpoint viola la compliance PCI-DSS.
+    Usare /create-checkout-session invece.
+    """
+    raise HTTPException(
+        status_code=410,  # Gone
+        detail="Questo endpoint è stato deprecato per motivi di sicurezza PCI-DSS. "
+               "Usa /api/orders/{order_id}/create-checkout-session invece."
+    )
 
 @api_router.post("/orders/{order_id}/pay")
 async def pay_order(order_id: str, user_id: str = Query(...)):
@@ -7917,18 +9445,22 @@ async def _process_paid_order(order_id: str, user_id: str, order: dict, payment_
     # Notifica alla cartolibreria con condizioni, foto, NO QR, NO prezzo
     foderazione_text_bs = "\n\n📗 FODERAZIONE: ✅ RICHIESTA (€1.50)" if include_foderazione else ""
     
+    # Anonimizza nomi per privacy nelle notifiche alla cartolibreria
+    seller_anonymous = f"Utente_{order.get('seller_id', '')[:5].upper()}"
+    buyer_anonymous = f"Utente_{order.get('buyer_id', '')[:5].upper()}"
+    
     bookstore_notification = {
         "id": str(uuid.uuid4()),
         "bookstore_id": order.get("bookstore_id"),
         "user_id": f"bookstore_{order.get('bookstore_id')}",
         "type": "incoming_book_delivery",
         "title": "📦 LIBRO IN ARRIVO" + (" + 📗 FODERAZIONE" if include_foderazione else ""),
-        "message": f"🔑 CODICE: {order.get('order_code')}\n\n📚 LIBRO: {order.get('book_titolo')}\n\n👤 VENDITORE: {order.get('seller_name')}\n🛒 ACQUIRENTE: {order.get('buyer_name')}{foderazione_text_bs}\n\n📋 CONDIZIONI:\n{conditions_text}",
+        "message": f"🔑 CODICE: {order.get('order_code')}\n\n📚 LIBRO: {order.get('book_titolo')}\n\n👤 VENDITORE: {seller_anonymous}\n🛒 ACQUIRENTE: {buyer_anonymous}{foderazione_text_bs}\n\n📋 CONDIZIONI:\n{conditions_text}",
         "order_id": order_id,
         "order_code": order.get("order_code"),
         "book_titolo": order.get("book_titolo"),
-        "seller_name": order.get("seller_name"),
-        "buyer_name": order.get("buyer_name"),
+        "seller_name": seller_anonymous,
+        "buyer_name": buyer_anonymous,
         "books_conditions": books_conditions,
         "books_photos": [listing_photo] if listing_photo else [],
         "include_foderazione": include_foderazione,
@@ -8179,12 +9711,16 @@ async def pay_orders_batch(user_id: str = Query(...), order_ids: str = Query(...
         for bc in books_conditions:
             bookstore_conditions_text += f"\n📚 {bc['title']}\n{bc['conditions']}\n"
         
+        # Anonimizza nomi per privacy
+        seller_anon = f"Utente_{group_orders[0].get('seller_id', '')[:5].upper()}"
+        buyer_anon = f"Utente_{group_orders[0].get('buyer_id', '')[:5].upper()}"
+        
         bookstore_notification = {
             "id": str(uuid.uuid4()),
             "bookstore_id": bookstore_id,
             "type": "incoming_order",
             "title": f"{'ORDINE MULTIPLO' if len(group_orders) > 1 else 'NUOVO ORDINE'} IN ARRIVO",
-            "message": f"CODICE: {batch_code}\n\nVENDITORE: {group_orders[0].get('seller_name')}\nACQUIRENTE: {group_orders[0].get('buyer_name')}\n\n📋 DETTAGLI LIBRI:{bookstore_conditions_text}",
+            "message": f"CODICE: {batch_code}\n\nVENDITORE: {seller_anon}\nACQUIRENTE: {buyer_anon}\n\n📋 DETTAGLI LIBRI:{bookstore_conditions_text}",
             "order_id": batch_id,
             "order_code": batch_code,
             "order_count": len(group_orders),
@@ -8250,18 +9786,22 @@ async def mark_delivered_to_bookstore(order_id: str, user_id: str = Query(...)):
     include_foderazione = order.get("include_foderazione", False)
     foderazione_text = "\n\n📦 FODERAZIONE RICHIESTA: ✅ SÌ (€1.50)" if include_foderazione else "\n\n📦 FODERAZIONE: ❌ Non richiesta"
     
+    # Anonimizza nomi per privacy
+    seller_anon = f"Utente_{order.get('seller_id', '')[:5].upper()}"
+    buyer_anon = f"Utente_{order.get('buyer_id', '')[:5].upper()}"
+    
     bookstore_delivery_notification = {
         "id": str(uuid.uuid4()),
         "bookstore_id": order.get("bookstore_id"),
         "type": "seller_delivery",
         "title": "📦 CONSEGNA VENDITORE" + (" + 📗 FODERAZIONE" if include_foderazione else ""),
-        "message": f"Il venditore sta per consegnare un libro.\n\n📚 LIBRO: {order.get('book_titolo')}\n\n👤 VENDITORE: {order.get('seller_name')}\n🛒 ACQUIRENTE: {order.get('buyer_name')}{foderazione_text}\n\n🔑 CODICE: {order.get('order_code')}\n\nVerifica il codice e le condizioni del libro prima di accettare la consegna.",
+        "message": f"Il venditore sta per consegnare un libro.\n\n📚 LIBRO: {order.get('book_titolo')}\n\n👤 VENDITORE: {seller_anon}\n🛒 ACQUIRENTE: {buyer_anon}{foderazione_text}\n\n🔑 CODICE: {order.get('order_code')}\n\nVerifica il codice e le condizioni del libro prima di accettare la consegna.",
         "order_id": order_id,
         "order_code": order.get("order_code"),
         "book_title": order.get("book_titolo"),
         "book_isbn": order.get("book_isbn"),
-        "seller_name": order.get("seller_name"),
-        "buyer_name": order.get("buyer_name"),
+        "seller_name": seller_anon,
+        "buyer_name": buyer_anon,
         "include_foderazione": include_foderazione,
         "book_details": {
             "titolo": order.get("book_titolo"),
@@ -8463,8 +10003,13 @@ async def confirm_pickup(order_id: str, user_id: str = Query(...)):
     }
 
 @api_router.get("/user-orders/{user_id}")
-async def get_user_orders(user_id: str):
-    """Ottieni tutti gli ordini di un utente (come acquirente o venditore)"""
+async def get_user_orders(
+    user_id: str,
+    authorization: Optional[str] = Header(None, alias="Authorization")
+):
+    """Ottieni tutti gli ordini di un utente (come acquirente o venditore) - RICHIEDE AUTENTICAZIONE"""
+    # Verifica autenticazione
+    await verify_user_auth(user_id, authorization)
     
     orders = await db.orders.find({
         "$or": [{"buyer_id": user_id}, {"seller_id": user_id}]
@@ -8914,12 +10459,16 @@ async def request_return(order_id: str, user_id: str = Query(...), reason: str =
             condition_details_text = "\n".join(details_lines)
     
     # Notifica alla cartolibreria - SALVA IN bookstore_notifications
+    # Anonimizza nomi per privacy
+    buyer_anon = f"Utente_{order.get('buyer_id', '')[:5].upper()}"
+    seller_anon = f"Utente_{order.get('seller_id', '')[:5].upper()}"
+    
     bookstore_notification = {
         "id": str(uuid.uuid4()),
         "bookstore_id": order.get("bookstore_id"),
         "type": "return_request",
         "title": "🔄 Richiesta reso da verificare",
-        "message": f"Nuovo reso da verificare:\n\n📚 LIBRO:\n{order.get('book_titolo')}\n\n👤 ACQUIRENTE: {order.get('buyer_name')}\n👤 VENDITORE: {order.get('seller_name')}\n\n⚠️ MOTIVAZIONE RESO:\n\"{reason_text}\"\n\n📋 CONDIZIONI GENERALI:\n{listing_details.get('condizioni', 'Non specificate')}\n\n🔍 DETTAGLI CONDIZIONI DICHIARATE:\n{condition_details_text}\n\n📝 NOTE VENDITORE:\n{listing_details.get('descrizione', 'Nessuna')}\n\n💰 Prezzo vendita: €{listing_details.get('prezzo_vendita', 0):.2f}\n\nVerifica il libro e approva o rifiuta il reso.",
+        "message": f"Nuovo reso da verificare:\n\n📚 LIBRO:\n{order.get('book_titolo')}\n\n👤 ACQUIRENTE: {buyer_anon}\n👤 VENDITORE: {seller_anon}\n\n⚠️ MOTIVAZIONE RESO:\n\"{reason_text}\"\n\n📋 CONDIZIONI GENERALI:\n{listing_details.get('condizioni', 'Non specificate')}\n\n🔍 DETTAGLI CONDIZIONI DICHIARATE:\n{condition_details_text}\n\n📝 NOTE VENDITORE:\n{listing_details.get('descrizione', 'Nessuna')}\n\n💰 Prezzo vendita: €{listing_details.get('prezzo_vendita', 0):.2f}\n\nVerifica il libro e approva o rifiuta il reso.",
         "order_id": order_id,
         "order_code": order.get("order_code"),
         "return_reason": reason_text,
@@ -8935,8 +10484,8 @@ async def request_return(order_id: str, user_id: str = Query(...), reason: str =
             "foto": listing_details.get("foto_base64"),
             "prezzo": listing_details.get("prezzo_vendita"),
         },
-        "buyer_name": order.get("buyer_name"),
-        "seller_name": order.get("seller_name"),
+        "buyer_name": buyer_anon,
+        "seller_name": seller_anon,
         "requires_action": True,
         "action_type": "verify_return",
         "read": False,
@@ -8963,6 +10512,20 @@ async def request_return(order_id: str, user_id: str = Query(...), reason: str =
         "created_at": now.isoformat()
     }
     await db.notifications.insert_one(notification_seller)
+    
+    # Notifica all'acquirente - CONFERMA richiesta reso inviata
+    notification_buyer = {
+        "id": str(uuid.uuid4()),
+        "user_id": order.get("buyer_id"),
+        "type": "return_request_sent",
+        "title": "Richiesta reso inviata",
+        "message": f"La tua richiesta di reso per:\n📚 {order.get('book_titolo')}\n\nè stata inviata alla cartolibreria.\n\n⏳ Attendi la verifica. Ti notificheremo l'esito.",
+        "order_id": order_id,
+        "return_reason": reason_text,
+        "read": False,
+        "created_at": now.isoformat()
+    }
+    await db.notifications.insert_one(notification_buyer)
     
     return {
         "success": True,
@@ -10208,11 +11771,11 @@ async def bookstore_confirm_seller_delivery(
         return {
             "success": True,
             "status": "pronto_per_ritiro",
-            "message": f"✅ Libro IDONEO! L'acquirente {order.get('buyer_name')} è stato notificato.",
+            "message": f"✅ Libro IDONEO! L'acquirente è stato notificato.",
             "order_id": order["id"],
             "order_code": order.get("order_code"),
             "book_titolo": order.get("book_titolo"),
-            "buyer_name": order.get("buyer_name"),
+            "buyer_name": f"Utente_{order.get('buyer_id', '')[:5].upper()}",
             "next_step": "In attesa del ritiro dell'acquirente"
         }
     else:
@@ -10358,13 +11921,14 @@ async def bookstore_confirm_pickup_by_code(bookstore_id: str, order_code: str = 
     }
     await db.notifications.insert_one(notification_buyer)
     
-    # Notifica alla cartolibreria
+    # Notifica alla cartolibreria - usa nome anonimo per privacy
+    buyer_anonymous = f"Utente_{order.get('buyer_id', '')[:5].upper()}"
     bookstore_notification = {
         "id": str(uuid.uuid4()),
         "bookstore_id": bookstore_id,
         "type": "order_pickup_completed",
         "title": "Ritiro completato",
-        "message": f"Ordine {order.get('order_code')} - Ritiro completato!\n\nLibro: {order.get('book_titolo')}\nAcquirente: {order.get('buyer_name')}\n\nIl pagamento sarà sbloccato tra 3/5 giorni lavorativi se non verranno trovate evidenti differenze nelle descrizioni dall'acquirente.",
+        "message": f"Ordine {order.get('order_code')} - Ritiro completato!\n\nLibro: {order.get('book_titolo')}\nAcquirente: {buyer_anonymous}\n\nIl pagamento sarà sbloccato tra 3/5 giorni lavorativi se non verranno trovate evidenti differenze nelle descrizioni dall'acquirente.",
         "order_id": order["id"],
         "order_code": order.get("order_code"),
         "commissione_cartolibreria": order.get("commissione_cartolibreria", 0),
@@ -10372,6 +11936,153 @@ async def bookstore_confirm_pickup_by_code(bookstore_id: str, order_code: str = 
         "created_at": now.isoformat()
     }
     await db.bookstore_notifications.insert_one(bookstore_notification)
+    
+    # ============== PROCESSO PAYOUT AUTOMATICO ==============
+    # Cattura pagamento Stripe e crea record payout
+    try:
+        # Ottieni configurazione piattaforma
+        config = await db.platform_config.find_one({"id": "platform_config"})
+        if not config:
+            config = {
+                "seller_percentage": 80.0,
+                "platform_percentage": 20.0,
+                "stripe_fee_percentage": 1.5,
+                "stripe_fee_fixed": 0.25,
+                "foderazione_cost": 1.50
+            }
+        
+        # Cattura il pagamento Stripe (se non già catturato)
+        payment_intent_id = order.get("payment_intent_id") or order.get("stripe_payment_intent_id")
+        if payment_intent_id:
+            try:
+                pi = stripe.PaymentIntent.retrieve(payment_intent_id)
+                if pi.status == "requires_capture":
+                    stripe.PaymentIntent.capture(payment_intent_id)
+                    logger.info(f"Payment captured for order {order['id']}")
+            except stripe.error.StripeError as e:
+                logger.error(f"Stripe capture error: {e}")
+        
+        # Calcola importi
+        prezzo_libro = order.get("prezzo_libro", 0)
+        totale_acquirente = order.get("totale_acquirente", 0)
+        include_foderazione = order.get("include_foderazione", False)
+        
+        # Commissione Stripe sul totale
+        stripe_fee = (totale_acquirente * config.get("stripe_fee_percentage", 1.5) / 100) + config.get("stripe_fee_fixed", 0.25)
+        
+        # Venditore: 80%
+        seller_gross = prezzo_libro * (config.get("seller_percentage", 80.0) / 100)
+        seller_net = round(seller_gross, 2)
+        
+        # Piattaforma: 20% - Stripe fees
+        platform_gross = prezzo_libro * (config.get("platform_percentage", 20.0) / 100)
+        platform_net = round(platform_gross - stripe_fee, 2)
+        
+        # Ottieni IBAN venditore
+        seller = await db.users.find_one({"id": order.get("seller_id")})
+        seller_iban = seller.get("iban") if seller else None
+        
+        # Ottieni IBAN piattaforma
+        platform_iban = config.get("platform_iban")
+        
+        # Calcola date di pagabilità
+        # Venditore e Piattaforma: 3 giorni dopo il ritiro
+        # Cartolibreria: cumulo ogni 15 giorni (prossimo 1° o 15 del mese)
+        pickup_date = now
+        seller_payable_from = (now + timedelta(days=3)).isoformat()
+        platform_payable_from = (now + timedelta(days=3)).isoformat()
+        
+        # Per cartolibreria: calcola prossima scadenza 15 giorni
+        day = now.day
+        if day < 15:
+            # Prossima scadenza: 15 del mese corrente
+            cartolibreria_payable = now.replace(day=15)
+        else:
+            # Prossima scadenza: 1 del mese successivo
+            if now.month == 12:
+                cartolibreria_payable = now.replace(year=now.year+1, month=1, day=1)
+            else:
+                cartolibreria_payable = now.replace(month=now.month+1, day=1)
+        cartolibreria_payable_from = cartolibreria_payable.isoformat()
+        
+        # Crea payout venditore (80% - pagabile dopo 3 giorni)
+        seller_payout = {
+            "id": str(uuid.uuid4()),
+            "order_id": order["id"],
+            "order_code": order.get("order_code", ""),
+            "recipient_type": "seller",
+            "recipient_id": order.get("seller_id"),
+            "recipient_name": order.get("seller_name"),
+            "recipient_iban": seller_iban or "IBAN NON DISPONIBILE",
+            "gross_amount": round(seller_gross, 2),
+            "stripe_fee": 0,
+            "net_amount": seller_net,
+            "description": f"Vendita: {order.get('book_titolo', '')}",
+            "pickup_date": pickup_date.isoformat(),
+            "payable_from": seller_payable_from,
+            "status": "pending",
+            "created_at": now.isoformat(),
+            "book_title": order.get("book_titolo"),
+            "buyer_name": order.get("buyer_name")
+        }
+        await db.payouts.insert_one(seller_payout)
+        
+        # Crea payout piattaforma (20% - commissioni Stripe, pagabile dopo 3 giorni)
+        if platform_net > 0:
+            platform_payout = {
+                "id": str(uuid.uuid4()),
+                "order_id": order["id"],
+                "order_code": order.get("order_code", ""),
+                "recipient_type": "platform",
+                "recipient_id": "platform",
+                "recipient_name": config.get("platform_name", "RiBook"),
+                "recipient_iban": platform_iban or "DA CONFIGURARE",
+                "gross_amount": round(platform_gross, 2),
+                "stripe_fee": round(stripe_fee, 2),
+                "net_amount": platform_net,
+                "description": f"Commissione: {order.get('book_titolo', '')}",
+                "pickup_date": pickup_date.isoformat(),
+                "payable_from": platform_payable_from,
+                "status": "pending",
+                "created_at": now.isoformat()
+            }
+            await db.payouts.insert_one(platform_payout)
+        
+        # Payout foderazione cartolibreria (cumulo ogni 15 giorni)
+        if include_foderazione:
+            fod_gross = config.get("foderazione_cost", 1.50)
+            fod_stripe = fod_gross * config.get("stripe_fee_percentage", 1.5) / 100
+            fod_net = round(fod_gross - fod_stripe, 2)
+            
+            fod_payout = {
+                "id": str(uuid.uuid4()),
+                "order_id": order["id"],
+                "order_code": order.get("order_code", ""),
+                "recipient_type": "cartolibreria",
+                "recipient_id": bookstore_id,
+                "recipient_name": bookstore.get("nome", "Cartolibreria"),
+                "recipient_iban": bookstore.get("iban", "IBAN NON DISPONIBILE"),
+                "gross_amount": fod_gross,
+                "stripe_fee": round(fod_stripe, 2),
+                "net_amount": fod_net,
+                "description": f"Foderazione: {order.get('book_titolo', '')}",
+                "pickup_date": pickup_date.isoformat(),
+                "payable_from": cartolibreria_payable_from,
+                "status": "pending",
+                "created_at": now.isoformat()
+            }
+            await db.payouts.insert_one(fod_payout)
+        
+        # Aggiorna ordine
+        await db.orders.update_one(
+            {"id": order["id"]},
+            {"$set": {"payout_processed": True, "payment_captured": True}}
+        )
+        
+        logger.info(f"Payouts created for order {order['id']}: seller={seller_net}, platform={platform_net}")
+        
+    except Exception as e:
+        logger.error(f"Error creating payouts for order {order['id']}: {e}")
     
     return {
         "success": True,
@@ -11255,8 +12966,14 @@ async def create_or_get_conversation(data: ConversationCreate):
 
 
 @api_router.get("/conversations/{user_id}")
-async def get_user_conversations(user_id: str):
-    """Get all conversations for a user (as buyer or seller)"""
+async def get_user_conversations(
+    user_id: str,
+    authorization: Optional[str] = Header(None, alias="Authorization")
+):
+    """Get all conversations for a user (as buyer or seller) - RICHIEDE AUTENTICAZIONE"""
+    # Verifica autenticazione
+    await verify_user_auth(user_id, authorization)
+    
     conversations = await db.conversations.find({
         "$or": [
             {"buyer_id": user_id},
@@ -12298,12 +14015,16 @@ async def admin_clear_all_data(admin_id: str = Query(...)):
 
 @api_router.post("/bookstore/{bookstore_id}/confirm-pickup/{order_id}")
 async def bookstore_confirm_pickup(bookstore_id: str, order_id: str):
-    """Conferma ritiro libro dall'acquirente"""
+    """Conferma ritiro libro dall'acquirente e genera ricevute"""
     from datetime import datetime
     
     order = await db.orders.find_one({"id": order_id, "bookstore_id": bookstore_id})
     if not order:
         raise HTTPException(status_code=404, detail="Ordine non trovato")
+    
+    # Ottieni nome cartolibreria
+    bookstore = await db.bookstores.find_one({"id": bookstore_id})
+    bookstore_name = bookstore.get("nome", "Cartolibreria") if bookstore else "Cartolibreria"
     
     await db.orders.update_one(
         {"id": order_id},
@@ -12313,19 +14034,94 @@ async def bookstore_confirm_pickup(bookstore_id: str, order_id: str):
         }}
     )
     
+    # ========== GENERAZIONE RICEVUTE ==========
+    try:
+        # Calcola importi
+        prezzo_libro = order.get("prezzo_libro", 0)
+        totale_acquirente = order.get("totale_acquirente", prezzo_libro)
+        quota_venditore = order.get("quota_venditore", prezzo_libro * 0.80)
+        commissione_piattaforma = order.get("commissione_piattaforma", prezzo_libro * 0.20)
+        
+        # Calcola commissioni Stripe (circa 1.5% + €0.25)
+        stripe_fee = round(totale_acquirente * 0.015 + 0.25, 2)
+        netto_piattaforma = round(commissione_piattaforma - stripe_fee, 2)
+        if netto_piattaforma < 0:
+            netto_piattaforma = 0
+        
+        order_data = {
+            "id": order.get("id"),
+            "order_code": order.get("order_code"),
+            "book_titolo": order.get("book_titolo"),
+            "book_isbn": order.get("book_isbn"),
+            "prezzo_libro": prezzo_libro,
+            "include_foderazione": order.get("include_foderazione", False),
+            "costo_foderazione": order.get("costo_foderazione", 1.50),
+            "commissione_piattaforma": commissione_piattaforma
+        }
+        
+        # 1. Ricevuta VENDITORE (80%)
+        await create_receipt(
+            receipt_type="vendita",
+            user_id=order.get("seller_id"),
+            order_data=order_data,
+            amount=quota_venditore,
+            bookstore_name=bookstore_name
+        )
+        
+        # 2. Ricevuta ACQUIRENTE (totale pagato)
+        await create_receipt(
+            receipt_type="acquisto",
+            user_id=order.get("buyer_id"),
+            order_data=order_data,
+            amount=totale_acquirente,
+            bookstore_name=bookstore_name
+        )
+        
+        # 3. Ricevuta PIATTAFORMA (20% - commissioni Stripe)
+        await create_receipt(
+            receipt_type="piattaforma",
+            user_id="PLATFORM",  # ID speciale per la piattaforma
+            order_data=order_data,
+            amount=netto_piattaforma,
+            commission=stripe_fee,
+            bookstore_name=bookstore_name
+        )
+        
+        logging.info(f"Ricevute generate per ordine {order_id}")
+    except Exception as e:
+        logging.error(f"Errore generazione ricevute per ordine {order_id}: {str(e)}")
+        # Non bloccare il flusso principale se le ricevute falliscono
+    
     # Notifica al venditore (pagamento in arrivo)
+    # Recupera il listing per ottenere il listing_code
+    listing = await db.listings.find_one({"id": order.get("listing_id")})
+    listing_code = listing.get("listing_code", "") if listing else ""
+    listing_code_text = f"\n\n🔖 Codice annuncio: {listing_code}" if listing_code else ""
+    
     await db.notifications.insert_one({
         "id": str(uuid.uuid4()),
         "user_id": order.get("seller_id"),
         "type": "order_completed",
         "title": "Vendita completata!",
-        "message": f"L'acquirente ha ritirato '{order.get('book_titolo')}'. Il pagamento sarà accreditato a breve.",
+        "message": f"L'acquirente ha ritirato '{order.get('book_titolo')}'.{listing_code_text}\n\nIl pagamento sarà accreditato a breve.\n\n📄 La ricevuta è disponibile nella sezione Documenti del tuo profilo.",
+        "data": {"order_id": order_id, "listing_code": listing_code},
+        "read": False,
+        "created_at": datetime.now()
+    })
+    
+    # Notifica all'acquirente
+    await db.notifications.insert_one({
+        "id": str(uuid.uuid4()),
+        "user_id": order.get("buyer_id"),
+        "type": "order_completed",
+        "title": "Libro ritirato!",
+        "message": f"Hai ritirato '{order.get('book_titolo')}'.\n\n📄 La ricevuta è disponibile nella sezione Documenti del tuo profilo.",
         "data": {"order_id": order_id},
         "read": False,
         "created_at": datetime.now()
     })
     
-    return {"success": True, "message": "Ritiro confermato"}
+    return {"success": True, "message": "Ritiro confermato e ricevute generate"}
 
 @api_router.post("/bookstore/{bookstore_id}/return/{order_id}")
 async def bookstore_register_return(bookstore_id: str, order_id: str, data: dict):
@@ -12348,6 +14144,472 @@ async def bookstore_register_return(bookstore_id: str, order_id: str, data: dict
     )
     
     return {"success": True, "message": "Reso registrato"}
+
+
+# ============== PAYOUT & DEADLINE MANAGEMENT ==============
+
+@api_router.get("/admin/platform-config")
+async def get_platform_config():
+    """Ottieni configurazione piattaforma"""
+    config = await db.platform_config.find_one({"id": "platform_config"})
+    if not config:
+        # Crea configurazione default
+        default_config = {
+            "id": "platform_config",
+            "platform_iban": None,
+            "platform_name": "RiBook",
+            "seller_percentage": 80.0,
+            "platform_percentage": 20.0,
+            "foderazione_cost": 1.50,
+            "stripe_fee_percentage": 1.5,
+            "stripe_fee_fixed": 0.25,
+            "updated_at": datetime.utcnow().isoformat()
+        }
+        await db.platform_config.insert_one(default_config)
+        return default_config
+    # Rimuovi _id per evitare errore serializzazione
+    config.pop("_id", None)
+    return config
+
+@api_router.put("/admin/platform-config")
+async def update_platform_config(config: dict):
+    """Aggiorna configurazione piattaforma (solo admin)"""
+    config["updated_at"] = datetime.utcnow().isoformat()
+    await db.platform_config.update_one(
+        {"id": "platform_config"},
+        {"$set": config},
+        upsert=True
+    )
+    return {"success": True, "message": "Configurazione aggiornata"}
+
+@api_router.post("/admin/process-pickup/{order_id}")
+async def process_pickup_payout(order_id: str, admin_user_id: str = Query(None)):
+    """
+    Processa il payout quando un libro viene ritirato.
+    Cattura il pagamento Stripe e crea i record di payout.
+    """
+    order = await db.orders.find_one({"id": order_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="Ordine non trovato")
+    
+    if order.get("status") not in ["ready_for_pickup", "pronto_ritiro", "ritirato", "picked_up", "completed"]:
+        raise HTTPException(status_code=400, detail=f"Stato ordine non valido per payout: {order.get('status')}")
+    
+    # Verifica se i payout sono già stati creati
+    existing_payouts = await db.payouts.find({"order_id": order_id}).to_list(10)
+    if existing_payouts:
+        return {"success": True, "message": "Payouts già creati", "payouts": existing_payouts}
+    
+    # Ottieni configurazione piattaforma
+    config = await db.platform_config.find_one({"id": "platform_config"})
+    if not config:
+        config = {
+            "seller_percentage": 80.0,
+            "platform_percentage": 20.0,
+            "stripe_fee_percentage": 1.5,
+            "stripe_fee_fixed": 0.25,
+            "foderazione_cost": 1.50
+        }
+    
+    # Cattura il pagamento Stripe (se non già catturato)
+    payment_intent_id = order.get("payment_intent_id") or order.get("stripe_payment_intent_id")
+    if payment_intent_id:
+        try:
+            pi = stripe.PaymentIntent.retrieve(payment_intent_id)
+            if pi.status == "requires_capture":
+                stripe.PaymentIntent.capture(payment_intent_id)
+                logger.info(f"Payment captured for order {order_id}")
+        except stripe.error.StripeError as e:
+            logger.error(f"Stripe capture error: {e}")
+            # Continua comunque per creare i record payout
+    
+    # Calcola importi
+    prezzo_libro = order.get("prezzo_libro", 0)
+    totale_acquirente = order.get("totale_acquirente", 0)
+    include_foderazione = order.get("include_foderazione", False)
+    
+    # Commissione Stripe sul totale (1.5% + €0.25)
+    stripe_fee = (totale_acquirente * config.get("stripe_fee_percentage", 1.5) / 100) + config.get("stripe_fee_fixed", 0.25)
+    
+    # Importi
+    # Venditore: 80% del prezzo libro
+    seller_gross = prezzo_libro * (config.get("seller_percentage", 80.0) / 100)
+    seller_stripe_fee = stripe_fee * (config.get("seller_percentage", 80.0) / 100)  # Proporzione Stripe
+    seller_net = round(seller_gross, 2)  # Il venditore riceve il lordo, la piattaforma paga Stripe
+    
+    # Piattaforma: 20% del prezzo libro - commissione Stripe totale
+    platform_gross = prezzo_libro * (config.get("platform_percentage", 20.0) / 100)
+    platform_net = round(platform_gross - stripe_fee, 2)  # La piattaforma paga tutta la commissione Stripe
+    
+    # Ottieni IBAN venditore
+    seller = await db.users.find_one({"id": order.get("seller_id")})
+    seller_iban = seller.get("iban") if seller else None
+    seller_name = order.get("seller_name", "Venditore")
+    
+    # Ottieni IBAN piattaforma
+    platform_iban = config.get("platform_iban")
+    
+    now = datetime.utcnow()
+    payouts_created = []
+    
+    # 1. Payout al venditore (80%)
+    seller_payout = {
+        "id": str(uuid.uuid4()),
+        "order_id": order_id,
+        "order_code": order.get("order_code", ""),
+        "recipient_type": "seller",
+        "recipient_id": order.get("seller_id"),
+        "recipient_name": seller_name,
+        "recipient_iban": seller_iban or "IBAN NON DISPONIBILE",
+        "gross_amount": round(seller_gross, 2),
+        "stripe_fee": 0,  # Stripe pagato dalla piattaforma
+        "net_amount": seller_net,
+        "description": f"Vendita libro: {order.get('book_titolo', '')}",
+        "status": "pending",
+        "created_at": now.isoformat(),
+        "book_title": order.get("book_titolo"),
+        "buyer_name": order.get("buyer_name")
+    }
+    await db.payouts.insert_one(seller_payout)
+    payouts_created.append(seller_payout)
+    
+    # 2. Payout alla piattaforma (20% - Stripe fees)
+    if platform_net > 0:
+        platform_payout = {
+            "id": str(uuid.uuid4()),
+            "order_id": order_id,
+            "order_code": order.get("order_code", ""),
+            "recipient_type": "platform",
+            "recipient_id": "platform",
+            "recipient_name": config.get("platform_name", "RiBook"),
+            "recipient_iban": platform_iban or "DA CONFIGURARE",
+            "gross_amount": round(platform_gross, 2),
+            "stripe_fee": round(stripe_fee, 2),
+            "net_amount": platform_net,
+            "description": f"Commissione vendita: {order.get('book_titolo', '')}",
+            "status": "pending" if platform_iban else "awaiting_iban",
+            "created_at": now.isoformat(),
+            "book_title": order.get("book_titolo")
+        }
+        await db.payouts.insert_one(platform_payout)
+        payouts_created.append(platform_payout)
+    
+    # 3. Payout foderazione alla cartolibreria (se applicabile)
+    if include_foderazione:
+        foderazione_gross = config.get("foderazione_cost", 1.50)
+        foderazione_stripe_fee = foderazione_gross * config.get("stripe_fee_percentage", 1.5) / 100
+        foderazione_net = round(foderazione_gross - foderazione_stripe_fee, 2)
+        
+        bookstore = await db.bookstores.find_one({"id": order.get("bookstore_id")})
+        bookstore_iban = bookstore.get("iban") if bookstore else None
+        
+        foderazione_payout = {
+            "id": str(uuid.uuid4()),
+            "order_id": order_id,
+            "order_code": order.get("order_code", ""),
+            "recipient_type": "cartolibreria",
+            "recipient_id": order.get("bookstore_id"),
+            "recipient_name": order.get("bookstore_name", "Cartolibreria"),
+            "recipient_iban": bookstore_iban or "IBAN NON DISPONIBILE",
+            "gross_amount": foderazione_gross,
+            "stripe_fee": round(foderazione_stripe_fee, 2),
+            "net_amount": foderazione_net,
+            "description": f"Foderazione libro: {order.get('book_titolo', '')}",
+            "status": "pending",
+            "created_at": now.isoformat()
+        }
+        await db.payouts.insert_one(foderazione_payout)
+        payouts_created.append(foderazione_payout)
+    
+    # Aggiorna ordine come processato per payout
+    await db.orders.update_one(
+        {"id": order_id},
+        {"$set": {
+            "payout_processed": True,
+            "payout_processed_at": now.isoformat(),
+            "payment_captured": True
+        }}
+    )
+    
+    # Notifica venditore
+    await db.notifications.insert_one({
+        "id": str(uuid.uuid4()),
+        "user_id": order.get("seller_id"),
+        "type": "payout_created",
+        "title": "Pagamento in arrivo!",
+        "message": f"Il libro '{order.get('book_titolo')}' è stato ritirato. Riceverai €{seller_net:.2f} sul tuo IBAN.",
+        "data": {"order_id": order_id, "amount": seller_net},
+        "read": False,
+        "created_at": now.isoformat()
+    })
+    
+    return {
+        "success": True,
+        "message": f"Creati {len(payouts_created)} payout",
+        "payouts": payouts_created,
+        "summary": {
+            "seller_amount": seller_net,
+            "platform_amount": platform_net,
+            "stripe_fees": round(stripe_fee, 2)
+        }
+    }
+
+@api_router.get("/admin/payouts")
+async def get_all_payouts(
+    status: str = Query(None),
+    recipient_type: str = Query(None),
+    limit: int = Query(100)
+):
+    """Ottieni tutti i payout (per admin)"""
+    query = {}
+    if status:
+        query["status"] = status
+    if recipient_type:
+        query["recipient_type"] = recipient_type
+    
+    payouts = await db.payouts.find(query).sort("created_at", -1).to_list(limit)
+    
+    # Rimuovi _id da ogni payout
+    for p in payouts:
+        p.pop("_id", None)
+    
+    # Calcola totali
+    totals = {
+        "pending": {"count": 0, "amount": 0},
+        "completed": {"count": 0, "amount": 0}
+    }
+    for p in payouts:
+        status_key = p.get("status", "pending")
+        if status_key in totals:
+            totals[status_key]["count"] += 1
+            totals[status_key]["amount"] += p.get("net_amount", 0)
+    
+    return {"payouts": payouts, "totals": totals}
+
+@api_router.post("/admin/payouts/{payout_id}/complete")
+async def complete_payout(
+    payout_id: str,
+    transaction_reference: str = Query(None),
+    admin_user_id: str = Query(None)
+):
+    """Segna un payout come completato (bonifico effettuato)"""
+    payout = await db.payouts.find_one({"id": payout_id})
+    if not payout:
+        raise HTTPException(status_code=404, detail="Payout non trovato")
+    
+    now = datetime.utcnow()
+    await db.payouts.update_one(
+        {"id": payout_id},
+        {"$set": {
+            "status": "completed",
+            "completed_at": now.isoformat(),
+            "completed_by": admin_user_id,
+            "transaction_reference": transaction_reference
+        }}
+    )
+    
+    # Notifica al beneficiario
+    if payout.get("recipient_type") == "seller":
+        await db.notifications.insert_one({
+            "id": str(uuid.uuid4()),
+            "user_id": payout.get("recipient_id"),
+            "type": "payout_completed",
+            "title": "Bonifico effettuato!",
+            "message": f"Abbiamo bonificato €{payout.get('net_amount', 0):.2f} sul tuo conto per la vendita di '{payout.get('book_title', 'libro')}'.",
+            "data": {"payout_id": payout_id, "amount": payout.get("net_amount")},
+            "read": False,
+            "created_at": now.isoformat()
+        })
+    
+    return {"success": True, "message": "Payout completato"}
+
+# ============== AUTOMATIC DEADLINE MANAGEMENT ==============
+
+@api_router.post("/admin/check-deadlines")
+async def check_order_deadlines():
+    """
+    Job automatico per verificare scadenze ordini.
+    Chiamare periodicamente (es. ogni ora) via cron o scheduler.
+    
+    1. Annulla ordini se venditore non conferma entro 24h
+    2. Annulla ordini (con rimborso) se venditore non consegna entro deadline
+    """
+    now = datetime.utcnow()
+    results = {
+        "checked_at": now.isoformat(),
+        "expired_confirmations": [],
+        "expired_deliveries": [],
+        "errors": []
+    }
+    
+    # 1. Ordini in attesa conferma venditore scaduti (24h)
+    expired_confirmation_statuses = ["in_attesa_conferma_venditore", "pending_seller_confirmation"]
+    expired_confirmations = await db.orders.find({
+        "status": {"$in": expired_confirmation_statuses},
+        "seller_confirmation_deadline": {"$lt": now.isoformat()}
+    }).to_list(100)
+    
+    for order in expired_confirmations:
+        try:
+            order_id = order.get("id")
+            
+            # Annulla ordine
+            await db.orders.update_one(
+                {"id": order_id},
+                {"$set": {
+                    "status": "annullato_scadenza_conferma",
+                    "cancelled_at": now.isoformat(),
+                    "cancellation_reason": "Venditore non ha confermato entro 24 ore"
+                }}
+            )
+            
+            # Rimetti il listing disponibile
+            listing_id = order.get("listing_id")
+            if listing_id:
+                await db.listings.update_one(
+                    {"id": listing_id},
+                    {"$set": {"status": "disponibile", "reserved_for": None}}
+                )
+            
+            # Notifica acquirente
+            await db.notifications.insert_one({
+                "id": str(uuid.uuid4()),
+                "user_id": order.get("buyer_id"),
+                "type": "order_expired",
+                "title": "Ordine annullato",
+                "message": f"L'ordine per '{order.get('book_titolo')}' è stato annullato perché il venditore non ha confermato entro 24 ore.",
+                "data": {"order_id": order_id},
+                "read": False,
+                "created_at": now.isoformat()
+            })
+            
+            # Notifica venditore
+            await db.notifications.insert_one({
+                "id": str(uuid.uuid4()),
+                "user_id": order.get("seller_id"),
+                "type": "order_expired_seller",
+                "title": "Ordine scaduto",
+                "message": f"Non hai confermato l'ordine per '{order.get('book_titolo')}' entro 24 ore. L'ordine è stato annullato.",
+                "data": {"order_id": order_id},
+                "read": False,
+                "created_at": now.isoformat()
+            })
+            
+            results["expired_confirmations"].append({
+                "order_id": order_id,
+                "order_code": order.get("order_code"),
+                "book": order.get("book_titolo")
+            })
+            
+        except Exception as e:
+            results["errors"].append({"order_id": order.get("id"), "error": str(e)})
+    
+    # 2. Ordini pagati con consegna scaduta (2 giorni lavorativi)
+    paid_statuses = ["pagato_attesa_consegna", "paid", "in_transito_a_cartolibreria"]
+    expired_deliveries = await db.orders.find({
+        "status": {"$in": paid_statuses},
+        "delivery_deadline": {"$lt": now.isoformat()}
+    }).to_list(100)
+    
+    for order in expired_deliveries:
+        try:
+            order_id = order.get("id")
+            
+            # Rimborso Stripe
+            refund_success = False
+            payment_intent_id = order.get("payment_intent_id") or order.get("stripe_payment_intent_id")
+            if payment_intent_id:
+                try:
+                    refund = stripe.Refund.create(payment_intent=payment_intent_id)
+                    refund_success = refund.status == "succeeded"
+                except stripe.error.StripeError as e:
+                    logger.error(f"Stripe refund error for order {order_id}: {e}")
+            
+            new_status = "rimborsato_scadenza_consegna" if refund_success else "annullato_scadenza_consegna"
+            
+            # Annulla ordine
+            await db.orders.update_one(
+                {"id": order_id},
+                {"$set": {
+                    "status": new_status,
+                    "cancelled_at": now.isoformat(),
+                    "cancellation_reason": "Venditore non ha consegnato entro la scadenza",
+                    "refund_processed": refund_success,
+                    "refunded_at": now.isoformat() if refund_success else None
+                }}
+            )
+            
+            # Rimetti il listing disponibile
+            listing_id = order.get("listing_id")
+            if listing_id:
+                await db.listings.update_one(
+                    {"id": listing_id},
+                    {"$set": {"status": "disponibile", "reserved_for": None}}
+                )
+            
+            # Notifica acquirente
+            await db.notifications.insert_one({
+                "id": str(uuid.uuid4()),
+                "user_id": order.get("buyer_id"),
+                "type": "order_refunded_deadline",
+                "title": "Ordine annullato e rimborsato",
+                "message": f"L'ordine per '{order.get('book_titolo')}' è stato annullato perché il venditore non ha consegnato in tempo. {'Il pagamento è stato rimborsato.' if refund_success else 'Il rimborso è in elaborazione.'}",
+                "data": {"order_id": order_id, "refunded": refund_success},
+                "read": False,
+                "created_at": now.isoformat()
+            })
+            
+            # Notifica venditore
+            await db.notifications.insert_one({
+                "id": str(uuid.uuid4()),
+                "user_id": order.get("seller_id"),
+                "type": "order_expired_delivery",
+                "title": "Ordine annullato - Consegna scaduta",
+                "message": f"Non hai consegnato '{order.get('book_titolo')}' entro la scadenza. L'ordine è stato annullato e l'acquirente rimborsato.",
+                "data": {"order_id": order_id},
+                "read": False,
+                "created_at": now.isoformat()
+            })
+            
+            results["expired_deliveries"].append({
+                "order_id": order_id,
+                "order_code": order.get("order_code"),
+                "book": order.get("book_titolo"),
+                "refunded": refund_success
+            })
+            
+        except Exception as e:
+            results["errors"].append({"order_id": order.get("id"), "error": str(e)})
+    
+    return results
+
+@api_router.get("/seller/{user_id}/payouts")
+async def get_seller_payouts(user_id: str):
+    """Ottieni i payout di un venditore"""
+    payouts = await db.payouts.find({
+        "recipient_type": "seller",
+        "recipient_id": user_id
+    }).sort("created_at", -1).to_list(100)
+    
+    # Rimuovi _id da ogni payout
+    for p in payouts:
+        p.pop("_id", None)
+    
+    # Calcola totali
+    totals = {
+        "pending": 0,
+        "completed": 0,
+        "total_earned": 0
+    }
+    for p in payouts:
+        amount = p.get("net_amount", 0)
+        if p.get("status") == "pending":
+            totals["pending"] += amount
+        elif p.get("status") == "completed":
+            totals["completed"] += amount
+        totals["total_earned"] += amount
+    
+    return {"payouts": payouts, "totals": totals}
 
 
 # Include the router in the main app

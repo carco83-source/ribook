@@ -203,8 +203,7 @@ export default function ListingDetailScreen() {
   const [reportDescription, setReportDescription] = useState('');
   const [sendingReport, setSendingReport] = useState(false);
   
-  // Opzione foderazione libro
-  const [richiediFoderazione, setRichiediFoderazione] = useState(false);
+  // Foderazione ora è solo nel carrello (non più qui)
   
   // Modal foto ingrandita - galleria swipeable
   const [showPhotoModal, setShowPhotoModal] = useState(false);
@@ -340,7 +339,8 @@ export default function ListingDetailScreen() {
   const calculateCommission = () => {
     if (!listing) return { commission: 0, total: 0, foderazione: 0 };
     const sellingPrice = getListingSellingPrice(listing);
-    const foderazioneCost = richiediFoderazione ? 1.50 : 0;
+    // Foderazione ora è solo nel carrello, qui è sempre 0
+    const foderazioneCost = 0;
     // NUOVA LOGICA: Nessuna commissione aggiuntiva per l'acquirente
     // Il prezzo visualizzato è il prezzo finale
     return { commission: 0, total: sellingPrice, foderazione: foderazioneCost };
@@ -439,10 +439,20 @@ export default function ListingDetailScreen() {
     }
     
     if (!userId) {
+      // Utente anonimo/provvisorio - reindirizza alla registrazione
       if (Platform.OS === 'web') {
-        window.alert('Devi effettuare il login');
+        if (window.confirm('Per acquistare devi registrarti. Vuoi creare un account?')) {
+          router.push('/(auth)/register');
+        }
       } else {
-        Alert.alert('Errore', 'Devi effettuare il login');
+        Alert.alert(
+          'Registrazione richiesta',
+          'Per acquistare un libro devi creare un account. I tuoi profili verranno mantenuti.',
+          [
+            { text: 'Annulla', style: 'cancel' },
+            { text: 'Registrati', onPress: () => router.push('/(auth)/register') }
+          ]
+        );
       }
       return;
     }
@@ -506,18 +516,16 @@ export default function ListingDetailScreen() {
 
     setPurchasing(true);
     try {
-      // Add to cart via API (with seller confirmation) - include foderazione
+      // Add to cart via API (with seller confirmation) - foderazione NON inclusa qui, selezionabile nel carrello
       const response = await axios.post(
-        `${API_URL}/api/cart/add?listing_id=${listing?.id}&bookstore_id=${selectedBookstore.id}&buyer_id=${userId}&include_foderazione=${richiediFoderazione}`
+        `${API_URL}/api/cart/add?listing_id=${listing?.id}&bookstore_id=${selectedBookstore.id}&buyer_id=${userId}&include_foderazione=false`
       );
       
-      const totalePagare = richiediFoderazione 
-        ? (listing?.prezzo_vendita || listing?.price || 0) + 1.50 
-        : (listing?.prezzo_vendita || listing?.price || 0);
+      const totalePagare = listing?.prezzo_vendita || listing?.price || 0;
       
       Alert.alert(
         'Prenotazione inviata!',
-        `"${listing?.book_titolo}" è stato prenotato.\n\nTotale: €${totalePagare.toFixed(2)}${richiediFoderazione ? ' (incl. foderazione)' : ''}\n\nIl venditore ha 24 ore per confermare la disponibilità.\n\nRitiro: ${selectedBookstore.nome}`,
+        `"${listing?.book_titolo}" è stato prenotato.\n\nPrezzo: €${totalePagare.toFixed(2)}\n\nIl venditore ha 24 ore per confermare la disponibilità.\n\nRitiro: ${selectedBookstore.nome}\n\n💡 Potrai aggiungere la foderazione nel carrello prima del pagamento.`,
         [
           { text: 'Continua acquisti', onPress: () => router.back() },
           { text: 'Vai al carrello', onPress: () => router.push('/cart') }
@@ -533,21 +541,14 @@ export default function ListingDetailScreen() {
   };
 
   const { commission, total, foderazione } = React.useMemo(() => {
-    console.log('[DEBUG useMemo] Calculating with richiediFoderazione:', richiediFoderazione);
     return calculateCommission();
-  }, [listing, richiediFoderazione]);
-  
-  // Debug foderazione
-  console.log('[DEBUG] richiediFoderazione:', richiediFoderazione, 'foderazione:', foderazione);
+  }, [listing]);
   
   // Verifica se l'utente corrente è il venditore
   const isOwner = userId && listing?.seller_id === userId;
   
-  // Debug isOwner
-  console.log('[DEBUG] userId:', userId, 'seller_id:', listing?.seller_id, 'isOwner:', isOwner);
-  
-  // Prezzo da mostrare: venditore vede il suo prezzo, acquirente vede il totale
-  const displayPrice = isOwner ? total : getListingBuyerPrice(listing, richiediFoderazione);
+  // Prezzo da mostrare: venditore vede il suo prezzo, acquirente vede solo prezzo libro (foderazione nel carrello)
+  const displayPrice = isOwner ? total : getListingBuyerPrice(listing, false);
 
   if (loading) {
     return (
@@ -995,43 +996,7 @@ export default function ListingDetailScreen() {
           </View>
         )}
 
-        {/* Opzione Foderazione - appare solo per ACQUIRENTI quando una cartolibreria è selezionata */}
-        {/* Debug: selectedBookstore={JSON.stringify(!!selectedBookstore)}, isOwner={JSON.stringify(isOwner)} */}
-        {selectedBookstore && !isOwner && (
-          <>
-            <TouchableOpacity 
-              style={styles.foderaturaCard}
-              onPress={() => setRichiediFoderazione(!richiediFoderazione)}
-            >
-              <View style={styles.foderaturaContent}>
-                <View style={[
-                  styles.foderaturaCheckbox,
-                  richiediFoderazione && styles.foderaturaCheckboxChecked
-                ]}>
-                  {richiediFoderazione && (
-                    <Ionicons name="checkmark" size={16} color="#fff" />
-                  )}
-                </View>
-                <View style={styles.foderaturaTextContainer}>
-                  <Text style={styles.foderaturaTitle}>Foderazione libro</Text>
-                  <Text style={styles.foderaturaSubtitle}>
-                    Richiedi la foderazione presso {selectedBookstore.nome}
-                  </Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-            
-            {/* Messaggio informativo quando foderazione selezionata */}
-            {richiediFoderazione && (
-              <View style={styles.foderaturaNotice}>
-                <Ionicons name="information-circle" size={18} color="#1a472a" />
-                <Text style={styles.foderaturaNoticeText}>
-                  Richiedi la foderazione presso la Cartolibreria Ni.Ca. Qualora i testi siano composti da più volumi, sarà foderato il volume principale.
-                </Text>
-              </View>
-            )}
-          </>
-        )}
+        {/* Foderazione RIMOSSA da qui - disponibile solo nel Carrello */}
 
         <View style={styles.sellerCard}>
           <Ionicons name="person-circle-outline" size={24} color="#1a472a" />
@@ -1046,7 +1011,7 @@ export default function ListingDetailScreen() {
         ) : null}
 
         {/* Price Display - Diverso per venditore e acquirente */}
-        <View style={styles.priceBreakdown} key={`price-${richiediFoderazione}`}>
+        <View style={styles.priceBreakdown}>
           {isOwner ? (
             // VENDITORE: vede solo il prezzo annuncio e quanto riceverà
             <>
@@ -1061,30 +1026,13 @@ export default function ListingDetailScreen() {
               </View>
             </>
           ) : (
-            // ACQUIRENTE: vede solo prezzo libro + foderazione opzionale
+            // ACQUIRENTE: vede solo prezzo libro (foderazione selezionabile nel Carrello)
             <>
-              {richiediFoderazione ? (
-                <>
-                  <View style={styles.priceRow}>
-                    <Text style={styles.priceRowLabel}>Libro</Text>
-                    <Text style={styles.priceRowValue}>€{getListingBuyerPrice(listing, false).toFixed(2)}</Text>
-                  </View>
-                  <View style={[styles.priceRow, { marginTop: 8 }]}>
-                    <Text style={styles.priceRowLabel}>Foderazione</Text>
-                    <Text style={styles.priceRowValue}>€{foderazione.toFixed(2)}</Text>
-                  </View>
-                  <View style={styles.totalDivider} />
-                  <View style={styles.priceRow}>
-                    <Text style={styles.totalLabel}>Totale</Text>
-                    <Text style={styles.totalValue}>€{getListingBuyerPrice(listing, richiediFoderazione).toFixed(2)}</Text>
-                  </View>
-                </>
-              ) : (
-                <View style={styles.priceRow}>
-                  <Text style={styles.totalLabel}>Prezzo</Text>
-                  <Text style={styles.totalValue}>€{getListingBuyerPrice(listing, false).toFixed(2)}</Text>
-                </View>
-              )}
+              <View style={styles.priceRow}>
+                <Text style={styles.totalLabel}>Prezzo</Text>
+                <Text style={styles.totalValue}>€{getListingBuyerPrice(listing, false).toFixed(2)}</Text>
+              </View>
+              <Text style={styles.foderazioneHint}>💡 La foderazione è selezionabile nel carrello</Text>
             </>
           )}
         </View>
@@ -1192,6 +1140,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+  },
+  foderazioneHint: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 8,
+    fontStyle: 'italic',
   },
   loadingContainer: {
     flex: 1,
