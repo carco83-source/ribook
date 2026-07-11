@@ -28,6 +28,7 @@ CASI PARTICOLARI:
 - Prima classe: niente 2025/2026 → solo categorie 3 e 4
 - Ultima classe: niente 2026/2027 → solo categoria 2
 - Strumenti musicali: esclusi dal calcolo costi
+- Discipline pluriennali (Religione, Ed. Fisica): durano tutto il ciclo
 """
 
 from typing import List, Dict, Tuple, Optional, Set
@@ -38,6 +39,14 @@ STRUMENTI_MUSICALI_KEYWORDS = [
     'chitarra', 'flauto', 'violino', 'pianoforte', 'pianistico', 'pianistica',
     'clarinetto', 'tromba', 'sassofono', 'percussioni', 'batteria',
     'violoncello', 'contrabbasso', 'oboe', 'fagotto', 'corno',
+]
+
+# Discipline con libri PLURIENNALI che durano tutto il ciclo (biennio/triennio)
+# Questi libri NON sono vendibili se lo studente resta nella stessa scuola
+DISCIPLINE_PLURIENNALI = [
+    'religione', 'religione cattolica', 'i.r.c.', 'irc',
+    'educazione fisica', 'scienze motorie', 'scienze motorie e sportive',
+    'ed. fisica', 'motoria',
 ]
 
 # =============================================================================
@@ -80,6 +89,34 @@ def is_libro_strumento_musicale(libro: Dict) -> bool:
     # Controlla se il titolo contiene parole chiave di strumenti
     for strumento in STRUMENTI_MUSICALI_KEYWORDS:
         if strumento in titolo:
+            return True
+    
+    return False
+
+
+def is_disciplina_pluriennale(libro: Dict) -> bool:
+    """
+    Verifica se un libro appartiene a una disciplina PLURIENNALE.
+    
+    Queste discipline hanno libri che durano tutto il ciclo scolastico
+    (biennio alle medie, triennio/biennio alle superiori).
+    Esempi: Religione, Educazione Fisica/Scienze Motorie
+    
+    Questi libri NON dovrebbero essere nei "vendibili" se lo studente
+    continua nella stessa scuola.
+    """
+    disciplina = (libro.get("disciplina") or "").lower().strip()
+    titolo = (libro.get("titolo") or "").lower()
+    
+    # Controlla la disciplina
+    for disc_pluriennale in DISCIPLINE_PLURIENNALI:
+        if disc_pluriennale in disciplina:
+            return True
+    
+    # Controlla anche nel titolo (backup)
+    keywords_titolo = ['religione', 'scienze motorie', 'educazione fisica']
+    for kw in keywords_titolo:
+        if kw in titolo:
             return True
     
     return False
@@ -466,6 +503,22 @@ async def classifica_libri_studente(
     for isbn in isbn_vendibili:
         libro = mappa_2025[isbn]
         volume = str(libro.get("volume", "")).upper().strip()
+        
+        # =====================================================
+        # DISCIPLINE PLURIENNALI (Religione, Ed. Fisica)
+        # Questi libri durano tutto il ciclo - NON vendibili se si resta nella stessa scuola
+        # =====================================================
+        if is_disciplina_pluriennale(libro) and classe_2026_2027 is not None:
+            # Lo studente continua nella stessa scuola → libro ANCORA IN USO
+            result["ancora_in_uso"].append({
+                **libro,
+                "categoria": "ANCORA_IN_USO",
+                "motivo": "Disciplina pluriennale - serve per tutto il ciclo",
+                "is_disciplina_pluriennale": True,
+                "is_strumento_musicale": False,
+                "escluso_dal_calcolo": False
+            })
+            continue  # Salta alla prossima iterazione
         
         # I libri con Volume Unico (U) NON sono vendibili - servono per più anni
         # MA solo se sono ancora richiesti dalla stessa scuola/classe
