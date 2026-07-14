@@ -6737,11 +6737,14 @@ async def generate_books_pdf(user_id: str, child_id: str):
     # Colonne ottimizzate per A4 Landscape (larghezza ~28cm disponibili)
     col_widths = [3*cm, 2.5*cm, 4*cm, 9*cm, 0.8*cm, 3*cm, 1.5*cm, 1.2*cm, 1.1*cm, 1.1*cm]
     
-    # Totale libri da acquistare
+    # Contatori per totale libri da acquistare
     total_price = 0
+    libri_da_acquistare = 0
+    totale_libri = 0
     
     # Add books
     for book in sorted(books, key=lambda x: x.get('disciplina', '')):
+        totale_libri += 1
         disciplina = book.get('disciplina', '')
         isbn = book.get('isbn', '') or '-'
         autori = book.get('autori', '') or '-'
@@ -6780,15 +6783,16 @@ async def generate_books_pdf(user_id: str, child_id: str):
         # Somma al totale se da acquistare (secondo il database MIUR)
         if book.get('da_acquistare') == True and prezzo:
             total_price += prezzo
+            libri_da_acquistare += 1
     
-    # Aggiungi riga TOTALE
+    # Aggiungi riga TOTALE LIBRI DA ACQUISTARE
     table_data.append([
         Paragraph('', cell_style),
         Paragraph('', cell_style),
         Paragraph('', cell_style),
+        Paragraph(f'<b>Totale libri: {totale_libri} | Da acquistare: {libri_da_acquistare}</b>', cell_bold),
         Paragraph('', cell_style),
-        Paragraph('', cell_style),
-        Paragraph('<b>TOTALE:</b>', cell_bold),
+        Paragraph('<b>TOTALE DA ACQUISTARE:</b>', cell_bold),
         Paragraph(f'<b>€ {total_price:.2f}</b>', cell_bold),
         Paragraph('', cell_style),
         Paragraph('', cell_style),
