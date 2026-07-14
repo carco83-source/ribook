@@ -615,8 +615,17 @@ async def classifica_libri_studente(
     # =====================================================
     # CATEGORIE 3 e 4: DA ACQUISTARE
     # ISBN richiesti nel 2026/2027 che NON possediamo già
+    # ECCEZIONE: Discipline pluriennali NON vanno acquistate se lo studente
+    #            aveva già un libro della stessa disciplina l'anno prima
     # =====================================================
     isbn_da_acquistare = isbn_2026 - isbn_2025
+    
+    # Ottieni le discipline dei libri che lo studente aveva l'anno scorso
+    discipline_2025 = set()
+    for libro in libri_2025:
+        disc = (libro.get("disciplina") or "").lower().strip()
+        if disc:
+            discipline_2025.add(disc)
     
     # Verifica disponibilità usato nelle scuole di Catanzaro
     disponibilita_usato = await get_isbn_vendibili_catanzaro(db, isbn_da_acquistare)
@@ -626,6 +635,38 @@ async def classifica_libri_studente(
     
     for isbn in isbn_da_acquistare:
         libro = mappa_2026[isbn]
+        
+        # =====================================================
+        # CONTROLLO DISCIPLINE PLURIENNALI
+        # Se è una disciplina pluriennale E lo studente aveva già un libro
+        # di quella disciplina l'anno scorso → NON deve acquistarlo
+        # (è lo stesso libro con ISBN diverso o edizione diversa)
+        # =====================================================
+        if is_disciplina_pluriennale(libro) and classe_2025_2026 is not None:
+            disciplina_libro = (libro.get("disciplina") or "").lower().strip()
+            # Cerca se lo studente aveva un libro della stessa disciplina
+            disciplina_gia_posseduta = False
+            for disc_2025 in discipline_2025:
+                # Controlla match parziale per discipline pluriennali
+                for disc_pluriennale in DISCIPLINE_PLURIENNALI:
+                    if disc_pluriennale in disc_2025 and disc_pluriennale in disciplina_libro:
+                        disciplina_gia_posseduta = True
+                        break
+                if disciplina_gia_posseduta:
+                    break
+            
+            if disciplina_gia_posseduta:
+                # Lo studente ha già un libro di questa disciplina → ANCORA IN USO
+                result["ancora_in_uso"].append({
+                    **libro,
+                    "categoria": "ANCORA_IN_USO",
+                    "motivo": "Disciplina pluriennale - hai già il libro dell'anno scorso",
+                    "is_disciplina_pluriennale": True,
+                    "is_strumento_musicale": False,
+                    "escluso_dal_calcolo": False
+                })
+                continue  # Salta alla prossima iterazione
+        
         is_strumento = is_libro_strumento_musicale(libro)
         prezzo_raw = libro.get("prezzo", 0)
         # Assicura che il prezzo sia un numero
