@@ -2,7 +2,7 @@
 set -euo pipefail
 
 APP_DIR="${APP_DIR:-/opt/ribook}"
-ENV_FILE="${APP_DIR}/.env"
+ENV_FILE="${APP_DIR}/deploy.env"
 COMPOSE_FILE="${APP_DIR}/docker-compose.prod.yml"
 
 cd "${APP_DIR}"
@@ -21,11 +21,13 @@ fi
 
 mkdir -p "${APP_DIR}/downloads"
 
+# Crea deploy.env solo se non esiste (per non sovrascrivere configurazioni esistenti)
 if [ ! -f "${ENV_FILE}" ]; then
   cat > "${ENV_FILE}" <<'ENV'
-APP_SITE_ADDRESS=:80
-EXPO_PUBLIC_BACKEND_URL=http://94.177.161.18
+APP_SITE_ADDRESS=ribook.it, www.ribook.it
+EXPO_PUBLIC_BACKEND_URL=https://ribook.it
 DB_NAME=ribook
+MONGO_URL=mongodb://mongo:27017/ribook
 STRIPE_SECRET_KEY=
 STRIPE_PUBLISHABLE_KEY=
 EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=
