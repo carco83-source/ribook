@@ -1418,17 +1418,17 @@ async def register_user(user_data: UserCreate):
             detail=f"Verifica identità fallita: {error_msg}"
         )
     
-    # 4. Verifica età minima (16 anni)
+    # 4. Verifica età minima (18 anni)
     age = calculate_age(user_data.data_nascita)
     if age < 0:
         raise HTTPException(
             status_code=400, 
             detail="Data di nascita non valida. Usa il formato YYYY-MM-DD."
         )
-    if age < 16:
+    if age < 18:
         raise HTTPException(
             status_code=400, 
-            detail="Devi avere almeno 16 anni per registrarti."
+            detail="Devi avere almeno 18 anni per registrarti."
         )
     
     # 5. Verifica che il codice fiscale non sia già registrato

@@ -154,10 +154,10 @@ export default function RegisterScreen() {
       return;
     }
     
-    // Verifica età minima (16 anni)
+    // Verifica età minima (18 anni)
     const age = calculateAge(dataNascita);
-    if (age < 16) {
-      setErrorMessage('Devi avere almeno 16 anni per registrarti');
+    if (age < 18) {
+      setErrorMessage('Devi avere almeno 18 anni per registrarti');
       return;
     }
     
@@ -490,10 +490,10 @@ export default function RegisterScreen() {
                   {formData.dataNascita && calculateAge(formData.dataNascita) >= 0 && (
                     <Text style={[
                       styles.ageText,
-                      calculateAge(formData.dataNascita) < 16 && styles.ageTextError
+                      calculateAge(formData.dataNascita) < 18 && styles.ageTextError
                     ]}>
-                      {calculateAge(formData.dataNascita) < 16 
-                        ? `Età: ${calculateAge(formData.dataNascita)} anni - Devi avere almeno 16 anni`
+                      {calculateAge(formData.dataNascita) < 18 
+                        ? `Età: ${calculateAge(formData.dataNascita)} anni - Devi avere almeno 18 anni`
                         : `Età: ${calculateAge(formData.dataNascita)} anni ✓`
                       }
                     </Text>
