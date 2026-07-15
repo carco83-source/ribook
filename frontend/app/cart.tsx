@@ -144,38 +144,44 @@ export default function CartScreen() {
   };
 
   const handlePayOrder = async (order: EscrowOrder) => {
-    // Reindirizza alla schermata di pagamento Stripe
-    if (Platform.OS === 'web') {
-      // Su web usa il pagamento mockato (Stripe non supportato completamente)
-      const proceedWithPayment = async () => {
-        setPayingOrderId(order.id);
-        setPurchasing(true);
-        
-        try {
-          const response = await axios.post(`${API_URL}/api/orders/${order.id}/pay?user_id=${userId}`);
-          
-          const successMessage = `Pagamento completato!\n\n` +
-            `Libro: ${order.book_titolo}\n` +
-            `Codice Ordine: ${order.order_code}\n` +
-            `Totale: €${order.totale_acquirente.toFixed(2)}\n\n` +
-            `Il venditore è stato notificato.\n` +
-            `Ritirerai il libro presso: ${order.bookstore_name}`;
-          
-          window.alert(successMessage);
-          loadCart();
-          
-        } catch (error: any) {
-          console.error('Error paying order:', error);
-          window.alert('Errore: ' + (error.response?.data?.detail || 'Errore durante il pagamento'));
-        } finally {
-          setPayingOrderId(null);
-          setPurchasing(false);
+    // Reindirizza sempre a Stripe Checkout (sia web che mobile)
+    setPayingOrderId(order.id);
+    setPurchasing(true);
+    
+    try {
+      // Crea Checkout Session su Stripe
+      const response = await axios.post(
+        `${API_URL}/api/orders/${order.id}/create-checkout-session?user_id=${userId}`,
+        { platform: Platform.OS }
+      );
+      
+      if (response.data?.checkout_url) {
+        if (Platform.OS === 'web') {
+          // Su web, redirect diretto alla pagina Stripe Checkout
+          window.location.href = response.data.checkout_url;
+        } else {
+          // Su mobile, apri nel browser
+          const supported = await Linking.canOpenURL(response.data.checkout_url);
+          if (supported) {
+            await Linking.openURL(response.data.checkout_url);
+          } else {
+            Alert.alert('Errore', 'Impossibile aprire la pagina di pagamento');
+          }
         }
-      };
-      await proceedWithPayment();
-    } else {
-      // Su mobile, vai alla schermata Stripe
-      router.push(`/stripe-payment?orderId=${order.id}`);
+      } else {
+        throw new Error('URL di checkout non ricevuto');
+      }
+    } catch (error: any) {
+      console.error('Error creating checkout:', error);
+      const errorMsg = error.response?.data?.detail || 'Errore durante l\'avvio del pagamento';
+      if (Platform.OS === 'web') {
+        window.alert('Errore: ' + errorMsg);
+      } else {
+        Alert.alert('Errore Pagamento', errorMsg);
+      }
+    } finally {
+      setPayingOrderId(null);
+      setPurchasing(false);
     }
   };
 
@@ -186,33 +192,37 @@ export default function CartScreen() {
       setPurchasing(true);
       
       try {
-        // Usa il nuovo endpoint batch che raggruppa ordini dallo stesso venditore
-        const orderIds = pendingPaymentOrders.map(o => o.id).join(',');
+        // Usa Stripe Checkout batch per pagare tutti gli ordini
+        const orderIds = pendingPaymentOrders.map(o => o.id);
         const response = await axios.post(
-          `${API_URL}/api/orders/pay-batch?user_id=${userId}&order_ids=${orderIds}`
+          `${API_URL}/api/orders/create-batch-checkout?user_id=${userId}`,
+          { order_ids: orderIds, platform: Platform.OS }
         );
         
-        const successMessage = `Tutti i pagamenti completati!\n\n` +
-          `${response.data.paid_count || pendingPaymentOrders.length} libri acquistati\n` +
-          `Totale: €${total.toFixed(2)}\n\n` +
-          `I venditori sono stati notificati.\n` +
-          `Se hai acquistato più libri dallo stesso venditore, avrai un unico QR code!`;
-        
-        if (Platform.OS === 'web') {
-          window.alert(successMessage);
+        if (response.data?.checkout_url) {
+          if (Platform.OS === 'web') {
+            // Su web, redirect diretto alla pagina Stripe Checkout
+            window.location.href = response.data.checkout_url;
+          } else {
+            // Su mobile, apri nel browser
+            const supported = await Linking.canOpenURL(response.data.checkout_url);
+            if (supported) {
+              await Linking.openURL(response.data.checkout_url);
+            } else {
+              Alert.alert('Errore', 'Impossibile aprire la pagina di pagamento');
+            }
+          }
         } else {
-          Alert.alert('Pagamento completato!', successMessage, [{ text: 'OK' }]);
+          throw new Error('URL di checkout non ricevuto');
         }
         
-        loadCart();
-        
       } catch (error: any) {
-        console.error('Error paying orders:', error);
-        const errorMsg = error.response?.data?.detail || 'Errore durante il pagamento';
+        console.error('Error creating batch checkout:', error);
+        const errorMsg = error.response?.data?.detail || 'Errore durante l\'avvio del pagamento';
         if (Platform.OS === 'web') {
           window.alert('Errore: ' + errorMsg);
         } else {
-          Alert.alert('Errore', errorMsg);
+          Alert.alert('Errore Pagamento', errorMsg);
         }
       } finally {
         setPurchasing(false);
