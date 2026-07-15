@@ -106,10 +106,6 @@ export default function StripeBatchSuccessScreen() {
               <Ionicons name="checkmark-circle" size={100} color="#22c55e" />
             </View>
             <Text style={styles.successTitle}>Acquisto Completato!</Text>
-            <Text style={styles.successMessage}>
-              Hai acquistato {orderCount} {orderCount === 1 ? 'libro' : 'libri'}.{'\n'}
-              Riceverai una notifica quando saranno pronti per il ritiro.
-            </Text>
             
             {orderCodes.length > 0 && (
               <View style={styles.orderCodesContainer}>
@@ -123,7 +119,7 @@ export default function StripeBatchSuccessScreen() {
             <View style={styles.infoBox}>
               <Ionicons name="time-outline" size={20} color="#FF9800" />
               <Text style={styles.infoText}>
-                I venditori hanno 2 giorni lavorativi per consegnare i libri alla cartolibreria.
+                I venditori hanno 2 giorni lavorativi per consegnare i libri alla cartolibreria. Riceverai una notifica quando saranno pronti per il ritiro.
               </Text>
             </View>
 
