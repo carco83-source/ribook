@@ -1124,89 +1124,51 @@ export default function SellFormScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Scegli il prezzo</Text>
           
-          {/* Prezzi Consigliati - sempre 3 opzioni */}
-          {priceRange.prices.map((price, idx) => (
-            <TouchableOpacity
-              key={idx}
-              style={[
-                styles.priceOption,
-                !useCustomPrice && selectedPriceOption === price.prezzoAcquirente && styles.priceOptionSelected
-              ]}
-              onPress={() => {
-                setUseCustomPrice(false);
-                setSelectedPriceOption(price.prezzoAcquirente ?? null);
-              }}
-            >
-              <View style={styles.priceOptionHeader}>
-                <Ionicons 
-                  name={!useCustomPrice && selectedPriceOption === price.prezzoAcquirente ? "radio-button-on" : "radio-button-off"} 
-                  size={22} 
-                  color={!useCustomPrice && selectedPriceOption === price.prezzoAcquirente ? "#1a472a" : "#666"} 
-                />
-                <Text style={styles.priceLabelBold}>{price.label}</Text>
-              </View>
-              <View style={styles.priceOptionDetails}>
-                <Text style={styles.priceEarningMain}>Guadagni: <Text style={styles.priceEarningValue}>€{price.guadagnoVenditore?.toFixed(2)}</Text></Text>
-                <Text style={styles.priceAcquirente}>L'acquirente pagherà €{price.prezzoAcquirente?.toFixed(2)}</Text>
-              </View>
-            </TouchableOpacity>
-          ))}
-
-          {/* Prezzo Personalizzato */}
-          <TouchableOpacity
-            style={[
-              styles.priceOption,
-              useCustomPrice && styles.priceOptionSelected
-            ]}
-            onPress={() => {
-              setUseCustomPrice(true);
-              setSelectedPriceOption(null);
-            }}
-          >
-            <View style={styles.priceOptionHeader}>
-              <Ionicons 
-                name={useCustomPrice ? "radio-button-on" : "radio-button-off"} 
-                size={22} 
-                color={useCustomPrice ? "#1a472a" : "#666"} 
+          {/* Solo campo prezzo */}
+          <View style={styles.simplePriceContainer}>
+            <View style={styles.simplePriceInputRow}>
+              <Text style={styles.simplePriceEuro}>€</Text>
+              <TextInput
+                style={styles.simplePriceInput}
+                placeholder="Inserisci il prezzo"
+                placeholderTextColor="#999"
+                keyboardType="decimal-pad"
+                value={customPrice}
+                onChangeText={(text) => {
+                  // Permetti solo numeri e un punto decimale
+                  const cleaned = text.replace(/[^0-9.]/g, '');
+                  // Assicura che ci sia solo un punto decimale
+                  const parts = cleaned.split('.');
+                  if (parts.length > 2) return;
+                  setCustomPrice(cleaned);
+                  setUseCustomPrice(true);
+                  // Aggiorna selectedPriceOption
+                  const numValue = parseFloat(cleaned);
+                  if (!isNaN(numValue) && numValue > 0) {
+                    setSelectedPriceOption(numValue);
+                  }
+                }}
               />
-              <Text style={styles.priceLabelBold}>Prezzo personalizzato</Text>
             </View>
-            {useCustomPrice && (
-              <View style={styles.customPriceContainer}>
-                <View style={styles.customPriceInputRow}>
-                  <Text style={styles.customPriceLabel}>€</Text>
-                  <TextInput
-                    style={styles.customPriceInput}
-                    placeholder="0.00"
-                    placeholderTextColor="#999"
-                    keyboardType="decimal-pad"
-                    value={customPrice}
-                    onChangeText={(text) => {
-                      // Permetti solo numeri e un punto decimale
-                      const cleaned = text.replace(/[^0-9.]/g, '');
-                      // Assicura che ci sia solo un punto decimale
-                      const parts = cleaned.split('.');
-                      if (parts.length > 2) return;
-                      setCustomPrice(cleaned);
-                      // Aggiorna selectedPriceOption
-                      const numValue = parseFloat(cleaned);
-                      if (!isNaN(numValue) && numValue > 0) {
-                        setSelectedPriceOption(numValue);
-                      }
-                    }}
-                  />
-                </View>
-                {customPrice && parseFloat(customPrice) > 0 && (
-                  <View style={styles.customPriceDetails}>
-                    <Text style={styles.priceEarningMain}>
-                      Guadagni: <Text style={styles.priceEarningValue}>€{(parseFloat(customPrice) * 0.83 - 0.25).toFixed(2)}</Text>
-                    </Text>
-                    <Text style={styles.priceAcquirente}>L'acquirente pagherà €{parseFloat(customPrice).toFixed(2)}</Text>
-                  </View>
-                )}
+            {customPrice && parseFloat(customPrice) > 0 && (
+              <View style={styles.simplePriceDetails}>
+                <Text style={styles.priceEarningMain}>
+                  Guadagni: <Text style={styles.priceEarningValue}>€{(parseFloat(customPrice) * 0.83 - 0.25).toFixed(2)}</Text>
+                </Text>
+                <Text style={styles.priceAcquirente}>L'acquirente pagherà €{parseFloat(customPrice).toFixed(2)}</Text>
               </View>
             )}
-          </TouchableOpacity>
+            
+            {/* Suggerimento prezzo basato sulla condizione */}
+            {priceRange.prices.length > 0 && (
+              <View style={styles.priceSuggestionBox}>
+                <Ionicons name="bulb-outline" size={16} color="#FF9800" />
+                <Text style={styles.priceSuggestionText}>
+                  Prezzo suggerito per condizione "{getConditionLabel(priceRange.condition)}": €{priceRange.prices[1]?.prezzoAcquirente?.toFixed(2) || priceRange.prices[0]?.prezzoAcquirente?.toFixed(2)}
+                </Text>
+              </View>
+            )}
+          </View>
         </View>
 
         {/* Foto del libro */}
@@ -1785,6 +1747,56 @@ const styles = StyleSheet.create({
   },
   customPriceDetails: {
     marginTop: 8,
+  },
+  // Stili per prezzo semplificato (senza opzioni)
+  simplePriceContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  simplePriceInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  simplePriceEuro: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#1a472a',
+  },
+  simplePriceInput: {
+    flex: 1,
+    backgroundColor: '#f8f9fa',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#1a472a',
+  },
+  simplePriceDetails: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+  },
+  priceSuggestionBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF8E1',
+    padding: 10,
+    borderRadius: 8,
+    marginTop: 12,
+    gap: 8,
+  },
+  priceSuggestionText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#666',
   },
   photoLabel: {
     fontSize: 14,
