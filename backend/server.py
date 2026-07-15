@@ -8974,7 +8974,13 @@ async def create_batch_checkout_session(
         order_metadata.append(order.get("id"))
     
     try:
-        base_url = os.getenv("FRONTEND_URL", "https://language-check-10.preview.emergentagent.com")
+        # In produzione usa EXPO_PUBLIC_BACKEND_URL per il redirect
+        # In sviluppo usa FRONTEND_URL o default
+        backend_url = os.getenv("EXPO_PUBLIC_BACKEND_URL", "")
+        if backend_url and "ribook.it" in backend_url:
+            base_url = "https://ribook.it"
+        else:
+            base_url = os.getenv("FRONTEND_URL", "https://ribook.it")
         
         # Crea una sessione Stripe con tutti gli ordini
         session = stripe.checkout.Session.create(
@@ -9144,8 +9150,12 @@ async def create_checkout_session(
     try:
         if request.platform == "web":
             # WEB: Crea Checkout Session con redirect
-            # Usa URL assoluto del frontend per success/cancel
-            base_url = os.getenv("FRONTEND_URL", "https://language-check-10.preview.emergentagent.com")
+            # In produzione usa EXPO_PUBLIC_BACKEND_URL per il redirect
+            backend_url = os.getenv("EXPO_PUBLIC_BACKEND_URL", "")
+            if backend_url and "ribook.it" in backend_url:
+                base_url = "https://ribook.it"
+            else:
+                base_url = os.getenv("FRONTEND_URL", "https://ribook.it")
             
             session = stripe.checkout.Session.create(
                 payment_method_types=["card"],
