@@ -621,7 +621,6 @@ export default function RadarScreen() {
               >
                 <Ionicons name="information-circle" size={24} color="#1a472a" />
               </TouchableOpacity>
-              </TouchableOpacity>
             </View>
             
             {/* Profili esistenti - Rettangoli compatti */}
