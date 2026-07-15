@@ -51,6 +51,22 @@ export default function BookstoreRegisterScreen() {
       Alert.alert('Errore', 'Inserisci una Partita IVA valida (11 cifre)');
       return false;
     }
+    if (!codiceUnivoco.trim() || codiceUnivoco.length < 6) {
+      Alert.alert('Errore', 'Inserisci un Codice Univoco valido (6-7 caratteri)');
+      return false;
+    }
+    if (!indirizzo.trim()) {
+      Alert.alert('Errore', 'Inserisci l\'indirizzo');
+      return false;
+    }
+    if (!citta.trim()) {
+      Alert.alert('Errore', 'Inserisci la città');
+      return false;
+    }
+    if (!telefono.trim()) {
+      Alert.alert('Errore', 'Inserisci il numero di telefono');
+      return false;
+    }
     return true;
   };
 
@@ -199,7 +215,7 @@ export default function BookstoreRegisterScreen() {
 
           {/* Codice Univoco (SDI) */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Codice Univoco (SDI)</Text>
+            <Text style={styles.label}>Codice Univoco (SDI) *</Text>
             <View style={styles.inputWrapper}>
               <Ionicons name="barcode-outline" size={20} color="#666" style={styles.inputIcon} />
               <TextInput
@@ -212,12 +228,12 @@ export default function BookstoreRegisterScreen() {
                 maxLength={7}
               />
             </View>
-            <Text style={styles.inputHint}>Per fatturazione elettronica (7 caratteri)</Text>
+            <Text style={styles.inputHint}>Per fatturazione elettronica (6-7 caratteri)</Text>
           </View>
 
           {/* Indirizzo */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Indirizzo</Text>
+            <Text style={styles.label}>Indirizzo *</Text>
             <View style={styles.inputWrapper}>
               <Ionicons name="location-outline" size={20} color="#666" style={styles.inputIcon} />
               <TextInput
@@ -234,7 +250,7 @@ export default function BookstoreRegisterScreen() {
 
           {/* Città */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Città</Text>
+            <Text style={styles.label}>Città *</Text>
             <View style={styles.inputWrapper}>
               <Ionicons name="business-outline" size={20} color="#666" style={styles.inputIcon} />
               <TextInput
@@ -251,7 +267,7 @@ export default function BookstoreRegisterScreen() {
 
           {/* Telefono */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Telefono</Text>
+            <Text style={styles.label}>Telefono *</Text>
             <View style={styles.inputWrapper}>
               <Ionicons name="call-outline" size={20} color="#666" style={styles.inputIcon} />
               <TextInput
