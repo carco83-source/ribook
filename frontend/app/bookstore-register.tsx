@@ -147,86 +147,123 @@ export default function BookstoreRegisterScreen() {
           {/* Nome Attività */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Nome Attività *</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Es. Cartolibreria Rossi"
-              value={nomeAttivita}
-              onChangeText={setNomeAttivita}
-            />
+            <View style={styles.inputWrapper}>
+              <Ionicons name="storefront-outline" size={20} color="#666" style={styles.inputIcon} />
+              <TextInput
+                style={styles.inputWithIcon}
+                placeholder="Es. Cartolibreria Rossi"
+                placeholderTextColor="#999"
+                value={nomeAttivita}
+                onChangeText={setNomeAttivita}
+                autoCapitalize="words"
+              />
+            </View>
           </View>
 
           {/* Email */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Email *</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="email@esempio.it"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
+            <View style={styles.inputWrapper}>
+              <Ionicons name="mail-outline" size={20} color="#666" style={styles.inputIcon} />
+              <TextInput
+                style={styles.inputWithIcon}
+                placeholder="email@esempio.it"
+                placeholderTextColor="#999"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                textContentType="emailAddress"
+              />
+            </View>
           </View>
 
           {/* Partita IVA */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Partita IVA *</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="12345678901"
-              value={partitaIva}
-              onChangeText={(text) => setPartitaIva(text.replace(/\D/g, ''))}
-              keyboardType="numeric"
-              maxLength={11}
-            />
+            <View style={styles.inputWrapper}>
+              <Ionicons name="document-text-outline" size={20} color="#666" style={styles.inputIcon} />
+              <TextInput
+                style={styles.inputWithIcon}
+                placeholder="12345678901"
+                placeholderTextColor="#999"
+                value={partitaIva}
+                onChangeText={(text) => setPartitaIva(text.replace(/\D/g, ''))}
+                keyboardType="numeric"
+                maxLength={11}
+              />
+            </View>
+            <Text style={styles.inputHint}>11 cifre senza spazi</Text>
           </View>
 
           {/* Codice Univoco (SDI) */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Codice Univoco (SDI)</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Es. ABC1234 o 0000000"
-              value={codiceUnivoco}
-              onChangeText={(text) => setCodiceUnivoco(text.toUpperCase())}
-              autoCapitalize="characters"
-              maxLength={7}
-            />
+            <View style={styles.inputWrapper}>
+              <Ionicons name="barcode-outline" size={20} color="#666" style={styles.inputIcon} />
+              <TextInput
+                style={styles.inputWithIcon}
+                placeholder="Es. ABC1234 o 0000000"
+                placeholderTextColor="#999"
+                value={codiceUnivoco}
+                onChangeText={(text) => setCodiceUnivoco(text.toUpperCase())}
+                autoCapitalize="characters"
+                maxLength={7}
+              />
+            </View>
             <Text style={styles.inputHint}>Per fatturazione elettronica (7 caratteri)</Text>
           </View>
 
           {/* Indirizzo */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Indirizzo</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Via Roma, 1"
-              value={indirizzo}
-              onChangeText={setIndirizzo}
-            />
+            <View style={styles.inputWrapper}>
+              <Ionicons name="location-outline" size={20} color="#666" style={styles.inputIcon} />
+              <TextInput
+                style={styles.inputWithIcon}
+                placeholder="Via Roma, 1"
+                placeholderTextColor="#999"
+                value={indirizzo}
+                onChangeText={setIndirizzo}
+                autoCapitalize="words"
+                textContentType="streetAddressLine1"
+              />
+            </View>
           </View>
 
           {/* Città */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Città</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Catanzaro"
-              value={citta}
-              onChangeText={setCitta}
-            />
+            <View style={styles.inputWrapper}>
+              <Ionicons name="business-outline" size={20} color="#666" style={styles.inputIcon} />
+              <TextInput
+                style={styles.inputWithIcon}
+                placeholder="Catanzaro"
+                placeholderTextColor="#999"
+                value={citta}
+                onChangeText={setCitta}
+                autoCapitalize="words"
+                textContentType="addressCity"
+              />
+            </View>
           </View>
 
           {/* Telefono */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Telefono</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="0961 123456"
-              value={telefono}
-              onChangeText={setTelefono}
-              keyboardType="phone-pad"
-            />
+            <View style={styles.inputWrapper}>
+              <Ionicons name="call-outline" size={20} color="#666" style={styles.inputIcon} />
+              <TextInput
+                style={styles.inputWithIcon}
+                placeholder="0961 123456"
+                placeholderTextColor="#999"
+                value={telefono}
+                onChangeText={setTelefono}
+                keyboardType="phone-pad"
+                textContentType="telephoneNumber"
+              />
+            </View>
           </View>
 
           <Text style={styles.requiredNote}>* Campi obbligatori</Text>
@@ -304,6 +341,22 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e0e0e0',
     borderRadius: 10,
+    padding: 14,
+    fontSize: 16,
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 10,
+  },
+  inputIcon: {
+    paddingLeft: 14,
+  },
+  inputWithIcon: {
+    flex: 1,
     padding: 14,
     fontSize: 16,
   },
