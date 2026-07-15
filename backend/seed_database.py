@@ -5,6 +5,8 @@ Viene eseguito all'avvio del server se il database è vuoto.
 import asyncio
 import json
 import os
+import hashlib
+import uuid
 from motor.motor_asyncio import AsyncIOMotorClient
 from dotenv import load_dotenv
 
@@ -12,6 +14,7 @@ load_dotenv()
 
 MONGO_URL = os.getenv("MONGO_URL", "mongodb://localhost:27017")
 SEED_DATA_PATH = os.path.join(os.path.dirname(__file__), "seed_data")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")  # Password admin da variabile d'ambiente
 
 async def seed_collection(db, collection_name: str, file_name: str):
     """Popola una collection se è vuota."""
@@ -58,6 +61,50 @@ async def seed_collection(db, collection_name: str, file_name: str):
     except Exception as e:
         print(f"  ✗ {collection_name}: errore - {str(e)}")
         return False
+
+
+async def seed_admin_user(db):
+    """
+    Crea l'utente admin se non esiste.
+    La password viene letta dalla variabile d'ambiente ADMIN_PASSWORD.
+    """
+    print("\n👤 Verifica utente admin...")
+    
+    # Controlla se admin esiste già
+    admin = await db.users.find_one({"email": "admin@ribook.it"})
+    
+    if admin:
+        print("  ✓ Admin già esistente")
+        return False
+    
+    # Verifica che ADMIN_PASSWORD sia configurata
+    if not ADMIN_PASSWORD:
+        print("  ⚠ ADMIN_PASSWORD non configurata - admin non creato")
+        print("    Aggiungi ADMIN_PASSWORD al file .env o deploy.env")
+        return False
+    
+    try:
+        # Crea hash della password
+        password_hash = hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest()
+        
+        admin_doc = {
+            "id": str(uuid.uuid4()),
+            "email": "admin@ribook.it",
+            "password_hash": password_hash,
+            "nome": "Admin",
+            "cognome": "RiBook",
+            "is_admin": True,
+            "created_at": "2026-01-01T00:00:00"
+        }
+        
+        await db.users.insert_one(admin_doc)
+        print(f"  ✓ Admin creato: admin@ribook.it")
+        return True
+        
+    except Exception as e:
+        print(f"  ✗ Errore creazione admin: {str(e)}")
+        return False
+
 
 async def create_indexes(db):
     """Crea gli indici necessari per le performance."""
@@ -123,6 +170,9 @@ async def run_seed():
         result = await seed_collection(db, collection_name, file_name)
         if result:
             any_seeded = True
+    
+    # Crea utente admin se non esiste
+    await seed_admin_user(db)
     
     # Crea indici se abbiamo inserito dati
     if any_seeded:
