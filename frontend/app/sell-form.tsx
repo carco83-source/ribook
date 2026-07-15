@@ -1130,7 +1130,7 @@ export default function SellFormScreen() {
               <Text style={styles.simplePriceEuro}>€</Text>
               <TextInput
                 style={styles.simplePriceInput}
-                placeholder="Inserisci il prezzo"
+                placeholder="0.00"
                 placeholderTextColor="#999"
                 keyboardType="decimal-pad"
                 value={customPrice}
