@@ -612,11 +612,12 @@ export default function RadarScreen() {
                 hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
                 activeOpacity={0.6}
                 onPress={() => {
-                  Alert.alert(
-                    'ℹ️ Informazione',
-                    'Seleziona la classe che frequenterai nel prossimo anno scolastico, non quella appena terminata. In questo modo RiBook potrà mostrarti i libri corretti per il nuovo anno.',
-                    [{ text: 'OK' }]
-                  );
+                  const message = 'Seleziona la classe che frequenterai nel prossimo anno scolastico, non quella appena terminata. In questo modo RiBook potrà mostrarti i libri corretti per il nuovo anno.';
+                  if (Platform.OS === 'web') {
+                    window.alert(message);
+                  } else {
+                    Alert.alert('ℹ️ Informazione', message, [{ text: 'OK' }]);
+                  }
                 }}
               >
                 <Ionicons name="information-circle" size={24} color="#1a472a" />
