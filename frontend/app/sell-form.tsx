@@ -1759,12 +1759,12 @@ const styles = StyleSheet.create({
   simplePriceInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
   },
   simplePriceEuro: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: 'bold',
     color: '#1a472a',
+    marginRight: 8,
   },
   simplePriceInput: {
     flex: 1,
@@ -1772,9 +1772,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e0e0e0',
     borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    fontSize: 18,
     fontWeight: '600',
     color: '#1a472a',
   },
@@ -1786,17 +1786,17 @@ const styles = StyleSheet.create({
   },
   priceSuggestionBox: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     backgroundColor: '#FFF8E1',
     padding: 10,
     borderRadius: 8,
     marginTop: 12,
-    gap: 8,
   },
   priceSuggestionText: {
     flex: 1,
     fontSize: 13,
     color: '#666',
+    marginLeft: 8,
   },
   photoLabel: {
     fontSize: 14,
