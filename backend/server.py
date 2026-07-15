@@ -13683,9 +13683,9 @@ async def bookstore_login(data: dict):
     if not bookstore:
         raise HTTPException(status_code=401, detail="Credenziali non valide")
     
-    # Verifica password (per ora semplice, in produzione usare bcrypt)
-    stored_password = bookstore.get("password", "")
-    if password != stored_password:
+    # Verifica password con bcrypt
+    stored_hash = bookstore.get("password_hash", "")
+    if not stored_hash or not verify_password(password, stored_hash):
         raise HTTPException(status_code=401, detail="Credenziali non valide")
     
     return {
