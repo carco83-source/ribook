@@ -598,13 +598,26 @@ export default function RadarScreen() {
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View style={styles.childTabsCompact}>
             {/* Rettangolo + per aggiungere profilo */}
-            <TouchableOpacity
-              style={styles.addProfileRectCompact}
-              onPress={() => setShowAddProfileModal(true)}
-            >
-              <Ionicons name="add" size={24} color="#1a472a" />
-              <Text style={styles.addProfileRectTextCompact}>Aggiungi</Text>
-            </TouchableOpacity>
+            <View style={styles.addProfileContainer}>
+              <TouchableOpacity
+                style={styles.addProfileRectCompact}
+                onPress={() => setShowAddProfileModal(true)}
+              >
+                <Ionicons name="add" size={24} color="#1a472a" />
+                <Text style={styles.addProfileRectTextCompact}>Aggiungi</Text>
+              </TouchableOpacity>
+              {/* Info icon */}
+              <TouchableOpacity
+                style={styles.infoIconButton}
+                onPress={() => Alert.alert(
+                  'ℹ️ Informazione',
+                  'Seleziona la classe che frequenterai nel prossimo anno scolastico, non quella appena terminata. In questo modo RiBook potrà mostrarti i libri corretti per il nuovo anno.',
+                  [{ text: 'OK' }]
+                )}
+              >
+                <Ionicons name="information-circle-outline" size={20} color="#1a472a" />
+              </TouchableOpacity>
+            </View>
             
             {/* Profili esistenti - Rettangoli compatti */}
             {childProfiles.map((child) => {
@@ -634,6 +647,60 @@ export default function RadarScreen() {
           </View>
         </ScrollView>
       </View>
+
+      {/* TESTO INTRODUTTIVO - Mostrato quando NON c'è un profilo selezionato */}
+      {!selectedChildId && (
+        <View style={styles.introSection}>
+          <Text style={styles.introTitle}>Benvenuto su RiBook</Text>
+          <Text style={styles.introSubtitle}>
+            Per trovare i libri giusti, inserisci la classe che frequenterai in questo anno scolastico
+          </Text>
+          <Text style={styles.introText}>
+            RiBook confronterà automaticamente l'elenco dei libri adottati per la classe che frequenterai e ti mostrerà quali puoi acquistare usati, quali sono già compatibili e quali potrai rivendere.
+          </Text>
+          
+          <Text style={styles.introSectionTitle}>Dai una seconda vita ai tuoi libri scolastici</Text>
+          <Text style={styles.introText}>
+            Compra e vendi libri usati in modo semplice, sicuro e conveniente.{'\n'}
+            Con RiBook puoi trovare i libri della tua scuola, risparmiare sull'acquisto dei testi scolastici e vendere quelli che non utilizzi più.
+          </Text>
+          
+          <View style={styles.introChecklist}>
+            <Text style={styles.introCheckItem}>✅ Cerca i libri compatibili con la tua nuova classe</Text>
+            <Text style={styles.introCheckItem}>✅ Vendi facilmente i libri che non ti serviranno più</Text>
+            <Text style={styles.introCheckItem}>✅ Ritira e consegna presso le cartolibrerie convenzionate</Text>
+            <Text style={styles.introCheckItem}>✅ Tutto in pochi minuti e in totale sicurezza</Text>
+          </View>
+          
+          <Text style={styles.introHighlight}>Registrati gratuitamente e inizia subito.</Text>
+          
+          <Text style={styles.introSectionTitle}>Perché scegliere RiBook?</Text>
+          <View style={styles.introChecklist}>
+            <Text style={styles.introCheckItem}>✔ Risparmia fino al 60-70% sull'acquisto dei libri scolastici.</Text>
+            <Text style={styles.introCheckItem}>✔ Evita annunci generici e trova subito il libro corretto.</Text>
+            <Text style={styles.introCheckItem}>✔ Verifica automaticamente la compatibilità con la tua scuola e la tua classe.</Text>
+            <Text style={styles.introCheckItem}>✔ Dai una seconda vita ai libri e contribuisci a ridurre gli sprechi.</Text>
+            <Text style={styles.introCheckItem}>✔ Una piattaforma pensata esclusivamente per studenti e famiglie.</Text>
+          </View>
+          
+          <Text style={styles.introSectionTitle}>Il ruolo delle cartolibrerie convenzionate</Text>
+          <Text style={styles.introText}>
+            Le cartolibrerie convenzionate sono un elemento fondamentale di RiBook e garantiscono maggiore sicurezza sia a chi acquista sia a chi vende.
+          </Text>
+          <Text style={styles.introText}>
+            Quando un libro viene consegnato, la cartolibreria verifica che corrisponda alla descrizione e alle fotografie inserite nell'annuncio, controllandone lo stato generale, la presenza di eventuali scritte, sottolineature, pagine mancanti o altri difetti rilevanti.
+          </Text>
+          <Text style={styles.introText}>
+            Se il libro risulta conforme alla descrizione, viene accettato e reso disponibile per il ritiro da parte dell'acquirente. Se invece presenta condizioni significativamente diverse da quelle dichiarate, la cartolibreria può rifiutarne l'accettazione, tutelando così chi acquista.
+          </Text>
+          <Text style={styles.introText}>
+            Per questo motivo è importante compilare l'annuncio con attenzione, descrivendo in modo accurato lo stato del libro e segnalando eventuali imperfezioni. Una descrizione precisa evita inconvenienti, velocizza la vendita e contribuisce a mantenere un servizio affidabile per tutta la comunità RiBook.
+          </Text>
+          <Text style={styles.introHighlight}>
+            Trasparenza, correttezza e fiducia sono alla base di ogni compravendita su RiBook.
+          </Text>
+        </View>
+      )}
 
       {/* Barra Dettagli Scuola e Spesa - Con nome profilo */}
       {selectedChildId && (() => {
@@ -833,6 +900,37 @@ export default function RadarScreen() {
                 </>
               );
             })()}
+
+            {/* TESTO INFORMATIVO - Dopo le categorie libri */}
+            <View style={styles.infoSectionAfterBooks}>
+              <Text style={styles.infoSectionTitle}>Dai una seconda vita ai tuoi libri scolastici</Text>
+              <Text style={styles.infoSectionText}>
+                Compra e vendi libri usati in modo semplice, sicuro e conveniente.
+              </Text>
+              
+              <View style={styles.infoChecklist}>
+                <Text style={styles.infoCheckItem}>✅ Cerca i libri compatibili con la tua nuova classe</Text>
+                <Text style={styles.infoCheckItem}>✅ Vendi facilmente i libri che non ti serviranno più</Text>
+                <Text style={styles.infoCheckItem}>✅ Ritira e consegna presso le cartolibrerie convenzionate</Text>
+                <Text style={styles.infoCheckItem}>✅ Tutto in pochi minuti e in totale sicurezza</Text>
+              </View>
+              
+              <Text style={styles.infoSectionTitle}>Perché scegliere RiBook?</Text>
+              <View style={styles.infoChecklist}>
+                <Text style={styles.infoCheckItem}>✔ Risparmia fino al 60-70% sull'acquisto dei libri scolastici.</Text>
+                <Text style={styles.infoCheckItem}>✔ Evita annunci generici e trova subito il libro corretto.</Text>
+                <Text style={styles.infoCheckItem}>✔ Verifica automaticamente la compatibilità con la tua scuola e classe.</Text>
+                <Text style={styles.infoCheckItem}>✔ Dai una seconda vita ai libri e contribuisci a ridurre gli sprechi.</Text>
+              </View>
+              
+              <Text style={styles.infoSectionTitle}>Il ruolo delle cartolibrerie convenzionate</Text>
+              <Text style={styles.infoSectionText}>
+                Le cartolibrerie convenzionate garantiscono maggiore sicurezza sia a chi acquista sia a chi vende, verificando che ogni libro corrisponda alla descrizione e alle fotografie inserite nell'annuncio.
+              </Text>
+              <Text style={styles.infoHighlightSmall}>
+                Trasparenza, correttezza e fiducia sono alla base di ogni compravendita su RiBook.
+              </Text>
+            </View>
 
           </View>
         );
@@ -2941,5 +3039,112 @@ const styles = StyleSheet.create({
   registerModalLoginBold: {
     color: '#1a472a',
     fontWeight: 'bold',
+  },
+  // Stili per container pulsante aggiungi + info icon
+  addProfileContainer: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    marginRight: 4,
+  },
+  infoIconButton: {
+    marginTop: 4,
+    padding: 2,
+  },
+  // Stili per sezione introduttiva (senza profilo)
+  introSection: {
+    backgroundColor: '#fff',
+    marginHorizontal: 12,
+    marginTop: 16,
+    padding: 20,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  introTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1a472a',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  introSubtitle: {
+    fontSize: 16,
+    color: '#333',
+    textAlign: 'center',
+    marginBottom: 16,
+    fontWeight: '500',
+  },
+  introSectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1a472a',
+    marginTop: 20,
+    marginBottom: 10,
+  },
+  introText: {
+    fontSize: 14,
+    color: '#555',
+    lineHeight: 22,
+    marginBottom: 10,
+  },
+  introChecklist: {
+    marginVertical: 10,
+  },
+  introCheckItem: {
+    fontSize: 14,
+    color: '#333',
+    lineHeight: 24,
+    paddingLeft: 4,
+  },
+  introHighlight: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#1a472a',
+    textAlign: 'center',
+    marginVertical: 16,
+    backgroundColor: '#e8f5e9',
+    padding: 12,
+    borderRadius: 8,
+  },
+  // Stili per sezione info DOPO le categorie libri
+  infoSectionAfterBooks: {
+    backgroundColor: '#f8f9fa',
+    marginTop: 20,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  infoSectionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1a472a',
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  infoSectionText: {
+    fontSize: 13,
+    color: '#555',
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  infoChecklist: {
+    marginVertical: 6,
+  },
+  infoCheckItem: {
+    fontSize: 13,
+    color: '#333',
+    lineHeight: 22,
+  },
+  infoHighlightSmall: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1a472a',
+    textAlign: 'center',
+    marginTop: 12,
+    fontStyle: 'italic',
   },
 });
