@@ -25,6 +25,7 @@ export default function BookstoreRegisterScreen() {
   const [nomeAttivita, setNomeAttivita] = useState('');
   const [email, setEmail] = useState('');
   const [partitaIva, setPartitaIva] = useState('');
+  const [codiceUnivoco, setCodiceUnivoco] = useState('');
   const [indirizzo, setIndirizzo] = useState('');
   const [citta, setCitta] = useState('');
   const [telefono, setTelefono] = useState('');
@@ -62,6 +63,7 @@ export default function BookstoreRegisterScreen() {
         nome_attivita: nomeAttivita.trim(),
         email: email.trim().toLowerCase(),
         partita_iva: partitaIva.trim(),
+        codice_univoco: codiceUnivoco.trim().toUpperCase(),
         indirizzo: indirizzo.trim(),
         citta: citta.trim(),
         telefono: telefono.trim(),
@@ -179,6 +181,20 @@ export default function BookstoreRegisterScreen() {
             />
           </View>
 
+          {/* Codice Univoco (SDI) */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Codice Univoco (SDI)</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Es. ABC1234 o 0000000"
+              value={codiceUnivoco}
+              onChangeText={(text) => setCodiceUnivoco(text.toUpperCase())}
+              autoCapitalize="characters"
+              maxLength={7}
+            />
+            <Text style={styles.inputHint}>Per fatturazione elettronica (7 caratteri)</Text>
+          </View>
+
           {/* Indirizzo */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Indirizzo</Text>
@@ -290,6 +306,11 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 14,
     fontSize: 16,
+  },
+  inputHint: {
+    fontSize: 12,
+    color: '#888',
+    marginTop: 4,
   },
   requiredNote: {
     fontSize: 12,

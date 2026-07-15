@@ -1307,6 +1307,7 @@ class BookstoreRegistrationRequest(BaseModel):
     nome_attivita: str
     email: str
     partita_iva: str
+    codice_univoco: Optional[str] = ""  # Codice SDI per fatturazione elettronica
     indirizzo: Optional[str] = ""
     citta: Optional[str] = ""
     telefono: Optional[str] = ""
@@ -1320,6 +1321,7 @@ class BookstoreRegistrationRequestCreate(BaseModel):
     nome_attivita: str
     email: str
     partita_iva: str
+    codice_univoco: Optional[str] = ""
     indirizzo: Optional[str] = ""
     citta: Optional[str] = ""
     telefono: Optional[str] = ""
@@ -11151,6 +11153,7 @@ async def submit_bookstore_registration(data: BookstoreRegistrationRequestCreate
         nome_attivita=data.nome_attivita,
         email=data.email.lower(),
         partita_iva=data.partita_iva,
+        codice_univoco=data.codice_univoco.upper() if data.codice_univoco else "",
         indirizzo=data.indirizzo or "",
         citta=data.citta or "",
         telefono=data.telefono or "",
