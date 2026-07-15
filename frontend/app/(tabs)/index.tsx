@@ -609,13 +609,18 @@ export default function RadarScreen() {
               {/* Info icon */}
               <TouchableOpacity
                 style={styles.infoIconButton}
-                onPress={() => Alert.alert(
-                  'ℹ️ Informazione',
-                  'Seleziona la classe che frequenterai nel prossimo anno scolastico, non quella appena terminata. In questo modo RiBook potrà mostrarti i libri corretti per il nuovo anno.',
-                  [{ text: 'OK' }]
-                )}
+                hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+                activeOpacity={0.6}
+                onPress={() => {
+                  Alert.alert(
+                    'ℹ️ Informazione',
+                    'Seleziona la classe che frequenterai nel prossimo anno scolastico, non quella appena terminata. In questo modo RiBook potrà mostrarti i libri corretti per il nuovo anno.',
+                    [{ text: 'OK' }]
+                  );
+                }}
               >
-                <Ionicons name="information-circle-outline" size={20} color="#1a472a" />
+                <Ionicons name="information-circle" size={24} color="#1a472a" />
+              </TouchableOpacity>
               </TouchableOpacity>
             </View>
             
@@ -3047,8 +3052,10 @@ const styles = StyleSheet.create({
     marginRight: 4,
   },
   infoIconButton: {
-    marginTop: 4,
-    padding: 2,
+    marginTop: 6,
+    padding: 8,
+    backgroundColor: '#e8f5e9',
+    borderRadius: 20,
   },
   // Stili per sezione introduttiva (senza profilo)
   introSection: {
