@@ -29,11 +29,12 @@ EXPO_PUBLIC_BACKEND_URL=https://ribook.it
 DB_NAME=ribook
 MONGO_URL=mongodb://mongo:27017/ribook
 ADMIN_PASSWORD=CambiaMiInProduzione123!
-STRIPE_SECRET_KEY=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
-STRIPE_PUBLISHABLE_KEY=pk_live_51TmUU9HYnbqrgFr2Vcs4UvKZhDgbtvsouPraSdgtV0CYuUlS8rdBSFodzU6abm09e4ecZbFb6EFu1qNAgKGvacnK00AyzCTLmT
-EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_51TmUU9HYnbqrgFr2Vcs4UvKZhDgbtvsouPraSdgtV0CYuUlS8rdBSFodzU6abm09e4ecZbFb6EFu1qNAgKGvacnK00AyzCTLmT
+STRIPE_SECRET_KEY=
+STRIPE_PUBLISHABLE_KEY=
+EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=
 ENV
   chmod 600 "${ENV_FILE}"
+  echo "ATTENZIONE: Configura le chiavi Stripe nel file ${ENV_FILE}"
 fi
 
 docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d --build --remove-orphans
