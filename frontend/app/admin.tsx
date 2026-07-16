@@ -439,6 +439,15 @@ export default function AdminPortalScreen() {
             <Text style={styles.quickActionText}>Gestione Payout</Text>
             <Text style={styles.quickActionSubtext}>Bonifici e scadenze</Text>
           </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[styles.quickActionButton, { backgroundColor: '#ef4444' }]}
+            onPress={() => router.push('/admin/accounts')}
+          >
+            <Ionicons name="people" size={24} color="#fff" />
+            <Text style={styles.quickActionText}>Gestione Account</Text>
+            <Text style={styles.quickActionSubtext}>Utenti e Cartolibrerie</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Dashboard Tab */}

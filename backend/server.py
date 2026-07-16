@@ -11474,6 +11474,118 @@ async def get_all_bookstores(admin_id: str = Query(...)):
     
     return {"bookstores": bookstores}
 
+# ============== ADMIN: GESTIONE UTENTI E CARTOLIBRERIE ==============
+
+@api_router.get("/admin/users-list")
+async def admin_get_users_list(admin_id: str = Query(...), search: str = Query(default="")):
+    """Admin: lista utenti con ricerca"""
+    admin = await db.users.find_one({"id": admin_id})
+    if not admin or not admin.get("is_admin", False):
+        raise HTTPException(status_code=403, detail="Accesso non autorizzato")
+    
+    query = {}
+    if search:
+        query = {
+            "$or": [
+                {"email": {"$regex": search, "$options": "i"}},
+                {"nome": {"$regex": search, "$options": "i"}},
+                {"cognome": {"$regex": search, "$options": "i"}},
+                {"username": {"$regex": search, "$options": "i"}}
+            ]
+        }
+    
+    users = await db.users.find(query).sort([("created_at", -1)]).to_list(200)
+    
+    result = []
+    for u in users:
+        result.append({
+            "id": u.get("id"),
+            "email": u.get("email"),
+            "nome": u.get("nome"),
+            "cognome": u.get("cognome"),
+            "username": u.get("username"),
+            "is_admin": u.get("is_admin", False),
+            "google_auth": u.get("google_auth", False),
+            "created_at": u.get("created_at"),
+            "profili_count": len(u.get("profili_figli", []))
+        })
+    
+    return {"users": result, "total": len(result)}
+
+@api_router.delete("/admin/users/{user_id}")
+async def admin_delete_user(user_id: str, admin_id: str = Query(...)):
+    """Admin: elimina un utente e tutti i suoi dati"""
+    admin = await db.users.find_one({"id": admin_id})
+    if not admin or not admin.get("is_admin", False):
+        raise HTTPException(status_code=403, detail="Accesso non autorizzato")
+    
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+    
+    if user.get("is_admin"):
+        raise HTTPException(status_code=400, detail="Non puoi eliminare un amministratore")
+    
+    # Verifica ordini attivi
+    active_orders = await db.orders.count_documents({
+        "$or": [{"buyer_id": user_id}, {"seller_id": user_id}],
+        "status": {"$nin": ["completed", "cancelled", "refunded", "annullato_acquirente", "annullato_non_disponibile"]}
+    })
+    
+    if active_orders > 0:
+        raise HTTPException(status_code=400, detail=f"L'utente ha {active_orders} ordini attivi. Completa o annulla gli ordini prima di eliminare.")
+    
+    # Elimina dati correlati
+    await db.listings.delete_many({"seller_id": user_id})
+    await db.notifications.delete_many({"user_id": user_id})
+    await db.user_sessions.delete_many({"user_id": user_id})
+    await db.messages.delete_many({"$or": [{"sender_id": user_id}, {"recipient_id": user_id}]})
+    
+    # Elimina utente
+    result = await db.users.delete_one({"id": user_id})
+    
+    print(f"[ADMIN] User {user_id} ({user.get('email')}) deleted by admin {admin_id}")
+    
+    return {
+        "success": True,
+        "message": f"Utente {user.get('email')} eliminato con successo",
+        "deleted_listings": True,
+        "deleted_notifications": True
+    }
+
+@api_router.delete("/admin/bookstores/{bookstore_id}")
+async def admin_delete_bookstore(bookstore_id: str, admin_id: str = Query(...)):
+    """Admin: elimina una cartolibreria"""
+    admin = await db.users.find_one({"id": admin_id})
+    if not admin or not admin.get("is_admin", False):
+        raise HTTPException(status_code=403, detail="Accesso non autorizzato")
+    
+    bookstore = await db.bookstores.find_one({"id": bookstore_id})
+    if not bookstore:
+        raise HTTPException(status_code=404, detail="Cartolibreria non trovata")
+    
+    # Verifica ordini attivi con questa cartolibreria
+    active_orders = await db.orders.count_documents({
+        "bookstore_id": bookstore_id,
+        "status": {"$nin": ["completed", "cancelled", "refunded", "annullato_acquirente", "annullato_non_disponibile", "picked_up"]}
+    })
+    
+    if active_orders > 0:
+        raise HTTPException(status_code=400, detail=f"La cartolibreria ha {active_orders} ordini attivi. Completa gli ordini prima di eliminare.")
+    
+    # Elimina cartolibreria
+    result = await db.bookstores.delete_one({"id": bookstore_id})
+    
+    # Elimina anche eventuali richieste correlate
+    await db.bookstore_requests.delete_many({"email": bookstore.get("email")})
+    
+    print(f"[ADMIN] Bookstore {bookstore_id} ({bookstore.get('nome')}) deleted by admin {admin_id}")
+    
+    return {
+        "success": True,
+        "message": f"Cartolibreria '{bookstore.get('nome')}' eliminata con successo"
+    }
+
 @api_router.post("/admin/bookstore-requests/{request_id}/approve")
 async def approve_bookstore_request(request_id: str, admin_id: str = Query(...)):
     """Admin: approva richiesta cartolibreria e genera password"""
