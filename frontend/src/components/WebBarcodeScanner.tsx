@@ -13,126 +13,140 @@ export default function WebBarcodeScanner({ onScan, onClose, scannerMode }: WebB
   const [errorMsg, setErrorMsg] = useState<string>('');
   const scannerRef = useRef<any>(null);
   const hasScannedRef = useRef(false);
-  const mountedRef = useRef(true);
+  const isMountedRef = useRef(true);
 
-  // Callback stabile per onScan
+  // Stable refs for callbacks
   const onScanRef = useRef(onScan);
+  const onCloseRef = useRef(onClose);
+  
   useEffect(() => {
     onScanRef.current = onScan;
-  }, [onScan]);
+    onCloseRef.current = onClose;
+  }, [onScan, onClose]);
 
-  const stopScanner = useCallback(() => {
+  // Stop and cleanup scanner
+  const cleanup = useCallback(async () => {
+    console.log('[WebScanner] Cleanup called');
     if (scannerRef.current) {
       try {
-        scannerRef.current.stop().catch(() => {});
+        const state = scannerRef.current.getState();
+        console.log('[WebScanner] Scanner state:', state);
+        if (state === 2) { // SCANNING
+          await scannerRef.current.stop();
+          console.log('[WebScanner] Scanner stopped');
+        }
+        scannerRef.current.clear();
+        console.log('[WebScanner] Scanner cleared');
       } catch (e) {
-        // Ignore
+        console.log('[WebScanner] Cleanup error (ignored):', e);
       }
+      scannerRef.current = null;
     }
   }, []);
 
-  const handleClose = useCallback(() => {
-    stopScanner();
-    onClose();
-  }, [onClose, stopScanner]);
+  // Handle close button
+  const handleClose = useCallback(async () => {
+    console.log('[WebScanner] handleClose called');
+    await cleanup();
+    // Use setTimeout to ensure state update happens after cleanup
+    setTimeout(() => {
+      onCloseRef.current();
+    }, 100);
+  }, [cleanup]);
 
-  const handleSuccessfulScan = useCallback((isbn: string) => {
-    if (hasScannedRef.current) return;
+  // Handle successful scan
+  const handleSuccessfulScan = useCallback(async (isbn: string) => {
+    if (hasScannedRef.current || !isMountedRef.current) return;
     hasScannedRef.current = true;
-    stopScanner();
-    onScanRef.current(isbn);
-  }, [stopScanner]);
+    console.log('[WebScanner] Successful scan:', isbn);
+    
+    await cleanup();
+    
+    setTimeout(() => {
+      if (isMountedRef.current) {
+        onScanRef.current(isbn);
+      }
+    }, 100);
+  }, [cleanup]);
 
   useEffect(() => {
-    mountedRef.current = true;
-    
-    // Check platform
+    isMountedRef.current = true;
+    hasScannedRef.current = false;
+
     if (Platform.OS !== 'web') {
       setStatus('error');
       setErrorMsg('Scanner disponibile solo su browser');
       return;
     }
 
-    // Timeout per il caricamento
-    const loadTimeout = setTimeout(() => {
-      if (mountedRef.current && status === 'loading') {
-        setStatus('error');
-        setErrorMsg('Timeout caricamento scanner. Riprova.');
-      }
-    }, 15000);
-
-    const initScanner = async () => {
+    let timeoutId: any;
+    
+    const init = async () => {
       try {
-        // Import dinamico con retry
-        let Html5Qrcode: any;
-        try {
-          const module = await import('html5-qrcode');
-          Html5Qrcode = module.Html5Qrcode;
-        } catch (importError) {
-          console.error('Import error:', importError);
-          if (mountedRef.current) {
-            setStatus('error');
-            setErrorMsg('Impossibile caricare lo scanner. Verifica la connessione.');
-          }
-          return;
+        console.log('[WebScanner] Initializing...');
+        
+        // Dynamic import
+        const { Html5Qrcode } = await import('html5-qrcode');
+        
+        if (!isMountedRef.current) return;
+
+        // Wait for DOM element
+        await new Promise(r => setTimeout(r, 400));
+        
+        const el = document.getElementById('barcode-reader');
+        if (!el) {
+          throw new Error('Element not found');
         }
 
-        if (!mountedRef.current) return;
-
-        // Wait for DOM
-        await new Promise(r => setTimeout(r, 500));
-
-        const element = document.getElementById('qr-reader');
-        if (!element) {
-          throw new Error('Elemento scanner non trovato');
-        }
-
-        const scanner = new Html5Qrcode('qr-reader', { verbose: false });
+        const scanner = new Html5Qrcode('barcode-reader', { verbose: false });
         scannerRef.current = scanner;
 
-        const windowWidth = window.innerWidth;
-        const qrboxWidth = Math.min(windowWidth * 0.85, 320);
-        const qrboxHeight = Math.round(qrboxWidth * 0.45);
+        const width = Math.min(window.innerWidth - 40, 300);
+        const height = Math.round(width * 0.5);
 
+        console.log('[WebScanner] Starting camera...');
+        
         await scanner.start(
           { facingMode: 'environment' },
           {
-            fps: 10,
-            qrbox: { width: qrboxWidth, height: qrboxHeight },
-            aspectRatio: 1.0,
+            fps: 15,
+            qrbox: { width, height },
+            aspectRatio: window.innerWidth / window.innerHeight,
           },
-          (text: string) => {
-            if (!mountedRef.current || hasScannedRef.current) return;
+          (decodedText: string) => {
+            if (!isMountedRef.current || hasScannedRef.current) return;
             
-            const isbn = text.replace(/[^0-9X]/gi, '');
-            console.log('Scanned barcode:', isbn);
+            // Clean ISBN - keep only digits and X
+            const isbn = decodedText.replace(/[^0-9Xx]/g, '').toUpperCase();
+            console.log('[WebScanner] Decoded:', decodedText, '-> ISBN:', isbn);
             
+            // Validate ISBN length
             if (isbn.length === 10 || isbn.length === 13) {
               handleSuccessfulScan(isbn);
             }
           },
           () => {
-            // Ignore scan errors (no barcode in frame)
+            // Ignore - no code found in frame (this is normal)
           }
         );
 
-        if (mountedRef.current) {
+        if (isMountedRef.current) {
+          console.log('[WebScanner] Camera started successfully');
           setStatus('ready');
-          clearTimeout(loadTimeout);
         }
       } catch (err: any) {
-        console.error('Scanner init error:', err);
-        if (!mountedRef.current) return;
-
-        clearTimeout(loadTimeout);
+        console.error('[WebScanner] Init error:', err);
         
-        let msg = 'Errore avvio scanner';
-        if (err.name === 'NotAllowedError' || err.message?.includes('Permission')) {
-          msg = 'Permesso fotocamera negato.\n\nConsenti l\'accesso alla fotocamera nelle impostazioni del browser.';
-        } else if (err.name === 'NotFoundError' || err.message?.includes('NotFoundError')) {
-          msg = 'Fotocamera non trovata.\n\nAssicurati che il dispositivo abbia una fotocamera.';
-        } else if (err.message) {
-          msg = err.message;
+        if (!isMountedRef.current) return;
+        
+        let msg = 'Errore avvio fotocamera';
+        
+        if (err.name === 'NotAllowedError' || err.message?.includes('denied') || err.message?.includes('Permission')) {
+          msg = 'Permesso fotocamera negato.\n\nPer usare lo scanner:\n1. Tocca l\'icona 🔒 nella barra indirizzi\n2. Consenti accesso alla fotocamera\n3. Ricarica la pagina';
+        } else if (err.name === 'NotFoundError' || err.message?.includes('Requested device not found')) {
+          msg = 'Nessuna fotocamera trovata.\n\nAssicurati che il dispositivo abbia una fotocamera posteriore.';
+        } else if (err.message?.includes('NotReadableError') || err.message?.includes('in use')) {
+          msg = 'Fotocamera già in uso.\n\nChiudi altre app che usano la fotocamera e riprova.';
         }
         
         setStatus('error');
@@ -140,78 +154,92 @@ export default function WebBarcodeScanner({ onScan, onClose, scannerMode }: WebB
       }
     };
 
-    // Start after small delay
-    const startTimer = setTimeout(initScanner, 200);
+    // Add timeout
+    timeoutId = setTimeout(() => {
+      if (isMountedRef.current && status === 'loading') {
+        console.log('[WebScanner] Timeout reached');
+        setStatus('error');
+        setErrorMsg('Timeout avvio fotocamera.\n\nRiprova o inserisci l\'ISBN manualmente.');
+      }
+    }, 12000);
+
+    init();
 
     return () => {
-      mountedRef.current = false;
-      clearTimeout(loadTimeout);
-      clearTimeout(startTimer);
-      stopScanner();
+      console.log('[WebScanner] Unmounting...');
+      isMountedRef.current = false;
+      clearTimeout(timeoutId);
+      cleanup();
     };
-  }, [handleSuccessfulScan, stopScanner]);
+  }, [cleanup, handleSuccessfulScan]);
 
-  // Non renderizzare su native
-  if (Platform.OS !== 'web') {
-    return null;
-  }
+  if (Platform.OS !== 'web') return null;
 
   return (
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={handleClose} style={styles.backBtn} activeOpacity={0.7}>
+        <TouchableOpacity 
+          onPress={handleClose} 
+          style={styles.headerBtn}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
-        <Text style={styles.title}>
+        <Text style={styles.headerTitle}>
           {scannerMode === 'cerca' ? 'Cerca Libro' : 'Scansiona ISBN'}
         </Text>
-        <View style={{ width: 40 }} />
+        <TouchableOpacity 
+          onPress={handleClose}
+          style={styles.headerBtn}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Ionicons name="close" size={24} color="#fff" />
+        </TouchableOpacity>
       </View>
 
       {/* Scanner Area */}
       <View style={styles.scannerArea}>
-        {/* Loading */}
         {status === 'loading' && (
-          <View style={styles.statusOverlay}>
+          <View style={styles.overlay}>
             <ActivityIndicator size="large" color="#4CAF50" />
-            <Text style={styles.statusText}>Avvio fotocamera...</Text>
-            <Text style={styles.statusHint}>Consenti l'accesso se richiesto</Text>
+            <Text style={styles.overlayText}>Avvio fotocamera...</Text>
+            <Text style={styles.overlayHint}>Consenti l'accesso se richiesto</Text>
           </View>
         )}
 
-        {/* Error */}
         {status === 'error' && (
-          <View style={styles.statusOverlay}>
-            <Ionicons name="alert-circle-outline" size={56} color="#ff6b6b" />
+          <View style={styles.overlay}>
+            <Ionicons name="warning-outline" size={60} color="#ff6b6b" />
             <Text style={styles.errorText}>{errorMsg}</Text>
-            <TouchableOpacity style={styles.closeErrorBtn} onPress={handleClose} activeOpacity={0.8}>
-              <Text style={styles.closeErrorBtnText}>Chiudi</Text>
+            <TouchableOpacity style={styles.errorBtn} onPress={handleClose}>
+              <Text style={styles.errorBtnText}>Chiudi Scanner</Text>
             </TouchableOpacity>
           </View>
         )}
 
-        {/* Scanner container - always render for html5-qrcode */}
+        {/* This div MUST exist for html5-qrcode */}
         <div 
-          id="qr-reader" 
-          style={{ 
-            width: '100%', 
+          id="barcode-reader"
+          style={{
+            width: '100%',
             height: '100%',
-            display: status === 'ready' ? 'block' : 'none',
-          }} 
+            backgroundColor: '#000',
+            visibility: status === 'ready' ? 'visible' : 'hidden',
+          }}
         />
       </View>
 
-      {/* Instructions */}
+      {/* Instructions when ready */}
       {status === 'ready' && (
         <View style={styles.instructions}>
-          <Ionicons name="scan-outline" size={20} color="#4CAF50" />
-          <Text style={styles.instructionsText}>Inquadra il codice a barre ISBN</Text>
+          <Ionicons name="barcode-outline" size={20} color="#4CAF50" />
+          <Text style={styles.instructionText}>Inquadra il codice a barre ISBN del libro</Text>
         </View>
       )}
 
       {/* Manual input button */}
-      <TouchableOpacity style={styles.manualBtn} onPress={handleClose} activeOpacity={0.8}>
+      <TouchableOpacity style={styles.manualBtn} onPress={handleClose}>
         <Ionicons name="keypad-outline" size={18} color="#fff" />
         <Text style={styles.manualBtnText}>Inserisci ISBN manualmente</Text>
       </TouchableOpacity>
@@ -228,16 +256,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 48,
-    paddingBottom: 12,
-    paddingHorizontal: 12,
+    paddingTop: 50,
+    paddingBottom: 14,
+    paddingHorizontal: 16,
     backgroundColor: '#1a472a',
   },
-  backBtn: {
-    padding: 8,
-    borderRadius: 8,
+  headerBtn: {
+    padding: 6,
   },
-  title: {
+  headerTitle: {
     fontSize: 17,
     fontWeight: '600',
     color: '#fff',
@@ -246,41 +273,42 @@ const styles = StyleSheet.create({
     flex: 1,
     position: 'relative',
     backgroundColor: '#111',
+    overflow: 'hidden',
   },
-  statusOverlay: {
+  overlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.95)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
-    zIndex: 10,
+    padding: 30,
+    zIndex: 100,
   },
-  statusText: {
+  overlayText: {
     color: '#fff',
-    fontSize: 16,
-    marginTop: 16,
+    fontSize: 17,
+    marginTop: 20,
+    fontWeight: '500',
   },
-  statusHint: {
+  overlayHint: {
     color: '#888',
     fontSize: 13,
     marginTop: 8,
   },
   errorText: {
     color: '#fff',
-    fontSize: 15,
+    fontSize: 14,
     textAlign: 'center',
-    marginTop: 16,
+    marginTop: 20,
     lineHeight: 22,
-    paddingHorizontal: 20,
   },
-  closeErrorBtn: {
-    marginTop: 28,
+  errorBtn: {
+    marginTop: 30,
     backgroundColor: '#1a472a',
-    paddingHorizontal: 32,
-    paddingVertical: 12,
-    borderRadius: 8,
+    paddingHorizontal: 28,
+    paddingVertical: 14,
+    borderRadius: 10,
   },
-  closeErrorBtnText: {
+  errorBtnText: {
     color: '#fff',
     fontSize: 15,
     fontWeight: '600',
@@ -293,8 +321,8 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     backgroundColor: '#1a1a1a',
   },
-  instructionsText: {
-    color: '#ddd',
+  instructionText: {
+    color: '#ccc',
     fontSize: 14,
   },
   manualBtn: {
@@ -303,9 +331,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     backgroundColor: '#1a472a',
-    paddingVertical: 15,
+    paddingVertical: 16,
     marginHorizontal: 16,
-    marginBottom: 30,
+    marginBottom: 34,
     borderRadius: 10,
   },
   manualBtnText: {

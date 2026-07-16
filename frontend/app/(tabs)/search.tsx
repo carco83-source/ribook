@@ -390,18 +390,24 @@ export default function SearchSellScreen() {
   // Handler per scansione web
   const handleWebScan = useCallback((isbn: string) => {
     console.log('Web scan result:', isbn, '- Mode:', scannerModeRef.current);
+    
+    // Prima resettiamo lo stato
     setShowWebScanner(false);
     
-    if (scannerModeRef.current === 'cerca') {
-      setCercaTitolo(isbn);
-      handleCercaTitolo(isbn);
-    } else {
-      setVendiIsbn(isbn);
-      handleVendiSearchWithIsbn(isbn);
-    }
+    // Poi processiamo il risultato dopo un breve delay
+    setTimeout(() => {
+      if (scannerModeRef.current === 'cerca') {
+        setCercaTitolo(isbn);
+        handleCercaTitolo(isbn);
+      } else {
+        setVendiIsbn(isbn);
+        handleVendiSearchWithIsbn(isbn);
+      }
+    }, 150);
   }, []);
 
   const closeWebScanner = useCallback(() => {
+    console.log('Closing web scanner...');
     setShowWebScanner(false);
   }, []);
 
