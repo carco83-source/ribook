@@ -101,17 +101,23 @@ export default function WebBarcodeScanner({ onScan, onClose, scannerMode }: WebB
         const scanner = new Html5Qrcode('barcode-reader', { verbose: false });
         scannerRef.current = scanner;
 
-        const width = Math.min(window.innerWidth - 40, 300);
-        const height = Math.round(width * 0.5);
+        // Calcola dimensioni ottimali per la scansione
+        const screenWidth = window.innerWidth;
+        const screenHeight = window.innerHeight;
+        const qrboxWidth = Math.min(screenWidth * 0.85, 320);
+        const qrboxHeight = Math.round(qrboxWidth * 0.4); // Rettangolo più stretto per barcode
 
         console.log('[WebScanner] Starting camera...');
         
         await scanner.start(
           { facingMode: 'environment' },
           {
-            fps: 15,
-            qrbox: { width, height },
-            aspectRatio: window.innerWidth / window.innerHeight,
+            fps: 20, // Aumentato per scansione più veloce
+            qrbox: { width: qrboxWidth, height: qrboxHeight },
+            aspectRatio: screenHeight / screenWidth, // Aspect ratio verticale per mobile
+            experimentalFeatures: {
+              useBarCodeDetectorIfSupported: true // Usa API nativa se disponibile
+            }
           },
           (decodedText: string) => {
             if (!isMountedRef.current || hasScannedRef.current) return;
@@ -224,10 +230,36 @@ export default function WebBarcodeScanner({ onScan, onClose, scannerMode }: WebB
           style={{
             width: '100%',
             height: '100%',
-            backgroundColor: '#000',
+            backgroundColor: '#111',
             visibility: status === 'ready' ? 'visible' : 'hidden',
           }}
         />
+        
+        {/* CSS per migliorare luminosità video */}
+        <style dangerouslySetInnerHTML={{__html: `
+          #barcode-reader video {
+            filter: brightness(1.15) contrast(1.1) !important;
+            object-fit: cover !important;
+          }
+          #barcode-reader > div:first-child {
+            border: none !important;
+          }
+          #barcode-reader__scan_region {
+            background: transparent !important;
+          }
+          #barcode-reader__scan_region > br {
+            display: none !important;
+          }
+          #barcode-reader__dashboard {
+            display: none !important;
+          }
+          #barcode-reader__dashboard_section {
+            display: none !important;
+          }
+          #barcode-reader__dashboard_section_swaplink {
+            display: none !important;
+          }
+        `}} />
       </View>
 
       {/* Instructions when ready */}

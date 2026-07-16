@@ -346,8 +346,17 @@ export default function SearchSellScreen() {
         setShowWebScanner(true);
         return;
       } else {
-        // Su desktop web, mostra messaggio
-        showAlert('Scanner', 'La scansione barcode è disponibile solo su smartphone.\n\nPuoi inserire l\'ISBN manualmente.');
+        // Su desktop web, mostra messaggio più visibile
+        console.log('Desktop detected - showing alert');
+        // Prova prima con alert nativo, poi con conferma
+        try {
+          const message = 'Lo scanner barcode è disponibile solo su smartphone.\n\nPer scansionare i codici a barre:\n• Apri ribook.it dal tuo telefono\n• Oppure inserisci l\'ISBN manualmente nel campo di ricerca';
+          if (typeof window !== 'undefined' && window.alert) {
+            window.alert(message);
+          }
+        } catch (e) {
+          console.error('Alert error:', e);
+        }
         return;
       }
     }
