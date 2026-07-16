@@ -8859,7 +8859,13 @@ async def buyer_cancel_order(order_id: str, user_id: str = Query(...), reason: s
     # Se pagato, processa il rimborso
     if needs_refund:
         payment_intent_id = order.get("payment_intent_id")
-        if payment_intent_id and not payment_intent_id.startswith("pi_mock"):
+        # Handle case where payment_intent_id is a dict (from old format)
+        if isinstance(payment_intent_id, dict):
+            payment_intent_id = payment_intent_id.get("id")
+        
+        print(f"[CANCEL] Processing refund for order {order_id}, payment_intent: {payment_intent_id}")
+        
+        if payment_intent_id and isinstance(payment_intent_id, str) and not payment_intent_id.startswith("pi_mock") and not payment_intent_id.startswith("pi_test"):
             try:
                 # Annulla/rimborsa il PaymentIntent
                 refund = stripe.Refund.create(
@@ -8871,13 +8877,21 @@ async def buyer_cancel_order(order_id: str, user_id: str = Query(...), reason: s
                     "amount": refund.amount / 100,
                     "status": refund.status
                 }
+                print(f"[CANCEL] Refund successful: {refund_result}")
             except stripe.error.StripeError as e:
+                print(f"[CANCEL] Stripe refund error: {e}, trying to cancel...")
                 # Se il pagamento era in hold (capture_method=manual), annulla invece di rimborsare
                 try:
                     intent = stripe.PaymentIntent.cancel(payment_intent_id)
                     refund_result = {"cancelled": True, "status": intent.status}
+                    print(f"[CANCEL] PaymentIntent cancelled: {refund_result}")
                 except stripe.error.StripeError as e2:
-                    raise HTTPException(status_code=400, detail=f"Errore rimborso: {str(e2)}")
+                    print(f"[CANCEL] Also failed to cancel: {e2}")
+                    # Non bloccare l'annullamento, procedi comunque
+                    refund_result = {"error": str(e2), "manual_refund_needed": True}
+        else:
+            print(f"[CANCEL] No valid payment_intent_id, skipping Stripe refund (mocked or test payment)")
+            refund_result = {"mocked": True, "note": "Pagamento di test - nessun rimborso necessario"}
     
     # Aggiorna stato ordine
     new_status = "rimborsato_acquirente" if needs_refund else "annullato_acquirente"
