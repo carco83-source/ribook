@@ -51,6 +51,11 @@ export default function RegisterScreen() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [acceptedMarketing, setAcceptedMarketing] = useState(false);
+
+  // Versione corrente dei termini
+  const TERMS_VERSION = '1.0.0';
 
   // Funzione per validare IBAN italiano
   const validateIBAN = (iban: string): boolean => {
@@ -178,6 +183,11 @@ export default function RegisterScreen() {
       setErrorMessage('IBAN non valido. Formato: IT + 25 caratteri');
       return;
     }
+    // Validazione accettazione termini (obbligatoria)
+    if (!acceptedTerms) {
+      setErrorMessage('Devi accettare i Termini e Condizioni, la Privacy Policy e la Cookie Policy per registrarti');
+      return;
+    }
 
     setLoading(true);
     try {
@@ -200,6 +210,11 @@ export default function RegisterScreen() {
         codice_fiscale: codiceFiscale.toUpperCase(),
         data_nascita: formattedDate,
         iban: cleanIban,
+        // Consensi GDPR
+        terms_accepted: true,
+        terms_version: TERMS_VERSION,
+        marketing_consent: acceptedMarketing,
+        registration_method: 'email',
       });
 
       // Il backend ritorna { message, user_id, username }
@@ -611,15 +626,65 @@ export default function RegisterScreen() {
                 </Text>
               </View>
 
+              {/* Sezione Consensi */}
+              <Text style={[
+                styles.sectionTitle, 
+                { marginTop: 24, fontSize: dynamicStyles.fontSize.sectionTitle }
+              ]}>
+                Consensi
+              </Text>
+
+              {/* Checkbox Termini (obbligatoria) */}
+              <TouchableOpacity 
+                style={styles.checkboxContainer}
+                onPress={() => setAcceptedTerms(!acceptedTerms)}
+                activeOpacity={0.7}
+              >
+                <View style={[
+                  styles.checkbox,
+                  acceptedTerms && styles.checkboxChecked
+                ]}>
+                  {acceptedTerms && (
+                    <Ionicons name="checkmark" size={16} color="#fff" />
+                  )}
+                </View>
+                <Text style={styles.checkboxLabel}>
+                  Dichiaro di aver letto e accettato i{' '}
+                  <Text style={styles.checkboxLink}>Termini e Condizioni</Text>,{' '}
+                  la <Text style={styles.checkboxLink}>Privacy Policy</Text> e{' '}
+                  la <Text style={styles.checkboxLink}>Cookie Policy</Text>.{' '}
+                  <Text style={styles.requiredStar}>*</Text>
+                </Text>
+              </TouchableOpacity>
+
+              {/* Checkbox Marketing (facoltativa) */}
+              <TouchableOpacity 
+                style={[styles.checkboxContainer, { marginTop: 12 }]}
+                onPress={() => setAcceptedMarketing(!acceptedMarketing)}
+                activeOpacity={0.7}
+              >
+                <View style={[
+                  styles.checkbox,
+                  acceptedMarketing && styles.checkboxChecked
+                ]}>
+                  {acceptedMarketing && (
+                    <Ionicons name="checkmark" size={16} color="#fff" />
+                  )}
+                </View>
+                <Text style={styles.checkboxLabel}>
+                  Acconsento a ricevere comunicazioni informative e promozionali da RiBook.
+                </Text>
+              </TouchableOpacity>
+
               {/* Register Button */}
               <TouchableOpacity
                 style={[
                   styles.registerButton,
-                  loading && styles.registerButtonDisabled,
+                  (loading || !acceptedTerms) && styles.registerButtonDisabled,
                   isDesktop && styles.registerButtonDesktop,
                 ]}
                 onPress={handleRegister}
-                disabled={loading}
+                disabled={loading || !acceptedTerms}
               >
                 {loading ? (
                   <ActivityIndicator color="#fff" />
@@ -890,5 +955,41 @@ const styles = StyleSheet.create({
   },
   ageTextError: {
     color: '#ef4444',
+  },
+  // Stili checkbox consensi
+  checkboxContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingVertical: 8,
+    gap: 12,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#1a472a',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    marginTop: 2,
+  },
+  checkboxChecked: {
+    backgroundColor: '#1a472a',
+  },
+  checkboxLabel: {
+    flex: 1,
+    fontSize: 14,
+    color: '#333',
+    lineHeight: 20,
+  },
+  checkboxLink: {
+    color: '#1a472a',
+    fontWeight: '600',
+    textDecorationLine: 'underline',
+  },
+  requiredStar: {
+    color: '#ef4444',
+    fontWeight: '700',
   },
 });

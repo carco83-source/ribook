@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form, Query, Depends, Header
+from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form, Query, Depends, Header, Request
 from fastapi.responses import StreamingResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -804,6 +804,11 @@ class UserCreate(BaseModel):
     classe: Optional[str] = None
     sezione: Optional[str] = None
     tipo_scuola: Optional[str] = None  # primo_grado or secondo_grado
+    # Consensi GDPR
+    terms_accepted: bool = False  # Obbligatorio
+    terms_version: Optional[str] = None  # Versione dei termini accettati
+    marketing_consent: bool = False  # Facoltativo
+    registration_method: Optional[str] = "email"  # email o google
 
 class UserLogin(BaseModel):
     email: str
@@ -1387,11 +1392,18 @@ class Match(BaseModel):
 # ============== AUTH ROUTES ==============
 
 @api_router.post("/auth/register")
-async def register_user(user_data: UserCreate):
+async def register_user(user_data: UserCreate, request: Request):
     print(f"=== REGISTRATION ATTEMPT ===")
     print(f"Email: {user_data.email}")
     print(f"Nome: {user_data.nome}")
     print(f"Cognome: {user_data.cognome}")
+    
+    # ============== VALIDAZIONE CONSENSO TERMINI ==============
+    if not user_data.terms_accepted:
+        raise HTTPException(
+            status_code=400,
+            detail="Devi accettare i Termini e Condizioni, la Privacy Policy e la Cookie Policy per registrarti."
+        )
     
     # ============== VALIDAZIONE CODICE FISCALE E ETÀ ==============
     
@@ -1454,6 +1466,13 @@ async def register_user(user_data: UserCreate):
     import base64
     data_nascita_encrypted = base64.b64encode(user_data.data_nascita.encode()).decode()
     
+    # Ottieni indirizzo IP del client
+    client_ip = request.client.host if request.client else None
+    # Controlla header per proxy/load balancer
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        client_ip = forwarded_for.split(",")[0].strip()
+    
     # Create user with auto-generated username
     user = User(
         nome=user_data.nome,
@@ -1472,8 +1491,20 @@ async def register_user(user_data: UserCreate):
         verified_identity=True
     )
     
-    await db.users.insert_one(user.dict())
-    print(f"Utente creato con ID: {user.id} - Identità verificata")
+    # Prepara dati utente con consensi GDPR
+    user_dict = user.dict()
+    user_dict["gdpr_consent"] = {
+        "terms_accepted": True,
+        "terms_version": user_data.terms_version or "1.0.0",
+        "terms_accepted_at": datetime.utcnow().isoformat(),
+        "marketing_consent": user_data.marketing_consent,
+        "marketing_consent_at": datetime.utcnow().isoformat() if user_data.marketing_consent else None,
+        "registration_ip": client_ip,
+        "registration_method": user_data.registration_method or "email",
+    }
+    
+    await db.users.insert_one(user_dict)
+    print(f"Utente creato con ID: {user.id} - Identità verificata - Consensi GDPR salvati")
     return {"message": "Registrazione completata", "user_id": user.id, "username": user.username}
 
 @api_router.post("/auth/login")
@@ -1508,6 +1539,51 @@ async def login_user(credentials: UserLogin):
         "profili_figli": user.get("profili_figli", []),
         "session_token": session_token
     }
+
+# ============== ENDPOINT ACCETTAZIONE TERMINI (per utenti Google OAuth) ==============
+
+class AcceptTermsRequest(BaseModel):
+    terms_accepted: bool
+    terms_version: str
+    marketing_consent: bool = False
+
+@api_router.post("/auth/accept-terms/{user_id}")
+async def accept_terms(user_id: str, data: AcceptTermsRequest, request: Request):
+    """
+    Permette a un utente (es. registrato via Google OAuth) di accettare i termini.
+    """
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+    
+    if not data.terms_accepted:
+        raise HTTPException(
+            status_code=400,
+            detail="Devi accettare i Termini e Condizioni per continuare."
+        )
+    
+    # Ottieni IP
+    client_ip = request.client.host if request.client else None
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        client_ip = forwarded_for.split(",")[0].strip()
+    
+    gdpr_consent = {
+        "terms_accepted": True,
+        "terms_version": data.terms_version,
+        "terms_accepted_at": datetime.utcnow().isoformat(),
+        "marketing_consent": data.marketing_consent,
+        "marketing_consent_at": datetime.utcnow().isoformat() if data.marketing_consent else None,
+        "registration_ip": client_ip,
+        "registration_method": user.get("gdpr_consent", {}).get("registration_method", "google"),
+    }
+    
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"gdpr_consent": gdpr_consent}}
+    )
+    
+    return {"message": "Termini accettati con successo", "gdpr_consent": gdpr_consent}
 
 # ============== MIGRAZIONE PROFILI TEMPORANEI ==============
 
@@ -1697,7 +1773,17 @@ async def google_oauth_callback(data: GoogleAuthRequest):
                 "is_admin": False,
                 "profili_figli": [],
                 "created_at": datetime.now(timezone.utc).isoformat(),
-                "last_login": datetime.now(timezone.utc).isoformat()
+                "last_login": datetime.now(timezone.utc).isoformat(),
+                # Consensi GDPR - per Google OAuth verranno richiesti al completamento profilo
+                "gdpr_consent": {
+                    "terms_accepted": False,  # Da accettare al completamento profilo
+                    "terms_version": None,
+                    "terms_accepted_at": None,
+                    "marketing_consent": False,
+                    "marketing_consent_at": None,
+                    "registration_ip": None,
+                    "registration_method": "google",
+                }
             }
             await db.users.insert_one(new_user)
             username = new_user["username"]

@@ -77,6 +77,12 @@ export default function SearchSellScreen() {
   const [scannerMode, setScannerMode] = useState<'vendi' | 'cerca'>('vendi'); // Modalità scanner
   const lastScannedRef = useRef<string | null>(null); // Debounce ref
   const scanTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Timeout ref
+  const scannerModeRef = useRef<'vendi' | 'cerca'>('vendi'); // Ref per mode attuale
+  
+  // Aggiorna ref quando cambia scannerMode
+  useEffect(() => {
+    scannerModeRef.current = scannerMode;
+  }, [scannerMode]);
   
   // Cerca states
   const [cercaIsbn, setCercaIsbn] = useState('');
@@ -206,21 +212,27 @@ export default function SearchSellScreen() {
   };
 
   const handleBarCodeScanned = useCallback((scanResult: BarcodeScanningResult) => {
-    // Previeni scansioni multiple
-    if (scanned || !isCameraReady) return;
+    // Previeni scansioni multiple usando ref (più affidabile di state)
+    if (scanned) {
+      console.log('Scan ignored - already scanned');
+      return;
+    }
     
-    const { data } = scanResult;
+    const { data, type } = scanResult;
+    console.log('Barcode detected - Type:', type, 'Data:', data);
     
     // Clean the ISBN
     const cleanIsbn = data.replace(/[^0-9X]/gi, '');
     
     // Ignora se stesso ISBN scansionato di recente (debounce)
     if (lastScannedRef.current === cleanIsbn) {
+      console.log('Scan ignored - same ISBN debounced');
       return;
     }
     
-    // Valida la lunghezza dell'ISBN
-    if (cleanIsbn.length < 10 || cleanIsbn.length > 13) {
+    // Valida la lunghezza dell'ISBN (10 per ISBN-10, 13 per ISBN-13/EAN-13)
+    if (cleanIsbn.length !== 10 && cleanIsbn.length !== 13) {
+      console.log('Scan ignored - invalid ISBN length:', cleanIsbn.length);
       return;
     }
     
@@ -228,14 +240,18 @@ export default function SearchSellScreen() {
     setScanned(true);
     lastScannedRef.current = cleanIsbn;
     
-    console.log('ISBN Scansionato:', cleanIsbn, '- Mode:', scannerMode);
+    // Usa ref per il mode corrente (evita problemi di closure)
+    const currentMode = scannerModeRef.current;
+    console.log('ISBN Scansionato:', cleanIsbn, '- Mode:', currentMode);
     
     // Vibration feedback
     if (Platform.OS !== 'web') {
       try {
         const Haptics = require('expo-haptics');
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } catch (e) {}
+      } catch (e) {
+        console.log('Haptics not available');
+      }
     }
     
     // Chiudi scanner immediatamente
@@ -248,7 +264,7 @@ export default function SearchSellScreen() {
     }
     
     scanTimeoutRef.current = setTimeout(() => {
-      if (scannerMode === 'cerca') {
+      if (currentMode === 'cerca') {
         setCercaTitolo(cleanIsbn);
         handleCercaTitolo(cleanIsbn);
       } else {
@@ -258,7 +274,7 @@ export default function SearchSellScreen() {
       // Reset refs after processing
       lastScannedRef.current = null;
     }, 200);
-  }, [scanned, isCameraReady, scannerMode]);
+  }, [scanned]); // Rimuoviamo scannerMode dalle dipendenze, usiamo ref
 
   const handleVendiSearchWithIsbn = async (isbn: string) => {
     if (!isbn || isbn.length < 10) return;
@@ -538,11 +554,10 @@ export default function SearchSellScreen() {
           style={StyleSheet.absoluteFillObject}
           facing="back"
           barcodeScannerSettings={{
-            barcodeTypes: ['ean13', 'ean8'],
-            interval: 500,
+            barcodeTypes: ['ean13', 'ean8', 'code128', 'code39', 'upc_a', 'upc_e'],
           }}
           onCameraReady={handleCameraReady}
-          onBarcodeScanned={isCameraReady && !scanned ? handleBarCodeScanned : undefined}
+          onBarcodeScanned={handleBarCodeScanned}
         />
         
         {/* Loading overlay while camera initializes */}
