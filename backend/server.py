@@ -18,6 +18,7 @@ import io
 import requests
 import re
 import httpx
+import bcrypt
 
 # Fuso orario Roma (CET/CEST)
 try:
@@ -624,7 +625,25 @@ def generate_bookstore_password():
     return ''.join(random.choices(chars, k=8))
 
 def hash_password(password: str) -> str:
+    """Hash password usando bcrypt"""
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+def hash_password_sha256(password: str) -> str:
+    """Hash password usando SHA256 (legacy)"""
     return hashlib.sha256(password.encode()).hexdigest()
+
+def verify_password(password: str, stored_hash: str) -> bool:
+    """Verifica password - supporta sia bcrypt che SHA256 legacy"""
+    try:
+        # Prova prima con bcrypt (hash inizia con $2b$ o $2a$)
+        if stored_hash.startswith('$2'):
+            return bcrypt.checkpw(password.encode('utf-8'), stored_hash.encode('utf-8'))
+        else:
+            # Fallback a SHA256 per hash legacy
+            return stored_hash == hashlib.sha256(password.encode()).hexdigest()
+    except Exception as e:
+        print(f"[verify_password] Error: {e}")
+        return False
 
 # ============== VALIDAZIONE CODICE FISCALE ==============
 
@@ -11165,13 +11184,13 @@ async def register_bookstore(bookstore_data: BookstoreCreate):
 @api_router.post("/bookstores/login")
 async def login_bookstore(credentials: UserLogin):
     bookstore = await db.bookstores.find_one({"email": credentials.email})
-    if not bookstore or bookstore["password_hash"] != hash_password(credentials.password):
+    if not bookstore or not verify_password(credentials.password, bookstore.get("password_hash", "")):
         raise HTTPException(status_code=401, detail="Credenziali non valide")
     
     return {
         "bookstore_id": bookstore["id"],
         "nome": bookstore["nome"],
-        "affiliazione_attiva": bookstore["affiliazione_attiva"]
+        "affiliazione_attiva": bookstore.get("affiliazione_attiva", True)
     }
 
 @api_router.get("/bookstores", response_model=List[BookstorePublic])
@@ -11569,6 +11588,37 @@ async def admin_delete_bookstore(bookstore_id: str, admin_id: str = Query(...)):
         "bookstore_id": bookstore_id,
         "status": {"$nin": ["completed", "cancelled", "refunded", "annullato_acquirente", "annullato_non_disponibile", "picked_up"]}
     })
+
+@api_router.post("/admin/bookstores/{bookstore_id}/reset-password")
+async def admin_reset_bookstore_password(bookstore_id: str, admin_id: str = Query(...)):
+    """Admin: resetta la password di una cartolibreria"""
+    admin = await db.users.find_one({"id": admin_id})
+    if not admin or not admin.get("is_admin", False):
+        raise HTTPException(status_code=403, detail="Accesso non autorizzato")
+    
+    bookstore = await db.bookstores.find_one({"id": bookstore_id})
+    if not bookstore:
+        raise HTTPException(status_code=404, detail="Cartolibreria non trovata")
+    
+    # Genera nuova password
+    new_password = generate_bookstore_password()
+    new_hash = hash_password(new_password)
+    
+    # Aggiorna nel database
+    await db.bookstores.update_one(
+        {"id": bookstore_id},
+        {"$set": {"password_hash": new_hash}}
+    )
+    
+    print(f"[ADMIN] Password reset for bookstore {bookstore_id} ({bookstore.get('email')}) by admin {admin_id}")
+    
+    return {
+        "success": True,
+        "bookstore_id": bookstore_id,
+        "email": bookstore.get("email"),
+        "new_password": new_password,
+        "message": f"Nuova password per {bookstore.get('nome')}: {new_password}"
+    }
     
     if active_orders > 0:
         raise HTTPException(status_code=400, detail=f"La cartolibreria ha {active_orders} ordini attivi. Completa gli ordini prima di eliminare.")

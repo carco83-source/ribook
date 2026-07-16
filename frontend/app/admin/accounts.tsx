@@ -190,6 +190,49 @@ export default function AdminAccountsScreen() {
     }
   };
 
+  const handleResetPassword = async (bookstoreId: string, bookstoreName: string) => {
+    if (!userId) return;
+    
+    const confirmMsg = `Vuoi resettare la password per "${bookstoreName}"?\n\nVerrà generata una nuova password.`;
+    
+    const doReset = async () => {
+      setDeleting(bookstoreId); // Riuso lo stato per loading
+      try {
+        const response = await axios.post(
+          `${API_URL}/api/admin/bookstores/${bookstoreId}/reset-password?admin_id=${userId}`
+        );
+        
+        const newPassword = response.data.new_password;
+        const email = response.data.email;
+        
+        showAlert(
+          'Password Resettata',
+          `Nuova password per ${bookstoreName}:\n\nEmail: ${email}\nPassword: ${newPassword}\n\nComunica queste credenziali alla cartolibreria.`
+        );
+      } catch (error: any) {
+        console.error('Error resetting password:', error);
+        showAlert('Errore', error.response?.data?.detail || 'Impossibile resettare la password');
+      } finally {
+        setDeleting(null);
+      }
+    };
+    
+    if (Platform.OS === 'web') {
+      if (window.confirm(confirmMsg)) {
+        doReset();
+      }
+    } else {
+      Alert.alert(
+        'Reset Password',
+        confirmMsg,
+        [
+          { text: 'Annulla', style: 'cancel' },
+          { text: 'Reset', onPress: doReset }
+        ]
+      );
+    }
+  };
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await loadData(userId!);
@@ -343,20 +386,31 @@ export default function AdminAccountsScreen() {
                     </View>
                   </View>
                   
-                  <TouchableOpacity
-                    style={[styles.deleteBtn, deleting === bs.id && styles.deleteBtnDisabled]}
-                    onPress={() => confirmDelete('bookstore', bs)}
-                    disabled={deleting === bs.id}
-                  >
-                    {deleting === bs.id ? (
-                      <ActivityIndicator size="small" color="#fff" />
-                    ) : (
-                      <>
-                        <Ionicons name="trash" size={16} color="#fff" />
-                        <Text style={styles.deleteBtnText}>Elimina</Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
+                  <View style={styles.cardActions}>
+                    <TouchableOpacity
+                      style={[styles.resetBtn, deleting === bs.id && styles.deleteBtnDisabled]}
+                      onPress={() => handleResetPassword(bs.id, bs.nome)}
+                      disabled={deleting === bs.id}
+                    >
+                      <Ionicons name="key" size={16} color="#fff" />
+                      <Text style={styles.resetBtnText}>Reset Password</Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity
+                      style={[styles.deleteBtn, deleting === bs.id && styles.deleteBtnDisabled]}
+                      onPress={() => confirmDelete('bookstore', bs)}
+                      disabled={deleting === bs.id}
+                    >
+                      {deleting === bs.id ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <>
+                          <Ionicons name="trash" size={16} color="#fff" />
+                          <Text style={styles.deleteBtnText}>Elimina</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  </View>
                 </View>
               ))
             )}
@@ -508,12 +562,34 @@ const styles = StyleSheet.create({
     gap: 6,
     backgroundColor: '#ef4444',
     paddingVertical: 10,
+    paddingHorizontal: 12,
     borderRadius: 8,
+    flex: 1,
   },
   deleteBtnDisabled: {
     backgroundColor: '#ccc',
   },
   deleteBtnText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  cardActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  resetBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#2563eb',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    flex: 1,
+  },
+  resetBtnText: {
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',
