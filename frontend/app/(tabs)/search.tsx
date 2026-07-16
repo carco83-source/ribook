@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -19,11 +19,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
 import * as Device from 'expo-device';
-
-// Import condizionale per web scanner
-const WebBarcodeScanner = Platform.OS === 'web' 
-  ? lazy(() => import('../../src/components/WebBarcodeScanner'))
-  : null;
+import WebBarcodeScanner from '../../src/components/WebBarcodeScanner';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:8001';
 
@@ -595,20 +591,13 @@ export default function SearchSellScreen() {
   // ==================== RENDER ====================
 
   // Web Scanner per mobile browser
-  if (showWebScanner && Platform.OS === 'web' && WebBarcodeScanner) {
+  if (showWebScanner && Platform.OS === 'web') {
     return (
-      <Suspense fallback={
-        <View style={styles.scannerContainer}>
-          <ActivityIndicator size="large" color="#4CAF50" />
-          <Text style={{ color: '#fff', marginTop: 16 }}>Caricamento scanner...</Text>
-        </View>
-      }>
-        <WebBarcodeScanner 
-          onScan={handleWebScan}
-          onClose={closeWebScanner}
-          scannerMode={scannerMode}
-        />
-      </Suspense>
+      <WebBarcodeScanner 
+        onScan={handleWebScan}
+        onClose={closeWebScanner}
+        scannerMode={scannerMode}
+      />
     );
   }
 
