@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import {
   View,
   Text,
@@ -19,6 +19,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
 import * as Device from 'expo-device';
+
+// Import condizionale per web scanner
+const WebBarcodeScanner = Platform.OS === 'web' 
+  ? lazy(() => import('../../src/components/WebBarcodeScanner'))
+  : null;
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:8001';
 
@@ -70,6 +75,7 @@ export default function SearchSellScreen() {
   const [vendiLoading, setVendiLoading] = useState(false);
   const [vendiBook, setVendiBook] = useState<Book | null>(null);
   const [showScanner, setShowScanner] = useState(false);
+  const [showWebScanner, setShowWebScanner] = useState(false); // Scanner web per mobile browser
   const [scanned, setScanned] = useState(false);
   const [cameraKey, setCameraKey] = useState(0);
   const [isCameraReady, setIsCameraReady] = useState(false);
@@ -322,11 +328,35 @@ export default function SearchSellScreen() {
     }
   };
 
+  // Funzione per verificare se siamo su mobile browser
+  const isMobileBrowser = () => {
+    if (Platform.OS !== 'web') return false;
+    if (typeof navigator === 'undefined') return false;
+    
+    const userAgent = navigator.userAgent || navigator.vendor || '';
+    return /android|iphone|ipad|ipod|mobile/i.test(userAgent.toLowerCase());
+  };
+
   const openScanner = async () => {
     console.log('=== SCANNER DEBUG ===');
     console.log('Platform.OS:', Platform.OS);
     console.log('Device.isDevice:', Device.isDevice);
+    console.log('isMobileBrowser:', isMobileBrowser());
     
+    // Su web mobile, usa lo scanner web
+    if (Platform.OS === 'web') {
+      if (isMobileBrowser()) {
+        console.log('Opening web scanner for mobile browser...');
+        setShowWebScanner(true);
+        return;
+      } else {
+        // Su desktop web, mostra messaggio
+        showAlert('Scanner', 'La scansione barcode è disponibile solo su smartphone.\n\nPuoi inserire l\'ISBN manualmente.');
+        return;
+      }
+    }
+    
+    // Su app nativa, verifica che sia un dispositivo fisico
     const isPhysicalDevice = Device.isDevice;
     
     if (!isPhysicalDevice) {
@@ -348,7 +378,7 @@ export default function SearchSellScreen() {
         }
       }
       
-      console.log('Opening scanner...');
+      console.log('Opening native scanner...');
       setScannerError(null);
       setScanned(false);
       setIsCameraReady(false);
@@ -360,6 +390,24 @@ export default function SearchSellScreen() {
       showAlert('Errore Scanner', 'Impossibile aprire lo scanner. Prova a inserire l\'ISBN manualmente.');
     }
   };
+
+  // Handler per scansione web
+  const handleWebScan = useCallback((isbn: string) => {
+    console.log('Web scan result:', isbn, '- Mode:', scannerModeRef.current);
+    setShowWebScanner(false);
+    
+    if (scannerModeRef.current === 'cerca') {
+      setCercaTitolo(isbn);
+      handleCercaTitolo(isbn);
+    } else {
+      setVendiIsbn(isbn);
+      handleVendiSearchWithIsbn(isbn);
+    }
+  }, []);
+
+  const closeWebScanner = useCallback(() => {
+    setShowWebScanner(false);
+  }, []);
 
   const handleCameraReady = useCallback(() => {
     console.log('Camera is ready!');
@@ -545,6 +593,24 @@ export default function SearchSellScreen() {
   };
 
   // ==================== RENDER ====================
+
+  // Web Scanner per mobile browser
+  if (showWebScanner && Platform.OS === 'web' && WebBarcodeScanner) {
+    return (
+      <Suspense fallback={
+        <View style={styles.scannerContainer}>
+          <ActivityIndicator size="large" color="#4CAF50" />
+          <Text style={{ color: '#fff', marginTop: 16 }}>Caricamento scanner...</Text>
+        </View>
+      }>
+        <WebBarcodeScanner 
+          onScan={handleWebScan}
+          onClose={closeWebScanner}
+          scannerMode={scannerMode}
+        />
+      </Suspense>
+    );
+  }
 
   if (showScanner) {
     return (
