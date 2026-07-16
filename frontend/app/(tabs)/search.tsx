@@ -748,14 +748,6 @@ export default function SearchSellScreen() {
               ) : (
                 /* Libro scolastico - vendibile */
                 <>
-                  <Image
-                    source={{ uri: vendiBook.cover_url || `https://covers.openlibrary.org/b/isbn/${vendiBook.isbn}-M.jpg` }}
-                    style={styles.bookCover}
-                    resizeMode="contain"
-                    onError={() => {
-                      // Se Open Library fallisce, usa IBS come fallback
-                    }}
-                  />
                   <View style={styles.bookInfo}>
                     <Text style={styles.bookTitle} numberOfLines={2}>{vendiBook.titolo || ''}</Text>
                     {vendiBook.autori ? <Text style={styles.bookAuthor}>{vendiBook.autori}</Text> : null}
@@ -788,17 +780,43 @@ export default function SearchSellScreen() {
           <Text style={[styles.sectionTitle, { color: '#4CAF50' }]}>CERCA UN LIBRO</Text>
         </View>
         
-        {/* Ricerca unificata per Titolo o ISBN */}
+        {/* Ricerca per Titolo */}
         <View style={styles.inputRow}>
           <TextInput
             style={[styles.isbnInput, { flex: 1 }]}
-            placeholder="Cerca titolo o codice ISBN..."
+            placeholder="Cerca per titolo..."
             placeholderTextColor="#999"
             value={cercaTitolo}
             onChangeText={setCercaTitolo}
             autoCapitalize="sentences"
             returnKeyType="search"
-            onSubmitEditing={handleCercaTitolo}
+            onSubmitEditing={() => handleCercaTitolo()}
+          />
+          <TouchableOpacity 
+            style={[styles.searchButton, { backgroundColor: '#4CAF50' }]} 
+            onPress={() => handleCercaTitolo()}
+            disabled={cercaTitolo.length < 3}
+          >
+            {cercaLoading ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Ionicons name="search" size={20} color="#fff" />
+            )}
+          </TouchableOpacity>
+        </View>
+
+        {/* Ricerca per ISBN */}
+        <View style={[styles.inputRow, { marginTop: 8 }]}>
+          <TextInput
+            style={[styles.isbnInput, { flex: 1 }]}
+            placeholder="Oppure inserisci ISBN..."
+            placeholderTextColor="#999"
+            value={cercaTitolo}
+            onChangeText={setCercaTitolo}
+            keyboardType="numeric"
+            maxLength={13}
+            returnKeyType="search"
+            onSubmitEditing={() => handleCercaTitolo()}
           />
           <TouchableOpacity 
             style={[styles.scanButton, { backgroundColor: '#4CAF50' }]} 
@@ -812,26 +830,10 @@ export default function SearchSellScreen() {
           >
             <Ionicons name="barcode-outline" size={22} color="#fff" />
           </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.searchButton, { backgroundColor: '#4CAF50' }]} 
-            onPress={handleCercaTitolo}
-            disabled={cercaTitolo.length < 3}
-          >
-            {cercaLoading ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Ionicons name="search" size={20} color="#fff" />
-            )}
-          </TouchableOpacity>
         </View>
 
         {cercaBook && (
           <View style={styles.resultCard}>
-            <Image
-              source={{ uri: `https://www.ibs.it/images/${cercaBook.isbn}_0_0_0_536_0.jpg` }}
-              style={styles.bookCover}
-              resizeMode="contain"
-            />
             <View style={styles.bookInfo}>
               <Text style={styles.bookTitle} numberOfLines={2}>{cercaBook.titolo}</Text>
               {cercaBook.autori && <Text style={styles.bookAuthor}>{cercaBook.autori}</Text>}
