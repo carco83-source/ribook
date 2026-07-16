@@ -155,7 +155,23 @@ export default function MyListingsScreen() {
                 <View key={listing.id || index} style={styles.listingCard}>
                   <TouchableOpacity 
                     style={styles.listingCardInner}
-                    onPress={() => router.push(`/sell-form?listingId=${listing.id}`)}
+                    onPress={() => {
+                      // Blocca modifica se riservato
+                      const isReserved = listing.stato !== 'disponibile' || 
+                                        listing.status === 'reserved' || 
+                                        listing.reserved_by || 
+                                        listing.order_id;
+                      if (isReserved) {
+                        const msg = 'Non puoi modificare un annuncio riservato o con ordine in corso.\n\nPotrai modificarlo quando tornerà disponibile.';
+                        if (Platform.OS === 'web') {
+                          window.alert(msg);
+                        } else {
+                          Alert.alert('Modifica non disponibile', msg);
+                        }
+                        return;
+                      }
+                      router.push(`/sell-form?listingId=${listing.id}`);
+                    }}
                   >
                     <Image 
                       source={{ uri: coverUrl }}

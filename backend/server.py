@@ -3932,12 +3932,19 @@ async def update_listing(listing_id: str, data: dict):
     if not listing:
         raise HTTPException(status_code=404, detail="Annuncio non trovato o non autorizzato")
     
-    # Verifica che non ci siano ordini attivi
-    if listing.get("stato") != "disponibile":
+    # Verifica che non ci siano ordini attivi o che il libro non sia riservato
+    listing_status = listing.get("status", listing.get("stato", "disponibile"))
+    if listing_status in ["reserved", "riservato", "sold", "venduto"]:
+        raise HTTPException(status_code=400, detail="Non puoi modificare un annuncio riservato o venduto")
+    
+    if listing.get("stato") != "disponibile" and listing.get("stato") is not None:
         raise HTTPException(status_code=400, detail="Non puoi modificare un annuncio con ordine attivo")
     
     if listing.get("order_id"):
         raise HTTPException(status_code=400, detail="Non puoi modificare un annuncio con ordine in corso")
+    
+    if listing.get("reserved_by"):
+        raise HTTPException(status_code=400, detail="Non puoi modificare un annuncio riservato da un acquirente")
     
     # Prepara i campi da aggiornare
     update_fields = {}
