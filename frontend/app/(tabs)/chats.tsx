@@ -106,14 +106,26 @@ export default function MessaggiScreen() {
         console.log('[Chats] Error loading conversations:', error.message);
       }
 
-      // Carica notifiche (usando API autenticata)
+      // Carica notifiche (usando API autenticata, con fallback non autenticata)
       try {
         const notifData = await authApi.get(`/api/notifications/${storedUserId}`);
         console.log('[Chats] Notifications loaded:', notifData.notifications?.length || 0);
         setNotifications(notifData.notifications || []);
         setUnreadNotifications(notifData.unread_count || 0);
       } catch (error: any) {
-        console.log('[Chats] Error loading notifications:', error.message);
+        console.log('[Chats] Auth API failed, trying fallback:', error.message);
+        // Fallback: prova senza autenticazione
+        try {
+          const response = await fetch(`${API_BASE}/notifications-public/${storedUserId}`);
+          if (response.ok) {
+            const notifData = await response.json();
+            console.log('[Chats] Fallback notifications loaded:', notifData.notifications?.length || 0);
+            setNotifications(notifData.notifications || []);
+            setUnreadNotifications(notifData.unread_count || 0);
+          }
+        } catch (fallbackError) {
+          console.log('[Chats] Fallback also failed:', fallbackError);
+        }
       }
     } catch (error) {
       console.error('[Chats] Error loading data:', error);

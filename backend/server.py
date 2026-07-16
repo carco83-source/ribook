@@ -3379,6 +3379,23 @@ async def get_notifications(
     
     return {"notifications": notifications, "unread_count": sum(1 for n in notifications if not n.get("read", True))}
 
+@api_router.get("/notifications-public/{user_id}")
+async def get_notifications_public(user_id: str, limit: int = 50):
+    """Recupera le notifiche per un utente - SENZA autenticazione (fallback)"""
+    # Verifica che l'utente esista
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+    
+    notifications = await db.notifications.find(
+        {"user_id": user_id}
+    ).sort("created_at", -1).limit(limit).to_list(limit)
+    
+    for n in notifications:
+        n.pop('_id', None)
+    
+    return {"notifications": notifications, "unread_count": sum(1 for n in notifications if not n.get("read", True))}
+
 @api_router.put("/notifications/{notification_id}/read")
 async def mark_notification_read(notification_id: str):
     """Segna una notifica come letta"""
