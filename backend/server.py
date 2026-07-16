@@ -8786,16 +8786,22 @@ async def buyer_cancel_order(order_id: str, user_id: str = Query(...), reason: s
     cancellable_with_refund = [
         "pagato_attesa_consegna",
         "paid",
-        "in_transito_a_cartolibreria"
+        "paid_escrow",
+        "in_transito_a_cartolibreria",
+        "delivering_to_bookstore"
     ]
     
     # Stati in cui NON si può più annullare
     non_cancellable = [
         "in_custodia",
         "pronto_per_ritiro",
+        "ready_for_pickup",
         "picked_up",
         "completed",
-        "refunded"
+        "refunded",
+        "rimborsato_acquirente",
+        "annullato_acquirente",
+        "annullato_non_disponibile"
     ]
     
     if current_status in non_cancellable:
@@ -8852,13 +8858,19 @@ async def buyer_cancel_order(order_id: str, user_id: str = Query(...), reason: s
         }]
     }
     
-    await db.orders.update_one({"id": order_id}, {"$set": update_data})
+    update_result = await db.orders.update_one({"id": order_id}, {"$set": update_data})
+    print(f"[CANCEL] Order {order_id} updated to status: {new_status}, matched={update_result.matched_count}, modified={update_result.modified_count}")
     
     # Rimetti il listing come disponibile
-    await db.listings.update_one(
-        {"id": order.get("listing_id")},
-        {"$set": {"status": "available", "stato": "disponibile"}, "$unset": {"reserved_by": "", "order_id": ""}}
-    )
+    listing_id = order.get("listing_id")
+    if listing_id:
+        listing_update = await db.listings.update_one(
+            {"id": listing_id},
+            {"$set": {"status": "available", "stato": "disponibile"}, "$unset": {"reserved_by": "", "order_id": ""}}
+        )
+        print(f"[CANCEL] Listing {listing_id} restored to available: matched={listing_update.matched_count}, modified={listing_update.modified_count}")
+    else:
+        print(f"[CANCEL] WARNING: No listing_id found for order {order_id}")
     
     # Elimina le notifiche relative a questo ordine
     await db.notifications.delete_many({
@@ -8890,9 +8902,10 @@ async def buyer_cancel_order(order_id: str, user_id: str = Query(...), reason: s
         notif_title = "Ordine annullato"
     
     # Notifica al venditore
+    seller_id = order.get("seller_id")
     notification = {
         "id": str(uuid.uuid4()),
-        "user_id": order.get("seller_id"),
+        "user_id": seller_id,
         "type": "order_cancelled_by_buyer",
         "title": notif_title,
         "message": notif_message,
@@ -8901,6 +8914,7 @@ async def buyer_cancel_order(order_id: str, user_id: str = Query(...), reason: s
         "created_at": now.isoformat()
     }
     await db.notifications.insert_one(notification)
+    print(f"[CANCEL] Notification sent to seller {seller_id} for cancelled order {order_id}")
     
     return_message = "Ordine annullato con successo."
     if needs_refund:
