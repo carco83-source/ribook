@@ -315,17 +315,22 @@ async def get_isbn_vendibili_catanzaro(
                     "tipo": "annuale"
                 })
         else:
-            # LIBRO TRIENNALE: cerca in classe 3 SOLO nelle scuole target
+            # LIBRO TRIENNALE/UNICO: cerca in TUTTE le classi dove era presente l'anno scorso
+            # Non solo classe 3, perché potrebbe essere usato in più anni (es. Vol U in istituti tecnici)
             async for doc in db.books.find({
                 "isbn": {"$in": isbn_da_cercare},
-                "classe": "3",
                 "codice_scuola": {"$in": codici_scuole_target}
             }):
+                classe_doc = doc.get("classe", "")
+                try:
+                    classe_int = int(classe_doc)
+                except (ValueError, TypeError):
+                    classe_int = 0
                 venditori.append({
                     "codice_scuola": doc.get("codice_scuola", ""),
-                    "classe_venditore": 3,
+                    "classe_venditore": classe_int,
                     "sezione": doc.get("sezione", ""),
-                    "tipo": "triennale"
+                    "tipo": "triennale_unico"
                 })
         
         if venditori:
