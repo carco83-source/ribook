@@ -1281,6 +1281,18 @@ export default function SellFormScreen() {
           />
         </View>
 
+        {/* Disclaimer legale */}
+        <View style={styles.legalDisclaimer}>
+          <Ionicons name="information-circle-outline" size={16} color="#666" />
+          <Text style={styles.legalDisclaimerText}>
+            Pubblicando l'annuncio accetti i{' '}
+            <Text style={styles.legalLink} onPress={() => router.push('/termini-condizioni')}>
+              Termini e Condizioni
+            </Text>{' '}
+            di RiBook.
+          </Text>
+        </View>
+
         {/* Bottone Pubblica / Salva Modifica */}
         <TouchableOpacity
           style={[styles.publishButton, creatingListing && styles.publishButtonDisabled]}
@@ -2064,5 +2076,27 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  legalDisclaimer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#f5f5f5',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderRadius: 8,
+    gap: 8,
+  },
+  legalDisclaimerText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#666',
+    lineHeight: 18,
+  },
+  legalLink: {
+    color: '#1a472a',
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
 });

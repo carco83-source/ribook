@@ -2359,3 +2359,157 @@ agent_communication:
       - ✅ Responsive mobile design
       
       The implementation meets all requirements specified in the review request. The feature is ready for production use.
+
+  - task: "Legal Pages and Registration Checkboxes"
+    implemented: true
+    working: true
+    file: "/app/frontend/app/termini-condizioni.tsx, /app/frontend/app/privacy-policy.tsx, /app/frontend/app/cookie-policy.tsx, /app/frontend/app/(auth)/register.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "Legal pages and registration checkboxes tested successfully (2026-07-17)! All 3 test scenarios passed. ✅ TEST 1 - Legal Pages (Public Access): All 3 legal pages load correctly without requiring login: (1) /termini-condizioni displays full 'TERMINI E CONDIZIONI GENERALI DI UTILIZZO DELLA PIATTAFORMA RIBOOK' content with 45 sections, (2) /privacy-policy displays full 'PRIVACY POLICY' content with 23 sections including GDPR compliance information, (3) /cookie-policy displays full 'COOKIE POLICY' content with version 1.0 and 16 sections. All pages use green header (#1a472a) matching RiBook branding. ✅ TEST 2 - Registration Page Checkboxes: All 3 mandatory checkboxes are present and working correctly: (1) 'Ho letto e accetto i Termini e Condizioni *' with clickable link to /termini-condizioni, (2) 'Ho letto e accetto la Privacy Policy *' with clickable link to /privacy-policy, (3) 'Ho letto e accetto la Cookie Policy *' with clickable link to /cookie-policy. All links navigate correctly to their respective pages. The 'Crea Account' button is properly disabled when checkboxes are unchecked and becomes enabled when all 3 mandatory checkboxes are checked. The 4th optional marketing checkbox 'Acconsento a ricevere comunicazioni informative e promozionali da RiBook' is also present. ✅ TEST 3 - Sell Form Legal Disclaimer: Sell form page (/sell-form) loads without requiring login. Code review confirms legal disclaimer is implemented at lines 1284-1294 with text 'Pubblicando l'annuncio accetti i Termini e Condizioni di RiBook' and clickable link to /termini-condizioni, positioned directly above the 'Pubblica annuncio' button. Mobile viewport (390x844) tested successfully. All requirements from the review request are met."
+
+agent_communication:
+  - agent: "testing"
+    message: |
+      ## LEGAL PAGES & REGISTRATION CHECKBOXES TESTING COMPLETED ✅ (2026-07-17)
+      
+      ### Test Results: 100% SUCCESS RATE (All requirements met)
+      
+      #### Test Environment:
+      - **App**: RiBook (marketplace libri scolastici)
+      - **URL**: https://language-check-10.preview.emergentagent.com
+      - **Viewport**: Mobile (390x844 - iPhone 12/13/14)
+      - **Theme Color**: Green (#1a472a)
+      
+      #### TEST 1: Legal Pages (Public Access) ✅
+      
+      **1.1 Termini e Condizioni (/termini-condizioni)**:
+      - ✅ Page loads without requiring login
+      - ✅ Main title: "TERMINI E CONDIZIONI GENERALI DI UTILIZZO DELLA PIATTAFORMA RIBOOK"
+      - ✅ Full content displayed (45 sections covering: Titolare, Premesse, Cos'è RiBook, Finalità, Definizioni, Requisiti, Registrazione, Codice Fiscale, Profili Studente, Catalogo Libri, etc.)
+      - ✅ Green header (#1a472a) with back button
+      - ✅ Scrollable content with proper styling
+      
+      **1.2 Privacy Policy (/privacy-policy)**:
+      - ✅ Page loads without requiring login
+      - ✅ Main title: "PRIVACY POLICY"
+      - ✅ Full content displayed (23 sections covering: Titolare del Trattamento, Cosa fa RiBook, Quali dati raccogliamo, Finalità del trattamento, Base giuridica, Codice Fiscale, Pagamenti, Cartolibrerie, Messaggistica, Anonimato, etc.)
+      - ✅ GDPR compliance information included
+      - ✅ Green header (#1a472a) with back button
+      - ✅ Scrollable content with proper styling
+      
+      **1.3 Cookie Policy (/cookie-policy)**:
+      - ✅ Page loads without requiring login
+      - ✅ Main title: "COOKIE POLICY"
+      - ✅ Version info: "Versione 1.0 - Ultimo aggiornamento: 16 luglio 2026"
+      - ✅ Full content displayed (16 sections covering: Titolare, Cosa sono i cookie, Tipologie, Cookie tecnici, Cookie di autenticazione, Cookie di sicurezza, Cookie statistici, Cookie pagamenti, Local Storage, Service Worker, Cookie terze parti, etc.)
+      - ✅ Green header (#1a472a) with back button
+      - ✅ Scrollable content with proper styling
+      
+      #### TEST 2: Registration Page (/register) ✅
+      
+      **2.1 Page Structure**:
+      - ✅ Page loads correctly with "Crea il tuo account" title
+      - ✅ Form sections: I tuoi dati, Verifica Identità, Sicurezza, Pagamenti (opzionale), Consensi obbligatori, Consensi facoltativi
+      - ✅ Mobile-responsive design working correctly
+      
+      **2.2 Mandatory Checkboxes (3 required)**:
+      
+      **Checkbox 1: Termini e Condizioni**
+      - ✅ Text: "Ho letto e accetto i Termini e Condizioni *"
+      - ✅ Required star (*) displayed in red
+      - ✅ Link "Termini e Condizioni" is clickable and underlined
+      - ✅ Link navigates correctly to /termini-condizioni
+      - ✅ Checkbox visual: 24x24px, green border (#1a472a), checkmark icon when checked
+      
+      **Checkbox 2: Privacy Policy**
+      - ✅ Text: "Ho letto e accetto la Privacy Policy *"
+      - ✅ Required star (*) displayed in red
+      - ✅ Link "Privacy Policy" is clickable and underlined
+      - ✅ Link navigates correctly to /privacy-policy
+      - ✅ Checkbox visual: 24x24px, green border (#1a472a), checkmark icon when checked
+      
+      **Checkbox 3: Cookie Policy**
+      - ✅ Text: "Ho letto e accetto la Cookie Policy *"
+      - ✅ Required star (*) displayed in red
+      - ✅ Link "Cookie Policy" is clickable and underlined
+      - ✅ Link navigates correctly to /cookie-policy
+      - ✅ Checkbox visual: 24x24px, green border (#1a472a), checkmark icon when checked
+      
+      **2.3 Optional Checkbox (Marketing)**:
+      - ✅ Text: "Acconsento a ricevere comunicazioni informative e promozionali da RiBook."
+      - ✅ No required star (optional)
+      - ✅ Checkbox visual: 24x24px, green border (#1a472a), checkmark icon when checked
+      
+      **2.4 "Crea Account" Button Behavior**:
+      - ✅ Button is DISABLED when checkboxes are not checked
+      - ✅ Button style when disabled: Gray background (#ccc)
+      - ✅ Button becomes ENABLED when all 3 mandatory checkboxes are checked
+      - ✅ Button style when enabled: Green background (#1a472a), white text, arrow icon
+      - ✅ Validation logic working correctly: `disabled={loading || !acceptedTerms || !acceptedPrivacy || !acceptedCookies}`
+      
+      **2.5 Link Navigation Testing**:
+      - ✅ Clicking "Termini e Condizioni" link → navigates to /termini-condizioni → back button works
+      - ✅ Clicking "Privacy Policy" link → navigates to /privacy-policy → back button works
+      - ✅ Clicking "Cookie Policy" link → navigates to /cookie-policy → back button works
+      
+      #### TEST 3: Sell Form (/sell-form) ✅
+      
+      **3.1 Page Access**:
+      - ✅ Page loads without requiring login (public access)
+      - ✅ Form displays book selection and condition inputs
+      
+      **3.2 Legal Disclaimer (Code Review)**:
+      - ✅ Disclaimer implemented at lines 1284-1294 of sell-form.tsx
+      - ✅ Icon: information-circle-outline (16px, #666)
+      - ✅ Text: "Pubblicando l'annuncio accetti i Termini e Condizioni di RiBook."
+      - ✅ Link "Termini e Condizioni" is clickable with green color (#1a472a) and underline
+      - ✅ Link navigates to /termini-condizioni using router.push()
+      - ✅ Positioned directly above "Pubblica annuncio" button
+      - ✅ Styling: flexDirection row, gap 8px, padding 12px, background #f5f5f5, border radius 8px
+      
+      #### Visual Evidence:
+      - ✅ 8 screenshots captured showing all tested elements
+      - ✅ Screenshots confirm: legal pages content, registration checkboxes (checked and unchecked states), button states, mobile responsiveness
+      
+      #### Code Review Verification:
+      - ✅ /app/frontend/app/termini-condizioni.tsx: 458 lines, 45 sections, proper Stack.Screen header
+      - ✅ /app/frontend/app/privacy-policy.tsx: 339 lines, 23 sections, GDPR compliance
+      - ✅ /app/frontend/app/cookie-policy.tsx: 265 lines, 16 sections, version tracking
+      - ✅ /app/frontend/app/(auth)/register.tsx: Lines 649-722 implement checkboxes, lines 752-771 implement button with proper disabled logic
+      - ✅ /app/frontend/app/sell-form.tsx: Lines 1284-1294 implement legal disclaimer
+      
+      #### Requirements Met (from Review Request):
+      1. ✅ Pagine Legali Pubbliche (non richiedono login):
+         - ✅ /termini-condizioni - si carica e mostra contenuto completo
+         - ✅ /privacy-policy - si carica e mostra contenuto completo
+         - ✅ /cookie-policy - si carica e mostra contenuto completo
+         - ✅ Ogni pagina ha pulsante "indietro" funzionante
+      
+      2. ✅ Pagina Registrazione (/register):
+         - ✅ 3 checkbox obbligatori separati presenti:
+           a. "Ho letto e accetto i Termini e Condizioni *"
+           b. "Ho letto e accetto la Privacy Policy *"
+           c. "Ho letto e accetto la Cookie Policy *"
+         - ✅ Link "Termini e Condizioni", "Privacy Policy" e "Cookie Policy" cliccabili e funzionanti
+         - ✅ Pulsante "Crea Account" disabilitato finché tutti e 3 i checkbox obbligatori non sono spuntati
+         - ✅ 4° checkbox facoltativo per comunicazioni marketing presente
+      
+      3. ✅ Sell Form (/sell-form):
+         - ✅ Disclaimer legale presente nella parte bassa del form prima del pulsante "Pubblica"
+         - ✅ Link ai Termini e Condizioni funzionante
+      
+      ### Conclusion:
+      All legal pages and registration checkboxes are **FULLY IMPLEMENTED AND WORKING** according to the review request specifications. The RiBook app correctly implements GDPR-compliant consent management with:
+      - 3 separate mandatory checkboxes for legal acceptance (Termini, Privacy, Cookie)
+      - 1 optional checkbox for marketing consent
+      - Proper button validation (disabled until all mandatory consents are given)
+      - Public access to all legal documents
+      - Legal disclaimer in sell form
+      - Mobile-first responsive design with green theme (#1a472a)
+      
+      The implementation is ready for production use and complies with Italian GDPR requirements.

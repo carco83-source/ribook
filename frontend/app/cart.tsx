@@ -582,6 +582,15 @@ export default function CartScreen() {
                   </>
                 )}
               </TouchableOpacity>
+
+              {/* Disclaimer legale */}
+              <Text style={styles.legalNote}>
+                Procedendo al pagamento accetti i{' '}
+                <Text style={styles.legalNoteLink} onPress={() => router.push('/termini-condizioni')}>
+                  Termini e Condizioni
+                </Text>{' '}
+                di RiBook.
+              </Text>
             </View>
           )}
 
@@ -1062,5 +1071,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#1a472a',
     lineHeight: 18,
+  },
+  legalNote: {
+    fontSize: 11,
+    color: '#999',
+    textAlign: 'center',
+    marginTop: 12,
+    lineHeight: 16,
+  },
+  legalNoteLink: {
+    color: '#1a472a',
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
 });

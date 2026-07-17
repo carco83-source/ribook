@@ -52,6 +52,8 @@ export default function RegisterScreen() {
   const [errorMessage, setErrorMessage] = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [acceptedPrivacy, setAcceptedPrivacy] = useState(false);
+  const [acceptedCookies, setAcceptedCookies] = useState(false);
   const [acceptedMarketing, setAcceptedMarketing] = useState(false);
 
   // Versione corrente dei termini
@@ -185,7 +187,15 @@ export default function RegisterScreen() {
     }
     // Validazione accettazione termini (obbligatoria)
     if (!acceptedTerms) {
-      setErrorMessage('Devi accettare i Termini e Condizioni, la Privacy Policy e la Cookie Policy per registrarti');
+      setErrorMessage('Devi accettare i Termini e Condizioni per registrarti');
+      return;
+    }
+    if (!acceptedPrivacy) {
+      setErrorMessage('Devi accettare la Privacy Policy per registrarti');
+      return;
+    }
+    if (!acceptedCookies) {
+      setErrorMessage('Devi accettare la Cookie Policy per registrarti');
       return;
     }
 
@@ -210,8 +220,10 @@ export default function RegisterScreen() {
         codice_fiscale: codiceFiscale.toUpperCase(),
         data_nascita: formattedDate,
         iban: cleanIban,
-        // Consensi GDPR
-        terms_accepted: true,
+        // Consensi GDPR - separati
+        terms_accepted: acceptedTerms,
+        privacy_accepted: acceptedPrivacy,
+        cookie_accepted: acceptedCookies,
         terms_version: TERMS_VERSION,
         marketing_consent: acceptedMarketing,
         registration_method: 'email',
@@ -631,35 +643,95 @@ export default function RegisterScreen() {
                 styles.sectionTitle, 
                 { marginTop: 24, fontSize: dynamicStyles.fontSize.sectionTitle }
               ]}>
-                Consensi
+                Consensi obbligatori
               </Text>
 
-              {/* Checkbox Termini (obbligatoria) */}
-              <TouchableOpacity 
-                style={styles.checkboxContainer}
-                onPress={() => setAcceptedTerms(!acceptedTerms)}
-                activeOpacity={0.7}
-              >
-                <View style={[
-                  styles.checkbox,
-                  acceptedTerms && styles.checkboxChecked
-                ]}>
-                  {acceptedTerms && (
-                    <Ionicons name="checkmark" size={16} color="#fff" />
-                  )}
-                </View>
-                <Text style={styles.checkboxLabel}>
-                  Dichiaro di aver letto e accettato i{' '}
-                  <Text style={styles.checkboxLink}>Termini e Condizioni</Text>,{' '}
-                  la <Text style={styles.checkboxLink}>Privacy Policy</Text> e{' '}
-                  la <Text style={styles.checkboxLink}>Cookie Policy</Text>.{' '}
-                  <Text style={styles.requiredStar}>*</Text>
-                </Text>
-              </TouchableOpacity>
+              {/* Checkbox Termini e Condizioni */}
+              <View style={styles.checkboxRow}>
+                <TouchableOpacity 
+                  style={styles.checkboxContainer}
+                  onPress={() => setAcceptedTerms(!acceptedTerms)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[
+                    styles.checkbox,
+                    acceptedTerms && styles.checkboxChecked
+                  ]}>
+                    {acceptedTerms && (
+                      <Ionicons name="checkmark" size={16} color="#fff" />
+                    )}
+                  </View>
+                  <Text style={styles.checkboxLabel}>
+                    Ho letto e accetto i{' '}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => router.push('/termini-condizioni')}>
+                  <Text style={styles.checkboxLink}>Termini e Condizioni</Text>
+                </TouchableOpacity>
+                <Text style={styles.requiredStar}> *</Text>
+              </View>
+
+              {/* Checkbox Privacy Policy */}
+              <View style={styles.checkboxRow}>
+                <TouchableOpacity 
+                  style={styles.checkboxContainer}
+                  onPress={() => setAcceptedPrivacy(!acceptedPrivacy)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[
+                    styles.checkbox,
+                    acceptedPrivacy && styles.checkboxChecked
+                  ]}>
+                    {acceptedPrivacy && (
+                      <Ionicons name="checkmark" size={16} color="#fff" />
+                    )}
+                  </View>
+                  <Text style={styles.checkboxLabel}>
+                    Ho letto e accetto la{' '}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => router.push('/privacy-policy')}>
+                  <Text style={styles.checkboxLink}>Privacy Policy</Text>
+                </TouchableOpacity>
+                <Text style={styles.requiredStar}> *</Text>
+              </View>
+
+              {/* Checkbox Cookie Policy */}
+              <View style={styles.checkboxRow}>
+                <TouchableOpacity 
+                  style={styles.checkboxContainer}
+                  onPress={() => setAcceptedCookies(!acceptedCookies)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[
+                    styles.checkbox,
+                    acceptedCookies && styles.checkboxChecked
+                  ]}>
+                    {acceptedCookies && (
+                      <Ionicons name="checkmark" size={16} color="#fff" />
+                    )}
+                  </View>
+                  <Text style={styles.checkboxLabel}>
+                    Ho letto e accetto la{' '}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => router.push('/cookie-policy')}>
+                  <Text style={styles.checkboxLink}>Cookie Policy</Text>
+                </TouchableOpacity>
+                <Text style={styles.requiredStar}> *</Text>
+              </View>
+
+              {/* Sezione Marketing (opzionale) */}
+              <Text style={[
+                styles.sectionTitle, 
+                { marginTop: 20, fontSize: dynamicStyles.fontSize.sectionTitle - 2 }
+              ]}>
+                Consensi facoltativi
+              </Text>
 
               {/* Checkbox Marketing (facoltativa) */}
               <TouchableOpacity 
-                style={[styles.checkboxContainer, { marginTop: 12 }]}
+                style={[styles.checkboxContainer, { marginTop: 8 }]}
                 onPress={() => setAcceptedMarketing(!acceptedMarketing)}
                 activeOpacity={0.7}
               >
@@ -680,11 +752,11 @@ export default function RegisterScreen() {
               <TouchableOpacity
                 style={[
                   styles.registerButton,
-                  (loading || !acceptedTerms) && styles.registerButtonDisabled,
+                  (loading || !acceptedTerms || !acceptedPrivacy || !acceptedCookies) && styles.registerButtonDisabled,
                   isDesktop && styles.registerButtonDesktop,
                 ]}
                 onPress={handleRegister}
-                disabled={loading || !acceptedTerms}
+                disabled={loading || !acceptedTerms || !acceptedPrivacy || !acceptedCookies}
               >
                 {loading ? (
                   <ActivityIndicator color="#fff" />
@@ -963,6 +1035,13 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     gap: 12,
   },
+  checkboxRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    paddingVertical: 8,
+    marginBottom: 4,
+  },
   checkbox: {
     width: 24,
     height: 24,
@@ -978,7 +1057,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#1a472a',
   },
   checkboxLabel: {
-    flex: 1,
     fontSize: 14,
     color: '#333',
     lineHeight: 20,
@@ -987,9 +1065,11 @@ const styles = StyleSheet.create({
     color: '#1a472a',
     fontWeight: '600',
     textDecorationLine: 'underline',
+    fontSize: 14,
   },
   requiredStar: {
     color: '#ef4444',
     fontWeight: '700',
+    fontSize: 14,
   },
 });

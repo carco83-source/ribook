@@ -116,6 +116,9 @@ export default function RootLayout() {
         <Stack.Screen name="sell-form" options={{ title: 'Vendi Libro' }} />
         <Stack.Screen name="bookstore-portal" options={{ title: 'Portale Cartolibreria', headerShown: false }} />
         <Stack.Screen name="admin" options={{ title: 'Admin', headerShown: false }} />
+        <Stack.Screen name="termini-condizioni" options={{ title: 'Termini e Condizioni' }} />
+        <Stack.Screen name="privacy-policy" options={{ title: 'Privacy Policy' }} />
+        <Stack.Screen name="cookie-policy" options={{ title: 'Cookie Policy' }} />
       </Stack>
     </NotificationProvider>
   );
