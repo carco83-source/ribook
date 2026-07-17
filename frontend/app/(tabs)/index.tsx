@@ -71,7 +71,19 @@ const getClasseLabel = (classe: number | string): string => {
 };
 
 // Strumenti musicali da nascondere nella Home (ma restano vendibili)
-const STRUMENTI_MUSICALI = ['chitarra', 'flauto', 'violino', 'pianoforte', 'pianistica', 'piano'];
+// Usiamo pattern più specifici per evitare falsi positivi (es. "PRIMO PIANO" non è uno strumento!)
+const STRUMENTI_MUSICALI_PATTERNS = [
+  /\bchitarra\b/i,
+  /\bflauto\b/i,
+  /\bviolino\b/i,
+  /\bpianoforte\b/i,
+  /\bpianistica\b/i,
+  /\bclarinetto\b/i,
+  /\bsassofono\b/i,
+  /\btromba\b/i,
+  /\bbatteria\b/i,
+  /\bpercussioni\b/i,
+];
 
 // Filtra libri di strumenti musicali dalla visualizzazione
 const filterOutStrumentiMusicali = (books: any[]): any[] => {
@@ -79,9 +91,9 @@ const filterOutStrumentiMusicali = (books: any[]): any[] => {
   return books.filter(book => {
     const disciplina = (book.disciplina || '').toLowerCase();
     const titolo = (book.titolo || '').toLowerCase();
-    // Nascondi se disciplina O titolo contiene uno strumento musicale
-    const isStrumentoMusicale = STRUMENTI_MUSICALI.some(strumento => 
-      disciplina.includes(strumento) || titolo.includes(strumento)
+    // Nascondi se disciplina O titolo contiene uno strumento musicale (pattern esatto)
+    const isStrumentoMusicale = STRUMENTI_MUSICALI_PATTERNS.some(pattern => 
+      pattern.test(disciplina) || pattern.test(titolo)
     );
     return !isStrumentoMusicale;
   });
