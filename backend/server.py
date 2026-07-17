@@ -823,8 +823,10 @@ class UserCreate(BaseModel):
     classe: Optional[str] = None
     sezione: Optional[str] = None
     tipo_scuola: Optional[str] = None  # primo_grado or secondo_grado
-    # Consensi GDPR
-    terms_accepted: bool = False  # Obbligatorio
+    # Consensi GDPR separati
+    terms_accepted: bool = False  # Obbligatorio - Termini e Condizioni
+    privacy_accepted: bool = False  # Obbligatorio - Privacy Policy
+    cookie_accepted: bool = False  # Obbligatorio - Cookie Policy
     terms_version: Optional[str] = None  # Versione dei termini accettati
     marketing_consent: bool = False  # Facoltativo
     registration_method: Optional[str] = "email"  # email o google
@@ -1421,7 +1423,17 @@ async def register_user(user_data: UserCreate, request: Request):
     if not user_data.terms_accepted:
         raise HTTPException(
             status_code=400,
-            detail="Devi accettare i Termini e Condizioni, la Privacy Policy e la Cookie Policy per registrarti."
+            detail="Devi accettare i Termini e Condizioni per registrarti."
+        )
+    if not user_data.privacy_accepted:
+        raise HTTPException(
+            status_code=400,
+            detail="Devi accettare la Privacy Policy per registrarti."
+        )
+    if not user_data.cookie_accepted:
+        raise HTTPException(
+            status_code=400,
+            detail="Devi accettare la Cookie Policy per registrarti."
         )
     
     # ============== VALIDAZIONE CODICE FISCALE E ETÀ ==============
@@ -1510,12 +1522,16 @@ async def register_user(user_data: UserCreate, request: Request):
         verified_identity=True
     )
     
-    # Prepara dati utente con consensi GDPR
+    # Prepara dati utente con consensi GDPR - 3 consensi separati
     user_dict = user.dict()
     user_dict["gdpr_consent"] = {
         "terms_accepted": True,
-        "terms_version": user_data.terms_version or "1.0.0",
         "terms_accepted_at": datetime.utcnow().isoformat(),
+        "privacy_accepted": True,
+        "privacy_accepted_at": datetime.utcnow().isoformat(),
+        "cookie_accepted": True,
+        "cookie_accepted_at": datetime.utcnow().isoformat(),
+        "terms_version": user_data.terms_version or "1.0.0",
         "marketing_consent": user_data.marketing_consent,
         "marketing_consent_at": datetime.utcnow().isoformat() if user_data.marketing_consent else None,
         "registration_ip": client_ip,
