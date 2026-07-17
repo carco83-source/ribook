@@ -1077,9 +1077,9 @@ class Bookstore(BaseModel):
 class BookstorePublic(BaseModel):
     id: str
     nome: str
-    indirizzo: str
-    citta: str
-    telefono: str
+    indirizzo: Optional[str] = ""
+    citta: Optional[str] = ""
+    telefono: Optional[str] = ""
 
 # Transaction Models
 class TransactionCreate(BaseModel):
@@ -11574,6 +11574,116 @@ async def toggle_bookstore_affiliation(bookstore_id: str, admin_id: str = Query(
         "message": f"Cartolibreria {'attivata' if new_status else 'disattivata'} come punto di ritiro"
     }
 
+@api_router.post("/admin/fix-bookstore-orders")
+async def admin_fix_bookstore_orders(admin_id: str = Query(...)):
+    """Admin: collega tutti gli ordini senza bookstore_id alla cartolibreria principale (Ni.Ca.)"""
+    admin = await db.users.find_one({"id": admin_id})
+    if not admin or not admin.get("is_admin", False):
+        raise HTTPException(status_code=403, detail="Accesso non autorizzato")
+    
+    # Trova la cartolibreria principale (Ni.Ca.)
+    nica = await db.bookstores.find_one({
+        "$or": [
+            {"nome": {"$regex": "nica", "$options": "i"}},
+            {"email": {"$regex": "nica", "$options": "i"}}
+        ]
+    })
+    
+    if not nica:
+        # Prendi la prima cartolibreria attiva
+        nica = await db.bookstores.find_one({"affiliazione_attiva": True})
+    
+    if not nica:
+        raise HTTPException(status_code=404, detail="Nessuna cartolibreria attiva trovata")
+    
+    nica_id = nica.get("id")
+    nica_nome = nica.get("nome")
+    
+    # Collega ordini senza bookstore_id
+    result_orders = await db.orders.update_many(
+        {
+            "$or": [
+                {"bookstore_id": {"$exists": False}},
+                {"bookstore_id": None},
+                {"bookstore_id": ""}
+            ]
+        },
+        {"$set": {
+            "bookstore_id": nica_id,
+            "bookstore_name": nica_nome
+        }}
+    )
+    
+    # Collega anche notifiche
+    result_notifs = await db.bookstore_notifications.update_many(
+        {
+            "$or": [
+                {"bookstore_id": {"$exists": False}},
+                {"bookstore_id": None},
+                {"bookstore_id": ""}
+            ]
+        },
+        {"$set": {"bookstore_id": nica_id}}
+    )
+    
+    # Conta ordini totali per questa cartolibreria
+    total_orders = await db.orders.count_documents({"bookstore_id": nica_id})
+    
+    return {
+        "success": True,
+        "bookstore": {"id": nica_id, "nome": nica_nome},
+        "orders_fixed": result_orders.modified_count,
+        "notifications_fixed": result_notifs.modified_count,
+        "total_orders_for_bookstore": total_orders
+    }
+
+@api_router.get("/admin/debug-bookstore-orders")
+async def admin_debug_bookstore_orders(admin_id: str = Query(...)):
+    """Admin: debug - mostra stato ordini e cartolibrerie"""
+    admin = await db.users.find_one({"id": admin_id})
+    if not admin or not admin.get("is_admin", False):
+        raise HTTPException(status_code=403, detail="Accesso non autorizzato")
+    
+    # Cartolibrerie
+    bookstores = await db.bookstores.find({}).to_list(100)
+    bookstores_info = []
+    for bs in bookstores:
+        orders_count = await db.orders.count_documents({"bookstore_id": bs.get("id")})
+        notifs_count = await db.bookstore_notifications.count_documents({"bookstore_id": bs.get("id")})
+        bookstores_info.append({
+            "id": bs.get("id"),
+            "nome": bs.get("nome"),
+            "email": bs.get("email"),
+            "affiliazione_attiva": bs.get("affiliazione_attiva", False),
+            "orders_count": orders_count,
+            "notifications_count": notifs_count
+        })
+    
+    # Ordini senza cartolibreria
+    orders_without_bs = await db.orders.count_documents({
+        "$or": [
+            {"bookstore_id": {"$exists": False}},
+            {"bookstore_id": None},
+            {"bookstore_id": ""}
+        ]
+    })
+    
+    # Totale ordini
+    total_orders = await db.orders.count_documents({})
+    
+    # Stati ordini
+    pipeline = [
+        {"$group": {"_id": "$status", "count": {"$sum": 1}}}
+    ]
+    status_counts = await db.orders.aggregate(pipeline).to_list(100)
+    
+    return {
+        "bookstores": bookstores_info,
+        "total_orders": total_orders,
+        "orders_without_bookstore": orders_without_bs,
+        "orders_by_status": {s["_id"]: s["count"] for s in status_counts}
+    }
+
 # ============== ADMIN: GESTIONE UTENTI E CARTOLIBRERIE ==============
 
 @api_router.get("/admin/users-list")
@@ -15003,8 +15113,114 @@ async def startup_seed_database():
     """Esegue il seed del database all'avvio se necessario."""
     try:
         await run_seed()
+        # Esegui migrazione per correggere cartolibrerie
+        await migrate_bookstores_and_orders()
     except Exception as e:
         logger.error(f"Errore durante il seed del database: {e}")
+
+async def migrate_bookstores_and_orders():
+    """Migrazione: corregge affiliazione cartolibrerie e collega ordini"""
+    try:
+        # 1. Attiva tutte le cartolibrerie che non hanno il flag
+        result = await db.bookstores.update_many(
+            {"affiliazione_attiva": {"$exists": False}},
+            {"$set": {"affiliazione_attiva": True}}
+        )
+        if result.modified_count > 0:
+            logger.info(f"Migrazione: attivate {result.modified_count} cartolibrerie")
+        
+        # 2. Trova la cartolibreria Ni.Ca. (o simile) se esiste
+        nica_bookstore = await db.bookstores.find_one({
+            "$or": [
+                {"nome": {"$regex": "nica", "$options": "i"}},
+                {"nome": {"$regex": "ni.ca", "$options": "i"}},
+                {"email": {"$regex": "nica", "$options": "i"}}
+            ]
+        })
+        
+        if nica_bookstore:
+            nica_id = nica_bookstore.get("id")
+            nica_nome = nica_bookstore.get("nome")
+            logger.info(f"Migrazione: trovata cartolibreria Ni.Ca. ID={nica_id}, Nome={nica_nome}")
+            
+            # Assicurati che sia attiva
+            await db.bookstores.update_one(
+                {"id": nica_id},
+                {"$set": {"affiliazione_attiva": True}}
+            )
+            
+            # 3. Collega ordini senza bookstore_id a Ni.Ca.
+            orders_without_bookstore = await db.orders.count_documents({
+                "$or": [
+                    {"bookstore_id": {"$exists": False}},
+                    {"bookstore_id": None},
+                    {"bookstore_id": ""}
+                ]
+            })
+            
+            if orders_without_bookstore > 0:
+                await db.orders.update_many(
+                    {
+                        "$or": [
+                            {"bookstore_id": {"$exists": False}},
+                            {"bookstore_id": None},
+                            {"bookstore_id": ""}
+                        ]
+                    },
+                    {"$set": {
+                        "bookstore_id": nica_id,
+                        "bookstore_name": nica_nome
+                    }}
+                )
+                logger.info(f"Migrazione: collegati {orders_without_bookstore} ordini a Ni.Ca.")
+            
+            # 4. Collega anche notifiche senza bookstore_id
+            notifs_without_bookstore = await db.bookstore_notifications.count_documents({
+                "$or": [
+                    {"bookstore_id": {"$exists": False}},
+                    {"bookstore_id": None},
+                    {"bookstore_id": ""}
+                ]
+            })
+            
+            if notifs_without_bookstore > 0:
+                await db.bookstore_notifications.update_many(
+                    {
+                        "$or": [
+                            {"bookstore_id": {"$exists": False}},
+                            {"bookstore_id": None},
+                            {"bookstore_id": ""}
+                        ]
+                    },
+                    {"$set": {"bookstore_id": nica_id}}
+                )
+                logger.info(f"Migrazione: collegate {notifs_without_bookstore} notifiche a Ni.Ca.")
+        
+        # 5. Se non c'è nessuna cartolibreria, crea Ni.Ca. s.a.s. di default
+        total_bookstores = await db.bookstores.count_documents({})
+        if total_bookstores == 0:
+            logger.info("Migrazione: nessuna cartolibreria trovata, creo Ni.Ca. s.a.s. di default")
+            default_bookstore = {
+                "id": str(uuid.uuid4()),
+                "nome": "Ni.Ca. s.a.s.",
+                "indirizzo": "Viale Magna Grecia n.179",
+                "citta": "Catanzaro",
+                "cap": "88100",
+                "telefono": "",
+                "email": "nica.cartolibreria@gmail.com",
+                "pec": "carto.nica@pec.it",
+                "p_iva": "01696960796",
+                "affiliazione_attiva": True,
+                "credito_commissioni": 0,
+                "credito_foderazione": 0,
+                "credito_totale": 0,
+                "created_at": datetime.utcnow().isoformat()
+            }
+            await db.bookstores.insert_one(default_bookstore)
+            logger.info(f"Migrazione: creata cartolibreria Ni.Ca. s.a.s. con ID {default_bookstore['id']}")
+            
+    except Exception as e:
+        logger.error(f"Errore durante migrazione cartolibrerie: {e}")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

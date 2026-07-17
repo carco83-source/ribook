@@ -239,6 +239,70 @@ export default function AdminAccountsScreen() {
     setRefreshing(false);
   }, [userId]);
 
+  // Fix ordini cartolibreria
+  const handleFixBookstoreOrders = async () => {
+    const confirmMsg = 'Questa operazione collegherà tutti gli ordini senza cartolibreria a Ni.Ca. s.a.s. Continuare?';
+    
+    const doFix = async () => {
+      try {
+        setLoading(true);
+        const response = await axios.post(
+          `${API_URL}/api/admin/fix-bookstore-orders?admin_id=${userId}`
+        );
+        
+        showAlert(
+          'Ordini Corretti',
+          `Cartolibreria: ${response.data.bookstore.nome}\n\nOrdini corretti: ${response.data.orders_fixed}\nNotifiche corrette: ${response.data.notifications_fixed}\nTotale ordini: ${response.data.total_orders_for_bookstore}`
+        );
+      } catch (error: any) {
+        console.error('Error fixing orders:', error);
+        showAlert('Errore', error.response?.data?.detail || 'Impossibile correggere gli ordini');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    if (Platform.OS === 'web') {
+      if (window.confirm(confirmMsg)) {
+        doFix();
+      }
+    } else {
+      Alert.alert('Correggi Ordini', confirmMsg, [
+        { text: 'Annulla', style: 'cancel' },
+        { text: 'Correggi', onPress: doFix }
+      ]);
+    }
+  };
+
+  // Debug cartolibrerie
+  const handleDebugBookstores = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get(
+        `${API_URL}/api/admin/debug-bookstore-orders?admin_id=${userId}`
+      );
+      
+      const data = response.data;
+      let message = `CARTOLIBRERIE:\n`;
+      data.bookstores.forEach((bs: any) => {
+        message += `\n${bs.nome}\n  - Attiva: ${bs.affiliazione_attiva ? 'Sì' : 'No'}\n  - Ordini: ${bs.orders_count}\n  - Notifiche: ${bs.notifications_count}\n`;
+      });
+      message += `\nTOTALE ORDINI: ${data.total_orders}`;
+      message += `\nORDINI SENZA CARTOLIBRERIA: ${data.orders_without_bookstore}`;
+      message += `\n\nSTATI ORDINI:\n`;
+      Object.entries(data.orders_by_status).forEach(([status, count]) => {
+        message += `  ${status}: ${count}\n`;
+      });
+      
+      showAlert('Debug Cartolibrerie', message);
+    } catch (error: any) {
+      console.error('Error debugging:', error);
+      showAlert('Errore', error.response?.data?.detail || 'Errore nel debug');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const formatDate = (dateStr: string) => {
     if (!dateStr) return 'N/A';
     const date = new Date(dateStr);
@@ -366,6 +430,25 @@ export default function AdminAccountsScreen() {
           </>
         ) : (
           <>
+            {/* Pulsanti di manutenzione */}
+            <View style={styles.maintenanceButtons}>
+              <TouchableOpacity
+                style={styles.debugBtn}
+                onPress={handleDebugBookstores}
+              >
+                <Ionicons name="bug" size={18} color="#fff" />
+                <Text style={styles.debugBtnText}>Debug Ordini</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={styles.fixBtn}
+                onPress={handleFixBookstoreOrders}
+              >
+                <Ionicons name="hammer" size={18} color="#fff" />
+                <Text style={styles.fixBtnText}>Correggi Ordini</Text>
+              </TouchableOpacity>
+            </View>
+            
             {bookstoresLoading ? (
               <ActivityIndicator size="large" color="#1a472a" style={{ marginTop: 40 }} />
             ) : bookstores.length === 0 ? (
@@ -590,6 +673,43 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   resetBtnText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  maintenanceButtons: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 16,
+  },
+  debugBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#6366f1',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  debugBtnText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  fixBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#f59e0b',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  fixBtnText: {
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',
