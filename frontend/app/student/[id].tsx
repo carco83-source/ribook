@@ -530,7 +530,7 @@ export default function StudentDetailScreen() {
                 {/* Divider */}
                 <View style={styles.divider} />
 
-                {/* Spesa Stimata con RiLiBro */}
+                {/* Spesa Stimata con RiBook */}
                 <View style={styles.spesaRow}>
                   <View style={[styles.spesaIcon, { backgroundColor: '#e8f5e9' }]}>
                     <Ionicons name="trending-down" size={24} color="#4CAF50" />

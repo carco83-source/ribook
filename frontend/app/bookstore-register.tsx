@@ -155,7 +155,7 @@ export default function BookstoreRegisterScreen() {
           <Ionicons name="storefront" size={48} color="#1a472a" />
           <Text style={styles.headerTitle}>Registra la tua cartolibreria</Text>
           <Text style={styles.headerSubtitle}>
-            Compila il modulo per richiedere l'accesso al portale cartolibrerie di RiLiBro
+            Compila il modulo per richiedere l'accesso al portale cartolibrerie di RiBook
           </Text>
         </View>
 

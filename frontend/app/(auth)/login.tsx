@@ -21,6 +21,7 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { secureSet, STORAGE_KEYS } from '../../src/utils/secureStorage';
 import { registerForPushNotifications } from '../../src/utils/pushNotifications';
+import Footer from '../../src/components/Footer';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
@@ -379,6 +380,9 @@ export default function LoginScreen() {
             </TouchableOpacity>
           </View>
         </View>
+        
+        {/* Footer con link legali */}
+        <Footer showCompanyInfo={false} />
       </ScrollView>
     </KeyboardAvoidingView>
   );

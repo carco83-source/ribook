@@ -33,7 +33,7 @@
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/icon.png"
+      "favicon": "./assets/images/ribook-logo.png"
     },
     "plugins": [
       "expo-router",

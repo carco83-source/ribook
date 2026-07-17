@@ -23,6 +23,7 @@ import { authApi } from '../../src/utils/api';
 import CustomPicker from '../../src/components/CustomPicker';
 import { SCUOLE_PRIMO_GRADO, SCUOLE_SECONDO_GRADO, getClassiByType, SEZIONI } from '../../src/constants/schools';
 import { useProfileStore } from '../../src/store/profileStore';
+import Footer from '../../src/components/Footer';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -940,6 +941,9 @@ export default function RadarScreen() {
           </View>
         );
       })()}
+
+      {/* Footer con link legali */}
+      <Footer showCompanyInfo={true} />
 
       </ScrollView>
 

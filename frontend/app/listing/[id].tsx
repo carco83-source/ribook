@@ -353,12 +353,12 @@ export default function ListingDetailScreen() {
       `✍️ ${getListingAuthor(listing)}\n` +
       `💰 Prezzo: €${sellingPrice.toFixed(2)}\n` +
       `📖 Condizione: ${getConditionLabel(getListingCondition(listing))}\n\n` +
-      `Trovato su RiLiBro - L'app per scambiare libri scolastici usati a Catanzaro!`;
+      `Trovato su RiBook - L'app per scambiare libri scolastici usati a Catanzaro!`;
 
     try {
       await Share.share({
         message,
-        title: `${getListingTitle(listing)} in vendita su RiLiBro`,
+        title: `${getListingTitle(listing)} in vendita su RiBook`,
       });
     } catch (error) {
       console.error('Error sharing:', error);
@@ -372,7 +372,7 @@ export default function ListingDetailScreen() {
       `✍️ ${getListingAuthor(listing)}\n` +
       `💰 Prezzo: €${listing.prezzo_vendita.toFixed(2)}\n` +
       `📖 Condizione: ${getConditionLabel(listing.condizione)}\n\n` +
-      `Trovato su RiLiBro!`;
+      `Trovato su RiBook!`;
 
     const url = `whatsapp://send?text=${encodeURIComponent(message)}`;
     

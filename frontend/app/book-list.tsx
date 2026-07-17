@@ -78,7 +78,7 @@ export default function BookListScreen() {
 
       {/* Titolo */}
       <View style={styles.titleSection}>
-        <Text style={styles.title}>RiLiBro</Text>
+        <Text style={styles.title}>RiBook</Text>
         <Text style={styles.subtitle}>
           {childData?.nome_figlio} - Classe {childData?.classe} - {childData?.scuola_nome || childData?.school_name}
         </Text>

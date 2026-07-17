@@ -1,10 +1,11 @@
 import React, { useEffect } from 'react';
-import { Platform } from 'react-native';
+import { Platform, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { NotificationProvider } from '../context/NotificationContext';
 import * as Notifications from 'expo-notifications';
 import * as Linking from 'expo-linking';
+import CookieBanner from '../src/components/CookieBanner';
 
 // ============== PUSH NOTIFICATIONS SETUP ==============
 // 1. Foreground handler - MODULE SCOPE, before any component
@@ -120,6 +121,8 @@ export default function RootLayout() {
         <Stack.Screen name="privacy-policy" options={{ title: 'Privacy Policy' }} />
         <Stack.Screen name="cookie-policy" options={{ title: 'Cookie Policy' }} />
       </Stack>
+      {/* Banner Cookie - appare solo al primo accesso */}
+      <CookieBanner />
     </NotificationProvider>
   );
 }
