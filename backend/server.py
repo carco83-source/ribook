@@ -11810,11 +11810,8 @@ async def admin_reset_bookstore_password(bookstore_id: str, admin_id: str = Quer
         "new_password": new_password,
         "message": f"Nuova password per {bookstore.get('nome')}: {new_password}"
     }
-    
-    if active_orders > 0:
-        raise HTTPException(status_code=400, detail=f"La cartolibreria ha {active_orders} ordini attivi. Completa gli ordini prima di eliminare.")
-    
-    # Elimina cartolibreria
+
+# Elimina cartolibreria
     result = await db.bookstores.delete_one({"id": bookstore_id})
     
     # Elimina anche eventuali richieste correlate
