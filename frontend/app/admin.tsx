@@ -442,7 +442,7 @@ export default function AdminPortalScreen() {
           
           <TouchableOpacity
             style={[styles.quickActionButton, { backgroundColor: '#ef4444' }]}
-            onPress={() => router.push('/admin/accounts')}
+            onPress={() => router.push('/admin-tools/accounts')}
           >
             <Ionicons name="people" size={24} color="#fff" />
             <Text style={styles.quickActionText}>Gestione Account</Text>
