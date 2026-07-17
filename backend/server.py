@@ -11547,6 +11547,33 @@ async def get_all_bookstores(admin_id: str = Query(...)):
     
     return {"bookstores": bookstores}
 
+@api_router.patch("/admin/bookstores/{bookstore_id}/toggle-affiliation")
+async def toggle_bookstore_affiliation(bookstore_id: str, admin_id: str = Query(...)):
+    """Admin: attiva/disattiva affiliazione cartolibreria (visibilità come punto di ritiro)"""
+    admin = await db.users.find_one({"id": admin_id})
+    if not admin or not admin.get("is_admin", False):
+        raise HTTPException(status_code=403, detail="Accesso non autorizzato")
+    
+    bookstore = await db.bookstores.find_one({"id": bookstore_id})
+    if not bookstore:
+        raise HTTPException(status_code=404, detail="Cartolibreria non trovata")
+    
+    # Toggle affiliazione
+    current_status = bookstore.get("affiliazione_attiva", False)
+    new_status = not current_status
+    
+    await db.bookstores.update_one(
+        {"id": bookstore_id},
+        {"$set": {"affiliazione_attiva": new_status}}
+    )
+    
+    return {
+        "success": True,
+        "bookstore_id": bookstore_id,
+        "affiliazione_attiva": new_status,
+        "message": f"Cartolibreria {'attivata' if new_status else 'disattivata'} come punto di ritiro"
+    }
+
 # ============== ADMIN: GESTIONE UTENTI E CARTOLIBRERIE ==============
 
 @api_router.get("/admin/users-list")
@@ -11707,7 +11734,7 @@ async def approve_bookstore_request(request_id: str, admin_id: str = Query(...))
     # Genera password
     password = generate_bookstore_password()
     
-    # Crea cartolibreria
+    # Crea cartolibreria con affiliazione attiva
     bookstore = Bookstore(
         nome=request["nome_attivita"],
         indirizzo=request.get("indirizzo", ""),
@@ -11717,7 +11744,12 @@ async def approve_bookstore_request(request_id: str, admin_id: str = Query(...))
         password_hash=hash_password(password)
     )
     
-    await db.bookstores.insert_one(bookstore.dict())
+    # Aggiungi affiliazione_attiva per renderla visibile come punto di ritiro
+    bookstore_dict = bookstore.dict()
+    bookstore_dict["affiliazione_attiva"] = True
+    bookstore_dict["approved_at"] = datetime.utcnow().isoformat()
+    
+    await db.bookstores.insert_one(bookstore_dict)
     
     # Aggiorna richiesta
     now = datetime.utcnow()
