@@ -433,7 +433,7 @@ export default function AdminPortalScreen() {
         <View style={styles.quickActions}>
           <TouchableOpacity
             style={styles.quickActionButton}
-            onPress={() => router.push('/admin/payouts')}
+            onPress={() => router.push('/admin-tools/payouts')}
           >
             <Ionicons name="wallet" size={24} color="#fff" />
             <Text style={styles.quickActionText}>Gestione Payout</Text>
