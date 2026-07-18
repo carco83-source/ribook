@@ -16,6 +16,25 @@
 - **Email**: admin@ribook.it
 - **Password**: Test123!
 
+## Cartolibrerie Convenzionate
+1. **Ni.Ca. s.a.s.**
+   - Email: nica.cartolibreria@gmail.com
+   - Indirizzo: Viale Magna Grecia n.179, 88100 Catanzaro
+   - PEC: carto.nica@pec.it
+   - P.IVA: 01696960796
+
+2. **Russomanno Maria Cartolibreria**
+   - Email: russomanno.cartolibreria@ribook.it
+   - Password: 4veAEmp4
+   - Indirizzo: Via Progresso 64, 88100 Catanzaro
+   - Telefono: 0961 731211
+
+3. **Libreria Punto e a capo**
+   - Email: puntoeacapo@ribook.it
+   - Password: RqD5Gdo4
+   - Indirizzo: Via Melchiorre Jannelli, 88100 Catanzaro
+   - Telefono: 0961 701727
+
 ## Note
 - Password: Test123! (verificata 2026-06-14)
 - Database: scambialibri

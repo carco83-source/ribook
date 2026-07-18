@@ -15240,31 +15240,87 @@ async def migrate_bookstores_and_orders():
                 )
                 logger.info(f"Migrazione: collegate {notifs_without_bookstore} notifiche a Ni.Ca.")
         
-        # 5. Se non c'è nessuna cartolibreria, crea Ni.Ca. s.a.s. di default
-        total_bookstores = await db.bookstores.count_documents({})
-        if total_bookstores == 0:
-            logger.info("Migrazione: nessuna cartolibreria trovata, creo Ni.Ca. s.a.s. di default")
-            default_bookstore = {
-                "id": str(uuid.uuid4()),
-                "nome": "Ni.Ca. s.a.s.",
-                "indirizzo": "Viale Magna Grecia n.179",
-                "citta": "Catanzaro",
-                "cap": "88100",
-                "telefono": "",
-                "email": "nica.cartolibreria@gmail.com",
-                "pec": "carto.nica@pec.it",
-                "p_iva": "01696960796",
-                "affiliazione_attiva": True,
-                "credito_commissioni": 0,
-                "credito_foderazione": 0,
-                "credito_totale": 0,
-                "created_at": datetime.utcnow().isoformat()
-            }
-            await db.bookstores.insert_one(default_bookstore)
-            logger.info(f"Migrazione: creata cartolibreria Ni.Ca. s.a.s. con ID {default_bookstore['id']}")
+        # 5. Crea cartolibrerie di default se non esistono
+        await create_default_bookstores()
             
     except Exception as e:
         logger.error(f"Errore durante migrazione cartolibrerie: {e}")
+
+async def create_default_bookstores():
+    """Crea le cartolibrerie convenzionate di default se non esistono"""
+    import bcrypt
+    import random
+    import string
+    
+    def generate_password(length=8):
+        chars = string.ascii_letters + string.digits
+        return ''.join(random.choice(chars) for _ in range(length))
+    
+    def hash_pwd(password):
+        return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    
+    # Lista delle cartolibrerie convenzionate
+    cartolibrerie = [
+        {
+            "nome": "Ni.Ca. s.a.s.",
+            "indirizzo": "Viale Magna Grecia n.179",
+            "citta": "Catanzaro",
+            "cap": "88100",
+            "telefono": "",
+            "email": "nica.cartolibreria@gmail.com",
+            "pec": "carto.nica@pec.it",
+            "p_iva": "01696960796",
+        },
+        {
+            "nome": "Russomanno Maria Cartolibreria",
+            "indirizzo": "Via Progresso, 64",
+            "citta": "Catanzaro",
+            "cap": "88100",
+            "telefono": "0961 731211",
+            "email": "russomanno.cartolibreria@ribook.it",
+        },
+        {
+            "nome": "Libreria Punto e a capo",
+            "indirizzo": "Via Melchiorre Jannelli",
+            "citta": "Catanzaro",
+            "cap": "88100",
+            "telefono": "0961 701727",
+            "email": "puntoeacapo@ribook.it",
+        },
+    ]
+    
+    for bs_data in cartolibrerie:
+        # Verifica se esiste già (per nome o email)
+        existing = await db.bookstores.find_one({
+            "$or": [
+                {"nome": bs_data["nome"]},
+                {"email": bs_data["email"]}
+            ]
+        })
+        
+        if existing:
+            # Assicurati che sia attiva
+            await db.bookstores.update_one(
+                {"_id": existing["_id"]},
+                {"$set": {"affiliazione_attiva": True}}
+            )
+            continue
+        
+        # Genera password e crea
+        password = generate_password()
+        bookstore = {
+            "id": str(uuid.uuid4()),
+            **bs_data,
+            "password_hash": hash_pwd(password),
+            "affiliazione_attiva": True,
+            "credito_commissioni": 0,
+            "credito_foderazione": 0,
+            "credito_totale": 0,
+            "created_at": datetime.utcnow().isoformat()
+        }
+        
+        await db.bookstores.insert_one(bookstore)
+        logger.info(f"Migrazione: creata cartolibreria {bs_data['nome']} - Password: {password}")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
