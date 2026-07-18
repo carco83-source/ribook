@@ -69,9 +69,14 @@ export default function AdminAccountsScreen() {
 
   const checkAdmin = async () => {
     try {
-      const storedUserId = await AsyncStorage.getItem('user_id');
+      // Controlla prima admin_id (login da pannello admin) poi user_id (login utente normale)
+      let storedUserId = await AsyncStorage.getItem('admin_id');
       if (!storedUserId) {
-        router.replace('/login');
+        storedUserId = await AsyncStorage.getItem('user_id');
+      }
+      
+      if (!storedUserId) {
+        router.replace('/admin');
         return;
       }
       setUserId(storedUserId);
@@ -79,7 +84,11 @@ export default function AdminAccountsScreen() {
       // Verifica admin
       const response = await axios.get(`${API_URL}/api/users/${storedUserId}`);
       if (!response.data.is_admin) {
-        Alert.alert('Accesso negato', 'Non sei autorizzato ad accedere a questa pagina');
+        if (Platform.OS === 'web') {
+          window.alert('Accesso negato: Non sei autorizzato ad accedere a questa pagina');
+        } else {
+          Alert.alert('Accesso negato', 'Non sei autorizzato ad accedere a questa pagina');
+        }
         router.back();
         return;
       }

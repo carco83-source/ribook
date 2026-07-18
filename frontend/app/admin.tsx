@@ -11,7 +11,7 @@ import {
   Platform,
   RefreshControl,
 } from 'react-native';
-import { useRouter, Stack, Link } from 'expo-router';
+import { useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
@@ -431,21 +431,23 @@ export default function AdminPortalScreen() {
       >
         {/* Quick Actions */}
         <View style={styles.quickActions}>
-          <Link href="/admin-tools/payouts" asChild>
-            <TouchableOpacity style={styles.quickActionButton}>
-              <Ionicons name="wallet" size={24} color="#fff" />
-              <Text style={styles.quickActionText}>Gestione Payout</Text>
-              <Text style={styles.quickActionSubtext}>Bonifici e scadenze</Text>
-            </TouchableOpacity>
-          </Link>
+          <TouchableOpacity 
+            style={styles.quickActionButton}
+            onPress={() => router.push('/admin-tools/payouts')}
+          >
+            <Ionicons name="wallet" size={24} color="#fff" />
+            <Text style={styles.quickActionText}>Gestione Payout</Text>
+            <Text style={styles.quickActionSubtext}>Bonifici e scadenze</Text>
+          </TouchableOpacity>
           
-          <Link href="/admin-tools/accounts" asChild>
-            <TouchableOpacity style={[styles.quickActionButton, { backgroundColor: '#ef4444' }]}>
-              <Ionicons name="people" size={24} color="#fff" />
-              <Text style={styles.quickActionText}>Gestione Account</Text>
-              <Text style={styles.quickActionSubtext}>Utenti e Cartolibrerie</Text>
-            </TouchableOpacity>
-          </Link>
+          <TouchableOpacity 
+            style={[styles.quickActionButton, { backgroundColor: '#ef4444' }]}
+            onPress={() => router.push('/admin-tools/accounts')}
+          >
+            <Ionicons name="people" size={24} color="#fff" />
+            <Text style={styles.quickActionText}>Gestione Account</Text>
+            <Text style={styles.quickActionSubtext}>Utenti e Cartolibrerie</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Dashboard Tab */}
