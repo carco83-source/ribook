@@ -15368,6 +15368,30 @@ async def create_default_bookstores():
             "telefono": "0961 701727",
             "email": "puntoeacapo@ribook.it",
         },
+        {
+            "nome": "Cartolibreria L'Apostrofo",
+            "indirizzo": "Via Genova 24, Viale Crotone 138",
+            "citta": "Catanzaro",
+            "cap": "88100",
+            "telefono": "",
+            "email": "apostrofo@ribook.it",
+        },
+        {
+            "nome": "Cartolibreria Palaia Luigi",
+            "indirizzo": "Via Santa Maria 1",
+            "citta": "Catanzaro",
+            "cap": "88100",
+            "telefono": "",
+            "email": "palaia@ribook.it",
+        },
+        {
+            "nome": "AEMME 77 di Ruoppolo Francesco",
+            "indirizzo": "Viale Tommaso Campanella 68",
+            "citta": "Catanzaro",
+            "cap": "88100",
+            "telefono": "",
+            "email": "aemme77@ribook.it",
+        },
     ]
     
     for bs_data in cartolibrerie:

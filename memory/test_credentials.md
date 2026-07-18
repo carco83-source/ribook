@@ -35,6 +35,21 @@
    - Indirizzo: Via Melchiorre Jannelli, 88100 Catanzaro
    - Telefono: 0961 701727
 
+4. **Cartolibreria L'Apostrofo**
+   - Email: apostrofo@ribook.it
+   - Password: AEBwKQUod9
+   - Indirizzo: Via Genova 24, Viale Crotone 138, 88100 Catanzaro
+
+5. **Cartolibreria Palaia Luigi**
+   - Email: palaia@ribook.it
+   - Password: MObUIIFnTO
+   - Indirizzo: Via Santa Maria 1, 88100 Catanzaro
+
+6. **AEMME 77 di Ruoppolo Francesco**
+   - Email: aemme77@ribook.it
+   - Password: vwhdRq67AZ
+   - Indirizzo: Viale Tommaso Campanella 68, 88100 Catanzaro
+
 ## Note
 - Password: Test123! (verificata 2026-06-14)
 - Database: scambialibri
