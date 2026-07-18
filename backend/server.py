@@ -11731,6 +11731,73 @@ async def admin_debug_bookstore_orders(admin_id: str = Query(...)):
         "orders_by_status": {s["_id"]: s["count"] for s in status_counts}
     }
 
+# Endpoint di emergenza per fix ordini - chiamabile via URL
+@api_router.get("/admin/emergency-fix-orders")
+async def emergency_fix_orders(secret: str = Query(...)):
+    """
+    Endpoint di emergenza per collegare ordini alla cartolibreria Ni.Ca.
+    Chiamare: /api/admin/emergency-fix-orders?secret=ribook2026fix
+    """
+    if secret != "ribook2026fix":
+        raise HTTPException(status_code=403, detail="Secret non valido")
+    
+    # Trova Ni.Ca.
+    nica = await db.bookstores.find_one({
+        "$or": [
+            {"nome": {"$regex": "nica", "$options": "i"}},
+            {"email": {"$regex": "nica", "$options": "i"}}
+        ]
+    })
+    
+    if not nica:
+        nica = await db.bookstores.find_one({"affiliazione_attiva": True})
+    
+    if not nica:
+        return {"error": "Nessuna cartolibreria trovata"}
+    
+    nica_id = nica.get("id")
+    nica_nome = nica.get("nome")
+    
+    # Fix ordini senza bookstore_id
+    result_orders = await db.orders.update_many(
+        {
+            "$or": [
+                {"bookstore_id": {"$exists": False}},
+                {"bookstore_id": None},
+                {"bookstore_id": ""}
+            ]
+        },
+        {"$set": {"bookstore_id": nica_id, "bookstore_name": nica_nome}}
+    )
+    
+    # Fix notifiche
+    result_notifs = await db.bookstore_notifications.update_many(
+        {
+            "$or": [
+                {"bookstore_id": {"$exists": False}},
+                {"bookstore_id": None},
+                {"bookstore_id": ""}
+            ]
+        },
+        {"$set": {"bookstore_id": nica_id}}
+    )
+    
+    # Conta ordini totali per questa cartolibreria
+    total_orders = await db.orders.count_documents({"bookstore_id": nica_id})
+    
+    # Lista stati ordini
+    pipeline = [{"$group": {"_id": "$status", "count": {"$sum": 1}}}]
+    status_counts = await db.orders.aggregate(pipeline).to_list(100)
+    
+    return {
+        "success": True,
+        "cartolibreria": nica_nome,
+        "ordini_corretti": result_orders.modified_count,
+        "notifiche_corrette": result_notifs.modified_count,
+        "totale_ordini_cartolibreria": total_orders,
+        "ordini_per_stato": {s["_id"]: s["count"] for s in status_counts}
+    }
+
 # ============== ADMIN: GESTIONE UTENTI E CARTOLIBRERIE ==============
 
 @api_router.get("/admin/users-list")
