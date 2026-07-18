@@ -11582,7 +11582,7 @@ async def get_all_orders(admin_id: str = Query(...), skip: int = 0, limit: int =
 
 @api_router.get("/admin/bookstores")
 async def get_all_bookstores(admin_id: str = Query(...)):
-    """Admin: lista cartolibrerie"""
+    """Admin: lista cartolibrerie con conteggio ordini"""
     admin = await db.users.find_one({"id": admin_id})
     if not admin or not admin.get("is_admin", False):
         raise HTTPException(status_code=403, detail="Accesso non autorizzato")
@@ -11591,6 +11591,14 @@ async def get_all_bookstores(admin_id: str = Query(...)):
     
     for bs in bookstores:
         bs.pop('_id', None)
+        # Aggiungi conteggio ordini per ogni cartolibreria
+        orders_count = await db.orders.count_documents({"bookstore_id": bs.get("id")})
+        active_orders_count = await db.orders.count_documents({
+            "bookstore_id": bs.get("id"),
+            "status": {"$nin": ["completed", "cancelled", "refunded", "annullato_acquirente", "annullato_non_disponibile", "picked_up"]}
+        })
+        bs["orders_count"] = orders_count
+        bs["active_orders_count"] = active_orders_count
     
     return {"bookstores": bookstores}
 
@@ -11893,6 +11901,25 @@ async def admin_delete_bookstore(bookstore_id: str, admin_id: str = Query(...)):
         "bookstore_id": bookstore_id,
         "status": {"$nin": ["completed", "cancelled", "refunded", "annullato_acquirente", "annullato_non_disponibile", "picked_up"]}
     })
+    
+    if active_orders > 0:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Impossibile eliminare: ci sono {active_orders} ordini attivi associati a questa cartolibreria"
+        )
+    
+    # Elimina la cartolibreria
+    result = await db.bookstores.delete_one({"id": bookstore_id})
+    
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=500, detail="Errore durante l'eliminazione")
+    
+    print(f"[ADMIN] Bookstore {bookstore_id} ({bookstore.get('email')}) deleted by admin {admin_id}")
+    
+    return {
+        "success": True,
+        "message": f"Cartolibreria {bookstore.get('nome')} eliminata con successo"
+    }
 
 @api_router.post("/admin/bookstores/{bookstore_id}/reset-password")
 async def admin_reset_bookstore_password(bookstore_id: str, admin_id: str = Query(...)):
@@ -11923,19 +11950,6 @@ async def admin_reset_bookstore_password(bookstore_id: str, admin_id: str = Quer
         "email": bookstore.get("email"),
         "new_password": new_password,
         "message": f"Nuova password per {bookstore.get('nome')}: {new_password}"
-    }
-
-# Elimina cartolibreria
-    result = await db.bookstores.delete_one({"id": bookstore_id})
-    
-    # Elimina anche eventuali richieste correlate
-    await db.bookstore_requests.delete_many({"email": bookstore.get("email")})
-    
-    print(f"[ADMIN] Bookstore {bookstore_id} ({bookstore.get('nome')}) deleted by admin {admin_id}")
-    
-    return {
-        "success": True,
-        "message": f"Cartolibreria '{bookstore.get('nome')}' eliminata con successo"
     }
 
 @api_router.post("/admin/bookstore-requests/{request_id}/approve")

@@ -39,6 +39,8 @@ interface Bookstore {
   indirizzo: string;
   status: string;
   created_at: string;
+  orders_count?: number;
+  active_orders_count?: number;
 }
 
 export default function AdminAccountsScreen() {
@@ -475,6 +477,18 @@ export default function AdminAccountsScreen() {
                       <Text style={styles.cardMeta}>
                         {bs.citta} • {bs.indirizzo?.substring(0, 30)}...
                       </Text>
+                      {/* Conteggio Ordini */}
+                      <View style={styles.ordersCountContainer}>
+                        <View style={[styles.ordersBadge, (bs.active_orders_count || 0) > 0 ? styles.ordersBadgeActive : styles.ordersBadgeEmpty]}>
+                          <Ionicons name="cart" size={14} color={(bs.active_orders_count || 0) > 0 ? '#fff' : '#666'} />
+                          <Text style={[styles.ordersBadgeText, (bs.active_orders_count || 0) > 0 ? styles.ordersBadgeTextActive : null]}>
+                            {bs.active_orders_count || 0} attivi
+                          </Text>
+                        </View>
+                        <Text style={styles.ordersTotal}>
+                          ({bs.orders_count || 0} totali)
+                        </Text>
+                      </View>
                     </View>
                   </View>
                   
@@ -722,5 +736,37 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',
+  },
+  ordersCountContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+    gap: 8,
+  },
+  ordersBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  ordersBadgeActive: {
+    backgroundColor: '#1a472a',
+  },
+  ordersBadgeEmpty: {
+    backgroundColor: '#f0f0f0',
+  },
+  ordersBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#666',
+  },
+  ordersBadgeTextActive: {
+    color: '#fff',
+  },
+  ordersTotal: {
+    fontSize: 12,
+    color: '#888',
   },
 });
