@@ -6772,8 +6772,10 @@ async def get_lista_ufficiale(user_id: str, child_id: str):
 async def generate_books_pdf(user_id: str, child_id: str):
     """
     Genera PDF formato ufficiale MUR - ELENCO DEI LIBRI DI TESTO ADOTTATI O CONSIGLIATI
+    Con logica RiBook: mostra quali libri lo studente deve effettivamente acquistare
     """
     from reportlab.lib.pagesizes import landscape
+    from book_logic_v2 import classifica_libri_studente
     
     # Get user and child profile
     user = await db.users.find_one({"id": user_id})
@@ -6793,13 +6795,43 @@ async def generate_books_pdf(user_id: str, child_id: str):
     child_codice_scuola = child_profile.get("codice_scuola", "")
     child_tipo = child_profile.get("tipo_scuola", "primo_grado")
     
+    # Calcola classe anno precedente
+    classe_precedente = child_profile.get("classe_anno_precedente")
+    if classe_precedente is None:
+        if child_tipo == "primo_grado":
+            classe_precedente = child_classe - 1 if child_classe > 1 else None
+        else:
+            classe_precedente = child_classe - 1 if child_classe > 1 else None
+    
     if not child_codice_scuola:
         raise HTTPException(status_code=400, detail="Codice scuola non configurato")
     
-    # Get books from adozioni collection - campo classe è stringa
+    # Usa la logica RiBook per classificare i libri
+    classificazione = await classifica_libri_studente(
+        db,
+        codice_scuola=child_codice_scuola,
+        classe_2025_2026=classe_precedente,
+        classe_2026_2027=child_classe,
+        sezione=child_sezione
+    )
+    
+    # Crea mappa ISBN -> categoria per lookup veloce
+    isbn_categoria = {}
+    for libro in classificazione.get("da_acquistare_nuovi", []):
+        isbn_categoria[libro.get("isbn")] = "DA_ACQUISTARE_NUOVO"
+    for libro in classificazione.get("da_acquistare_usati", []):
+        isbn_categoria[libro.get("isbn")] = "DA_ACQUISTARE_USATO"
+    for libro in classificazione.get("ancora_in_uso", []):
+        isbn_categoria[libro.get("isbn")] = "ANCORA_IN_USO"
+    for libro in classificazione.get("vendibili_usati", []):
+        isbn_categoria[libro.get("isbn")] = "VENDIBILE"
+    for libro in classificazione.get("fuori_corso", []):
+        isbn_categoria[libro.get("isbn")] = "FUORI_CORSO"
+    
+    # Get books from adozioni collection
     adozioni_query = {
         "codice_scuola": child_codice_scuola,
-        "classe": str(child_classe),  # classe è una stringa nel database
+        "classe": str(child_classe),
         "sezione": {"$regex": f"^{child_sezione}$", "$options": "i"}
     }
     
@@ -6813,7 +6845,6 @@ async def generate_books_pdf(user_id: str, child_id: str):
         }
         all_books = await db.adozioni.find(fallback_query).to_list(length=200)
         if all_books:
-            # Prendi la prima sezione disponibile
             prima_sezione = all_books[0].get("sezione")
             books = [b for b in all_books if b.get("sezione") == prima_sezione]
     
@@ -6908,11 +6939,27 @@ async def generate_books_pdf(user_id: str, child_id: str):
         # Volume - usa il campo dal database
         vol = book.get('volume', '') or str(child_classe)
         
-        # DATI OGGETTIVI DAL DATABASE - NESSUNA LOGICA AGGIUNTIVA
-        # Questi campi vengono mostrati esattamente come sono nel database MIUR
+        # USA CLASSIFICAZIONE RIBOOK invece dei dati grezzi MIUR
+        categoria = isbn_categoria.get(isbn, "")
+        
+        # Da acquistare = Si se è in una delle categorie "da acquistare"
+        if categoria in ["DA_ACQUISTARE_NUOVO", "DA_ACQUISTARE_USATO"]:
+            da_acq = "Si"
+        elif categoria == "ANCORA_IN_USO":
+            da_acq = "No"  # Ce l'ha già
+        else:
+            # Fallback ai dati MIUR se non in classificazione
+            da_acq = "Si" if book.get('da_acquistare') == True else "No"
+        
+        # Consigliato = Ap se consigliato nel database MIUR
+        consigliato_raw = book.get('consigliato')
+        if consigliato_raw == True or consigliato_raw == "Ap" or str(consigliato_raw).lower() == "ap":
+            consigliato = "Ap"
+        else:
+            consigliato = "No"
+        
+        # Nuova adozione
         nuova_adoz = "Si" if book.get('nuova_adozione') == True else "No"
-        da_acq = "Si" if book.get('da_acquistare') == True else "No"
-        consigliato = "Ap" if book.get('consigliato') == True else "No"
         
         table_data.append([
             Paragraph(disciplina, cell_style),
@@ -6927,8 +6974,8 @@ async def generate_books_pdf(user_id: str, child_id: str):
             Paragraph(consigliato, cell_style),
         ])
         
-        # Somma al totale se da acquistare (secondo il database MIUR)
-        if book.get('da_acquistare') == True and prezzo:
+        # Somma al totale se da acquistare (secondo classificazione RiBook)
+        if categoria in ["DA_ACQUISTARE_NUOVO", "DA_ACQUISTARE_USATO"] and prezzo:
             total_price += prezzo
             libri_da_acquistare += 1
     
