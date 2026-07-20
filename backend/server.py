@@ -11838,6 +11838,95 @@ async def admin_debug_all_orders(secret: str = Query(...)):
         "orders": order_info
     }
 
+@api_router.get("/admin/cleanup-duplicate-bookstores")
+async def admin_cleanup_duplicate_bookstores(secret: str = Query(...)):
+    """
+    PULIZIA: Rimuove cartolibrerie duplicate (LPC, nica@test) mantenendo quella con ordini.
+    Mantiene solo le 6 cartolibrerie ufficiali.
+    Usa: /api/admin/cleanup-duplicate-bookstores?secret=ribook2026fix
+    """
+    if secret != "ribook2026fix":
+        raise HTTPException(status_code=403, detail="Secret non valido")
+    
+    results = {
+        "deleted": [],
+        "kept": [],
+        "transferred_orders": 0
+    }
+    
+    # Email delle cartolibrerie ufficiali da MANTENERE
+    official_emails = [
+        "nica.cartolibreria@gmail.com",  # Ni.Ca. s.a.s. (ufficiale)
+        "russomanno.cartolibreria@ribook.it",
+        "puntoeacapo@ribook.it",
+        "apostrofo@ribook.it",
+        "palaia@ribook.it",
+        "aemme77@ribook.it"
+    ]
+    
+    # Trova la cartolibreria NiCa ufficiale
+    nica_official = await db.bookstores.find_one({"email": "nica.cartolibreria@gmail.com"})
+    
+    # Se non esiste, cerca quella con più ordini tra le NiCa
+    if not nica_official:
+        nica_variants = await db.bookstores.find({
+            "$or": [
+                {"nome": {"$regex": "nica", "$options": "i"}},
+                {"nome": {"$regex": "ni.ca", "$options": "i"}},
+                {"email": {"$regex": "nica", "$options": "i"}}
+            ]
+        }).to_list(10)
+        
+        # Trova quella con più ordini
+        max_orders = -1
+        for bs in nica_variants:
+            orders_count = await db.orders.count_documents({"bookstore_id": bs.get("id")})
+            if orders_count > max_orders:
+                max_orders = orders_count
+                nica_official = bs
+    
+    nica_official_id = nica_official.get("id") if nica_official else None
+    
+    # Trova tutte le cartolibrerie duplicate (non nelle email ufficiali)
+    all_bookstores = await db.bookstores.find({}).to_list(100)
+    
+    for bs in all_bookstores:
+        email = bs.get("email", "")
+        bs_id = bs.get("id")
+        nome = bs.get("nome")
+        
+        # Se è nelle email ufficiali, mantieni
+        if email in official_emails:
+            results["kept"].append({"nome": nome, "email": email})
+            continue
+        
+        # Altrimenti, è una duplicata - trasferisci ordini e elimina
+        orders_to_transfer = await db.orders.find({"bookstore_id": bs_id}).to_list(100)
+        
+        if orders_to_transfer and nica_official_id:
+            # Trasferisci ordini alla NiCa ufficiale
+            await db.orders.update_many(
+                {"bookstore_id": bs_id},
+                {"$set": {
+                    "bookstore_id": nica_official_id,
+                    "bookstore_name": nica_official.get("nome")
+                }}
+            )
+            results["transferred_orders"] += len(orders_to_transfer)
+        
+        # Elimina la cartolibreria duplicata
+        await db.bookstores.delete_one({"id": bs_id})
+        results["deleted"].append({"nome": nome, "email": email, "orders_transferred": len(orders_to_transfer)})
+    
+    # Conta rimanenti
+    remaining = await db.bookstores.count_documents({})
+    results["remaining_bookstores"] = remaining
+    
+    return {
+        "success": True,
+        **results
+    }
+
 @api_router.get("/admin/emergency-capture-payments")
 async def admin_emergency_capture_payments(secret: str = Query(...)):
     """
