@@ -1079,6 +1079,7 @@ class BookstorePublic(BaseModel):
     nome: str
     indirizzo: Optional[str] = ""
     citta: Optional[str] = ""
+    cap: Optional[str] = "88100"
     telefono: Optional[str] = ""
 
 # Transaction Models

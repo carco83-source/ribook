@@ -33,22 +33,19 @@ interface Book {
   editore?: string;
 }
 
-// Bookshops data
-const bookshopsData = [
+// Bookshops interface
+interface BookshopData {
+  id: string;
+  name: string;
+  address: string;
+}
+
+// Bookshops data will be loaded from API
+const fallbackBookshopsData: BookshopData[] = [
   { 
     id: 'lapostrofo', 
     name: "Cartolibreria L'Apostrofo", 
     address: 'Via Genova 24, Viale Crotone 138, 88100 Catanzaro',
-  },
-  { 
-    id: 'palaia', 
-    name: 'Cartolibreria Palaia Luigi', 
-    address: 'Via Santa Maria 1, 88100 Catanzaro',
-  },
-  { 
-    id: 'aemme77', 
-    name: 'AEMME 77 di Ruoppolo Francesco', 
-    address: 'Viale Tommaso Campanella 68, 88100 Catanzaro',
   },
   { 
     id: 'nica', 
@@ -92,6 +89,8 @@ export default function SellFormScreen() {
   
   // Bookshops & Price
   const [selectedBookshops, setSelectedBookshops] = useState<string[]>([]);
+  const [bookshopsData, setBookshopsData] = useState<BookshopData[]>(fallbackBookshopsData);
+  const [loadingBookshops, setLoadingBookshops] = useState(true);
   const [selectedPriceOption, setSelectedPriceOption] = useState<number | null>(null);
   const [customPrice, setCustomPrice] = useState<string>(''); // Prezzo personalizzato
   const [useCustomPrice, setUseCustomPrice] = useState(false); // Flag per usare prezzo personalizzato
@@ -120,7 +119,30 @@ export default function SellFormScreen() {
 
   useEffect(() => {
     loadData();
+    loadBookshops();
   }, []);
+
+  // Carica cartolibrerie attive dal backend
+  const loadBookshops = async () => {
+    try {
+      setLoadingBookshops(true);
+      const response = await axios.get(`${API_URL}/api/bookstores`);
+      if (response.data && response.data.length > 0) {
+        const formattedBookshops: BookshopData[] = response.data.map((bs: any) => ({
+          id: bs.id,
+          name: bs.nome,
+          address: `${bs.indirizzo}, ${bs.cap} ${bs.citta}`,
+        }));
+        setBookshopsData(formattedBookshops);
+        console.log(`Caricate ${formattedBookshops.length} cartolibrerie attive`);
+      }
+    } catch (error) {
+      console.log('Errore caricamento cartolibrerie, uso fallback:', error);
+      // Mantieni i dati di fallback già impostati
+    } finally {
+      setLoadingBookshops(false);
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -1248,23 +1270,32 @@ export default function SellFormScreen() {
         {/* Punti di scambio */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Punti di scambio</Text>
-          {bookshopsData.map((shop) => (
-            <TouchableOpacity
-              key={shop.id}
-              style={[styles.shopOption, selectedBookshops.includes(shop.id) && styles.shopOptionSelected]}
-              onPress={() => toggleBookshop(shop.id)}
-            >
-              <Ionicons 
-                name={selectedBookshops.includes(shop.id) ? "checkbox" : "square-outline"} 
-                size={22} 
-                color={selectedBookshops.includes(shop.id) ? "#1a472a" : "#666"} 
-              />
-              <View style={styles.shopInfo}>
-                <Text style={styles.shopName}>{shop.name}</Text>
-                <Text style={styles.shopAddress}>{shop.address}</Text>
-              </View>
-            </TouchableOpacity>
-          ))}
+          {loadingBookshops ? (
+            <View style={styles.loadingBookshops}>
+              <ActivityIndicator size="small" color="#1a472a" />
+              <Text style={styles.loadingBookshopsText}>Caricamento cartolibrerie...</Text>
+            </View>
+          ) : bookshopsData.length === 0 ? (
+            <Text style={styles.noBookshopsText}>Nessuna cartolibreria disponibile</Text>
+          ) : (
+            bookshopsData.map((shop) => (
+              <TouchableOpacity
+                key={shop.id}
+                style={[styles.shopOption, selectedBookshops.includes(shop.id) && styles.shopOptionSelected]}
+                onPress={() => toggleBookshop(shop.id)}
+              >
+                <Ionicons 
+                  name={selectedBookshops.includes(shop.id) ? "checkbox" : "square-outline"} 
+                  size={22} 
+                  color={selectedBookshops.includes(shop.id) ? "#1a472a" : "#666"} 
+                />
+                <View style={styles.shopInfo}>
+                  <Text style={styles.shopName}>{shop.name}</Text>
+                  <Text style={styles.shopAddress}>{shop.address}</Text>
+                </View>
+              </TouchableOpacity>
+            ))
+          )}
         </View>
 
         {/* Note */}
@@ -2098,5 +2129,23 @@ const styles = StyleSheet.create({
     color: '#1a472a',
     fontWeight: '600',
     textDecorationLine: 'underline',
+  },
+  loadingBookshops: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+    gap: 10,
+  },
+  loadingBookshopsText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  noBookshopsText: {
+    fontSize: 14,
+    color: '#999',
+    textAlign: 'center',
+    padding: 20,
+    fontStyle: 'italic',
   },
 });
