@@ -11865,13 +11865,21 @@ async def admin_emergency_capture_payments(secret: str = Query(...)):
         order_id = order.get("id")
         order_code = order.get("order_code", "N/A")
         status = order.get("status", "unknown")
-        payment_intent_id = order.get("payment_intent_id") or order.get("stripe_payment_intent") or order.get("stripe_payment_intent_id")
+        
+        # Estrai payment_intent_id - può essere stringa o oggetto!
+        pi_field = order.get("payment_intent_id") or order.get("stripe_payment_intent") or order.get("stripe_payment_intent_id")
+        
+        # Se è un oggetto/dict, estrai l'ID
+        if isinstance(pi_field, dict):
+            payment_intent_id = pi_field.get("id")
+        else:
+            payment_intent_id = pi_field
         
         if not payment_intent_id:
             continue
         
         # Salta ordini annullati o rimborsati
-        if status in ["cancelled", "refunded", "annullato_acquirente", "annullato_non_disponibile"]:
+        if status in ["cancelled", "refunded", "annullato_acquirente", "annullato_non_disponibile", "rimborsato_acquirente"]:
             skipped += 1
             results.append({"order": order_code, "status": f"skipped_{status}"})
             continue
@@ -14752,7 +14760,13 @@ async def bookstore_confirm_pickup(bookstore_id: str, order_id: str):
     
     # ========== CATTURA PAGAMENTO STRIPE ==========
     payment_captured = False
-    payment_intent_id = order.get("payment_intent_id") or order.get("stripe_payment_intent")
+    pi_field = order.get("payment_intent_id") or order.get("stripe_payment_intent")
+    
+    # Se è un oggetto/dict, estrai l'ID
+    if isinstance(pi_field, dict):
+        payment_intent_id = pi_field.get("id")
+    else:
+        payment_intent_id = pi_field
     
     if payment_intent_id:
         try:
