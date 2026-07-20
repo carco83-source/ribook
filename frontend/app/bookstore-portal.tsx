@@ -234,6 +234,13 @@ export default function BookstorePortalScreen() {
   const [notifications, setNotifications] = useState<BookstoreNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   
+  // Modal per rifiuto libro con note
+  const [rejectModalVisible, setRejectModalVisible] = useState(false);
+  const [rejectOrderCode, setRejectOrderCode] = useState('');
+  const [rejectBookTitle, setRejectBookTitle] = useState('');
+  const [rejectNotes, setRejectNotes] = useState('');
+  const [rejectLoading, setRejectLoading] = useState(false);
+  
   // Funzione per marcare tutte le notifiche come lette
   const markAllNotificationsAsRead = useCallback(async () => {
     if (!bookstoreId || unreadCount === 0) return;
@@ -538,11 +545,12 @@ export default function BookstorePortalScreen() {
   };
 
   // Conferma ricezione libro dal venditore
-  const handleConfirmSellerDelivery = async (orderCode: string, idoneo: boolean = true) => {
+  const handleConfirmSellerDelivery = async (orderCode: string, idoneo: boolean = true, notes: string = '') => {
     setConfirmingAction(true);
     try {
+      const notesParam = notes ? `&notes=${encodeURIComponent(notes)}` : '';
       const response = await axios.post(
-        `${API_URL}/api/bookstore/${bookstoreId}/confirm-seller-delivery?order_code=${orderCode.toUpperCase()}&idoneo=${idoneo}`
+        `${API_URL}/api/bookstore/${bookstoreId}/confirm-seller-delivery?order_code=${orderCode.toUpperCase()}&idoneo=${idoneo}${notesParam}`
       );
       
       const msg = idoneo 
@@ -557,6 +565,12 @@ export default function BookstorePortalScreen() {
       
       setShowScanner(false);
       setManualCode('');
+      // Reset modal rifiuto
+      setRejectModalVisible(false);
+      setRejectNotes('');
+      setRejectOrderCode('');
+      setRejectBookTitle('');
+      
       await loadDashboardData(bookstoreId!);
     } catch (error: any) {
       const errorMsg = error.response?.data?.detail || 'Errore durante la verifica';
@@ -567,7 +581,30 @@ export default function BookstorePortalScreen() {
       }
     } finally {
       setConfirmingAction(false);
+      setRejectLoading(false);
     }
+  };
+  
+  // Apri modal per rifiuto con note
+  const openRejectModal = (orderCode: string, bookTitle: string) => {
+    setRejectOrderCode(orderCode);
+    setRejectBookTitle(bookTitle);
+    setRejectNotes('');
+    setRejectModalVisible(true);
+  };
+  
+  // Conferma rifiuto dal modal
+  const confirmReject = async () => {
+    if (!rejectNotes.trim()) {
+      if (Platform.OS === 'web') {
+        window.alert('Inserisci il motivo del rifiuto');
+      } else {
+        Alert.alert('Attenzione', 'Inserisci il motivo del rifiuto');
+      }
+      return;
+    }
+    setRejectLoading(true);
+    await handleConfirmSellerDelivery(rejectOrderCode, false, rejectNotes);
   };
 
   // Conferma ritiro acquirente
@@ -1128,36 +1165,23 @@ export default function BookstorePortalScreen() {
                     <Text style={styles.alphaCodeHint}>Richiedi QR o codice al venditore</Text>
                   </View>
 
-                  {/* Pulsanti Accettato/Rifiutato */}
-                  <View style={styles.inArrivoButtonsContainer}>
+                  {/* Pulsanti Accettato/Rifiutato - PIÙ GRANDI E VISIBILI */}
+                  <View style={styles.verifyButtonsContainer}>
                     <TouchableOpacity
-                      style={[styles.inArrivoBtn, styles.inArrivoBtnReject]}
-                      onPress={() => {
-                        if (Platform.OS === 'web') {
-                          if (window.confirm(`Rifiutare il libro "${order.book_titolo}" perché non conforme alle condizioni dichiarate?\n\nL'acquirente riceverà il rimborso.`)) {
-                            handleConfirmSellerDelivery(order.order_code, false);
-                          }
-                        } else {
-                          Alert.alert(
-                            'Rifiuta Libro',
-                            `Rifiutare "${order.book_titolo}" perché non conforme alle condizioni dichiarate?\n\nL'acquirente riceverà il rimborso.`,
-                            [
-                              { text: 'Annulla', style: 'cancel' },
-                              { text: 'Rifiuta', style: 'destructive', onPress: () => handleConfirmSellerDelivery(order.order_code, false) }
-                            ]
-                          );
-                        }
-                      }}
+                      style={styles.verifyBtnReject}
+                      onPress={() => openRejectModal(order.order_code, order.book_titolo)}
                     >
-                      <Ionicons name="close-circle" size={20} color="#fff" />
-                      <Text style={styles.inArrivoBtnText}>Rifiutato</Text>
+                      <Ionicons name="close-circle" size={28} color="#fff" />
+                      <Text style={styles.verifyBtnText}>RIFIUTA</Text>
+                      <Text style={styles.verifyBtnSubtext}>Non conforme</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={[styles.inArrivoBtn, styles.inArrivoBtnAccept]}
+                      style={styles.verifyBtnAccept}
                       onPress={() => handleConfirmSellerDelivery(order.order_code, true)}
                     >
-                      <Ionicons name="checkmark-circle" size={20} color="#fff" />
-                      <Text style={styles.inArrivoBtnText}>Accettato</Text>
+                      <Ionicons name="checkmark-circle" size={28} color="#fff" />
+                      <Text style={styles.verifyBtnText}>ACCETTA</Text>
+                      <Text style={styles.verifyBtnSubtext}>Libro idoneo</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -1427,6 +1451,67 @@ export default function BookstorePortalScreen() {
 
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      {/* Modal Rifiuto Libro con Note */}
+      <Modal 
+        visible={rejectModalVisible} 
+        transparent 
+        animationType="fade" 
+        onRequestClose={() => setRejectModalVisible(false)}
+      >
+        <View style={styles.rejectModalOverlay}>
+          <View style={styles.rejectModalContent}>
+            <View style={styles.rejectModalHeader}>
+              <Ionicons name="warning" size={40} color="#dc2626" />
+              <Text style={styles.rejectModalTitle}>Rifiuta Libro</Text>
+            </View>
+            
+            <Text style={styles.rejectModalBookTitle}>{rejectBookTitle}</Text>
+            <Text style={styles.rejectModalSubtitle}>Codice: {rejectOrderCode}</Text>
+            
+            <Text style={styles.rejectModalLabel}>Motivo del rifiuto *</Text>
+            <TextInput
+              style={styles.rejectModalInput}
+              placeholder="Es: Copertina strappata, pagine mancanti, condizioni peggiori di quelle dichiarate..."
+              placeholderTextColor="#999"
+              value={rejectNotes}
+              onChangeText={setRejectNotes}
+              multiline
+              numberOfLines={4}
+              textAlignVertical="top"
+            />
+            
+            <Text style={styles.rejectModalWarning}>
+              ⚠️ L'acquirente riceverà il rimborso completo e sarà notificato del motivo del rifiuto.
+            </Text>
+            
+            <View style={styles.rejectModalButtons}>
+              <TouchableOpacity
+                style={styles.rejectModalBtnCancel}
+                onPress={() => setRejectModalVisible(false)}
+                disabled={rejectLoading}
+              >
+                <Text style={styles.rejectModalBtnCancelText}>Annulla</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.rejectModalBtnConfirm, rejectLoading && { opacity: 0.7 }]}
+                onPress={confirmReject}
+                disabled={rejectLoading}
+              >
+                {rejectLoading ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <>
+                    <Ionicons name="close-circle" size={20} color="#fff" />
+                    <Text style={styles.rejectModalBtnConfirmText}>Conferma Rifiuto</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Scanner Modal */}
       <Modal visible={showScanner} animationType="slide" onRequestClose={() => setShowScanner(false)}>
@@ -3059,5 +3144,154 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#333',
     fontStyle: 'italic',
+  },
+  // Nuovi stili per pulsanti verifica più visibili
+  verifyButtonsContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e5e5',
+  },
+  verifyBtnReject: {
+    flex: 1,
+    backgroundColor: '#dc2626',
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#dc2626',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  verifyBtnAccept: {
+    flex: 1,
+    backgroundColor: '#16a34a',
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#16a34a',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  verifyBtnText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+    marginTop: 4,
+  },
+  verifyBtnSubtext: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  // Stili Modal Rifiuto
+  rejectModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  rejectModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  rejectModalHeader: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  rejectModalTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#dc2626',
+    marginTop: 8,
+  },
+  rejectModalBookTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#333',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  rejectModalSubtitle: {
+    fontSize: 13,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  rejectModalLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  rejectModalInput: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 10,
+    padding: 14,
+    fontSize: 14,
+    color: '#333',
+    backgroundColor: '#f9f9f9',
+    minHeight: 100,
+    textAlignVertical: 'top',
+  },
+  rejectModalWarning: {
+    fontSize: 12,
+    color: '#b45309',
+    backgroundColor: '#fef3c7',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 16,
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  rejectModalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  rejectModalBtnCancel: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 10,
+    backgroundColor: '#f3f4f6',
+    alignItems: 'center',
+  },
+  rejectModalBtnCancelText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#666',
+  },
+  rejectModalBtnConfirm: {
+    flex: 1,
+    flexDirection: 'row',
+    paddingVertical: 14,
+    borderRadius: 10,
+    backgroundColor: '#dc2626',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  rejectModalBtnConfirmText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#fff',
   },
 });
