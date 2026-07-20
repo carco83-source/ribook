@@ -11809,19 +11809,18 @@ async def emergency_fix_orders(secret: str = Query(...)):
 @api_router.get("/admin/emergency-capture-payments")
 async def admin_emergency_capture_payments(secret: str = Query(...)):
     """
-    EMERGENZA: Cattura tutti i pagamenti Stripe per ordini completed/picked_up 
-    che non sono stati catturati.
+    EMERGENZA: Cattura tutti i pagamenti Stripe per ordini che non sono stati catturati.
     Usa: /api/admin/emergency-capture-payments?secret=ribook2026fix
     """
     if secret != "ribook2026fix":
         raise HTTPException(status_code=403, detail="Secret non valido")
     
-    # Trova ordini completed o picked_up che potrebbero avere pagamenti non catturati
+    # Cerca TUTTI gli ordini che hanno un payment_intent (qualsiasi status)
     orders = await db.orders.find({
-        "status": {"$in": ["completed", "picked_up", "ritirato"]},
         "$or": [
-            {"payment_captured": {"$ne": True}},
-            {"payment_captured": {"$exists": False}}
+            {"payment_intent_id": {"$exists": True, "$ne": None, "$ne": ""}},
+            {"stripe_payment_intent": {"$exists": True, "$ne": None, "$ne": ""}},
+            {"stripe_payment_intent_id": {"$exists": True, "$ne": None, "$ne": ""}}
         ]
     }).to_list(100)
     
@@ -11829,14 +11828,21 @@ async def admin_emergency_capture_payments(secret: str = Query(...)):
     captured_count = 0
     already_captured = 0
     errors = []
+    skipped = 0
     
     for order in orders:
         order_id = order.get("id")
         order_code = order.get("order_code", "N/A")
+        status = order.get("status", "unknown")
         payment_intent_id = order.get("payment_intent_id") or order.get("stripe_payment_intent") or order.get("stripe_payment_intent_id")
         
         if not payment_intent_id:
-            results.append({"order": order_code, "status": "no_payment_intent"})
+            continue
+        
+        # Salta ordini annullati o rimborsati
+        if status in ["cancelled", "refunded", "annullato_acquirente", "annullato_non_disponibile"]:
+            skipped += 1
+            results.append({"order": order_code, "status": f"skipped_{status}"})
             continue
         
         try:
@@ -11855,23 +11861,27 @@ async def admin_emergency_capture_payments(secret: str = Query(...)):
                 captured_count += 1
                 results.append({
                     "order": order_code,
-                    "status": "captured",
+                    "order_status": status,
+                    "action": "captured",
                     "payment_intent": payment_intent_id,
                     "amount": pi.amount / 100
                 })
                 logger.info(f"✅ Emergency capture: Order {order_code} - €{pi.amount/100}")
                 
             elif pi.status == "succeeded":
-                # Già catturato
+                # Già catturato - aggiorna il flag nel DB
                 await db.orders.update_one(
                     {"id": order_id},
                     {"$set": {"payment_captured": True}}
                 )
                 already_captured += 1
-                results.append({"order": order_code, "status": "already_captured"})
+                results.append({"order": order_code, "order_status": status, "action": "already_captured"})
+                
+            elif pi.status == "canceled":
+                results.append({"order": order_code, "order_status": status, "action": "stripe_canceled"})
                 
             else:
-                results.append({"order": order_code, "status": f"unexpected_status_{pi.status}"})
+                results.append({"order": order_code, "order_status": status, "action": f"stripe_status_{pi.status}"})
                 
         except Exception as e:
             error_msg = str(e)
@@ -11883,6 +11893,7 @@ async def admin_emergency_capture_payments(secret: str = Query(...)):
         "total_orders_checked": len(orders),
         "captured": captured_count,
         "already_captured": already_captured,
+        "skipped": skipped,
         "errors": len(errors),
         "results": results,
         "error_details": errors
