@@ -11806,6 +11806,88 @@ async def emergency_fix_orders(secret: str = Query(...)):
         "ordini_per_stato": {s["_id"]: s["count"] for s in status_counts}
     }
 
+@api_router.get("/admin/emergency-capture-payments")
+async def admin_emergency_capture_payments(secret: str = Query(...)):
+    """
+    EMERGENZA: Cattura tutti i pagamenti Stripe per ordini completed/picked_up 
+    che non sono stati catturati.
+    Usa: /api/admin/emergency-capture-payments?secret=ribook2026fix
+    """
+    if secret != "ribook2026fix":
+        raise HTTPException(status_code=403, detail="Secret non valido")
+    
+    # Trova ordini completed o picked_up che potrebbero avere pagamenti non catturati
+    orders = await db.orders.find({
+        "status": {"$in": ["completed", "picked_up", "ritirato"]},
+        "$or": [
+            {"payment_captured": {"$ne": True}},
+            {"payment_captured": {"$exists": False}}
+        ]
+    }).to_list(100)
+    
+    results = []
+    captured_count = 0
+    already_captured = 0
+    errors = []
+    
+    for order in orders:
+        order_id = order.get("id")
+        order_code = order.get("order_code", "N/A")
+        payment_intent_id = order.get("payment_intent_id") or order.get("stripe_payment_intent") or order.get("stripe_payment_intent_id")
+        
+        if not payment_intent_id:
+            results.append({"order": order_code, "status": "no_payment_intent"})
+            continue
+        
+        try:
+            pi = stripe.PaymentIntent.retrieve(payment_intent_id)
+            
+            if pi.status == "requires_capture":
+                # Cattura il pagamento
+                stripe.PaymentIntent.capture(payment_intent_id)
+                
+                # Aggiorna ordine
+                await db.orders.update_one(
+                    {"id": order_id},
+                    {"$set": {"payment_captured": True, "payment_captured_at": datetime.utcnow().isoformat()}}
+                )
+                
+                captured_count += 1
+                results.append({
+                    "order": order_code,
+                    "status": "captured",
+                    "payment_intent": payment_intent_id,
+                    "amount": pi.amount / 100
+                })
+                logger.info(f"✅ Emergency capture: Order {order_code} - €{pi.amount/100}")
+                
+            elif pi.status == "succeeded":
+                # Già catturato
+                await db.orders.update_one(
+                    {"id": order_id},
+                    {"$set": {"payment_captured": True}}
+                )
+                already_captured += 1
+                results.append({"order": order_code, "status": "already_captured"})
+                
+            else:
+                results.append({"order": order_code, "status": f"unexpected_status_{pi.status}"})
+                
+        except Exception as e:
+            error_msg = str(e)
+            errors.append({"order": order_code, "error": error_msg})
+            logger.error(f"❌ Emergency capture error: Order {order_code} - {error_msg}")
+    
+    return {
+        "success": True,
+        "total_orders_checked": len(orders),
+        "captured": captured_count,
+        "already_captured": already_captured,
+        "errors": len(errors),
+        "results": results,
+        "error_details": errors
+    }
+
 # ============== ADMIN: GESTIONE UTENTI E CARTOLIBRERIE ==============
 
 @api_router.get("/admin/users-list")
@@ -14626,11 +14708,34 @@ async def bookstore_confirm_pickup(bookstore_id: str, order_id: str):
     bookstore = await db.bookstores.find_one({"id": bookstore_id})
     bookstore_name = bookstore.get("nome", "Cartolibreria") if bookstore else "Cartolibreria"
     
+    # ========== CATTURA PAGAMENTO STRIPE ==========
+    payment_captured = False
+    payment_intent_id = order.get("payment_intent_id") or order.get("stripe_payment_intent")
+    
+    if payment_intent_id:
+        try:
+            pi = stripe.PaymentIntent.retrieve(payment_intent_id)
+            if pi.status == "requires_capture":
+                stripe.PaymentIntent.capture(payment_intent_id)
+                payment_captured = True
+                logger.info(f"✅ Payment captured for order {order_id} - PaymentIntent: {payment_intent_id}")
+            elif pi.status == "succeeded":
+                payment_captured = True
+                logger.info(f"Payment already captured for order {order_id}")
+            else:
+                logger.warning(f"PaymentIntent {payment_intent_id} has unexpected status: {pi.status}")
+        except Exception as e:
+            logger.error(f"❌ Stripe capture error for order {order_id}: {str(e)}")
+            # Non bloccare il flusso, ma logga l'errore
+    else:
+        logger.warning(f"No payment_intent_id found for order {order_id}")
+    
     await db.orders.update_one(
         {"id": order_id},
         {"$set": {
             "status": "completed",
-            "completed_at": datetime.now()
+            "completed_at": datetime.now(),
+            "payment_captured": payment_captured
         }}
     )
     
