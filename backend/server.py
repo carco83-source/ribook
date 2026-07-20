@@ -11806,6 +11806,37 @@ async def emergency_fix_orders(secret: str = Query(...)):
         "ordini_per_stato": {s["_id"]: s["count"] for s in status_counts}
     }
 
+@api_router.get("/admin/debug-all-orders")
+async def admin_debug_all_orders(secret: str = Query(...)):
+    """
+    DEBUG: Mostra tutti gli ordini con i loro campi payment
+    Usa: /api/admin/debug-all-orders?secret=ribook2026fix
+    """
+    if secret != "ribook2026fix":
+        raise HTTPException(status_code=403, detail="Secret non valido")
+    
+    # Trova TUTTI gli ordini
+    orders = await db.orders.find({}).to_list(100)
+    
+    order_info = []
+    for order in orders:
+        order_info.append({
+            "order_code": order.get("order_code"),
+            "status": order.get("status"),
+            "payment_intent_id": order.get("payment_intent_id"),
+            "stripe_payment_intent": order.get("stripe_payment_intent"),
+            "stripe_payment_intent_id": order.get("stripe_payment_intent_id"),
+            "payment_captured": order.get("payment_captured"),
+            "bookstore_id": order.get("bookstore_id"),
+            "created_at": str(order.get("created_at", ""))[:19],
+            "all_keys": list(order.keys())
+        })
+    
+    return {
+        "total_orders": len(orders),
+        "orders": order_info
+    }
+
 @api_router.get("/admin/emergency-capture-payments")
 async def admin_emergency_capture_payments(secret: str = Query(...)):
     """
