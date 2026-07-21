@@ -24,11 +24,7 @@ export default function Footer({ showCompanyInfo = true }: FooterProps) {
   };
 
   const handleEmailPress = () => {
-    Linking.openURL('mailto:nica.cartolibreria@gmail.com');
-  };
-
-  const handlePecPress = () => {
-    Linking.openURL('mailto:carto.nica@pec.it');
+    Linking.openURL('mailto:info@ribook.it');
   };
 
   return (
@@ -64,19 +60,13 @@ export default function Footer({ showCompanyInfo = true }: FooterProps) {
       {/* Info Aziendali */}
       {showCompanyInfo && (
         <View style={styles.companyInfo}>
-          <Text style={styles.companyName}>Ni.Ca. s.a.s.</Text>
-          <Text style={styles.companyDetail}>Viale Magna Grecia n.179, 88100 Catanzaro (CZ)</Text>
-          <Text style={styles.companyDetail}>P. IVA 01696960796</Text>
+          <Text style={styles.companyName}>RiBook</Text>
+          <Text style={styles.companyDetail}>Il marketplace dei libri scolastici usati</Text>
           
           <View style={[styles.contactRow, isDesktop && styles.contactRowDesktop]}>
             <TouchableOpacity style={styles.contactButton} onPress={handleEmailPress}>
               <Ionicons name="mail-outline" size={14} color="#666" />
-              <Text style={styles.contactText}>nica.cartolibreria@gmail.com</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.contactButton} onPress={handlePecPress}>
-              <Ionicons name="shield-checkmark-outline" size={14} color="#666" />
-              <Text style={styles.contactText}>carto.nica@pec.it</Text>
+              <Text style={styles.contactText}>info@ribook.it</Text>
             </TouchableOpacity>
           </View>
         </View>
