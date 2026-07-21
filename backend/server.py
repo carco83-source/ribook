@@ -3924,13 +3924,18 @@ async def delete_listing(listing_id: str, user_id: str = Query(...)):
     if not listing:
         raise HTTPException(status_code=404, detail="Annuncio non trovato")
     
-    # Verifica stato - permetti eliminazione anche se riservato ma senza ordine attivo
+    # Verifica stato - permetti eliminazione per stati "disponibile", "active", "available"
     stato = listing.get("stato", "disponibile")
-    if stato not in ["disponibile", "active"]:
+    status = listing.get("status", "available")
+    
+    # Stati che permettono l'eliminazione diretta
+    allowed_states = ["disponibile", "active", "available"]
+    
+    if stato not in allowed_states and status not in allowed_states:
         # Controlla se c'è un ordine attivo
         active_order = await db.orders.find_one({
             "listing_id": listing_id,
-            "status": {"$nin": ["cancelled", "refunded", "rejected", "completed"]}
+            "status": {"$nin": ["cancelled", "refunded", "rejected", "completed", "picked_up", "annullato_acquirente", "annullato_non_disponibile", "rimborsato_acquirente"]}
         })
         if active_order:
             raise HTTPException(status_code=400, detail="Non puoi eliminare un annuncio con ordine attivo")

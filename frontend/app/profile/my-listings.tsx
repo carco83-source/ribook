@@ -52,7 +52,7 @@ export default function MyListingsScreen() {
   const handleDeleteListing = async (listingId: string, bookTitle: string) => {
     const confirmDelete = () => {
       setDeleting(listingId);
-      axios.delete(`${API_URL}/api/listings/${listingId}`)
+      axios.delete(`${API_URL}/api/listings/${listingId}?user_id=${userId}`)
         .then(() => {
           setListings(prev => prev.filter(l => l.id !== listingId));
           if (Platform.OS === 'web') {
@@ -63,10 +63,11 @@ export default function MyListingsScreen() {
         })
         .catch((error) => {
           console.error('Error deleting listing:', error);
+          const errorMsg = error.response?.data?.detail || 'Impossibile eliminare l\'annuncio';
           if (Platform.OS === 'web') {
-            alert('Errore durante l\'eliminazione dell\'annuncio');
+            alert('Errore: ' + errorMsg);
           } else {
-            Alert.alert('Errore', 'Impossibile eliminare l\'annuncio');
+            Alert.alert('Errore', errorMsg);
           }
         })
         .finally(() => {
