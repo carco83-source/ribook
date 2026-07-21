@@ -26,6 +26,7 @@ export default function MyListingsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [listings, setListings] = useState<any[]>([]);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
     loadListings();
@@ -33,13 +34,14 @@ export default function MyListingsScreen() {
 
   const loadListings = async () => {
     try {
-      const userId = await AsyncStorage.getItem('user_id');
-      if (!userId) {
+      const storedUserId = await AsyncStorage.getItem('user_id');
+      if (!storedUserId) {
         router.replace('/');
         return;
       }
+      setUserId(storedUserId);
 
-      const response = await axios.get(`${API_URL}/api/listings/user/${userId}`);
+      const response = await axios.get(`${API_URL}/api/listings/user/${storedUserId}`);
       setListings(response.data || []);
     } catch (error) {
       console.error('Error loading listings:', error);
@@ -50,6 +52,15 @@ export default function MyListingsScreen() {
   };
 
   const handleDeleteListing = async (listingId: string, bookTitle: string) => {
+    if (!userId) {
+      if (Platform.OS === 'web') {
+        alert('Errore: utente non autenticato');
+      } else {
+        Alert.alert('Errore', 'Utente non autenticato');
+      }
+      return;
+    }
+    
     const confirmDelete = () => {
       setDeleting(listingId);
       axios.delete(`${API_URL}/api/listings/${listingId}?user_id=${userId}`)
