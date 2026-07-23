@@ -6,6 +6,8 @@ import { NotificationProvider } from '../context/NotificationContext';
 import * as Notifications from 'expo-notifications';
 import * as Linking from 'expo-linking';
 import CookieBanner from '../src/components/CookieBanner';
+import { useAppUpdate } from '../src/hooks/useAppUpdate';
+import { usePWAConfig } from '../src/hooks/usePWAConfig';
 
 // ============== PUSH NOTIFICATIONS SETUP ==============
 // 1. Foreground handler - MODULE SCOPE, before any component
@@ -34,6 +36,10 @@ if (Platform.OS === 'android') {
 
 export default function RootLayout() {
   const router = useRouter();
+  
+  // PWA update handling - check for updates when app becomes visible
+  useAppUpdate();
+  usePWAConfig();
 
   useEffect(() => {
     // Skip notification listeners on web
