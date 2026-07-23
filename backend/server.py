@@ -3347,32 +3347,111 @@ async def create_listing(listing_data: BookListingCreate, user_id: str = Query(.
     
     await db.listings.insert_one(listing.dict())
     
-    # NOTIFICA: Cerca utenti che hanno richieste attive per questo libro
+    # NOTIFICA: Cerca utenti che hanno questo libro come "acquistabile usato"
     book_isbn = listing.book_isbn
     if book_isbn:
-        # Trova tutte le richieste attive per questo ISBN (escludi il venditore)
-        active_requests = await db.requests.find({
-            "book_isbn": book_isbn,
-            "stato": "cercando",
-            "buyer_id": {"$ne": user_id}  # Non notificare il venditore stesso
-        }).to_list(100)
-        
-        # Crea notifiche per ogni utente che stava cercando questo libro
-        for request in active_requests:
-            notification = {
-                "id": str(uuid.uuid4()),
-                "user_id": request.get("buyer_id"),
-                "type": "book_available",
-                "title": "Libro Disponibile!",
-                "message": f"Il libro '{listing.book_titolo[:50]}' che stavi cercando è ora disponibile!",
+        try:
+            # 1. Notifica utenti con richieste attive (sistema vecchio)
+            active_requests = await db.requests.find({
                 "book_isbn": book_isbn,
-                "book_titolo": listing.book_titolo,
-                "listing_id": listing.id,
-                "prezzo": listing.prezzo_vendita,
-                "read": False,
-                "created_at": datetime.utcnow().isoformat()
-            }
-            await db.notifications.insert_one(notification)
+                "stato": "cercando",
+                "buyer_id": {"$ne": user_id}
+            }).to_list(100)
+            
+            for request in active_requests:
+                notification = {
+                    "id": str(uuid.uuid4()),
+                    "user_id": request.get("buyer_id"),
+                    "type": "book_available",
+                    "title": "Libro Disponibile!",
+                    "message": f"Il libro '{listing.book_titolo[:50]}' che stavi cercando è ora disponibile!",
+                    "book_isbn": book_isbn,
+                    "book_titolo": listing.book_titolo,
+                    "listing_id": listing.id,
+                    "prezzo": listing.prezzo_vendita,
+                    "read": False,
+                    "created_at": datetime.utcnow().isoformat()
+                }
+                await db.notifications.insert_one(notification)
+            
+            # 2. NUOVO: Notifica utenti che hanno profili con questo ISBN come "acquistabile usato"
+            # Cerca nei profili figli (children) quale scuola/classe ha questo ISBN nella lista adozioni
+            adozioni_con_isbn = await db.adozioni.find({
+                "isbn": book_isbn,
+                "da_acquistare": True
+            }).to_list(100)
+            
+            if adozioni_con_isbn:
+                # Estrai le combinazioni scuola/classe/sezione
+                scuole_classi = set()
+                for adozione in adozioni_con_isbn:
+                    key = (
+                        adozione.get("codice_scuola"),
+                        str(adozione.get("classe")),
+                        adozione.get("sezione", "")
+                    )
+                    scuole_classi.add(key)
+                
+                # Cerca utenti con figli in quelle scuole/classi
+                users_to_notify = set()
+                
+                for codice_scuola, classe, sezione in scuole_classi:
+                    # Cerca nei profili figli
+                    query = {
+                        "$or": [
+                            {"profili_figli.codice_scuola": codice_scuola, "profili_figli.classe": classe},
+                            {"profili_figli.codice_scuola": codice_scuola, "profili_figli.classe": int(classe) if classe.isdigit() else classe}
+                        ],
+                        "id": {"$ne": user_id}  # Escludi il venditore
+                    }
+                    
+                    if sezione:
+                        query["profili_figli.sezione"] = sezione
+                    
+                    matching_users = await db.users.find(query).to_list(500)
+                    
+                    for u in matching_users:
+                        # Verifica che il figlio sia effettivamente in quella classe
+                        for figlio in u.get("profili_figli", []):
+                            fig_scuola = figlio.get("codice_scuola")
+                            fig_classe = str(figlio.get("classe", ""))
+                            fig_sezione = figlio.get("sezione", "")
+                            
+                            if fig_scuola == codice_scuola and fig_classe == classe:
+                                if not sezione or fig_sezione == sezione:
+                                    users_to_notify.add((u["id"], figlio.get("nome", "tuo figlio")))
+                
+                # Crea notifiche per questi utenti
+                for notif_user_id, child_name in users_to_notify:
+                    # Verifica che non abbia già una notifica recente per questo libro
+                    existing = await db.notifications.find_one({
+                        "user_id": notif_user_id,
+                        "book_isbn": book_isbn,
+                        "type": "book_available",
+                        "created_at": {"$gte": (datetime.utcnow() - timedelta(hours=24)).isoformat()}
+                    })
+                    
+                    if not existing:
+                        notification = {
+                            "id": str(uuid.uuid4()),
+                            "user_id": notif_user_id,
+                            "type": "book_available",
+                            "title": "📚 Libro Disponibile!",
+                            "message": f"'{listing.book_titolo[:45]}' è ora in vendita a €{listing.prezzo_vendita:.2f}!",
+                            "book_isbn": book_isbn,
+                            "book_titolo": listing.book_titolo,
+                            "listing_id": listing.id,
+                            "prezzo": listing.prezzo_vendita,
+                            "child_name": child_name,
+                            "read": False,
+                            "created_at": datetime.utcnow().isoformat()
+                        }
+                        await db.notifications.insert_one(notification)
+                        logger.info(f"📚 Notifica libro disponibile inviata a {notif_user_id} per ISBN {book_isbn}")
+        
+        except Exception as e:
+            logger.error(f"Errore invio notifiche libro disponibile: {str(e)}")
+            # Non bloccare la creazione del listing per errori di notifica
     
     return listing
 
@@ -3421,6 +3500,24 @@ async def mark_notification_read(notification_id: str):
         {"$set": {"read": True}}
     )
     return {"success": result.modified_count > 0}
+
+@api_router.post("/notifications/{notification_id}/read")
+async def mark_notification_read_post(notification_id: str):
+    """Segna una notifica come letta (POST)"""
+    result = await db.notifications.update_one(
+        {"id": notification_id},
+        {"$set": {"read": True}}
+    )
+    return {"success": result.modified_count > 0}
+
+@api_router.post("/notifications/mark-all-read/{user_id}")
+async def mark_all_notifications_read(user_id: str):
+    """Segna tutte le notifiche di un utente come lette"""
+    result = await db.notifications.update_many(
+        {"user_id": user_id, "read": False},
+        {"$set": {"read": True}}
+    )
+    return {"success": True, "modified_count": result.modified_count}
 
 @api_router.put("/notifications/{notification_id}/mark-used")
 async def mark_notification_used(notification_id: str):

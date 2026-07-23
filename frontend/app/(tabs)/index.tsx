@@ -214,6 +214,7 @@ export default function RadarScreen() {
   // Notifications state
   const [notifications, setNotifications] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [showNotificationsModal, setShowNotificationsModal] = useState(false);
 
   // Modal Aggiungi Profilo state
   const [showAddProfileModal, setShowAddProfileModal] = useState(false);
@@ -769,9 +770,24 @@ export default function RadarScreen() {
               
               return (
                 <>
-                  {/* Titolo sezione categorie */}
+                  {/* Titolo sezione categorie + Campanella notifiche */}
                   <View style={styles.categoriesTitleContainer}>
                     <Text style={styles.categoriesTitle}>LE TUE CATEGORIE</Text>
+                    
+                    {/* Campanella notifiche */}
+                    {unreadCount > 0 && (
+                      <TouchableOpacity 
+                        style={styles.notificationBell}
+                        onPress={() => setShowNotificationsModal(true)}
+                      >
+                        <Ionicons name="notifications" size={22} color="#1a472a" />
+                        <View style={styles.notificationBellBadge}>
+                          <Text style={styles.notificationBellBadgeText}>
+                            {unreadCount > 9 ? '9+' : unreadCount}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    )}
                   </View>
                   
                   {/* Barra tabs scorrevole */}
@@ -963,6 +979,108 @@ export default function RadarScreen() {
       <Footer showCompanyInfo={true} />
 
       </ScrollView>
+
+      {/* Modal Notifiche Libri Disponibili */}
+      <Modal
+        visible={showNotificationsModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowNotificationsModal(false)}
+      >
+        <View style={styles.notifModalOverlay}>
+          <View style={styles.notifModalContent}>
+            <View style={styles.notifModalHeader}>
+              <Text style={styles.notifModalTitle}>📚 Libri Disponibili</Text>
+              <TouchableOpacity 
+                onPress={() => setShowNotificationsModal(false)}
+                style={styles.modalCloseButton}
+              >
+                <Ionicons name="close" size={28} color="#333" />
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView style={styles.notifModalScrollContent}>
+              {notifications.filter(n => n.type === 'book_available').length === 0 ? (
+                <View style={styles.notifEmptyState}>
+                  <Ionicons name="notifications-off-outline" size={48} color="#ccc" />
+                  <Text style={styles.notifEmptyText}>Nessuna notifica</Text>
+                  <Text style={styles.notifEmptySubtext}>
+                    Riceverai una notifica quando un libro che ti serve diventa disponibile
+                  </Text>
+                </View>
+              ) : (
+                notifications
+                  .filter(n => n.type === 'book_available')
+                  .map((notif) => (
+                    <TouchableOpacity 
+                      key={notif.id}
+                      style={[styles.notifItem, !notif.read && styles.notifItemUnread]}
+                      onPress={async () => {
+                        // Segna come letta
+                        if (!notif.read) {
+                          try {
+                            await axios.post(`${API_URL}/api/notifications/${notif.id}/read`);
+                            setNotifications(prev => 
+                              prev.map(n => n.id === notif.id ? {...n, read: true} : n)
+                            );
+                            setUnreadCount(prev => Math.max(0, prev - 1));
+                          } catch (e) {
+                            console.log('Error marking notification read');
+                          }
+                        }
+                        // Naviga al libro
+                        setShowNotificationsModal(false);
+                        if (notif.listing_id) {
+                          router.push(`/book-detail/${notif.book_isbn}`);
+                        }
+                      }}
+                    >
+                      <View style={styles.notifItemIcon}>
+                        <Ionicons name="book" size={24} color="#1a472a" />
+                      </View>
+                      <View style={styles.notifItemContent}>
+                        <Text style={styles.notifItemTitle} numberOfLines={2}>
+                          {notif.book_titolo || 'Libro disponibile'}
+                        </Text>
+                        <Text style={styles.notifItemPrice}>
+                          Prezzo: €{(notif.prezzo || 0).toFixed(2)}
+                        </Text>
+                        <Text style={styles.notifItemTime}>
+                          {new Date(notif.created_at).toLocaleDateString('it-IT', {
+                            day: 'numeric',
+                            month: 'short',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </Text>
+                      </View>
+                      {!notif.read && (
+                        <View style={styles.notifUnreadDot} />
+                      )}
+                    </TouchableOpacity>
+                  ))
+              )}
+            </ScrollView>
+            
+            {notifications.filter(n => n.type === 'book_available' && !n.read).length > 0 && (
+              <TouchableOpacity 
+                style={styles.notifMarkAllReadBtn}
+                onPress={async () => {
+                  try {
+                    await axios.post(`${API_URL}/api/notifications/mark-all-read/${userId}`);
+                    setNotifications(prev => prev.map(n => ({...n, read: true})));
+                    setUnreadCount(0);
+                  } catch (e) {
+                    console.log('Error marking all read');
+                  }
+                }}
+              >
+                <Text style={styles.notifMarkAllReadText}>Segna tutte come lette</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      </Modal>
 
       {/* Modal Aggiungi Profilo */}
       <Modal
@@ -1486,6 +1604,9 @@ const styles = StyleSheet.create({
   categoriesTitleContainer: {
     paddingHorizontal: 0,
     marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   categoriesTitle: {
     fontSize: 14,
@@ -1493,6 +1614,136 @@ const styles = StyleSheet.create({
     color: '#1a472a',
     letterSpacing: 1,
     textTransform: 'uppercase',
+  },
+  // Stili campanella notifiche
+  notificationBell: {
+    position: 'relative',
+    padding: 8,
+  },
+  notificationBellBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    backgroundColor: '#ef4444',
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  notificationBellBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  // Stili Modal Notifiche
+  notifModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  notifModalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '80%',
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+  },
+  notifModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  notifModalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1a472a',
+  },
+  notifModalScrollContent: {
+    maxHeight: 400,
+    paddingHorizontal: 16,
+  },
+  notifEmptyState: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  notifEmptyText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#666',
+    marginTop: 12,
+  },
+  notifEmptySubtext: {
+    fontSize: 13,
+    color: '#999',
+    textAlign: 'center',
+    marginTop: 8,
+    paddingHorizontal: 20,
+  },
+  notifItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    marginVertical: 6,
+    borderWidth: 1,
+    borderColor: '#eee',
+  },
+  notifItemUnread: {
+    backgroundColor: '#f0fdf4',
+    borderColor: '#22c55e',
+  },
+  notifItemIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#e8f5e9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  notifItemContent: {
+    flex: 1,
+  },
+  notifItemTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  notifItemPrice: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1a472a',
+  },
+  notifItemTime: {
+    fontSize: 11,
+    color: '#999',
+    marginTop: 4,
+  },
+  notifUnreadDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#22c55e',
+    marginLeft: 8,
+  },
+  notifMarkAllReadBtn: {
+    margin: 16,
+    padding: 14,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  notifMarkAllReadText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
   },
   // Stili per tabs categorie libri
   categoryTabsContainer: {
