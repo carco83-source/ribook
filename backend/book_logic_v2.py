@@ -299,39 +299,26 @@ async def get_isbn_vendibili_catanzaro(
         # Lista di ISBN da cercare (originale e normalizzato)
         isbn_da_cercare = list(set([isbn, isbn_norm]))
         
-        if is_libro_annuale and volume_number:
-            # LIBRO ANNUALE: cerca nella classe corrispondente SOLO nelle scuole target
-            classe_venditore = volume_number
+        # IMPORTANTE: Non assumere che il numero del volume corrisponda alla classe!
+        # Un "Volume 1" può essere usato in qualsiasi classe (es. Latino 1 in 2ª e 3ª)
+        # Cerca sempre in TUTTE le classi dove il libro è presente nel database
+        async for doc in db.books.find({
+            "isbn": {"$in": isbn_da_cercare},
+            "codice_scuola": {"$in": codici_scuole_target}
+        }):
+            classe_doc = doc.get("classe", "")
+            try:
+                classe_int = int(classe_doc)
+            except (ValueError, TypeError):
+                classe_int = 0
             
-            async for doc in db.books.find({
-                "isbn": {"$in": isbn_da_cercare},
-                "classe": classe_venditore,
-                "codice_scuola": {"$in": codici_scuole_target}
-            }):
-                venditori.append({
-                    "codice_scuola": doc.get("codice_scuola", ""),
-                    "classe_venditore": int(classe_venditore),
-                    "sezione": doc.get("sezione", ""),
-                    "tipo": "annuale"
-                })
-        else:
-            # LIBRO TRIENNALE/UNICO: cerca in TUTTE le classi dove era presente l'anno scorso
-            # Non solo classe 3, perché potrebbe essere usato in più anni (es. Vol U in istituti tecnici)
-            async for doc in db.books.find({
-                "isbn": {"$in": isbn_da_cercare},
-                "codice_scuola": {"$in": codici_scuole_target}
-            }):
-                classe_doc = doc.get("classe", "")
-                try:
-                    classe_int = int(classe_doc)
-                except (ValueError, TypeError):
-                    classe_int = 0
-                venditori.append({
-                    "codice_scuola": doc.get("codice_scuola", ""),
-                    "classe_venditore": classe_int,
-                    "sezione": doc.get("sezione", ""),
-                    "tipo": "triennale_unico"
-                })
+            tipo = "annuale" if is_libro_annuale else "triennale_unico"
+            venditori.append({
+                "codice_scuola": doc.get("codice_scuola", ""),
+                "classe_venditore": classe_int,
+                "sezione": doc.get("sezione", ""),
+                "tipo": tipo
+            })
         
         if venditori:
             # Usa ISBN normalizzato come chiave
