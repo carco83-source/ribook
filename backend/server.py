@@ -15216,7 +15216,7 @@ async def get_all_payouts(
     recipient_type: str = Query(None),
     limit: int = Query(100)
 ):
-    """Ottieni tutti i payout (per admin)"""
+    """Ottieni tutti i payout (per admin) con nomi reali dei venditori"""
     query = {}
     if status:
         query["status"] = status
@@ -15225,9 +15225,27 @@ async def get_all_payouts(
     
     payouts = await db.payouts.find(query).sort("created_at", -1).to_list(limit)
     
-    # Rimuovi _id da ogni payout
+    # Arricchisci i payouts con i nomi reali dei venditori
     for p in payouts:
         p.pop("_id", None)
+        
+        # Se è un payout per un venditore, recupera il nome reale
+        if p.get("recipient_type") == "seller" and p.get("recipient_id"):
+            seller = await db.users.find_one({"id": p["recipient_id"]})
+            if seller:
+                nome = seller.get("nome", "")
+                cognome = seller.get("cognome", "")
+                nome_completo = f"{nome} {cognome}".strip()
+                
+                # Aggiungi nome reale e email per l'admin
+                p["recipient_real_name"] = nome_completo if nome_completo else p.get("recipient_name")
+                p["recipient_email"] = seller.get("email", "")
+            else:
+                p["recipient_real_name"] = p.get("recipient_name")
+                p["recipient_email"] = ""
+        else:
+            p["recipient_real_name"] = p.get("recipient_name")
+            p["recipient_email"] = ""
     
     # Calcola totali
     totals = {

@@ -28,6 +28,8 @@ interface Payout {
   recipient_type: 'seller' | 'platform' | 'cartolibreria';
   recipient_id: string;
   recipient_name: string;
+  recipient_real_name?: string;  // Nome reale del venditore
+  recipient_email?: string;      // Email del venditore
   recipient_iban: string;
   gross_amount: number;
   stripe_fee: number;
@@ -423,7 +425,17 @@ export default function AdminPayoutsScreen() {
                     </View>
                   </View>
                   
-                  <Text style={styles.payoutRecipient}>{payout.recipient_name}</Text>
+                  {/* Nome reale del venditore (solo per seller) */}
+                  {payout.recipient_type === 'seller' && payout.recipient_real_name ? (
+                    <View>
+                      <Text style={styles.payoutRecipientReal}>{payout.recipient_real_name}</Text>
+                      {payout.recipient_email && (
+                        <Text style={styles.payoutRecipientEmail}>{payout.recipient_email}</Text>
+                      )}
+                    </View>
+                  ) : (
+                    <Text style={styles.payoutRecipient}>{payout.recipient_name}</Text>
+                  )}
                   <Text style={styles.payoutDescription}>{payout.description}</Text>
                   
                   <View style={styles.payoutDetails}>
@@ -692,6 +704,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#333',
+  },
+  payoutRecipientReal: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#1a472a',
+  },
+  payoutRecipientEmail: {
+    fontSize: 13,
+    color: '#666',
+    marginTop: 2,
   },
   payoutDescription: {
     fontSize: 14,
