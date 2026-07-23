@@ -758,9 +758,9 @@ export default function RadarScreen() {
               const fuoriCorsoFiltered = filterOutStrumentiMusicali(compatibility.fuori_corso || []);
               
               const categories = [
-                { id: 'vendibili', label: 'Vendibili', count: vendibiliFiltered.length, color: '#2196F3', books: vendibiliFiltered },
-                { id: 'usati', label: 'Comprare Usati', count: usatiFiltered.length, color: '#4CAF50', books: usatiFiltered },
-                { id: 'nuovi', label: 'Comprare Nuovi', count: nuoviFiltered.length, color: '#FF9800', books: nuoviFiltered },
+                { id: 'vendibili', label: 'Vendibili Usati', count: vendibiliFiltered.length, color: '#2196F3', books: vendibiliFiltered },
+                { id: 'usati', label: 'Acquistabili Usati', count: usatiFiltered.length, color: '#4CAF50', books: usatiFiltered },
+                { id: 'nuovi', label: 'Da Acquistare Nuovi', count: nuoviFiltered.length, color: '#FF9800', books: nuoviFiltered },
                 { id: 'inuso', label: 'Ancora in Uso', count: inUsoFiltered.length, color: '#9C27B0', books: inUsoFiltered },
                 { id: 'fuoricorso', label: 'Fuori Corso', count: fuoriCorsoFiltered.length, color: '#795548', books: fuoriCorsoFiltered },
               ].filter(cat => cat.count > 0);
@@ -769,6 +769,11 @@ export default function RadarScreen() {
               
               return (
                 <>
+                  {/* Titolo sezione categorie */}
+                  <View style={styles.categoriesTitleContainer}>
+                    <Text style={styles.categoriesTitle}>LE TUE CATEGORIE</Text>
+                  </View>
+                  
                   {/* Barra tabs scorrevole */}
                   <ScrollView 
                     horizontal 
@@ -1134,7 +1139,7 @@ export default function RadarScreen() {
           <View style={styles.infoModalContent}>
             <View style={styles.infoModalHeader}>
               <Ionicons name="information-circle" size={32} color="#2196F3" />
-              <Text style={styles.infoModalTitle}>Libri Vendibili</Text>
+              <Text style={styles.infoModalTitle}>Libri Vendibili Usati</Text>
             </View>
             <Text style={styles.infoModalText}>
               LIBRI PRESUMIBILMENTE GIÀ IN TUO POSSESSO, NON UTILIZZABILI QUEST'ANNO.
@@ -1476,6 +1481,18 @@ const styles = StyleSheet.create({
   classCompatSection: {
     marginHorizontal: 16,
     marginBottom: 16,
+  },
+  // Stili per titolo categorie
+  categoriesTitleContainer: {
+    paddingHorizontal: 0,
+    marginBottom: 12,
+  },
+  categoriesTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1a472a',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
   },
   // Stili per tabs categorie libri
   categoryTabsContainer: {
