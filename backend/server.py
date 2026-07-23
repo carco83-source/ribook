@@ -15738,6 +15738,7 @@ async def create_default_bookstores():
             "cap": "88100",
             "telefono": "0961 701727",
             "email": "puntoeacapo@ribook.it",
+            "affiliazione_attiva": False,  # Disattivata su richiesta utente
         },
         {
             "nome": "Cartolibreria L'Apostrofo",
@@ -15775,10 +15776,11 @@ async def create_default_bookstores():
         })
         
         if existing:
-            # Assicurati che sia attiva
+            # Rispetta il valore di affiliazione_attiva definito nel seed
+            target_status = bs_data.get("affiliazione_attiva", True)
             await db.bookstores.update_one(
                 {"_id": existing["_id"]},
-                {"$set": {"affiliazione_attiva": True}}
+                {"$set": {"affiliazione_attiva": target_status}}
             )
             continue
         
@@ -15788,7 +15790,7 @@ async def create_default_bookstores():
             "id": str(uuid.uuid4()),
             **bs_data,
             "password_hash": hash_pwd(password),
-            "affiliazione_attiva": True,
+            "affiliazione_attiva": bs_data.get("affiliazione_attiva", True),
             "credito_commissioni": 0,
             "credito_foderazione": 0,
             "credito_totale": 0,
